@@ -1,0 +1,4 @@
+#!/bin/sh
+# Launch aug from anywhere: the Solid preload resolves from the repo.
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+exec bun run --cwd "$DIR" --conditions=browser --preload @opentui/solid/preload "$DIR/src/index.tsx" "$@"

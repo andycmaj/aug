@@ -1,0 +1,32 @@
+{
+  "name": "@andycmaj/aug",
+  "version": "0.0.1",
+  "description": "A local work manager TUI: GitHub and Slack become tasks, Claude does the work, nothing goes out until you approve. A Taskuary clone on OpenTUI Solid.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "aug": "./bin/aug"
+  },
+  "scripts": {
+    "dev": "AUG_DEV=1 bun run --conditions=browser --preload @opentui/solid/preload ./src/index.tsx",
+    "demo": "AUG_FIXTURE=demo bun run --conditions=browser --preload @opentui/solid/preload ./src/index.tsx",
+    "debug": "AUG_DEV=1 SHOW_CONSOLE=true bun run --inspect-wait --conditions=browser --preload @opentui/solid/preload ./src/index.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "format": "prettier --write src test"
+  },
+  "dependencies": {
+    "@andycmaj/opentui-app": "0.3.1",
+    "@opentui/core": "0.5.12",
+    "@opentui/solid": "0.5.12",
+    "citty": "^0.2.2",
+    "ghostty-opentui": "1.5.0",
+    "solid-js": "1.9.12"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "25.2.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  }
+}

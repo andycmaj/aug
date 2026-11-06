@@ -1,0 +1,602 @@
+// Every move the owner makes, once: the rail row, the table, the Board and
+// the palette all call these. They talk to the engine, open dialogs, and keep
+// the table moving (a row that leaves the rail hands the table to the next).
+
+import { createSignal, type Accessor, type JSX } from "solid-js";
+import { writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { useFocus, useToast } from "@andycmaj/opentui-app";
+import { Commands } from "../commands";
+import { useAug, ViewMode } from "../context/aug";
+import { useTerminals } from "../context/terminals";
+import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
+import {
+  formatBytes,
+  openerArgv,
+  openTarget,
+  parseFiles,
+  type MadeFile,
+} from "../core/files";
+import { infoTitle, itemInfo } from "../core/info";
+import { actionText } from "../core/outbound";
+import { paths } from "../core/paths";
+import { neighborKey, type RailItem } from "../core/rail";
+import * as store from "../core/store";
+import {
+  AgentState,
+  Kind,
+  Priority,
+  SessionKind,
+  type TaskRow,
+} from "../core/types";
+import {
+  ChoiceModal,
+  ConfirmSendModal,
+  InfoModal,
+  PromptModal,
+} from "./modals";
+import type { ItemMoves } from "./moves";
+
+export interface Dialogs {
+  dialog: Accessor<(() => JSX.Element) | null>;
+  show: (render: () => JSX.Element) => void;
+  close: () => void;
+}
+
+export function useDialogs(): Dialogs {
+  const { openModal, closeModal } = useFocus();
+  const [dialog, setDialog] = createSignal<(() => JSX.Element) | null>(null);
+  return {
+    dialog,
+    show: (render) => {
+      setDialog(() => render);
+      openModal("dialog");
+    },
+    close: () => {
+      closeModal();
+      setDialog(null);
+    },
+  };
+}
+
+const EDITOR_ID = "editor";
+
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+export function useActions(dialogs: Dialogs) {
+  const aug = useAug();
+  const terminals = useTerminals();
+  const { setActivePane } = useFocus();
+  const { showToast } = useToast();
+  const engine = aug.engine;
+
+  // A row is about to leave the rail. On the table: the table walks on.
+  // Only under the cursor: the cursor steps to a neighbor, the table stays.
+  function advanceFrom(key: string) {
+    if (aug.selectedKey() === key) {
+      const next = aug.walk(1) ?? aug.walk(-1);
+      if (!next) aug.select(null);
+      return;
+    }
+    if (aug.cursorKey() === key) {
+      aug.moveCursor(
+        neighborKey(
+          aug.items().map((i) => i.key),
+          key,
+        ),
+      );
+    }
+  }
+
+  // ── coding terminals ──────────────────────────────────────────────────
+
+  function startCoding(taskId: number, note?: string) {
+    const live = terminals.forTask(taskId);
+    if (live?.running) {
+      aug.selectTask(taskId);
+      setActivePane("task");
+      return;
+    }
+    const prior = store.latestSession(taskId);
+    const resume = prior?.kind === SessionKind.pty ? prior.id : undefined;
+    const launch = engine.beginCoding(taskId, { resume, note });
+    if (!launch) return;
+    terminals.open({
+      id: launch.sessionId,
+      title: store.taskRef(taskId),
+      kind: "agent",
+      taskId,
+      argv: launch.argv,
+      cwd: launch.cwd,
+      env: launch.env,
+      onExit: (code) => engine.codingExited(launch.sessionId, code),
+    });
+    if (aug.mode() === ViewMode.chat) {
+      aug.selectTask(taskId);
+      setActivePane("task");
+    }
+  }
+
+  // $EDITOR in an embedded terminal on the table; done runs when it exits.
+  function openEditor(
+    file: string,
+    title: string,
+    done?: (code: number | null) => void,
+  ) {
+    aug.setMode(ViewMode.chat);
+    terminals.close(EDITOR_ID);
+    const editor = process.env.VISUAL ?? process.env.EDITOR ?? "vi";
+    terminals.open({
+      id: EDITOR_ID,
+      title,
+      kind: "editor",
+      argv: ["sh", "-c", `${editor} "$1"`, "editor", file],
+      onExit: (code) => {
+        // Before close: closing gives the table back, and what comes back
+        // may read what done leaves.
+        done?.(code);
+        terminals.close(EDITOR_ID);
+        setActivePane("task");
+      },
+    });
+    setTimeout(() => setActivePane("task"), 0);
+  }
+
+  // ── on a task ─────────────────────────────────────────────────────────
+
+  function start(task: TaskRow) {
+    if (task.kind === Kind.coding) startCoding(task.id);
+    else {
+      engine.startGeneral(task.id);
+      showToast(`${store.taskRef(task.id)}: agent started`);
+    }
+  }
+
+  function stop(task: TaskRow) {
+    const live = terminals.forTask(task.id);
+    if (live?.running) {
+      terminals.close(live.id);
+      store.updateTask(task.id, { agent_state: AgentState.saved });
+    } else engine.stopAgent(task.id);
+    showToast(`${store.taskRef(task.id)}: stopped and saved`);
+  }
+
+  function done(task: TaskRow) {
+    const live = terminals.forTask(task.id);
+    if (live?.running) terminals.close(live.id);
+    advanceFrom(`t${task.id}`);
+    engine.markDone(task.id);
+    showToast(`${store.taskRef(task.id)} done`);
+  }
+
+  function remind(task: TaskRow) {
+    const pick = (label: string, days: number) => ({
+      label,
+      run: () => {
+        advanceFrom(`t${task.id}`);
+        const at = engine.remind(task.id, days);
+        showToast(`Back ${new Date(at).toDateString()}`);
+      },
+    });
+    const toMonday = (8 - new Date().getDay()) % 7 || 7;
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Remind me about ${store.taskRef(task.id)}`}
+        hint="Put away until the day you pick, then back on your rail that morning."
+        choices={[
+          pick("Tomorrow", 1),
+          pick("In 2 days", 2),
+          pick("Next Monday", toMonday),
+          pick("Next week", 7),
+          pick("In 2 weeks", 14),
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function watch(task: TaskRow) {
+    engine.watch(task.id, !task.watching);
+    showToast(
+      task.watching ? "Back in Tasks" : "Watching: not yours, kept open",
+    );
+  }
+
+  function notATask(task: TaskRow) {
+    advanceFrom(`t${task.id}`);
+    engine.notATask(task.id);
+    showToast("Not a task: triage will learn from it");
+  }
+
+  function cyclePriority(task: TaskRow) {
+    const order: Priority[] = [
+      Priority.regular,
+      Priority.important,
+      Priority.urgent,
+    ];
+    const next = order[(order.indexOf(task.priority) + 1) % order.length];
+    engine.setPriority(task.id, next);
+    showToast(`${store.taskRef(task.id)} is ${next}`);
+  }
+
+  function changeKind(task: TaskRow) {
+    const pick = (kind: Kind, hint: string) => ({
+      label: kind,
+      hint,
+      run: () => engine.setKind(task.id, kind),
+    });
+    dialogs.show(() => (
+      <ChoiceModal
+        title="What kind of work is it?"
+        hint="Correcting it teaches triage."
+        choices={[
+          pick(Kind.general, "worth thinking about: an agent in a chat"),
+          pick(Kind.reply, "a sentence settles it"),
+          pick(Kind.coding, "an agent at a keyboard in a repo"),
+          pick(Kind.task, "yours to do"),
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function waitOn(task: TaskRow) {
+    dialogs.show(() => (
+      <PromptModal
+        title="Hand it to a person"
+        hint="The task waits on them, and comes back when they answer. Empty clears it."
+        placeholder="Who is it waiting on?"
+        initial={task.waiting_on ?? ""}
+        onSubmit={(who) => engine.waitOn(task.id, who)}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function send(task: TaskRow) {
+    const pending = store.pendingAction(task.id);
+    if (!pending) {
+      showToast("Nothing waits to be sent");
+      return;
+    }
+    dialogs.show(() => (
+      <ConfirmSendModal
+        action={pending.action}
+        onClose={dialogs.close}
+        onSend={() => {
+          engine
+            .send(task.id)
+            .then((receipt) => showToast(`Sent: ${receipt}`, 3000))
+            .catch((err: unknown) =>
+              showToast(`Not sent: ${errText(err)}`, 6000, "error"),
+            );
+        }}
+      />
+    ));
+  }
+
+  function editDraft(task: TaskRow) {
+    const pending = store.pendingAction(task.id);
+    if (!pending) return;
+    const file = join(paths.drafts(), `${store.taskRef(task.id)}.md`);
+    writeFileSync(file, actionText(pending.action));
+    openEditor(file, `draft for ${store.taskRef(task.id)}`, () => {
+      if (!existsSync(file)) return;
+      const text = readFileSync(file, "utf8").trimEnd();
+      if (text && engine.editDraft(task.id, text)) showToast("Draft updated");
+    });
+  }
+
+  function redraft(task: TaskRow) {
+    dialogs.show(() => (
+      <PromptModal
+        title="Ask for a different draft"
+        placeholder="What should change? (shorter, mention the deadline...)"
+        onSubmit={(text) => engine.redraft(task.id, text)}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function say(task: TaskRow, text: string) {
+    const live = terminals.forTask(task.id);
+    if (live?.running) {
+      // Tell the agent: the line goes to its prompt as if typed.
+      terminals.write(live.id, text.replace(/\n/g, " "));
+      setTimeout(() => terminals.write(live.id, "\r"), 30);
+      store.addTurn({
+        taskId: task.id,
+        role: "you",
+        author: "you",
+        body: text,
+      });
+      return;
+    }
+    engine.say(task.id, text);
+  }
+
+  // ── on an FYI / an idea ───────────────────────────────────────────────
+
+  function makeTask(item: RailItem) {
+    if (item.type === "fyi") {
+      const task = engine.fyiToTask(item.message.id);
+      if (task) {
+        aug.selectTask(task.id);
+        showToast(`${store.taskRef(task.id)}: it was work; triage will learn`);
+      }
+    } else if (item.type === "idea") {
+      const task = engine.ideaToTask(item.idea.id);
+      if (task) {
+        aug.selectTask(task.id);
+        showToast(`${store.taskRef(task.id)} on your list`);
+      }
+    }
+  }
+
+  function dismiss(item: RailItem) {
+    advanceFrom(item.key);
+    if (item.type === "fyi") engine.readFyi(item.message.id);
+    if (item.type === "idea") engine.dismissIdea(item.idea.id);
+  }
+
+  // Next on an FYI, an idea or an agent's finished result reads it: off the rail.
+  // The chat box in $EDITOR. Save and quit sends; quitting empty or with an
+  // error (vim's :cq) sends nothing and hands the text back to the box.
+  function compose(
+    task: TaskRow,
+    initial: string,
+    keep: (text: string) => void,
+  ) {
+    const file = join(paths.drafts(), `${store.taskRef(task.id)}-message.md`);
+    writeFileSync(file, initial);
+    openEditor(file, `a message on ${store.taskRef(task.id)}`, (code) => {
+      const text = existsSync(file)
+        ? readFileSync(file, "utf8").trimEnd()
+        : initial;
+      rmSync(file, { force: true });
+      if (code === 0 && text.trim()) {
+        say(task, text);
+        return;
+      }
+      keep(text);
+      setTimeout(() => setActivePane("input"), 0);
+    });
+  }
+
+  function walk(direction: 1 | -1) {
+    const current = aug.selected();
+    if (direction === 1 && current) {
+      if (current.type === "fyi") engine.readFyi(current.message.id);
+      if (current.type === "idea") engine.dismissIdea(current.idea.id);
+      if (current.type === "task" && current.task.unread_result)
+        engine.readResult(current.task.id);
+    }
+    const key = aug.walk(direction);
+    if (!key)
+      showToast(
+        direction === 1
+          ? "That's everything. All walked."
+          : "Nothing before this",
+      );
+  }
+
+  function newTask() {
+    const ask = (kind: Kind, label: string) => ({
+      label,
+      run: () =>
+        dialogs.show(() => (
+          <PromptModal
+            title={label}
+            placeholder={
+              kind === Kind.task ? "What do you need to do?" : "What's the job?"
+            }
+            onSubmit={(title) => {
+              const task = engine.newTask(title, kind);
+              aug.setMode(ViewMode.chat);
+              aug.selectTask(task.id);
+              if (kind === Kind.general) engine.startGeneral(task.id, title);
+            }}
+            onClose={dialogs.close}
+          />
+        )),
+    });
+    dialogs.show(() => (
+      <ChoiceModal
+        title="New"
+        choices={[
+          ask(Kind.general, "Give an agent a job"),
+          ask(Kind.coding, "A coding job (press s to start it)"),
+          ask(Kind.task, "A to-do of my own"),
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function docs() {
+    dialogs.show(() => (
+      <ChoiceModal
+        title="Docs: what the models are told"
+        hint="Opens in $EDITOR. SOUL.md always outranks LEARNED.md."
+        choices={Object.values(DocName).map((name) => ({
+          label: name,
+          hint: DOC_PURPOSE[name],
+          run: () => openEditor(docPath(name), name),
+        }))}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  // Files the task's agent turns made, newest first, still on disk.
+  function madeFiles(item: RailItem): MadeFile[] {
+    if (item.type !== "task") return [];
+    const seen = new Set<string>();
+    const out: MadeFile[] = [];
+    for (const turn of [...store.turnsForTask(item.task.id)].reverse()) {
+      for (const f of parseFiles(turn.files)) {
+        if (seen.has(f.path) || !existsSync(f.path)) continue;
+        seen.add(f.path);
+        out.push(f);
+      }
+    }
+    return out;
+  }
+
+  function open(target: string) {
+    try {
+      openTarget(target);
+    } catch (err) {
+      showToast(`Could not open: ${errText(err)}`, 5000, "error");
+    }
+  }
+
+  // o: the link, or a pick of the link and what the agent made.
+  function openLink(item: RailItem) {
+    const url =
+      item.type === "task"
+        ? item.task.url
+        : item.type === "fyi"
+          ? item.message.url
+          : null;
+    const files = madeFiles(item);
+    if (files.length === 0) {
+      if (url) open(url);
+      else showToast("No link on this one");
+      return;
+    }
+    dialogs.show(() => (
+      <ChoiceModal
+        title="Open"
+        hint={`With ${openerArgv("…").slice(0, -1).join(" ")} (set "opener" in config).`}
+        choices={[
+          ...(url
+            ? [
+                {
+                  label: "The thread",
+                  hint: url.replace(/^https?:\/\//, "").slice(0, 30),
+                  run: () => open(url),
+                },
+              ]
+            : []),
+          ...files.map((f) => ({
+            label: f.name,
+            hint: formatBytes(f.bytes),
+            run: () => open(f.path),
+          })),
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  // O: a file the agent made, in $EDITOR on the table.
+  function editFile(item: RailItem) {
+    const files = madeFiles(item);
+    if (files.length === 0) {
+      showToast("The agent has not made any files here");
+      return;
+    }
+    const edit = (f: MadeFile) => openEditor(f.path, f.name);
+    if (files.length === 1) {
+      edit(files[0]);
+      return;
+    }
+    dialogs.show(() => (
+      <ChoiceModal
+        title="Edit in $EDITOR"
+        choices={files.map((f) => ({
+          label: f.name,
+          hint: formatBytes(f.bytes),
+          run: () => edit(f),
+        }))}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function info(item: RailItem) {
+    dialogs.show(() => (
+      <InfoModal
+        title={infoTitle(item)}
+        sections={itemInfo(item)}
+        onCopied={(label, ok) =>
+          ok
+            ? showToast(`Copied the ${label}`)
+            : showToast("No clipboard here", 3000, "error")
+        }
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  // The key handlers for an item, given how to find it.
+  function itemMoves(
+    get: () => RailItem | null,
+    typeInto: () => void,
+  ): ItemMoves {
+    const onTask = (fn: (t: TaskRow) => void) => () => {
+      const item = get();
+      if (item?.type !== "task") return false;
+      const fresh = store.getTask(item.task.id);
+      if (fresh) fn(fresh);
+    };
+    return {
+      [Commands.SEND]: onTask(send),
+      [Commands.EDIT_DRAFT]: onTask(editDraft),
+      [Commands.REDRAFT]: onTask(redraft),
+      [Commands.START]: onTask(start),
+      [Commands.STOP]: onTask(stop),
+      [Commands.DONE]: onTask(done),
+      [Commands.REMIND]: onTask(remind),
+      [Commands.WATCH]: onTask(watch),
+      [Commands.PRIORITY]: onTask(cyclePriority),
+      [Commands.KIND]: onTask(changeKind),
+      [Commands.WAIT_ON]: onTask(waitOn),
+      [Commands.TYPE]: onTask(() => typeInto()),
+      [Commands.NOT_TASK]: () => {
+        const item = get();
+        if (!item) return false;
+        if (item.type === "task") notATask(item.task);
+        else dismiss(item);
+      },
+      [Commands.MAKE_TASK]: () => {
+        const item = get();
+        if (item && item.type !== "task") makeTask(item);
+      },
+      [Commands.EDIT_FILE]: () => {
+        const item = get();
+        if (item) editFile(item);
+      },
+      [Commands.OPEN_URL]: () => {
+        const item = get();
+        if (item) openLink(item);
+      },
+      [Commands.INFO]: () => {
+        const item = get();
+        if (!item) return false;
+        info(item);
+      },
+    };
+  }
+
+  return {
+    startCoding,
+    openEditor,
+    start,
+    stop,
+    done,
+    send,
+    say,
+    compose,
+    walk,
+    newTask,
+    docs,
+    itemMoves,
+    editorId: EDITOR_ID,
+  };
+}
+
+export type Actions = ReturnType<typeof useActions>;

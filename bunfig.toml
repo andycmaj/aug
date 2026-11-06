@@ -1,0 +1,5 @@
+# No global `preload` here on purpose: it would load the Solid JSX transform for
+# every `bun run`, including plain scripts. `dev`/`debug` pass it themselves.
+
+[test]
+preload = ["./test/solid-preload.ts"]
