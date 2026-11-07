@@ -4,21 +4,44 @@
 // costs a process start and one SQLite write.
 
 import { defineCommand, runMain } from "citty";
-import { handleDone, handleHook, type HookPayload } from "../core/hooks";
+import { adoptHook, paneEnv } from "../core/adopt";
+import { handleDone, handleHook, type HookEnv, type HookPayload } from "../core/hooks";
 import { logger } from "../core/log";
+import { setMux, socketFromEnv, TmuxMux } from "../core/mux";
 import * as store from "../core/store";
 import { NoteLabel } from "../core/types";
 
-function env(): { taskId: number; sessionId: string } {
+// Inside a pane, talk to the tmux server the pane lives on.
+function usePaneServer(): void {
+  const socket = socketFromEnv();
+  if (socket) setMux(new TmuxMux(socket));
+}
+
+// An aug-launched agent has its ids in env; a claude you started by hand in
+// a project window is found through the window's tag.
+async function env(): Promise<HookEnv> {
   const taskId = Number(process.env.AUG_TASK_ID);
   const sessionId = process.env.AUG_SESSION_ID ?? "";
-  if (!taskId || !sessionId) {
-    console.error(
-      "aug-tools: run this from an aug agent session (AUG_TASK_ID is not set)",
-    );
-    process.exit(2);
+  if (taskId && sessionId) return { taskId, sessionId };
+  const pane = process.env.TMUX_PANE;
+  if (pane) {
+    usePaneServer();
+    const found = await paneEnv(pane);
+    if (found) return found;
   }
-  return { taskId, sessionId };
+  console.error(
+    "aug-tools: run this from an aug agent session (AUG_TASK_ID is not set)",
+  );
+  process.exit(2);
+}
+
+async function readPayload(): Promise<HookPayload> {
+  try {
+    const text = await Bun.stdin.text();
+    return text.trim() ? (JSON.parse(text) as HookPayload) : {};
+  } catch {
+    return {};
+  }
 }
 
 function author(): string {
@@ -30,13 +53,7 @@ const hook = defineCommand({
   meta: { name: "hook", description: "Claude Code hook entry (internal)" },
   args: { event: { type: "positional", required: true } },
   async run({ args }) {
-    let payload: HookPayload = {};
-    try {
-      const text = await Bun.stdin.text();
-      payload = text.trim() ? (JSON.parse(text) as HookPayload) : {};
-    } catch {
-      payload = {};
-    }
+    const payload = await readPayload();
     const taskId = Number(process.env.AUG_TASK_ID);
     const sessionId = process.env.AUG_SESSION_ID;
     // A hook must never break the agent's session: no task, nothing to do.
@@ -46,6 +63,26 @@ const hook = defineCommand({
       session: sessionId,
     });
     handleHook(String(args.event), payload, { taskId, sessionId });
+  },
+});
+
+const adopt = defineCommand({
+  meta: {
+    name: "adopt-hook",
+    description: "Claude Code hook for a claude started by hand (internal)",
+  },
+  args: { event: { type: "positional", required: true } },
+  async run({ args }) {
+    const payload = await readPayload();
+    const pane = process.env.TMUX_PANE;
+    if (!pane || process.env.AUG_TASK_ID) return;
+    usePaneServer();
+    try {
+      await adoptHook(String(args.event), payload, pane);
+    } catch (err) {
+      // A hook must never break the session it rides on.
+      logger("hook").warn("adopt failed", { event: String(args.event), err });
+    }
   },
 });
 
@@ -67,7 +104,7 @@ const done = defineCommand({
         "issue | merge | approve: the close-out riding with the reply",
     },
   },
-  run({ args }) {
+  async run({ args }) {
     const close =
       args.close === "issue" ||
       args.close === "merge" ||
@@ -75,7 +112,11 @@ const done = defineCommand({
         ? args.close
         : undefined;
     console.log(
-      handleDone(env(), { summary: args.summary, reply: args.reply, close }),
+      handleDone(await env(), {
+        summary: args.summary,
+        reply: args.reply,
+        close,
+      }),
     );
   },
 });
@@ -164,6 +205,7 @@ const main = defineCommand({
   meta: { name: "aug-tools", description: "aug's callback tools for agents" },
   subCommands: {
     hook,
+    "adopt-hook": adopt,
     done,
     note,
     notes,

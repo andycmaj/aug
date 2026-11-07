@@ -166,8 +166,10 @@ worktrees, or aug-made worktrees will get two windows.
    close, move, reconcile. Engine wiring.
 4. [x] Replace the in-aug PTY coding launch, and embed the viewer session in
    Chat. `shift+t` jumps your client to the window.
-5. Adoption hooks (`aug hooks install|uninstall`, the `sh` guard), and auto
-   tasks for hand-started claudes.
+5. [x] Adoption hooks (`aug hooks install|uninstall|status`, the `sh` guard
+   at `$AUG_HOME/adopt-hook.sh`), and auto tasks for hand-started claudes.
+   `aug-tools done|note` work in an adopted window too (found by its tag).
+   The offer to install on first create/adopt lands with the Projects tab.
 6. PR link by branch, `aug-tools pr`, `aug-tools feedback`, the nudge.
 7. Board `Projects` tab, rail chip and filter.
 8. `watch()`-driven reconcile, README env contract.

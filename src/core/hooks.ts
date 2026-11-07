@@ -17,6 +17,9 @@ export interface HookPayload {
   tool_input?: Record<string, unknown>;
   message?: string;
   reason?: string;
+  // UserPromptSubmit carries what was typed; every event carries the cwd.
+  prompt?: string;
+  cwd?: string;
 }
 
 export interface HookEnv {

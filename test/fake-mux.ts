@@ -5,6 +5,7 @@ import type {
   MuxWindow,
   MadeWorktree,
   NewWindow,
+  PaneInfo,
   Worktree,
 } from "../src/core/mux";
 
@@ -88,6 +89,20 @@ export class FakeMux implements Mux {
 
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {
     return ["tmux", "new-session", "-t", sessionId, "-s", viewerName, ";", "select-window", "-t", windowId];
+  }
+
+  // In the fake a pane id is its window id.
+  async paneInfo(paneId: string): Promise<PaneInfo | null> {
+    const w = this.windows.find((w) => w.id === paneId);
+    if (!w) return null;
+    const s = this.sessions.find((s) => s.id === w.sessionId);
+    return {
+      windowId: w.id,
+      windowName: w.name,
+      sessionId: w.sessionId,
+      taskId: w.taskId,
+      projectId: s?.projectId ?? null,
+    };
   }
 
   async branchExists(_repoPath: string, branch: string): Promise<boolean> {

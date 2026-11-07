@@ -29,6 +29,15 @@ export interface MuxWindow {
   taskId: number | null;
 }
 
+// Where a pane sits: what a hook in a hand-started claude needs to know.
+export interface PaneInfo {
+  windowId: string;
+  windowName: string;
+  sessionId: string;
+  taskId: number | null;
+  projectId: number | null;
+}
+
 export interface MuxState {
   sessions: MuxSession[];
   windows: MuxWindow[];
@@ -66,6 +75,7 @@ export interface Mux {
   // argv for the embedded terminal: attaches a grouped session of its own,
   // so showing a window never moves your real client.
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[];
+  paneInfo(paneId: string): Promise<PaneInfo | null>;
   // A local or origin branch by that name.
   branchExists(repoPath: string, branch: string): Promise<boolean>;
   // Makes the worktree and answers its path.
@@ -146,15 +156,53 @@ function idOf(raw: string | undefined): number | null {
   return raw && Number.isInteger(n) && n > 0 ? n : null;
 }
 
+export interface TmuxSocket {
+  socketName?: string;
+  socketPath?: string;
+}
+
+// Inside a pane, $TMUX names the server the pane lives on.
+export function socketFromEnv(tmux = process.env.TMUX): TmuxSocket | null {
+  const path = tmux?.split(",")[0];
+  return path ? { socketPath: path } : null;
+}
+
 export class TmuxMux implements Mux {
   private server: Server;
+  private socket: TmuxSocket;
 
-  constructor(private socketName = loadConfig().tmuxSocket) {
-    this.server = new Server(socketName ? { socketName } : {});
+  constructor(socket?: TmuxSocket | string) {
+    const name = typeof socket === "string" ? socket : undefined;
+    this.socket =
+      typeof socket === "object"
+        ? socket
+        : { socketName: name ?? loadConfig().tmuxSocket };
+    const { socketName, socketPath } = this.socket;
+    this.server = new Server(
+      socketPath ? { socketPath } : socketName ? { socketName } : {},
+    );
   }
 
   private tmuxArgs(): string[] {
-    return this.socketName ? ["tmux", "-L", this.socketName] : ["tmux"];
+    const { socketName, socketPath } = this.socket;
+    if (socketPath) return ["tmux", "-S", socketPath];
+    return socketName ? ["tmux", "-L", socketName] : ["tmux"];
+  }
+
+  async paneInfo(paneId: string): Promise<PaneInfo | null> {
+    try {
+      const [line] = await this.server.cmd("display-message", [
+        "-p",
+        "-t",
+        paneId,
+        ["#{window_id}", "#{window_name}", "#{session_id}", `#{${TASK_OPTION}}`, `#{${PROJECT_OPTION}}`].join(SEP),
+      ]);
+      if (!line) return null;
+      const [windowId, windowName, sessionId, task, project] = line.split(SEP);
+      return { windowId, windowName, sessionId, taskId: idOf(task), projectId: idOf(project) };
+    } catch {
+      return null;
+    }
   }
 
   async state(): Promise<MuxState> {
