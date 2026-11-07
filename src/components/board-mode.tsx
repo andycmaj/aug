@@ -15,6 +15,7 @@ import {
   useScope,
   useTheme,
   useToast,
+  type ThemeColor,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
@@ -25,7 +26,9 @@ import * as store from "../core/store";
 import {
   AgentState,
   NoteLabel,
+  TaskStatus,
   type HubRow,
+  type ProjectRow,
   type TaskRow,
 } from "../core/types";
 import { encodeKey } from "../terminal/key-encode";
@@ -41,6 +44,7 @@ const Tab = {
   wall: "wall",
   notes: "notes",
   hub: "hub",
+  projects: "projects",
 } as const;
 type Tab = (typeof Tab)[keyof typeof Tab];
 const TABS: { key: Tab; label: string }[] = [
@@ -48,7 +52,12 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "wall", label: "2 Wall" },
   { key: "notes", label: "3 Live handoffs" },
   { key: "hub", label: "4 Hub" },
+  { key: "projects", label: "5 Projects" },
 ];
+
+type ProjectLine =
+  | { type: "project"; project: ProjectRow; tasks: number }
+  | { type: "task"; task: TaskRow; project: ProjectRow };
 
 const [tab, setTab] = createSignal<Tab>(Tab.columns);
 
@@ -68,6 +77,7 @@ export function BoardMode() {
   const [wallCols, setWallCols] = createSignal(2);
   const [attached, setAttached] = createSignal(false);
   const [hubAt, setHubAt] = createSignal(0);
+  const [projAt, setProjAt] = createSignal(0);
   let notesScroll: ScrollBoxRenderable | undefined;
 
   const columns = createMemo(() =>
@@ -90,12 +100,32 @@ export function BoardMode() {
     aug.version();
     return store.listNotes(100);
   });
+  const projectLines = createMemo((): ProjectLine[] => {
+    aug.version();
+    const out: ProjectLine[] = [];
+    for (const project of store.listProjects()) {
+      const tasks = store
+        .tasksForProject(project.id)
+        .filter(
+          (t) => t.status === TaskStatus.open || t.status === TaskStatus.later,
+        );
+      out.push({ type: "project", project, tasks: tasks.length });
+      for (const task of tasks) out.push({ type: "task", task, project });
+    }
+    return out;
+  });
+  const projectLine = (): ProjectLine | null =>
+    projectLines()[Math.min(projAt(), projectLines().length - 1)] ?? null;
 
   const target = (): TaskRow | null => {
     if (tab() === Tab.columns) return cardTask();
     if (tab() === Tab.wall) {
       const id = tileTerm()?.taskId;
       return id ? store.getTask(id) : null;
+    }
+    if (tab() === Tab.projects) {
+      const line = projectLine();
+      return line?.type === "task" ? line.task : null;
     }
     return null;
   };
@@ -132,6 +162,10 @@ export function BoardMode() {
   };
 
   function compose() {
+    if (tab() === Tab.projects) {
+      shell.actions.newProject();
+      return;
+    }
     if (tab() === Tab.hub) {
       shell.dialogs.show(() => (
         <PromptModal
@@ -197,6 +231,11 @@ export function BoardMode() {
       case Tab.hub:
         setHubAt((h) => Math.max(0, Math.min(hub().length - 1, h + d)));
         break;
+      case Tab.projects:
+        setProjAt((i) =>
+          Math.max(0, Math.min(projectLines().length - 1, i + d)),
+        );
+        break;
     }
   };
   const horizontal = (d: number) => {
@@ -217,7 +256,9 @@ export function BoardMode() {
           ? setRow(0)
           : tab() === Tab.hub
             ? setHubAt(0)
-            : notesScroll?.scrollTo(0),
+            : tab() === Tab.projects
+              ? setProjAt(0)
+              : notesScroll?.scrollTo(0),
       [Commands.NAV_BOTTOM]: () => vertical(999),
       [Commands.BOARD_LEFT]: () => horizontal(-1),
       [Commands.BOARD_RIGHT]: () => horizontal(1),
@@ -228,9 +269,22 @@ export function BoardMode() {
         store.markNotesRead("you");
       },
       [Commands.BOARD_TAB_4]: () => setTab(Tab.hub),
+      [Commands.BOARD_TAB_5]: () => setTab(Tab.projects),
+      [Commands.PROJECT_ADOPT]: () => void shell.actions.adoptProject(),
+      [Commands.PROJECT_ARCHIVE]: () => {
+        const line = projectLine();
+        if (tab() !== Tab.projects || !line) return false;
+        shell.actions.archiveProject(line.project.id);
+      },
+      [Commands.MOVE_TO_PROJECT]: onTask(shell.actions.moveToProject),
       [Commands.OPEN]: () => {
         if (tab() === Tab.wall) {
           if (tileTerm()?.running) setAttached(true);
+          return;
+        }
+        const line = tab() === Tab.projects ? projectLine() : null;
+        if (line?.type === "project") {
+          void shell.actions.jumpToProject(line.project.id);
           return;
         }
         const t = target();
@@ -240,7 +294,14 @@ export function BoardMode() {
       [Commands.WALL_COLS]: () => setWallCols((c) => (c % 3) + 1),
       [Commands.START]: onTask(shell.actions.start),
       [Commands.STOP]: onTask(shell.actions.stop),
-      [Commands.JUMP]: onTask((t) => void shell.actions.jumpTo(t.id)),
+      [Commands.JUMP]: () => {
+        const line = tab() === Tab.projects ? projectLine() : null;
+        if (line?.type === "project")
+          return void shell.actions.jumpToProject(line.project.id);
+        const t = target();
+        if (!t) return false;
+        void shell.actions.jumpTo(t.id);
+      },
       [Commands.NUDGE]: onTask((t) => void shell.actions.nudge(t.id)),
       [Commands.DONE]: onTask(shell.actions.done),
     },
@@ -249,10 +310,10 @@ export function BoardMode() {
 
   const ctx = (): HelpCtx => ({
     item: target() ? "task" : null,
-    kind: null,
+    kind: target()?.kind ?? null,
     hasDraft: false,
     live: false,
-    coding: false,
+    coding: target()?.kind === "coding",
     watching: false,
   });
 
@@ -378,6 +439,13 @@ export function BoardMode() {
             <Match when={tab() === Tab.hub}>
               <Hub entries={hub()} selected={hubAt()} width={dims().width} />
             </Match>
+            <Match when={tab() === Tab.projects}>
+              <Projects
+                lines={projectLines()}
+                selected={projAt()}
+                width={dims().width}
+              />
+            </Match>
           </Switch>
         </box>
         <AugFooter ctx={ctx} />
@@ -385,6 +453,98 @@ export function BoardMode() {
       </box>
       <shell.Modals />
     </box>
+  );
+}
+
+function Projects(props: {
+  lines: ProjectLine[];
+  selected: number;
+  width: number;
+}) {
+  const theme = useTheme();
+  const aug = useAug();
+  const live = (task: TaskRow) => {
+    aug.version();
+    const s = store.latestSession(task.id);
+    return Boolean(s?.tmux_window && !s.ended_at);
+  };
+  return (
+    <Show
+      when={props.lines.length > 0}
+      fallback={
+        <box paddingLeft={1} flexDirection="column">
+          <text fg={theme.textMuted}>
+            No projects yet. c makes one (a tmux session); A adopts a session
+            you already have.
+          </text>
+          <text fg={theme.textMuted}>
+            Starting a coding task outside a project makes a project of its own.
+          </text>
+        </box>
+      }
+    >
+      <scrollbox flexGrow={1} flexBasis={0} paddingLeft={1}>
+        <For each={props.lines}>
+          {(line, i) => {
+            const on = () => i() === props.selected;
+            const fg = (color: ThemeColor) =>
+              on() ? contrastingForeground(theme.primary) : color;
+            if (line.type === "project") {
+              const repos = store.projectRepos(line.project);
+              return (
+                <box
+                  flexDirection="row"
+                  gap={2}
+                  marginTop={i() === 0 ? 0 : 1}
+                  backgroundColor={on() ? theme.primary : undefined}
+                >
+                  <text fg={fg(theme.primary)} attributes={1}>
+                    {`◫ ${line.project.name}`}
+                  </text>
+                  <text fg={fg(theme.textMuted)}>
+                    {truncate(
+                      [
+                        `tmux ${line.project.tmux_session}`,
+                        repos.length ? repos.join(", ") : null,
+                        `${line.tasks} open`,
+                        line.project.solo ? "one task" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · "),
+                      props.width - line.project.name.length - 12,
+                    )}
+                  </text>
+                </box>
+              );
+            }
+            const t = line.task;
+            return (
+              <box
+                flexDirection="row"
+                gap={2}
+                paddingLeft={2}
+                backgroundColor={on() ? theme.primary : undefined}
+              >
+                <text fg={fg(theme.textMuted)}>{store.taskRef(t.id)}</text>
+                <text fg={fg(theme.text)}>{truncate(t.title, 44)}</text>
+                <text fg={fg(theme.textMuted)}>
+                  {truncate(
+                    [
+                      t.branch ?? (t.kind === "coding" ? "no worktree" : t.kind),
+                      t.agent_state === AgentState.none ? null : t.agent_state,
+                      live(t) ? "● live" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · "),
+                    Math.max(10, props.width - 70),
+                  )}
+                </text>
+              </box>
+            );
+          }}
+        </For>
+      </scrollbox>
+    </Show>
   );
 }
 

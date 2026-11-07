@@ -419,6 +419,42 @@ export class Engine {
     });
   }
 
+  // ── projects ──────────────────────────────────────────────────────────
+
+  // Fixture mode has no checkouts: no branch or repo questions.
+  get makesWorktrees(): boolean {
+    return !this.options.noWorktrees;
+  }
+
+  // Fixture mode never touches your real settings (the hooks offer).
+  get offline(): boolean {
+    return Boolean(this.options.offline);
+  }
+
+  createProject(name: string, repo?: string | null) {
+    return projects.createProject({ name, repo });
+  }
+
+  adoptableSessions() {
+    return projects.adoptableSessions();
+  }
+
+  adoptSession(sessionId: string) {
+    return projects.adoptSession(sessionId);
+  }
+
+  archiveProject(projectId: number) {
+    return projects.archiveProject(projectId);
+  }
+
+  moveTask(taskId: number, projectId: number) {
+    return projects.moveTask(taskId, projectId);
+  }
+
+  jumpToProject(projectId: number) {
+    return projects.jumpToProject(projectId);
+  }
+
   // One line into the agent's window pointing it at its feedback.
   nudge(taskId: number): Promise<boolean> {
     return projects.nudge(taskId, nudgeText(taskId));

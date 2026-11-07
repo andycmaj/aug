@@ -280,6 +280,11 @@ export function addProjectRepo(id: number, repo: string): void {
   updateProject(id, { repos: JSON.stringify([...repos, repo]) });
 }
 
+// Only for a project that never got its tmux tag: nothing points at it yet.
+export function deleteProject(id: number): void {
+  run("DELETE FROM projects WHERE id = ?", id);
+}
+
 export function archiveProject(id: number): void {
   updateProject(id, { status: ProjectStatus.archived, archived_at: now() });
 }

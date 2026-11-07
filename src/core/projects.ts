@@ -93,7 +93,13 @@ export async function createProject(opts: {
     repos: opts.repo ? [opts.repo] : [],
     solo: opts.solo,
   });
-  await mux().tagSession(session.id, project.id);
+  try {
+    await mux().tagSession(session.id, project.id);
+  } catch (err) {
+    store.deleteProject(project.id);
+    await mux().killSession(session.id).catch(() => {});
+    throw err;
+  }
   log.info("project created", { project: project.id, session: session.name });
   return project;
 }
@@ -114,7 +120,12 @@ export async function adoptSession(sessionId: string): Promise<ProjectRow> {
     name: session.name,
     tmuxSession: session.name,
   });
-  await mux().tagSession(session.id, project.id);
+  try {
+    await mux().tagSession(session.id, project.id);
+  } catch (err) {
+    store.deleteProject(project.id);
+    throw err;
+  }
   log.info("project adopted", { project: project.id, session: session.name });
   return project;
 }
@@ -348,15 +359,20 @@ export async function archiveProject(projectId: number): Promise<void> {
   await archive(project, await mux().state());
 }
 
+// Windows go first: a grouped viewer would otherwise keep them (and their
+// claudes) alive after the session is gone.
 async function archive(project: ProjectRow, state: MuxState): Promise<void> {
   const live = liveSessionFor(state, project.id);
   if (live) {
     try {
+      for (const w of state.windows.filter((w) => w.sessionId === live.id))
+        await mux().killWindow(w.id);
       await mux().killSession(live.id);
     } catch (err) {
       log.warn("kill session failed", { project: project.id, err });
     }
   }
+  for (const task of store.tasksForProject(project.id)) endTmuxSessions(task.id);
   store.archiveProject(project.id);
 }
 
@@ -392,6 +408,14 @@ export async function nudge(taskId: number, text: string): Promise<boolean> {
 
 // One viewer per task: each is a grouped session showing that task's window,
 // so the Wall can show several agents of one project at once.
+export async function jumpToProject(projectId: number): Promise<boolean> {
+  const project = store.getProject(projectId);
+  if (!project) return false;
+  const session = await ensureSession(project);
+  await mux().switchClient(session.id);
+  return true;
+}
+
 export function viewerName(taskId: number): string {
   return `${VIEWER_PREFIX}${process.pid}-${taskId}`;
 }

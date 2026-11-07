@@ -22,6 +22,8 @@ import { infoTitle, itemInfo } from "../core/info";
 import { actionText } from "../core/outbound";
 import { paths } from "../core/paths";
 import * as projects from "../core/projects";
+import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt";
+import { loadConfig } from "../core/config";
 import { neighborKey, type RailItem } from "../core/rail";
 import * as store from "../core/store";
 import {
@@ -107,6 +109,7 @@ export function useActions(dialogs: Dialogs) {
       }
     };
     if (terminals.forTask(taskId)?.running) return show();
+    if (!engine.makesWorktrees) return void launchCoding(taskId, { note });
     const repoPath = projects.repoPath(task.repo);
     if (task.repo && !repoPath && !task.worktree) return askRepoPath(task, note);
     if (task.repo && repoPath && !task.worktree) {
@@ -200,6 +203,160 @@ export function useActions(dialogs: Dialogs) {
       return true;
     } finally {
       attaching.delete(taskId);
+    }
+  }
+
+  // ── projects ──────────────────────────────────────────────────────────
+
+  // The first project you make or adopt offers the hooks that pick up
+  // claudes you start by hand. Asked once; `aug hooks` is there after.
+  function offerHooks() {
+    if (engine.offline || hooksInstalled() || store.kvGet("hooks.offered"))
+      return;
+    store.kvSet("hooks.offered", "1");
+    dialogs.show(() => (
+      <ChoiceModal
+        title="Pick up claudes you start by hand?"
+        hint={`Adds hooks to ${claudeSettingsPath()} that only act inside a project's tmux session. Undo with: aug hooks uninstall`}
+        choices={[
+          {
+            label: "Yes, install the hooks",
+            run: () => {
+              try {
+                showToast(`Hooks added to ${installHooks()}`);
+              } catch (err) {
+                showToast(`Could not install: ${errText(err)}`, 4000, "error");
+              }
+            },
+          },
+          { label: "Not now", run: () => {} },
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function newProject(then?: (projectId: number) => void) {
+    const repos = Object.keys(loadConfig().github.repos);
+    const create = (name: string, repo: string | null) =>
+      void engine.createProject(name, repo).then(
+        (p) => {
+          showToast(`Project ${p.name}: tmux session ${p.tmux_session}`);
+          then?.(p.id);
+          offerHooks();
+        },
+        (err) => showToast(`Could not create: ${errText(err)}`, 4000, "error"),
+      );
+    dialogs.show(() => (
+      <PromptModal
+        title="New project"
+        hint="One tmux session; each task in it gets a window and a worktree."
+        placeholder="billing-migration"
+        onSubmit={(name) => {
+          if (repos.length === 0) return create(name.trim(), null);
+          dialogs.show(() => (
+            <ChoiceModal
+              title={`Main repo for ${name.trim()}`}
+              hint="Where the session opens. Tasks can use any repo."
+              choices={[
+                ...repos.map((repo) => ({
+                  label: repo,
+                  run: () => create(name.trim(), repo),
+                })),
+                { label: "none", run: () => create(name.trim(), null) },
+              ]}
+              onClose={dialogs.close}
+            />
+          ));
+        }}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  async function adoptProject() {
+    let sessions: Awaited<ReturnType<typeof engine.adoptableSessions>>;
+    try {
+      sessions = await engine.adoptableSessions();
+    } catch (err) {
+      showToast(`tmux: ${errText(err)}`, 4000, "error");
+      return;
+    }
+    if (sessions.length === 0) {
+      showToast("Every tmux session is a project already (or none is running)");
+      return;
+    }
+    dialogs.show(() => (
+      <ChoiceModal
+        title="Adopt a tmux session as a project"
+        hint="aug tags it; its name and windows stay as they are."
+        choices={sessions.map((s) => ({
+          label: s.name,
+          run: () =>
+            void engine.adoptSession(s.id).then(
+              (p) => {
+                showToast(`Project ${p.name}`);
+                offerHooks();
+              },
+              (err) => showToast(`Could not adopt: ${errText(err)}`, 4000, "error"),
+            ),
+        }))}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function moveToProject(task: TaskRow) {
+    const move = (projectId: number) =>
+      void engine.moveTask(task.id, projectId).then(
+        () => showToast(`${store.taskRef(task.id)} moved`),
+        (err) => showToast(`Could not move: ${errText(err)}`, 4000, "error"),
+      );
+    const others = store.listProjects().filter((p) => p.id !== task.project_id);
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Move ${store.taskRef(task.id)} to a project`}
+        hint="Its window moves with it; the claude keeps running."
+        choices={[
+          ...others.map((p) => ({ label: p.name, run: () => move(p.id) })),
+          { label: "New project...", run: () => newProject(move) },
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function archiveProject(projectId: number) {
+    const project = store.getProject(projectId);
+    if (!project) return;
+    const open = store
+      .tasksForProject(projectId)
+      .filter((t) => t.status === "open" || t.status === "later").length;
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Archive ${project.name}?`}
+        hint={`Kills tmux session ${project.tmux_session}${open ? ` and the windows of its ${open} open task${open === 1 ? "" : "s"}` : ""}. Tasks and worktrees stay.`}
+        choices={[
+          {
+            label: "Archive it",
+            run: () =>
+              void engine.archiveProject(projectId).then(
+                () => showToast(`${project.name} archived`),
+                (err) => showToast(`Could not archive: ${errText(err)}`, 4000, "error"),
+              ),
+          },
+          { label: "Keep it", run: () => {} },
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  async function jumpToProject(projectId: number) {
+    try {
+      await engine.jumpToProject(projectId);
+    } catch (err) {
+      showToast(`Could not jump: ${errText(err)}`, 4000, "error");
     }
   }
 
@@ -689,6 +846,7 @@ export function useActions(dialogs: Dialogs) {
       [Commands.STOP]: onTask(stop),
       [Commands.JUMP]: onTask((task) => void jumpTo(task.id)),
       [Commands.NUDGE]: onTask((task) => void nudge(task.id)),
+      [Commands.MOVE_TO_PROJECT]: onTask(moveToProject),
       [Commands.DONE]: onTask(done),
       [Commands.REMIND]: onTask(remind),
       [Commands.WATCH]: onTask(watch),
@@ -726,6 +884,11 @@ export function useActions(dialogs: Dialogs) {
     startCoding,
     jumpTo,
     nudge,
+    newProject,
+    adoptProject,
+    moveToProject,
+    archiveProject,
+    jumpToProject,
     openEditor,
     start,
     stop,

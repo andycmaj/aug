@@ -52,6 +52,9 @@ interface AugContextValue {
   board: Accessor<Record<BoardColumn, TaskRow[]>>;
   mode: Accessor<ViewMode>;
   setMode: (mode: ViewMode) => void;
+  // The rail shows one project's tasks while set.
+  projectFilter: Accessor<number | null>;
+  cycleProjectFilter: () => number | null;
 }
 
 const [AugContext, useAug] = createRequiredContext<AugContextValue>("Aug");
@@ -101,9 +104,22 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     return store.tasksWithPendingAction();
   });
 
+  const [projectFilter, setProjectFilter] = createSignal<number | null>(null);
+  // Off, then each active project in turn, then off again.
+  const cycleProjectFilter = (): number | null => {
+    const ids = store.listProjects().map((p) => p.id);
+    const at = ids.indexOf(projectFilter() ?? -1);
+    const next = at + 1 < ids.length ? ids[at + 1] : null;
+    setProjectFilter(next);
+    return next;
+  };
+
   const rail = createMemo(() => {
     version();
-    const tasks = store.listTasks();
+    const only = projectFilter();
+    const tasks = store
+      .listTasks()
+      .filter((t) => only === null || t.project_id === only);
     const lastHeard = new Map<number, string>();
     for (const t of tasks) {
       if (!t.waiting_on) continue;
@@ -227,6 +243,8 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
         board,
         mode,
         setMode,
+        projectFilter,
+        cycleProjectFilter,
       }}
     >
       {props.children}

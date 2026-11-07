@@ -5,7 +5,7 @@
 // Only this file imports libtmux (alpha, pinned exactly): its API churn and
 // any macOS trouble stay here. Tests swap in a fake with setMux.
 
-import { Server } from "libtmux";
+import { Server, TmuxServerRestartedError } from "libtmux";
 import { loadConfig } from "./config";
 import { logger } from "./log";
 
@@ -177,10 +177,30 @@ export class TmuxMux implements Mux {
       typeof socket === "object"
         ? socket
         : { socketName: name ?? loadConfig().tmuxSocket };
+    this.server = this.connect();
+  }
+
+  private connect(): Server {
     const { socketName, socketPath } = this.socket;
-    this.server = new Server(
+    return new Server(
       socketPath ? { socketPath } : socketName ? { socketName } : {},
     );
+  }
+
+  // libtmux pins ids to the daemon it first met and refuses (before running
+  // anything) once that tmux server has restarted; meet the new one.
+  private async retry<T>(run: (server: Server) => Promise<T>): Promise<T> {
+    try {
+      return await run(this.server);
+    } catch (err) {
+      if (!(err instanceof TmuxServerRestartedError)) throw err;
+      this.server = this.connect();
+      return run(this.server);
+    }
+  }
+
+  private cmd(command: string, args: string[]): Promise<readonly string[]> {
+    return this.retry((server) => server.cmd(command, args));
   }
 
   private tmuxArgs(): string[] {
@@ -191,7 +211,7 @@ export class TmuxMux implements Mux {
 
   async paneInfo(paneId: string): Promise<PaneInfo | null> {
     try {
-      const [line] = await this.server.cmd("display-message", [
+      const [line] = await this.cmd("display-message", [
         "-p",
         "-t",
         paneId,
@@ -209,8 +229,8 @@ export class TmuxMux implements Mux {
     let sessionLines: readonly string[];
     let windowLines: readonly string[];
     try {
-      sessionLines = await this.server.cmd("list-sessions", ["-F", SESSION_FORMAT]);
-      windowLines = await this.server.cmd("list-windows", ["-a", "-F", WINDOW_FORMAT]);
+      sessionLines = await this.cmd("list-sessions", ["-F", SESSION_FORMAT]);
+      windowLines = await this.cmd("list-windows", ["-a", "-F", WINDOW_FORMAT]);
     } catch (err) {
       // No server on the socket yet.
       log.debug("tmux state empty", { err: String(err) });
@@ -241,46 +261,48 @@ export class TmuxMux implements Mux {
   }
 
   async newSession(name: string, cwd: string): Promise<MuxSession> {
-    const session = await this.server.newSession({ name, startDirectory: cwd });
+    const session = await this.retry((server) =>
+      server.newSession({ name, startDirectory: cwd }),
+    );
     return { id: session.id, name: session.name ?? name, projectId: null, viewer: false };
   }
 
   async tagSession(sessionId: string, projectId: number): Promise<void> {
-    await this.server.cmd("set-option", ["-t", sessionId, PROJECT_OPTION, String(projectId)]);
+    await this.cmd("set-option", ["-t", sessionId, PROJECT_OPTION, String(projectId)]);
   }
 
   async newWindow(w: NewWindow): Promise<MuxWindow> {
     const args = ["-d", "-P", "-F", "#{window_id}", "-t", `${w.sessionId}:`, "-n", w.name, "-c", w.cwd];
     for (const [key, value] of Object.entries(w.env)) args.push("-e", `${key}=${value}`);
     args.push(windowCommand(w.argv));
-    const [id] = await this.server.cmd("new-window", args);
+    const [id] = await this.cmd("new-window", args);
     if (!id) throw new MuxError("tmux new-window printed no window id");
     return { id: id.trim(), sessionId: w.sessionId, name: w.name, taskId: null };
   }
 
   async tagWindow(windowId: string, taskId: number): Promise<void> {
-    await this.server.cmd("set-option", ["-w", "-t", windowId, TASK_OPTION, String(taskId)]);
+    await this.cmd("set-option", ["-w", "-t", windowId, TASK_OPTION, String(taskId)]);
   }
 
   async killWindow(windowId: string): Promise<void> {
-    await this.server.cmd("kill-window", ["-t", windowId]);
+    await this.cmd("kill-window", ["-t", windowId]);
   }
 
   async killSession(sessionId: string): Promise<void> {
-    await this.server.cmd("kill-session", ["-t", sessionId]);
+    await this.cmd("kill-session", ["-t", sessionId]);
   }
 
   async moveWindow(windowId: string, sessionId: string): Promise<void> {
-    await this.server.cmd("move-window", ["-d", "-s", windowId, "-t", `${sessionId}:`]);
+    await this.cmd("move-window", ["-d", "-s", windowId, "-t", `${sessionId}:`]);
   }
 
   async sendLine(windowId: string, text: string): Promise<void> {
-    await this.server.cmd("send-keys", ["-t", windowId, "-l", text]);
-    await this.server.cmd("send-keys", ["-t", windowId, "Enter"]);
+    await this.cmd("send-keys", ["-t", windowId, "-l", text]);
+    await this.cmd("send-keys", ["-t", windowId, "Enter"]);
   }
 
   async switchClient(windowId: string): Promise<void> {
-    await this.server.cmd("switch-client", ["-t", windowId]);
+    await this.cmd("switch-client", ["-t", windowId]);
   }
 
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {

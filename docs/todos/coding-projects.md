@@ -173,5 +173,9 @@ worktrees, or aug-made worktrees will get two windows.
 6. [x] PR link by branch (`task_threads`; ingest fetches a PR's head only for
    repos with branch tasks), `aug-tools pr`, `aug-tools feedback`, the nudge
    (`u`). The coding brief tells agents about both tools.
-7. Board `Projects` tab, rail chip and filter.
+7. [x] Board `5 Projects` tab (`c` new, `A` adopt, `x` archive, `M` move,
+   `enter`/`T` jump), rail chip (`◫ name` in place of the channel) and `f`
+   filter, `M` in Chat too. The first create/adopt offers the hooks once
+   (never in fixture mode). Archive kills windows before the session, since
+   a grouped viewer would otherwise keep them alive.
 8. `watch()`-driven reconcile, README env contract.

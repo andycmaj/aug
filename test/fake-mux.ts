@@ -18,6 +18,7 @@ export class FakeMux implements Mux {
   sent: { windowId: string; text: string }[] = [];
   switched: string[] = [];
   removeFails: string | null = null;
+  tagFails: string | null = null;
   branches = new Set<string>();
   private next = 0;
 
@@ -40,6 +41,7 @@ export class FakeMux implements Mux {
   }
 
   async tagSession(sessionId: string, projectId: number): Promise<void> {
+    if (this.tagFails) throw new Error(this.tagFails);
     const s = this.sessions.find((s) => s.id === sessionId);
     if (!s) throw new Error(`no session ${sessionId}`);
     s.projectId = projectId;

@@ -10,6 +10,7 @@ import {
 import {
   adoptSession,
   adoptableSessions,
+  archiveProject,
   closeTask,
   createProject,
   freeSessionName,
@@ -81,6 +82,15 @@ describe("projects", () => {
     expect(p.tmux_session).toBe("billing-2");
     expect(fake.sessions.find((s) => s.name === "billing-2")?.projectId).toBe(p.id);
     expect(store.projectRepos(p)).toEqual(["acme/api"]);
+  });
+
+  test("a project whose session cannot be tagged is not kept", async () => {
+    fake.sessions.push({ id: "$1", name: "home", projectId: null, viewer: false });
+    fake.tagFails = "tmux went away";
+    await expect(createProject({ name: "Auth" })).rejects.toThrow("tmux went away");
+    await expect(adoptSession("$1")).rejects.toThrow("tmux went away");
+    expect(store.listProjects()).toHaveLength(0);
+    expect(fake.sessions.map((s) => s.name)).toEqual(["home"]);
   });
 
   test("only untagged, non-viewer sessions can be adopted", async () => {
@@ -245,6 +255,21 @@ describe("closing, moving, reconciling", () => {
     store.updateTask(t.id, { project_id: p.id });
     await startTask(t.id);
     expect(fake.sessions[0]).toMatchObject({ name: "auth-renamed", projectId: p.id });
+  });
+
+  test("archiving kills the project's windows (viewers too) and stops its tasks", async () => {
+    const p = await createProject({ name: "Auth" });
+    const t = codingTask();
+    store.updateTask(t.id, { project_id: p.id });
+    await startTask(t.id);
+    const session = fake.sessions.find((s) => s.projectId === p.id)!;
+    fake.sessions.push({ id: "$v", name: "aug-view-1-1", projectId: null, viewer: true });
+    await archiveProject(p.id);
+    expect(fake.windows).toHaveLength(0);
+    expect(fake.sessions.some((s) => s.id === session.id)).toBe(false);
+    expect(store.getProject(p.id)!.status).toBe("archived");
+    expect(store.latestSession(t.id)!.ended_at).not.toBeNull();
+    expect(store.getTask(t.id)!.agent_state).toBe(AgentState.stopped);
   });
 
   test("nudge types a line into the live window only", async () => {

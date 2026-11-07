@@ -85,6 +85,12 @@ const itemMoves: BindingSpec<HelpCtx>[] = [
     relevant: (c) => c.coding,
   },
   {
+    key: "shift+m",
+    cmd: Commands.MOVE_TO_PROJECT,
+    desc: "move it to a project",
+    relevant: (c) => c.coding,
+  },
+  {
     key: "u",
     cmd: Commands.NUDGE,
     desc: "nudge the agent to read new reviews / CI",
@@ -212,6 +218,7 @@ export const keymap: KeymapTable<HelpCtx> = {
   rail: [
     ...(listNav as BindingSpec<HelpCtx>[]),
     { key: "return", cmd: Commands.OPEN, desc: "put it on the table" },
+    { key: "f", cmd: Commands.PROJECT_FILTER, desc: "only one project / all" },
     ...itemMoves,
   ],
   task: [
@@ -258,6 +265,10 @@ export const keymap: KeymapTable<HelpCtx> = {
       help: "handoffs",
     },
     { key: "4", cmd: Commands.BOARD_TAB_4, desc: "hub", help: "hub" },
+    { key: "5", cmd: Commands.BOARD_TAB_5, desc: "projects", help: "projects" },
+    { key: "shift+a", cmd: Commands.PROJECT_ADOPT, desc: "projects: adopt a tmux session" },
+    { key: "x", cmd: Commands.PROJECT_ARCHIVE, desc: "projects: archive the project" },
+    { key: "shift+m", cmd: Commands.MOVE_TO_PROJECT, desc: "move the task to a project" },
     { key: "return", cmd: Commands.OPEN, desc: "open / attach", help: "open" },
     {
       key: "c",

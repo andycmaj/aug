@@ -25,6 +25,10 @@ export const Commands = {
   STOP: "agent.stop",
   JUMP: "agent.jump",
   NUDGE: "agent.nudge",
+  MOVE_TO_PROJECT: "task.project",
+  PROJECT_FILTER: "rail.project",
+  PROJECT_ADOPT: "project.adopt",
+  PROJECT_ARCHIVE: "project.archive",
   SEND: "action.send",
   EDIT_DRAFT: "action.edit",
   REDRAFT: "action.redraft",
@@ -55,6 +59,7 @@ export const Commands = {
   BOARD_TAB_2: "board.tab.2",
   BOARD_TAB_3: "board.tab.3",
   BOARD_TAB_4: "board.tab.4",
+  BOARD_TAB_5: "board.tab.5",
   BOARD_COMPOSE: "board.compose",
   WALL_COLS: "wall.cols",
 } as const;

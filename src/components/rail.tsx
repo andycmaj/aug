@@ -21,13 +21,21 @@ import {
   useFocus,
   useScope,
   useTheme,
+  useToast,
   type Theme,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug } from "../context/aug";
 import { Lane, LANE_META } from "../core/lanes";
 import { ageLabel, SECTION_TITLES, type RailItem } from "../core/rail";
-import { taskRef } from "../core/store";
+import { getProject, taskRef } from "../core/store";
+
+// A task in a project shows the project's name where its channel would be.
+function projectChip(projectId: number | null): string | null {
+  if (!projectId) return null;
+  const name = getProject(projectId)?.tmux_session;
+  return name ? `◫ ${name.length > 14 ? `${name.slice(0, 13)}…` : name}` : null;
+}
 import { AgentState } from "../core/types";
 import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
 import { ConnectorLine } from "./connector-line";
@@ -43,6 +51,7 @@ export function Rail(props: { moves: ItemMoves }) {
   const aug = useAug();
   const theme = useTheme();
   const { isPaneFocused, setActivePane } = useFocus();
+  const { showToast } = useToast();
   const focused = () => isPaneFocused("rail");
   let scrollRef: ScrollBoxRenderable | undefined;
   let pane: Renderable | undefined;
@@ -120,6 +129,10 @@ export function Rail(props: { moves: ItemMoves }) {
         aug.select(aug.cursorKey());
         setActivePane("task");
       },
+      [Commands.PROJECT_FILTER]: () => {
+        const id = aug.cycleProjectFilter();
+        showToast(id ? `Only ${projectChip(id)}` : "Every project");
+      },
       ...props.moves,
     },
     { target: () => pane },
@@ -148,7 +161,13 @@ export function Rail(props: { moves: ItemMoves }) {
       width={RAIL_WIDTH}
       ref={(r) => (pane = r)}
     >
-      <PaneHeader title="Work">
+      <PaneHeader
+        title={
+          aug.projectFilter()
+            ? `Work ${projectChip(aug.projectFilter()) ?? ""}`
+            : "Work"
+        }
+      >
         <text>
           <Show when={counts().blocked > 0}>
             <span
@@ -263,7 +282,13 @@ function RailRow(props: {
           markColor: toneColor(theme(), meta.tone),
           title: item.task.title,
           titleColor: item.priority === "urgent" ? theme().error : theme().text,
-          sub: `${age} · ${CHANNEL_WORD[item.task.channel]} · ${taskRef(item.task.id)} · ${word}`,
+          sub: [
+            age,
+            projectChip(item.task.project_id) ??
+              CHANNEL_WORD[item.task.channel],
+            taskRef(item.task.id),
+            word,
+          ].join(" · "),
         };
       }
       case "fyi":
