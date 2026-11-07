@@ -5,6 +5,12 @@
 
 import { defineCommand, runMain } from "citty";
 import { adoptHook, paneEnv } from "../core/adopt";
+import {
+  formatFeedback,
+  linkPr,
+  markFeedbackRead,
+  unreadFeedback,
+} from "../core/feedback";
 import { handleDone, handleHook, type HookEnv, type HookPayload } from "../core/hooks";
 import { logger } from "../core/log";
 import { setMux, socketFromEnv, TmuxMux } from "../core/mux";
@@ -121,6 +127,36 @@ const done = defineCommand({
   },
 });
 
+const pr = defineCommand({
+  meta: {
+    name: "pr",
+    description: "Link a pull request to this task, so its reviews land here",
+  },
+  args: { url: { type: "positional", required: true } },
+  async run({ args }) {
+    const { taskId } = await env();
+    const key = linkPr(taskId, String(args.url));
+    if (!key) {
+      console.error(`not a GitHub pull request URL: ${args.url}`);
+      process.exit(2);
+    }
+    console.log(`linked ${key} to ${store.taskRef(taskId)}`);
+  },
+});
+
+const feedback = defineCommand({
+  meta: {
+    name: "feedback",
+    description: "Reviews, comments and CI on this task's threads since you last looked",
+  },
+  async run() {
+    const { taskId } = await env();
+    const messages = unreadFeedback(taskId);
+    console.log(formatFeedback(messages));
+    markFeedbackRead(taskId, messages);
+  },
+});
+
 const labels = Object.values(NoteLabel) as string[];
 
 const note = defineCommand({
@@ -207,6 +243,8 @@ const main = defineCommand({
     hook,
     "adopt-hook": adopt,
     done,
+    pr,
+    feedback,
     note,
     notes,
     hub: defineCommand({

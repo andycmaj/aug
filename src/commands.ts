@@ -24,6 +24,7 @@ export const Commands = {
   START: "agent.start",
   STOP: "agent.stop",
   JUMP: "agent.jump",
+  NUDGE: "agent.nudge",
   SEND: "action.send",
   EDIT_DRAFT: "action.edit",
   REDRAFT: "action.redraft",

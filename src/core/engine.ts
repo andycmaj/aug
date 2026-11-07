@@ -19,6 +19,7 @@ import { errorMessage, logger } from "./log";
 import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
 import { slackTransport, type SlackTransport } from "./slack/transport";
 import { correct } from "./learn";
+import { nudgeText } from "./feedback";
 import * as projects from "./projects";
 import { editPending, sendPending, setSlackSender } from "./outbound";
 import * as store from "./store";
@@ -31,6 +32,7 @@ import {
   TaskStatus,
   TurnRole,
   Verdict,
+  type MessageRow,
   type TaskRow,
 } from "./types";
 
@@ -61,6 +63,19 @@ export interface EngineOptions {
 }
 
 const log = logger("engine");
+
+// A PR whose head branch is a task's worktree branch is that task's thread,
+// so its reviews and CI land on the task instead of making a new one.
+export function linkByBranch(message: MessageRow): number | null {
+  if (message.channel !== "github") return null;
+  const meta = JSON.parse(message.meta) as { repo?: string; head?: string };
+  if (!meta.repo || !meta.head) return null;
+  const task = store.taskForBranch(meta.repo, meta.head);
+  if (!task || task.thread_key === message.thread_key) return null;
+  store.linkThread(task.id, message.thread_key);
+  if (!task.url && message.url) store.updateTask(task.id, { url: message.url });
+  return task.id;
+}
 
 const off = (detail: string): ConnectorStatus => ({
   state: "off",
@@ -202,6 +217,7 @@ export class Engine {
       const row = store.insertMessage(m);
       if (!row) continue;
       fresh++;
+      linkByBranch(row);
       const outcome = await triage(row);
       log.debug("triaged", {
         message: row.id,
@@ -241,7 +257,9 @@ export class Engine {
       const since =
         store.kvGet("github.since") ??
         new Date(Date.now() - 2 * 86400000).toISOString();
-      const fresh = await this.ingest(await pollGithub(since));
+      const fresh = await this.ingest(
+        await pollGithub(since, undefined, store.hasBranchTasks),
+      );
       store.kvSet("github.since", startedAt);
       done({ fresh });
       this.setStatus("github", {
@@ -399,6 +417,11 @@ export class Engine {
       noWorktree: opts.noWorktree || this.options.noWorktrees,
       launchOverride: this.options.launchOverride,
     });
+  }
+
+  // One line into the agent's window pointing it at its feedback.
+  nudge(taskId: number): Promise<boolean> {
+    return projects.nudge(taskId, nudgeText(taskId));
   }
 
   stopCoding(taskId: number): Promise<void> {

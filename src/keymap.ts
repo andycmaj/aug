@@ -85,6 +85,13 @@ const itemMoves: BindingSpec<HelpCtx>[] = [
     relevant: (c) => c.coding,
   },
   {
+    key: "u",
+    cmd: Commands.NUDGE,
+    desc: "nudge the agent to read new reviews / CI",
+    help: "nudge",
+    relevant: (c) => c.coding,
+  },
+  {
     key: "d",
     cmd: Commands.DONE,
     desc: "mark done",
@@ -262,6 +269,7 @@ export const keymap: KeymapTable<HelpCtx> = {
     { key: "s", cmd: Commands.START, desc: "start / continue the agent" },
     { key: "shift+s", cmd: Commands.STOP, desc: "stop the agent and save" },
     { key: "shift+t", cmd: Commands.JUMP, desc: "jump to the agent's tmux window" },
+    { key: "u", cmd: Commands.NUDGE, desc: "nudge the agent about new feedback" },
     { key: "d", cmd: Commands.DONE, desc: "mark done" },
   ],
 };

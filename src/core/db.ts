@@ -144,6 +144,15 @@ CREATE TABLE IF NOT EXISTS projects (
   archived_at TEXT
 );
 
+-- More threads that belong to a task: the PR its worktree opened, beside
+-- the issue it came from.
+CREATE TABLE IF NOT EXISTS task_threads (
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  thread_key TEXT NOT NULL,
+  linked_at TEXT NOT NULL,
+  PRIMARY KEY (thread_key, task_id)
+);
+
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

@@ -141,17 +141,50 @@ export function listTasks(): TaskRow[] {
   );
 }
 
+// A task owns its own thread plus any linked to it (task_threads).
+const ON_THREAD =
+  "(thread_key = ? OR id IN (SELECT task_id FROM task_threads WHERE thread_key = ?))";
+
 export function openTaskForThread(threadKey: string): TaskRow | null {
   return one<TaskRow>(
-    "SELECT * FROM tasks WHERE thread_key = ? AND status IN ('open','later') ORDER BY id DESC LIMIT 1",
+    `SELECT * FROM tasks WHERE ${ON_THREAD} AND status IN ('open','later') ORDER BY id DESC LIMIT 1`,
+    threadKey,
     threadKey,
   );
 }
 
 export function lastTaskForThread(threadKey: string): TaskRow | null {
   return one<TaskRow>(
-    "SELECT * FROM tasks WHERE thread_key = ? ORDER BY id DESC LIMIT 1",
+    `SELECT * FROM tasks WHERE ${ON_THREAD} ORDER BY id DESC LIMIT 1`,
     threadKey,
+    threadKey,
+  );
+}
+
+export function linkThread(taskId: number, threadKey: string): void {
+  run(
+    "INSERT OR IGNORE INTO task_threads (task_id, thread_key, linked_at) VALUES (?, ?, ?)",
+    taskId,
+    threadKey,
+    now(),
+  );
+}
+
+export function threadsForTask(taskId: number): string[] {
+  const task = getTask(taskId);
+  const linked = all<{ thread_key: string }>(
+    "SELECT thread_key FROM task_threads WHERE task_id = ? ORDER BY linked_at",
+    taskId,
+  ).map((r) => r.thread_key);
+  return task?.thread_key ? [task.thread_key, ...linked] : linked;
+}
+
+export function hasBranchTasks(repo: string): boolean {
+  return (
+    one<{ n: number }>(
+      "SELECT 1 AS n FROM tasks WHERE repo = ? AND branch IS NOT NULL LIMIT 1",
+      repo,
+    ) !== null
   );
 }
 

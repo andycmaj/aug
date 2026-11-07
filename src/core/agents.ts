@@ -494,6 +494,8 @@ export function codingBrief(task: TaskRow): string {
     "Leave the live handoff board a note when you start, get blocked, or have something ready:",
     `  ${toolsCommand("note", "--label", "working on", "<what, which files>")}`,
     `Read what other agents left before you start: ${toolsCommand("notes")}`,
+    `When you open a pull request, link it so its reviews come back to this task: ${toolsCommand("pr", "<url>")}`,
+    `Reviews, comments and CI that came back since you last looked: ${toolsCommand("feedback")}`,
     `Durable discoveries go in the Hub: ${toolsCommand("hub", "add", "--topic", "<topic>", "--title", "<title>", "<body>")}`,
     `Search it: ${toolsCommand("hub", "search", "<words>")}`,
     "",

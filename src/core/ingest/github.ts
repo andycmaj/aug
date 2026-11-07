@@ -67,6 +67,7 @@ export function toMessage(
   n: GhNotification,
   item: GhItem | null,
   me: string,
+  head: string | null = null,
 ): NewMessage | null {
   const repo = n.repository.full_name;
   const number = numberFromUrl(n.subject.url);
@@ -91,13 +92,22 @@ export function toMessage(
     url: item?.html_url ?? n.repository.html_url,
     receivedAt: n.updated_at,
     fromMe: author.toLowerCase() === me.toLowerCase(),
-    meta: { repo, number, type: n.subject.type, reason: n.reason },
+    meta: {
+      repo,
+      number,
+      type: n.subject.type,
+      reason: n.reason,
+      ...(head ? { head } : {}),
+    },
   };
 }
 
+// A PR's head branch is one more call, so it is only fetched for repos where
+// some task has a worktree branch a PR could come from.
 export async function pollGithub(
   sinceIso: string | null,
   api: GhApi = ghApi,
+  wantsHead: (repo: string) => boolean = () => false,
 ): Promise<NewMessage[]> {
   const me = ((await api("user")) as { login: string }).login;
   const query = new URLSearchParams({
@@ -123,7 +133,22 @@ export async function pollGithub(
         item = null;
       }
     }
-    const message = toMessage(n, item, me);
+    let head: string | null = null;
+    if (
+      n.subject.type === "PullRequest" &&
+      n.subject.url &&
+      wantsHead(n.repository.full_name)
+    ) {
+      try {
+        const pr = (await api(
+          n.subject.url.replace("https://api.github.com/", ""),
+        )) as { head?: { ref?: string } };
+        head = pr.head?.ref ?? null;
+      } catch {
+        head = null;
+      }
+    }
+    const message = toMessage(n, item, me, head);
     if (message) out.push(message);
   }
   return out;

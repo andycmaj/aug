@@ -170,6 +170,8 @@ worktrees, or aug-made worktrees will get two windows.
    at `$AUG_HOME/adopt-hook.sh`), and auto tasks for hand-started claudes.
    `aug-tools done|note` work in an adopted window too (found by its tag).
    The offer to install on first create/adopt lands with the Projects tab.
-6. PR link by branch, `aug-tools pr`, `aug-tools feedback`, the nudge.
+6. [x] PR link by branch (`task_threads`; ingest fetches a PR's head only for
+   repos with branch tasks), `aug-tools pr`, `aug-tools feedback`, the nudge
+   (`u`). The coding brief tells agents about both tools.
 7. Board `Projects` tab, rail chip and filter.
 8. `watch()`-driven reconcile, README env contract.

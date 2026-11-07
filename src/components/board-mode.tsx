@@ -241,6 +241,7 @@ export function BoardMode() {
       [Commands.START]: onTask(shell.actions.start),
       [Commands.STOP]: onTask(shell.actions.stop),
       [Commands.JUMP]: onTask((t) => void shell.actions.jumpTo(t.id)),
+      [Commands.NUDGE]: onTask((t) => void shell.actions.nudge(t.id)),
       [Commands.DONE]: onTask(shell.actions.done),
     },
     { target: p.target },

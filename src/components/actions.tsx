@@ -203,6 +203,18 @@ export function useActions(dialogs: Dialogs) {
     }
   }
 
+  async function nudge(taskId: number) {
+    try {
+      showToast(
+        (await engine.nudge(taskId))
+          ? `${store.taskRef(taskId)}: nudged`
+          : "Its window is gone; s starts it again",
+      );
+    } catch (err) {
+      showToast(`Could not nudge: ${errText(err)}`, 4000, "error");
+    }
+  }
+
   async function jumpTo(taskId: number) {
     try {
       if (!(await projects.jump(taskId)))
@@ -676,6 +688,7 @@ export function useActions(dialogs: Dialogs) {
       [Commands.START]: onTask(start),
       [Commands.STOP]: onTask(stop),
       [Commands.JUMP]: onTask((task) => void jumpTo(task.id)),
+      [Commands.NUDGE]: onTask((task) => void nudge(task.id)),
       [Commands.DONE]: onTask(done),
       [Commands.REMIND]: onTask(remind),
       [Commands.WATCH]: onTask(watch),
@@ -712,6 +725,7 @@ export function useActions(dialogs: Dialogs) {
   return {
     startCoding,
     jumpTo,
+    nudge,
     openEditor,
     start,
     stop,
