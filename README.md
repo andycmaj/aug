@@ -25,7 +25,8 @@ a fresh scratch home.
 ## Run it for real
 
 Requirements: [bun](https://bun.sh), the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI (logged in),
-and [`gh`](https://cli.github.com/) (logged in).
+[`gh`](https://cli.github.com/) (logged in), [tmux](https://github.com/tmux/tmux)
+3.3a or newer (3.7 for live updates), and [worktrunk](https://worktrunk.dev) (`wt`) for coding tasks.
 
 ```sh
 export SLACK_TOKEN=xoxp-...   # optional: a Slack *user* token
@@ -71,6 +72,7 @@ State lives in `~/.aug` (`AUG_HOME` overrides): `aug.db` (SQLite), `config.json`
   "brain": { "triageModel": "haiku", "agentModel": "sonnet", "assistantModel": "sonnet", "slackModel": "haiku" },
   "opener": "open",
   "maxActiveAgents": 4,
+  "worktreeCommand": "wt -C {repo_path} switch {create} {branch} --no-cd --format json -y",
   "autostart": true,
   "learning": true,
   "theme": "default",
@@ -78,8 +80,12 @@ State lives in `~/.aug` (`AUG_HOME` overrides): `aug.db` (SQLite), `config.json`
 }
 ```
 
-`github.repos` maps a repository to its local checkout, which is where a coding
-agent works. `slack.channels` are channels where every message is triaged.
+`github.repos` maps a repository to its local checkout; a coding task gets a
+worktree of it (aug asks for the path the first time a repo is unmapped).
+`worktreeCommand` makes that worktree: `{repo_path}`, `{create}` (`-c` for a new
+branch) and `{branch}` are filled in, and it must print wt's JSON or a path on
+its last line. Swap in your own alias, or add `--no-hooks`. `tmuxSocket` puts
+agents on a private tmux server (`-L`); unset means your default one. `slack.channels` are channels where every message is triaged.
 Anywhere else, only DMs and mentions of you are triaged. `opener` opens links
 and files the agent made: a command or an argv array, with the target appended.
 It defaults to `open` on macOS, `wslview` on WSL and `xdg-open` on Linux.
@@ -117,10 +123,12 @@ does the work, and whatever comes out waits for you.
   tools are read-only look-ups plus writes in its own scratch folder; anything
   else is denied without asking. Files it writes there show under **What it
   made**: markdown rendered, CSV/TSV as a small table, anything else listed.
-- **A coding task runs interactive Claude Code in a terminal embedded on the
-  table**, in the repository's checkout. Hooks passed with `--settings`
+- **A coding task runs interactive Claude Code in tmux**, in its own worktree,
+  in a window of its project's session (see [Projects](#projects)). The table
+  embeds a view of that window. Hooks passed with `--settings`
   (`aug-tools hook ...`) move it through the agent states. Its brief tells it
-  to finish with `aug-tools done`, leave handoff notes, and use the Hub.
+  to finish with `aug-tools done`, leave handoff notes, use the Hub, link the
+  PR it opens (`aug-tools pr`) and read what came back (`aug-tools feedback`).
 - **Nothing sends itself.** A draft (a Slack reply, or a GitHub comment with
   merge, close or approve riding along) goes out only on `y` plus a confirm.
   Sending never closes a task. Mark done (`d`) does.
@@ -135,16 +143,64 @@ does the work, and whatever comes out waits for you.
   when you ask: done, remind, watch, start, redraft, not a task, priority,
   remember. It never sends.
 
+## Projects
+
+A project is one tmux session; each coding task in it is one window, one
+worktree and one claude. tmux owns the claudes, so they outlive aug and you can
+work with them from any tmux client.
+
+- **Make or adopt.** Board tab `5` makes a project (`c`) or adopts a session you
+  already have (`A`). aug tags the session with `@aug_project` and each window
+  with `@aug_task`; names are only names, so rename freely. A coding task
+  started outside a project gets a project of its own.
+- **Start.** `s` asks for the branch (a new one, an existing one, or `pr:N`),
+  runs `worktreeCommand`, and opens the window. Esc on the checkout question
+  works in a scratch folder instead.
+- **Watch and jump.** The table shows the window through a grouped tmux session
+  of aug's own, so it never moves your real client. `T` moves your real client
+  there; on the Board, `enter` on a project jumps to its session.
+- **Finish.** `S` closes the window and keeps the worktree, so `s` resumes the
+  same claude. `d` closes the window and runs `wt remove`; a dirty worktree is
+  kept and aug says so. A project made for one task is archived when that task
+  is done. `x` on the Board archives a project; `M` moves a task (its window
+  moves with it).
+- **PRs.** A PR whose head branch is a task's branch belongs to that task, so
+  its reviews and CI land there. `u` types one line into the agent's window
+  telling it to run `aug-tools feedback`. Nothing else is pasted or sent.
+- **Claudes you start by hand.** `aug hooks install` adds hooks to
+  `~/.claude/settings.json` (backed up once to `settings.json.before-aug`).
+  A small `sh` guard exits at once unless the claude is in a project's session
+  and is not one aug started. Then its first prompt makes it a task in that
+  project. `aug hooks uninstall` removes them; `aug hooks status` says which.
+
+### Env contract
+
+Every command aug runs for a task (the worktree command, the tmux window, the
+claude in it) gets these, so your own wt and tmux hooks can skip what aug
+already does with `[ -n "$AUG" ] && exit 0`:
+
+| Variable         | Value                              |
+| ---------------- | ---------------------------------- |
+| `AUG`            | `1`                                |
+| `AUG_HOME`       | aug's home directory               |
+| `AUG_PROJECT`    | the project id                     |
+| `AUG_TASK_ID`    | the task id                        |
+| `AUG_BRANCH`     | the branch                         |
+| `AUG_SESSION_ID` | the claude session id (claude only) |
+
+If one of your hooks opens a tmux window for every new worktree, guard it with
+`$AUG`, or aug-made worktrees get two windows.
+
 ## Keys
 
 | Where           | Keys                                                                                                                                                                                          |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Anywhere        | `n`/`b` walk next/back · `a` ask · `v` Chat/Board · `N` new · `D` docs · `C` connections · `^r` check now · `:` palette · `?` help · `Tab` pane · `q` quit                                     |
-| Rail            | `j`/`k` move the cursor · `enter` put the row on the table. Moves act on the row under the cursor. |
-| Rail and table  | `y` send (asks first) · `e` edit draft in `$EDITOR` · `E` redraft · `s` start/continue agent · `S` stop and save · `d` done · `r` remind me · `w` watch · `x` not a task / read · `m` make it a task · `p` priority · `t` kind · `W` waiting on someone · `o` open the link or a file the agent made · `O` edit a made file in `$EDITOR` · `i` type · `I` info (everything aug knows about the row; `c` copies a value) |
+| Rail            | `j`/`k` move the cursor · `enter` put the row on the table · `f` one project / all. Moves act on the row under the cursor. |
+| Rail and table  | `y` send (asks first) · `e` edit draft in `$EDITOR` · `E` redraft · `s` start/continue agent · `S` stop and save · `d` done · `r` remind me · `w` watch · `x` not a task / read · `m` make it a task · `p` priority · `t` kind · `W` waiting on someone · `o` open the link or a file the agent made · `O` edit a made file in `$EDITOR` · `i` type · `I` info (everything aug knows about the row; `c` copies a value) · coding: `T` jump to its tmux window · `u` nudge about feedback · `M` move to a project |
 | Chat box        | `enter` send to the agent · `esc` leave                                                                                                                                                       |
 | Agent terminal  | everything goes to the agent · `^]` detach                                                                                                                                                    |
-| Board           | `1`–`4` Columns / Wall / Live handoffs / Hub · `h j k l` move · `enter` open or attach · `c` write a note or Hub entry · `L` tiles across                                                       |
+| Board           | `1`–`5` Columns / Wall / Live handoffs / Hub / Projects · `h j k l` move · `enter` open or attach · `c` write a note or Hub entry (new project on tab 5) · `L` tiles across · `A` adopt a tmux session · `x` archive a project · `M` move a task |
 
 ## What changed for a terminal
 
@@ -155,7 +211,7 @@ These Taskuary features were rethought for a TUI:
 | Chat / Board / Game switch                        | `v` toggles Chat and Board. Game is not built.                                                    |
 | One-press **Send** button                         | `y` opens a confirm that shows the exact words; a stray key never sends.                         |
 | Draft edited in place                             | `e` opens the draft in `$EDITOR` inside an embedded terminal. Saving updates it and teaches voice. |
-| Live terminal on the task page and on the Wall    | Embedded PTY ([ghostty-opentui](https://www.npmjs.com/package/ghostty-opentui)): attach by focusing it, `^]` to detach. |
+| Live terminal on the task page and on the Wall    | The agent runs in tmux; aug embeds a view of its window ([ghostty-opentui](https://www.npmjs.com/package/ghostty-opentui)): attach by focusing it, `^]` to detach, `T` to jump there in your own tmux. |
 | Docs page with an editor                          | `D` picks a doc, which opens in `$EDITOR`.                                                         |
 | Rail click opens the task                         | Same as Taskuary: the cursor moves freely, `enter` puts the row on the table (marked `▸`), `n`/`b` walk the table. |
 | Chat pill in the corner                           | `a` opens the Assistant as a modal. Its conversation survives the view switch.                      |

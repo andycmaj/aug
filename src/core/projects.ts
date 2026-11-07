@@ -454,6 +454,23 @@ function markGone(session: SessionRow): void {
   });
 }
 
+// Live reconcile: tmux events, debounced, while aug runs. The watch ends
+// when the server does (or never starts without one); the caller's poll
+// starts it again.
+export function watchTmux(
+  onChange: () => void,
+  signal: AbortSignal,
+  debounceMs = 300,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const changed = () => {
+    clearTimeout(timer);
+    timer = setTimeout(onChange, debounceMs);
+  };
+  signal.addEventListener("abort", () => clearTimeout(timer));
+  return mux().watch(changed, signal);
+}
+
 // tmux is the truth for whether a window lives: a session whose window is
 // gone has stopped, and a project whose session was renamed gets the new
 // name. Runs at boot, on watch events, and on a slow poll.

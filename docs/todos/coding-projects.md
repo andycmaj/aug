@@ -1,6 +1,6 @@
 # Projects: one tmux session per project, one claude per task
 
-Status: designed (grilled 2026-11-07), in progress.
+Status: built (grilled and built 2026-11-07).
 
 ## Problem
 
@@ -178,4 +178,7 @@ worktrees, or aug-made worktrees will get two windows.
    filter, `M` in Chat too. The first create/adopt offers the hooks once
    (never in fixture mode). Archive kills windows before the session, since
    a grouped viewer would otherwise keep them alive.
-8. `watch()`-driven reconcile, README env contract.
+8. [x] `watch()`-driven reconcile: the control client attaches to a session
+   of aug's own (`aug-view-watch-<pid>`), so none of your panes' output
+   streams into aug; structural events from every session still arrive.
+   README: Projects section and the env contract.

@@ -19,6 +19,7 @@ import {
   reconcile,
   slug,
   startTask,
+  watchTmux,
 } from "../src/core/projects";
 import * as store from "../src/core/store";
 import { AgentState, Kind, SessionKind } from "../src/core/types";
@@ -270,6 +271,19 @@ describe("closing, moving, reconciling", () => {
     expect(store.getProject(p.id)!.status).toBe("archived");
     expect(store.latestSession(t.id)!.ended_at).not.toBeNull();
     expect(store.getTask(t.id)!.agent_state).toBe(AgentState.stopped);
+  });
+
+  test("tmux events are debounced into one reconcile, until aborted", async () => {
+    const abort = new AbortController();
+    let calls = 0;
+    const done = watchTmux(() => calls++, abort.signal, 10);
+    await Bun.sleep(0);
+    for (const fire of fake.watchers) { fire(); fire(); fire(); }
+    await Bun.sleep(30);
+    expect(calls).toBe(1);
+    abort.abort();
+    await done;
+    expect(fake.watchers).toHaveLength(0);
   });
 
   test("nudge types a line into the live window only", async () => {

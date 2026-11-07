@@ -119,7 +119,13 @@ export class Engine {
     ensureDocs();
     this.recoverSessions();
     void this.reconcile();
-    this.timers.push(setInterval(() => void this.reconcile(), 30_000));
+    this.timers.push(
+      setInterval(() => {
+        void this.reconcile();
+        this.watchTmux();
+      }, 30_000),
+    );
+    this.watchTmux();
     store.wakeReminders();
     this.timers.push(setInterval(() => store.wakeReminders(), 60_000));
     if (this.options.offline) {
@@ -172,6 +178,8 @@ export class Engine {
     log.info("engine stop");
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
+    this.watching?.abort();
+    this.watching = null;
     this.slack?.stop();
     this.pool.stopAll();
   }
@@ -468,6 +476,22 @@ export class Engine {
   async closeCoding(taskId: number): Promise<projects.CloseResult> {
     this.markDone(taskId);
     return projects.closeTask(taskId);
+  }
+
+  private watching: AbortController | null = null;
+
+  // One watch at a time; when it ends (no server yet, or it went away) the
+  // next poll tick starts another.
+  private watchTmux(): void {
+    if (this.watching) return;
+    const abort = new AbortController();
+    this.watching = abort;
+    projects
+      .watchTmux(() => void this.reconcile(), abort.signal)
+      .catch((err) => log.debug("tmux watch ended", { err: errorMessage(err) }))
+      .finally(() => {
+        if (this.watching === abort) this.watching = null;
+      });
   }
 
   async reconcile(): Promise<void> {

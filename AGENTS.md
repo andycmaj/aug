@@ -17,10 +17,16 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 - **The brain is `claude -p`** (`core/brain.ts`), swappable with `setBrain` for
   tests and fixtures. User settings are skipped (`--setting-sources ""`) so the
   user's hooks never leak into what triage reads back.
-- **Coding agents run as interactive `claude` in a PTY.** `core/agents.ts`
-  builds the command line and the brief. Hooks call `src/bin/aug-tools.ts`,
-  which is plain TS and needs no Solid preload. Those hooks write to SQLite, and
-  the TUI notices through `PRAGMA data_version`.
+- **Coding agents run as interactive `claude` in tmux**, one window per task
+  in its project's session (`core/projects.ts`), in a worktree made by `wt`.
+  `core/agents.ts` builds the command line and the brief. The table embeds a
+  grouped viewer session in a PTY. Hooks call `src/bin/aug-tools.ts`, which is
+  plain TS and needs no Solid preload. Those hooks write to SQLite, and the TUI
+  notices through `PRAGMA data_version`.
+- **`core/mux.ts` is the only door to tmux and wt**, and the only importer of
+  `libtmux` (alpha, pinned exactly). Identity is the `@aug_project` /
+  `@aug_task` user options, never names. Tests use `test/fake-mux.ts`; real
+  tmux checks use a private server (`-L`), never the default one.
 - **Slack goes through a `SlackTransport`** (`core/slack/`): `token`,
   `claude-mcp` (a persistent `claude -p` whose session can only read, plus a
   one-shot send call), or `mcp` (a stub). claude.ai connectors load only with

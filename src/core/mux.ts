@@ -76,6 +76,9 @@ export interface Mux {
   // so showing a window never moves your real client.
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[];
   paneInfo(paneId: string): Promise<PaneInfo | null>;
+  // Calls onChange when windows or sessions come and go, until the signal
+  // aborts or the server goes away. Resolves at once with no server.
+  watch(onChange: () => void, signal: AbortSignal): Promise<void>;
   // A local or origin branch by that name.
   branchExists(repoPath: string, branch: string): Promise<boolean>;
   // Makes the worktree and answers its path.
@@ -150,6 +153,28 @@ const WINDOW_FORMAT = [
 ].join(SEP);
 
 export const VIEWER_PREFIX = "aug-view-";
+const WATCH_PREFIX = `${VIEWER_PREFIX}watch-`;
+
+// Structural changes worth a reconcile; pane output never is.
+const WATCHED = new Set([
+  "window-add",
+  "window-close",
+  "unlinked-window-add",
+  "unlinked-window-close",
+  "window-renamed",
+  "unlinked-window-renamed",
+  "session-renamed",
+  "sessions-changed",
+]);
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function idOf(raw: string | undefined): number | null {
   const n = Number(raw);
@@ -319,6 +344,34 @@ export class TmuxMux implements Mux {
       ";", "set-option", "destroy-unattached", "on",
       ";", "select-window", "-t", windowId,
     ];
+  }
+
+  // The control client attaches to a session of aug's own, so none of your
+  // panes' output streams into aug; tmux still reports structural changes
+  // in every other session (the unlinked-* events).
+  async watch(onChange: () => void, signal: AbortSignal): Promise<void> {
+    const state = await this.state();
+    if (state.sessions.length === 0) return;
+    for (const s of state.sessions) {
+      const pid = Number(s.name.slice(WATCH_PREFIX.length));
+      if (s.name.startsWith(WATCH_PREFIX) && pid !== process.pid && !pidAlive(pid))
+        await this.cmd("kill-session", ["-t", s.id]).catch(() => []);
+    }
+    const name = `${WATCH_PREFIX}${process.pid}`;
+    const id =
+      state.sessions.find((s) => s.name === name)?.id ??
+      (await this.cmd("new-session", ["-d", "-P", "-F", "#{session_id}", "-s", name]))[0]?.trim();
+    if (!id) return;
+    const stream = this.server.watch({ target: id, signal });
+    signal.addEventListener("abort", () => {
+      void stream.close();
+      void this.cmd("kill-session", ["-t", id]).catch(() => []);
+    });
+    try {
+      for await (const event of stream) if (WATCHED.has(event.kind)) onChange();
+    } finally {
+      await stream.close();
+    }
   }
 
   async branchExists(repoPath: string, branch: string): Promise<boolean> {

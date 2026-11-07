@@ -107,6 +107,14 @@ export class FakeMux implements Mux {
     };
   }
 
+  watchers: (() => void)[] = [];
+
+  async watch(onChange: () => void, signal: AbortSignal): Promise<void> {
+    this.watchers.push(onChange);
+    await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve()));
+    this.watchers = this.watchers.filter((w) => w !== onChange);
+  }
+
   async branchExists(_repoPath: string, branch: string): Promise<boolean> {
     return this.branches.has(branch);
   }
