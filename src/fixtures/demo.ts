@@ -628,7 +628,12 @@ export function installFixture(name: string): Engine {
   if (name !== "demo") throw new Error(`unknown fixture "${name}" (try: demo)`);
   process.env.AUG_HOME ??= mkdtempSync(join(tmpdir(), "aug-demo-"));
   useDb(openDb());
-  setConfigForTest({ ...DEFAULT_CONFIG, autostart: false });
+  // Coding agents run on a private tmux server, never your own.
+  setConfigForTest({
+    ...DEFAULT_CONFIG,
+    autostart: false,
+    tmuxSocket: "aug-demo",
+  });
   ensureDocs();
   if (store.listTasks().length === 0) seedDemo();
   setBrain(demoBrain);
@@ -639,6 +644,7 @@ export function installFixture(name: string): Engine {
   const fake = fileURLToPath(new URL("./fake-claude.ts", import.meta.url));
   return new Engine({
     offline: true,
+    noWorktrees: true,
     launchOverride: (task, launch) => ({
       ...launch,
       argv: [process.execPath, fake, task.title],

@@ -21,6 +21,7 @@
     "@opentui/solid": "0.5.12",
     "citty": "^0.2.2",
     "ghostty-opentui": "1.5.0",
+    "libtmux": "0.1.2",
     "solid-js": "1.9.12"
   },
   "devDependencies": {

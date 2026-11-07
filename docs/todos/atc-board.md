@@ -120,7 +120,7 @@ fuel.
   times.
 - Don't start an agent whose result you can't review today. Its draft only
   goes stale, and it burns tokens: the airborne-holding cost.
-- `agentsAtOnce` is a crude version of this already.
+- `maxActiveAgents` is a crude version of this already.
 
 ### Holding stacks and EFC → For later
 

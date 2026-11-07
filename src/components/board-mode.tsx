@@ -240,6 +240,7 @@ export function BoardMode() {
       [Commands.WALL_COLS]: () => setWallCols((c) => (c % 3) + 1),
       [Commands.START]: onTask(shell.actions.start),
       [Commands.STOP]: onTask(shell.actions.stop),
+      [Commands.JUMP]: onTask((t) => void shell.actions.jumpTo(t.id)),
       [Commands.DONE]: onTask(shell.actions.done),
     },
     { target: p.target },

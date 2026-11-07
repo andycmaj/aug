@@ -4,7 +4,7 @@
 // the owner makes (the buttons) goes through it so the TUI stays a view.
 
 import { advisorDue, runAdvisor } from "./advisor";
-import { AgentPool, codingLaunch, type CodingLaunch } from "./agents";
+import { AgentPool, type CodingLaunch } from "./agents";
 import {
   ask,
   Verb,
@@ -19,6 +19,7 @@ import { errorMessage, logger } from "./log";
 import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
 import { slackTransport, type SlackTransport } from "./slack/transport";
 import { correct } from "./learn";
+import * as projects from "./projects";
 import { editPending, sendPending, setSlackSender } from "./outbound";
 import * as store from "./store";
 import { triage, type TriageEffect } from "./triage";
@@ -52,6 +53,8 @@ export interface EngineOptions {
   offline?: boolean;
   // Replaces the coding agent's command line (fixture mode's fake claude).
   launchOverride?: (task: TaskRow, launch: CodingLaunch) => CodingLaunch;
+  // Fixture mode has no checkouts: coding windows open in scratch.
+  noWorktrees?: boolean;
   onLearned?: (line: string) => void;
   // Replaces the Slack transport chosen from config (tests).
   slack?: SlackTransport;
@@ -100,6 +103,8 @@ export class Engine {
   start(): void {
     ensureDocs();
     this.recoverSessions();
+    void this.reconcile();
+    this.timers.push(setInterval(() => void this.reconcile(), 30_000));
     store.wakeReminders();
     this.timers.push(setInterval(() => store.wakeReminders(), 60_000));
     if (this.options.offline) {
@@ -112,7 +117,7 @@ export class Engine {
     log.info("engine start", {
       github: config.github.enabled,
       slack: config.slack.enabled ? config.slack.transport : false,
-      agentsAtOnce: config.agentsAtOnce,
+      maxActiveAgents: config.maxActiveAgents,
     });
     if (config.github.enabled) {
       void this.pollGithub();
@@ -158,9 +163,12 @@ export class Engine {
 
   // Sessions alive when aug last quit are not alive now: a chat turn cut off
   // or a terminal closed reads as stopped, with Continue.
+  // tmux keeps coding agents alive across restarts; reconcile asks it which
+  // still are. Anything else that was live died with the last aug.
   private recoverSessions(): void {
     store.batch(() => {
       for (const s of store.liveSessions()) {
+        if (s.kind === SessionKind.tmux) continue;
         store.updateSession(s.id, {
           state: AgentState.stopped,
           ended_at: now(),
@@ -177,7 +185,8 @@ export class Engine {
       for (const task of store.listTasks()) {
         if (
           task.agent_state === AgentState.working &&
-          !store.liveSessions().some((s) => s.task_id === task.id)
+          !store.liveSessions().some((s) => s.task_id === task.id) &&
+          !this.pool.isRunning(task.id)
         ) {
           store.updateTask(task.id, { agent_state: AgentState.stopped });
         }
@@ -209,7 +218,10 @@ export class Engine {
   runEffects(effects: TriageEffect[]): void {
     for (const effect of effects) {
       const session = store.latestSession(effect.taskId);
-      if (effect.type === "agent-message" && session?.kind === SessionKind.pty)
+      if (
+        effect.type === "agent-message" &&
+        (session?.kind === SessionKind.pty || session?.kind === SessionKind.tmux)
+      )
         continue;
       const reason =
         effect.type === "agent-turn"
@@ -376,66 +388,35 @@ export class Engine {
     );
   }
 
-  // A coding session in a terminal: the TUI spawns it; the engine records it.
-  beginCoding(
+  // A coding agent: a claude in a window of the task's project session.
+  // tmux owns it; the TUI only embeds a viewer on it.
+  startCoding(
     taskId: number,
-    opts: { resume?: string; note?: string } = {},
-  ): CodingLaunch | null {
-    const task = store.getTask(taskId);
-    if (!task) return null;
-    let launch = codingLaunch(task, opts);
-    if (this.options.launchOverride)
-      launch = this.options.launchOverride(task, launch);
-    store.batch(() => {
-      if (opts.resume && store.getSession(opts.resume)) {
-        store.updateSession(opts.resume, {
-          state: AgentState.working,
-          ended_at: null,
-        });
-      } else {
-        store.createSession({
-          id: launch.sessionId,
-          taskId,
-          kind: SessionKind.pty,
-          cwd: launch.cwd,
-          startedBy: "owner",
-        });
-      }
-      if (task.status !== TaskStatus.open) store.reopen(taskId);
-      store.updateTask(taskId, {
-        agent_state: AgentState.working,
-        queue_reason: null,
-        agent_says: null,
-        unread_result: 0,
-      });
-      store.addTurn({
-        taskId,
-        role: TurnRole.trigger,
-        body: opts.resume
-          ? "Continued the coding session"
-          : `Started a coding session in ${launch.cwd}`,
-      });
+    opts: Omit<projects.StartOptions, "launchOverride"> = {},
+  ): Promise<projects.StartResult> {
+    return projects.startTask(taskId, {
+      ...opts,
+      noWorktree: opts.noWorktree || this.options.noWorktrees,
+      launchOverride: this.options.launchOverride,
     });
-    return launch;
   }
 
-  codingExited(sessionId: string, code: number | null): void {
-    const session = store.getSession(sessionId);
-    if (!session || session.ended_at) return;
-    const task = store.getTask(session.task_id);
-    const finished = task?.agent_state === AgentState.agentdone;
-    store.batch(() => {
-      store.updateSession(sessionId, {
-        state: finished ? AgentState.agentdone : AgentState.stopped,
-        ended_at: now(),
-      });
-      if (task && !finished && task.status === TaskStatus.open) {
-        store.updateTask(task.id, {
-          agent_state: AgentState.stopped,
-          agent_says: code ? `exited ${code}` : null,
-        });
-      }
-    });
+  stopCoding(taskId: number): Promise<void> {
+    return projects.stopTask(taskId);
+  }
+
+  // Done with a coding task: its window and worktree go too.
+  async closeCoding(taskId: number): Promise<projects.CloseResult> {
+    this.markDone(taskId);
+    return projects.closeTask(taskId);
+  }
+
+  async reconcile(): Promise<void> {
+    try {
+      await projects.reconcile();
+    } catch (err) {
+      log.warn("reconcile failed", { err: errorMessage(err) });
+    }
   }
 
   stopAgent(taskId: number): void {

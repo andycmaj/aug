@@ -84,6 +84,32 @@ export interface TaskRow {
   updated_at: string;
   closed_at: string | null;
   closed_by: string | null;
+  project_id: number | null;
+  // Set once the task has a worktree; (repo, branch) is how a PR finds it.
+  branch: string | null;
+  worktree: string | null;
+}
+
+export const ProjectStatus = {
+  active: "active",
+  archived: "archived",
+} as const;
+export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
+
+// One tmux session. The session carries @aug_project; tmux_session is only
+// the name it had when aug last looked.
+export interface ProjectRow {
+  id: number;
+  name: string;
+  tmux_session: string;
+  // JSON array of owner/repo keys.
+  repos: string;
+  status: ProjectStatus;
+  // Made for one inbound task; archived when it empties.
+  solo: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
 }
 
 export interface MessageRow {
@@ -157,6 +183,8 @@ export const SessionKind = {
   chat: "chat",
   // Interactive claude in an embedded terminal: a coding task.
   pty: "pty",
+  // Interactive claude in a window of the project's tmux session.
+  tmux: "tmux",
 } as const;
 export type SessionKind = (typeof SessionKind)[keyof typeof SessionKind];
 
@@ -174,6 +202,8 @@ export interface SessionRow {
   last_event_at: string;
   ended_at: string | null;
   result: string | null;
+  // The tmux window id (@12) for a tmux session.
+  tmux_window: string | null;
 }
 
 export const NoteLabel = {

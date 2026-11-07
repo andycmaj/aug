@@ -253,7 +253,7 @@ export class AgentPool {
   private waiting: { taskId: number; reason: string }[] = [];
 
   constructor(
-    private options: PoolOptions = { limit: () => loadConfig().agentsAtOnce },
+    private options: PoolOptions = { limit: () => loadConfig().maxActiveAgents },
   ) {}
 
   isRunning(taskId: number): boolean {

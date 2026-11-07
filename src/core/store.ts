@@ -7,6 +7,7 @@ import { db, now } from "./db";
 import {
   ActionState,
   AgentState,
+  ProjectStatus,
   TaskStatus,
   TurnRole,
   type Channel,
@@ -19,6 +20,7 @@ import {
   type NoteLabel,
   type NoteRow,
   type Priority,
+  type ProjectRow,
   type SessionKind,
   type SessionRow,
   type TaskRow,
@@ -102,13 +104,15 @@ export interface NewTask {
   url?: string | null;
   triageReason?: string | null;
   createdAt?: string;
+  projectId?: number | null;
+  branch?: string | null;
 }
 
 export function createTask(t: NewTask): TaskRow {
   const at = t.createdAt ?? now();
   const id = run(
-    `INSERT INTO tasks (title, summary, kind, priority, watching, repo, thread_key, channel, url, triage_reason, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (title, summary, kind, priority, watching, repo, thread_key, channel, url, triage_reason, created_at, updated_at, project_id, branch)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     t.title,
     t.summary ?? "",
     t.kind,
@@ -121,6 +125,8 @@ export function createTask(t: NewTask): TaskRow {
     t.triageReason ?? null,
     at,
     at,
+    t.projectId ?? null,
+    t.branch ?? null,
   );
   return getTask(id)!;
 }
@@ -162,6 +168,87 @@ export function updateTask(id: number, patch: TaskPatch): void {
     now(),
     id,
   );
+}
+
+export function tasksForProject(projectId: number): TaskRow[] {
+  return all<TaskRow>(
+    "SELECT * FROM tasks WHERE project_id = ? AND status != 'dropped' ORDER BY created_at, id",
+    projectId,
+  );
+}
+
+// A PR's head branch finds the task whose worktree pushed it.
+export function taskForBranch(repo: string, branch: string): TaskRow | null {
+  return one<TaskRow>(
+    "SELECT * FROM tasks WHERE repo = ? AND branch = ? ORDER BY id DESC LIMIT 1",
+    repo,
+    branch,
+  );
+}
+
+// ── projects ─────────────────────────────────────────────────────────────
+
+export interface NewProject {
+  name: string;
+  tmuxSession: string;
+  repos?: string[];
+  solo?: boolean;
+}
+
+export function createProject(p: NewProject): ProjectRow {
+  const at = now();
+  const id = run(
+    `INSERT INTO projects (name, tmux_session, repos, solo, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    p.name,
+    p.tmuxSession,
+    JSON.stringify(p.repos ?? []),
+    p.solo ? 1 : 0,
+    at,
+    at,
+  );
+  return getProject(id)!;
+}
+
+export function getProject(id: number): ProjectRow | null {
+  return one<ProjectRow>("SELECT * FROM projects WHERE id = ?", id);
+}
+
+export function listProjects(): ProjectRow[] {
+  return all<ProjectRow>(
+    "SELECT * FROM projects WHERE status = 'active' ORDER BY created_at, id",
+  );
+}
+
+export function projectRepos(project: ProjectRow): string[] {
+  return JSON.parse(project.repos) as string[];
+}
+
+type ProjectPatch = Partial<Omit<ProjectRow, "id" | "created_at">>;
+
+export function updateProject(id: number, patch: ProjectPatch): void {
+  const keys = Object.keys(patch) as (keyof ProjectPatch)[];
+  if (keys.length === 0) return;
+  const sets = keys.map((k) => `${k} = ?`).join(", ");
+  const values = keys.map((k) => patch[k] ?? null) as SQLQueryBindings[];
+  run(
+    `UPDATE projects SET ${sets}, updated_at = ? WHERE id = ?`,
+    ...values,
+    now(),
+    id,
+  );
+}
+
+export function addProjectRepo(id: number, repo: string): void {
+  const project = getProject(id);
+  if (!project) return;
+  const repos = projectRepos(project);
+  if (repos.includes(repo)) return;
+  updateProject(id, { repos: JSON.stringify([...repos, repo]) });
+}
+
+export function archiveProject(id: number): void {
+  updateProject(id, { status: ProjectStatus.archived, archived_at: now() });
 }
 
 // ── messages ─────────────────────────────────────────────────────────────
@@ -356,13 +443,14 @@ export interface NewSession {
   kind: SessionKind;
   cwd: string;
   startedBy: SessionRow["started_by"];
+  tmuxWindow?: string | null;
 }
 
 export function createSession(s: NewSession): SessionRow {
   const at = now();
   run(
-    `INSERT INTO sessions (id, task_id, kind, cwd, state, started_by, started_at, last_event_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO sessions (id, task_id, kind, cwd, state, started_by, started_at, last_event_at, tmux_window)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     s.id,
     s.taskId,
     s.kind,
@@ -371,6 +459,7 @@ export function createSession(s: NewSession): SessionRow {
     s.startedBy,
     at,
     at,
+    s.tmuxWindow ?? null,
   );
   return getSession(s.id)!;
 }
@@ -396,6 +485,13 @@ export function sessionsForTask(taskId: number): SessionRow[] {
 export function liveSessions(): SessionRow[] {
   return all<SessionRow>(
     "SELECT * FROM sessions WHERE ended_at IS NULL ORDER BY started_at",
+  );
+}
+
+export function sessionForWindow(windowId: string): SessionRow | null {
+  return one<SessionRow>(
+    "SELECT * FROM sessions WHERE tmux_window = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1",
+    windowId,
   );
 }
 

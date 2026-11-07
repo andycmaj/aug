@@ -70,7 +70,7 @@ State lives in `~/.aug` (`AUG_HOME` overrides): `aug.db` (SQLite), `config.json`
   "slack": { "transport": "token", "pollSeconds": 60, "channels": ["C0123ABC"] },
   "brain": { "triageModel": "haiku", "agentModel": "sonnet", "assistantModel": "sonnet", "slackModel": "haiku" },
   "opener": "open",
-  "agentsAtOnce": 4,
+  "maxActiveAgents": 4,
   "autostart": true,
   "learning": true,
   "theme": "default",

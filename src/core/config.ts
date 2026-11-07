@@ -37,7 +37,14 @@ export interface AugConfig {
     // Reads and sends Slack under transport claude-mcp.
     slackModel: string;
   };
-  agentsAtOnce: number;
+  // How many claudes aug starts by itself may run at once. Claudes you start
+  // by hand never count.
+  maxActiveAgents: number;
+  // Makes a task's worktree. {repo_path}, {create} (-c or empty) and
+  // {branch} are filled in; stdout is wt's JSON, or a path on the last line.
+  worktreeCommand: string;
+  // A private tmux server (-L); unset means your default server.
+  tmuxSocket?: string;
   // Start a general agent on a fresh general or reply task by itself.
   autostart: boolean;
   learning: boolean;
@@ -68,7 +75,9 @@ export const DEFAULT_CONFIG: AugConfig = {
     assistantModel: "sonnet",
     slackModel: "haiku",
   },
-  agentsAtOnce: 4,
+  maxActiveAgents: 4,
+  worktreeCommand:
+    "wt -C {repo_path} switch {create} {branch} --no-cd --format json -y",
   autostart: true,
   learning: true,
   theme: "default",
@@ -81,11 +90,19 @@ type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K];
 };
 
+// Keys renamed since they first shipped, still read from an old file.
+interface LegacyKeys {
+  agentsAtOnce?: number;
+}
+
 // Under claude-mcp every poll is a model turn, so it polls less often unless
 // told otherwise.
 const CLAUDE_MCP_POLL_SECONDS = 180;
 
-export function mergeConfig(raw: DeepPartial<AugConfig>): AugConfig {
+export function mergeConfig(
+  raw: DeepPartial<AugConfig> & LegacyKeys,
+): AugConfig {
+  const { agentsAtOnce, ...rest } = raw;
   const slackPoll =
     raw.slack?.pollSeconds ??
     (raw.slack?.transport === "claude-mcp"
@@ -93,7 +110,9 @@ export function mergeConfig(raw: DeepPartial<AugConfig>): AugConfig {
       : DEFAULT_CONFIG.slack.pollSeconds);
   return {
     ...DEFAULT_CONFIG,
-    ...raw,
+    ...rest,
+    maxActiveAgents:
+      raw.maxActiveAgents ?? agentsAtOnce ?? DEFAULT_CONFIG.maxActiveAgents,
     github: { ...DEFAULT_CONFIG.github, ...raw.github },
     slack: { ...DEFAULT_CONFIG.slack, ...raw.slack, pollSeconds: slackPoll },
     brain: { ...DEFAULT_CONFIG.brain, ...raw.brain },

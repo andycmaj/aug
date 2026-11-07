@@ -132,6 +132,18 @@ CREATE TABLE IF NOT EXISTS corrections (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS projects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  tmux_session TEXT NOT NULL,
+  repos TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'active',
+  solo INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  archived_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -154,16 +166,28 @@ export function openDb(file = paths.db()): Database {
 // Columns added after a table first shipped: added in place on an old file.
 const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "turns", column: "files", ddl: "TEXT NOT NULL DEFAULT '[]'" },
+  { table: "tasks", column: "project_id", ddl: "INTEGER REFERENCES projects(id)" },
+  { table: "tasks", column: "branch", ddl: "TEXT" },
+  { table: "tasks", column: "worktree", ddl: "TEXT" },
+  { table: "sessions", column: "tmux_window", ddl: "TEXT" },
 ];
+
+function columns(db: Database, table: string): string[] {
+  const rows = db.query(`PRAGMA table_info(${table})`).all() as {
+    name: string;
+  }[];
+  return rows.map((r) => r.name);
+}
 
 export function migrate(db: Database): void {
   for (const { table, column, ddl } of ADDED_COLUMNS) {
-    const cols = db.query(`PRAGMA table_info(${table})`).all() as {
-      name: string;
-    }[];
-    if (!cols.some((c) => c.name === column))
+    const cols = columns(db, table);
+    if (cols.length > 0 && !cols.includes(column))
       db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
   }
+  // Indexes on added columns wait until the columns exist.
+  if (columns(db, "tasks").includes("branch"))
+    db.exec("CREATE INDEX IF NOT EXISTS tasks_branch ON tasks(repo, branch)");
 }
 
 export function db(): Database {

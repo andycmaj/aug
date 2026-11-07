@@ -23,6 +23,7 @@ export const Commands = {
   NOT_TASK: "task.not",
   START: "agent.start",
   STOP: "agent.stop",
+  JUMP: "agent.jump",
   SEND: "action.send",
   EDIT_DRAFT: "action.edit",
   REDRAFT: "action.redraft",

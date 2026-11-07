@@ -2,9 +2,10 @@
 // the palette all call these. They talk to the engine, open dialogs, and keep
 // the table moving (a row that leaves the rail hands the table to the next).
 
-import { createSignal, type Accessor, type JSX } from "solid-js";
+import { createEffect, createSignal, type Accessor, type JSX } from "solid-js";
 import { writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
@@ -20,6 +21,7 @@ import {
 import { infoTitle, itemInfo } from "../core/info";
 import { actionText } from "../core/outbound";
 import { paths } from "../core/paths";
+import * as projects from "../core/projects";
 import { neighborKey, type RailItem } from "../core/rail";
 import * as store from "../core/store";
 import {
@@ -61,6 +63,9 @@ export function useDialogs(): Dialogs {
 
 const EDITOR_ID = "editor";
 
+// Both modes mount the actions; one viewer attach per task at a time.
+const attaching = new Set<number>();
+
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -93,29 +98,117 @@ export function useActions(dialogs: Dialogs) {
   // ── coding terminals ──────────────────────────────────────────────────
 
   function startCoding(taskId: number, note?: string) {
-    const live = terminals.forTask(taskId);
-    if (live?.running) {
-      aug.selectTask(taskId);
-      setActivePane("task");
+    const task = store.getTask(taskId);
+    if (!task) return;
+    const show = () => {
+      if (aug.mode() === ViewMode.chat) {
+        aug.selectTask(taskId);
+        setActivePane("task");
+      }
+    };
+    if (terminals.forTask(taskId)?.running) return show();
+    const repoPath = projects.repoPath(task.repo);
+    if (task.repo && !repoPath && !task.worktree) return askRepoPath(task, note);
+    if (task.repo && repoPath && !task.worktree) {
+      dialogs.show(() => (
+        <PromptModal
+          title={`Branch for ${store.taskRef(taskId)}`}
+          hint="A new branch gets a worktree of its own. An existing branch or pr:N works too."
+          initial={task.branch ?? projects.defaultBranch(task)}
+          onSubmit={(branch) => void launchCoding(taskId, { note, branch })}
+          onClose={dialogs.close}
+        />
+      ));
       return;
     }
+    void launchCoding(taskId, { note });
+  }
+
+  // An unmapped repo: ask once where it lives; Esc works in scratch instead.
+  function askRepoPath(task: TaskRow, note?: string) {
+    let submitted = false;
+    dialogs.show(() => (
+      <PromptModal
+        title={`Where is ${task.repo} checked out?`}
+        hint="Saved to config. Esc starts it in a scratch folder with no worktree."
+        placeholder="/path/to/checkout"
+        onSubmit={(path) => {
+          submitted = true;
+          projects.mapRepo(task.repo!, path.trim().replace(/^~/, homedir()));
+          startCoding(task.id, note);
+        }}
+        onClose={() => {
+          dialogs.close();
+          // onSubmit runs right after onClose; only a bare Esc gets here.
+          queueMicrotask(() => {
+            if (!submitted) void launchCoding(task.id, { note, noWorktree: true });
+          });
+        }}
+      />
+    ));
+  }
+
+  async function launchCoding(
+    taskId: number,
+    opts: { note?: string; branch?: string; noWorktree?: boolean },
+  ) {
     const prior = store.latestSession(taskId);
-    const resume = prior?.kind === SessionKind.pty ? prior.id : undefined;
-    const launch = engine.beginCoding(taskId, { resume, note });
-    if (!launch) return;
-    terminals.open({
-      id: launch.sessionId,
-      title: store.taskRef(taskId),
-      kind: "agent",
-      taskId,
-      argv: launch.argv,
-      cwd: launch.cwd,
-      env: launch.env,
-      onExit: (code) => engine.codingExited(launch.sessionId, code),
+    const resume =
+      prior?.kind === SessionKind.pty || prior?.kind === SessionKind.tmux
+        ? prior.id
+        : undefined;
+    showToast(`Starting ${store.taskRef(taskId)}...`);
+    const result = await engine.startCoding(taskId, {
+      ...opts,
+      branch: opts.branch?.trim() || undefined,
+      resume,
     });
+    if (result.type === "needs-repo-path") {
+      const task = store.getTask(taskId);
+      if (task) askRepoPath(task, opts.note);
+      return;
+    }
+    if (result.type === "failed") {
+      showToast(`Could not start: ${result.error}`, 4000, "error");
+      return;
+    }
+    await attachViewer(taskId);
     if (aug.mode() === ViewMode.chat) {
       aug.selectTask(taskId);
       setActivePane("task");
+    }
+  }
+
+  // The embedded terminal is a tmux client on the task's window; closing it
+  // detaches, and the claude keeps running.
+  async function attachViewer(taskId: number): Promise<boolean> {
+    if (terminals.forTask(taskId)?.running) return true;
+    if (attaching.has(taskId)) return false;
+    attaching.add(taskId);
+    try {
+      const argv = await projects.viewerArgv(taskId);
+      if (!argv || terminals.forTask(taskId)?.running) return Boolean(argv);
+      const id = `view-${taskId}`;
+      terminals.close(id);
+      terminals.open({
+        id,
+        title: store.taskRef(taskId),
+        kind: "agent",
+        taskId,
+        argv,
+      });
+      return true;
+    } finally {
+      attaching.delete(taskId);
+    }
+  }
+
+  async function jumpTo(taskId: number) {
+    try {
+      if (!(await projects.jump(taskId)))
+        showToast("Its window is gone; s starts it again");
+    } catch (err) {
+      showToast(`Could not jump: ${errText(err)}`, 4000, "error");
     }
   }
 
@@ -156,9 +249,11 @@ export function useActions(dialogs: Dialogs) {
 
   function stop(task: TaskRow) {
     const live = terminals.forTask(task.id);
-    if (live?.running) {
-      terminals.close(live.id);
-      store.updateTask(task.id, { agent_state: AgentState.saved });
+    if (live?.running) terminals.close(live.id);
+    if (task.kind === Kind.coding) {
+      void engine
+        .stopCoding(task.id)
+        .catch((err) => showToast(`Could not stop: ${errText(err)}`, 4000, "error"));
     } else engine.stopAgent(task.id);
     showToast(`${store.taskRef(task.id)}: stopped and saved`);
   }
@@ -167,9 +262,40 @@ export function useActions(dialogs: Dialogs) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
     advanceFrom(`t${task.id}`);
-    engine.markDone(task.id);
-    showToast(`${store.taskRef(task.id)} done`);
+    if (task.kind !== Kind.coding) {
+      engine.markDone(task.id);
+      showToast(`${store.taskRef(task.id)} done`);
+      return;
+    }
+    void engine.closeCoding(task.id).then(
+      (r) =>
+        showToast(
+          r.warnings.length
+            ? `${store.taskRef(task.id)} done; ${r.warnings.join("; ")}`
+            : `${store.taskRef(task.id)} done${r.archived ? ", project archived" : ""}`,
+          r.warnings.length ? 5000 : 2000,
+          r.warnings.length ? "error" : "info",
+        ),
+      (err) => showToast(`Closing: ${errText(err)}`, 4000, "error"),
+    );
   }
+
+  // Keeps the table's terminal in step with tmux: a live claude on the
+  // selected task gets a viewer, and a viewer whose claude ended goes.
+  createEffect(() => {
+    aug.version();
+    const item = aug.selected();
+    const task = item?.type === "task" ? item.task : null;
+    for (const term of terminals.list()) {
+      if (!term.id.startsWith("view-") || term.taskId === undefined) continue;
+      const latest = store.latestSession(term.taskId);
+      if (latest?.ended_at) terminals.close(term.id);
+    }
+    if (!task || task.kind !== Kind.coding) return;
+    const latest = store.latestSession(task.id);
+    if (latest?.kind !== SessionKind.tmux || latest.ended_at) return;
+    void attachViewer(task.id);
+  });
 
   function remind(task: TaskRow) {
     const pick = (label: string, days: number) => ({
@@ -549,6 +675,7 @@ export function useActions(dialogs: Dialogs) {
       [Commands.REDRAFT]: onTask(redraft),
       [Commands.START]: onTask(start),
       [Commands.STOP]: onTask(stop),
+      [Commands.JUMP]: onTask((task) => void jumpTo(task.id)),
       [Commands.DONE]: onTask(done),
       [Commands.REMIND]: onTask(remind),
       [Commands.WATCH]: onTask(watch),
@@ -584,6 +711,7 @@ export function useActions(dialogs: Dialogs) {
 
   return {
     startCoding,
+    jumpTo,
     openEditor,
     start,
     stop,

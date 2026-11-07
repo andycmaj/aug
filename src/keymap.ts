@@ -78,6 +78,13 @@ const itemMoves: BindingSpec<HelpCtx>[] = [
     relevant: (c) => c.live,
   },
   {
+    key: "shift+t",
+    cmd: Commands.JUMP,
+    desc: "jump your tmux client to the agent's window",
+    help: "jump",
+    relevant: (c) => c.coding,
+  },
+  {
     key: "d",
     cmd: Commands.DONE,
     desc: "mark done",
@@ -254,6 +261,7 @@ export const keymap: KeymapTable<HelpCtx> = {
     { key: "shift+l", cmd: Commands.WALL_COLS, desc: "wall: tiles across" },
     { key: "s", cmd: Commands.START, desc: "start / continue the agent" },
     { key: "shift+s", cmd: Commands.STOP, desc: "stop the agent and save" },
+    { key: "shift+t", cmd: Commands.JUMP, desc: "jump to the agent's tmux window" },
     { key: "d", cmd: Commands.DONE, desc: "mark done" },
   ],
 };
