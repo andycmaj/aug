@@ -51,6 +51,22 @@ export function mapRepo(repo: string, path: string): void {
   });
 }
 
+// A coding task you made yourself has no repo yet: offer its project's repos
+// first, then every mapped one.
+export function repoChoices(task: TaskRow): string[] {
+  const project = task.project_id ? store.getProject(task.project_id) : null;
+  const ours = project ? store.projectRepos(project) : [];
+  const mapped = Object.keys(loadConfig().github.repos);
+  return [...new Set([...ours, ...mapped])];
+}
+
+export function setTaskRepo(taskId: number, repo: string): void {
+  const clean = repo.trim();
+  if (!/^[\w.-]+\/[\w.-]+$/.test(clean))
+    throw new Error(`${clean || "that"} is not owner/repo`);
+  store.updateTask(taskId, { repo: clean });
+}
+
 // The env contract: every command aug spawns for a task carries these, so
 // your own wt and tmux hooks can test $AUG and skip what aug already does.
 export function augEnv(

@@ -17,6 +17,8 @@ import {
   moveTask,
   nudge,
   reconcile,
+  repoChoices,
+  setTaskRepo,
   slug,
   startTask,
   watchTmux,
@@ -73,6 +75,32 @@ describe("helpers", () => {
   test("the old agentsAtOnce key still sets maxActiveAgents", () => {
     expect(mergeConfig({ agentsAtOnce: 2 } as never).maxActiveAgents).toBe(2);
     expect(mergeConfig({}).maxActiveAgents).toBe(4);
+  });
+});
+
+describe("repo choices", () => {
+  test("a coding task with no repo is offered its project's repos first, then mapped ones", async () => {
+    freshHome({
+      github: {
+        ...DEFAULT_CONFIG.github,
+        repos: { "acme/api": "/src/api", "acme/web": "/src/web" },
+      },
+    });
+    const t = codingTask(null, "Spike");
+    expect(repoChoices(t)).toEqual(["acme/api", "acme/web"]);
+    const p = await createProject({ name: "Web", repo: "acme/web" });
+    store.addProjectRepo(p.id, "acme/infra");
+    store.updateTask(t.id, { project_id: p.id });
+    expect(repoChoices(store.getTask(t.id)!)).toEqual(["acme/web", "acme/infra", "acme/api"]);
+  });
+
+  test("setting the repo lets start make a worktree", async () => {
+    const t = codingTask(null, "Spike");
+    setTaskRepo(t.id, "acme/api");
+    const r = await startTask(t.id);
+    expect(r.type).toBe("started");
+    expect(fake.worktrees[0].repoPath).toBe("/src/api");
+    expect(() => setTaskRepo(t.id, "not a repo")).toThrow("owner/repo");
   });
 });
 

@@ -455,6 +455,10 @@ export class Engine {
     return projects.archiveProject(projectId);
   }
 
+  setTaskRepo(taskId: number, repo: string) {
+    projects.setTaskRepo(taskId, repo);
+  }
+
   moveTask(taskId: number, projectId: number) {
     return projects.moveTask(taskId, projectId);
   }

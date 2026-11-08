@@ -109,7 +109,11 @@ export function useActions(dialogs: Dialogs) {
       }
     };
     if (terminals.forTask(taskId)?.running) return show();
-    if (!engine.makesWorktrees) return void launchCoding(taskId, { note });
+    // Resuming never asks again: the first start settled repo and branch.
+    const resuming = store.latestSession(taskId)?.kind === SessionKind.tmux;
+    if (!engine.makesWorktrees || resuming)
+      return void launchCoding(taskId, { note });
+    if (!task.repo && !task.worktree) return askRepo(task, note);
     const repoPath = projects.repoPath(task.repo);
     if (task.repo && !repoPath && !task.worktree) return askRepoPath(task, note);
     if (task.repo && repoPath && !task.worktree) {
@@ -125,6 +129,50 @@ export function useActions(dialogs: Dialogs) {
       return;
     }
     void launchCoding(taskId, { note });
+  }
+
+  // A coding task you made has no repo: pick one, then the usual questions
+  // (where it is checked out, which branch) follow.
+  function askRepo(task: TaskRow, note?: string) {
+    const use = (repo: string) => {
+      try {
+        engine.setTaskRepo(task.id, repo);
+      } catch (err) {
+        showToast(errText(err), 4000, "error");
+        return;
+      }
+      startCoding(task.id, note);
+    };
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Which repo is ${store.taskRef(task.id)} in?`}
+        hint="It gets a worktree and a branch there."
+        choices={[
+          ...projects.repoChoices(task).map((repo) => ({
+            label: repo,
+            run: () => use(repo),
+          })),
+          {
+            label: "Another repo (owner/repo)...",
+            run: () =>
+              dialogs.show(() => (
+                <PromptModal
+                  title="Which repo?"
+                  hint="As GitHub names it: owner/repo."
+                  placeholder="andycmaj/aug"
+                  onSubmit={use}
+                  onClose={dialogs.close}
+                />
+              )),
+          },
+          {
+            label: "No repo: a scratch folder",
+            run: () => void launchCoding(task.id, { note, noWorktree: true }),
+          },
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
   }
 
   // An unmapped repo: ask once where it lives; Esc works in scratch instead.
