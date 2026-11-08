@@ -122,18 +122,13 @@ function mentionScore(task: TaskRow, query: string): number | null {
   return at === q.length ? 3 : null;
 }
 
-// What `@` offers in a chat box: open work first, newest first within a score.
+// What `@` offers in a chat box: open work only, newest first within a score.
+// Finished work would crowd the short list and is rarely what you mean.
 export function suggestTasks(query: string, limit = 6): TaskRow[] {
-  const open = (t: TaskRow) =>
-    t.status === TaskStatus.open || t.status === TaskStatus.later ? 0 : 1;
-  return store
-    .listTasks()
+  return findTasks()
     .map((task) => ({ task, score: mentionScore(task, query) }))
     .filter((m): m is { task: TaskRow; score: number } => m.score !== null)
-    .sort(
-      (a, b) =>
-        open(a.task) - open(b.task) || a.score - b.score || b.task.id - a.task.id,
-    )
+    .sort((a, b) => a.score - b.score || b.task.id - a.task.id)
     .slice(0, limit)
     .map((m) => m.task);
 }
