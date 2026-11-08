@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { mentionedTasks } from "../src/core/assistant";
 import { findProject, mentionAt, suggestTasks } from "../src/core/lookup";
 import * as store from "../src/core/store";
-import { Kind } from "../src/core/types";
+import { Kind, TaskStatus } from "../src/core/types";
 import { freshHome } from "./helpers";
 
 beforeEach(() => freshHome());
@@ -19,15 +19,25 @@ describe("@ mentions", () => {
     expect(mentionAt("@fix the thing")).toBeNull();
   });
 
-  test("a number matches the ref; words match the title, open work first", () => {
+  test("a number matches the ref; words match the title", () => {
     const build = task("Fix the build");
     const flaky = task("Flaky deploy fix");
-    const done = task("Fix old thing");
-    store.markDone(done.id);
-    expect(suggestTasks("fix").map((t) => t.id)).toEqual([build.id, flaky.id, done.id]);
+    expect(suggestTasks("fix").map((t) => t.id)).toEqual([build.id, flaky.id]);
     expect(suggestTasks("AUG-2").map((t) => t.id)).toEqual([flaky.id]);
     expect(suggestTasks("fdx").map((t) => t.id)).toEqual([flaky.id]);
     expect(suggestTasks("zzz")).toEqual([]);
+  });
+
+  test("only open work is offered, snoozed included", () => {
+    const open = task("Fix the build");
+    const later = task("Fix the docs");
+    const done = task("Fix old thing");
+    const dropped = task("Fix nothing");
+    store.updateTask(later.id, { status: TaskStatus.later });
+    store.markDone(done.id);
+    store.updateTask(dropped.id, { status: TaskStatus.dropped });
+    expect(suggestTasks("fix").map((t) => t.id)).toEqual([later.id, open.id]);
+    expect(suggestTasks(String(done.id))).toEqual([]);
   });
 
   test("Home is never offered", () => {
