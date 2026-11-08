@@ -23,7 +23,6 @@ export interface RailProject {
 
 export const Section = {
   home: "home",
-  projects: "projects",
   tasks: "tasks",
   watching: "watching",
   later: "later",
@@ -34,7 +33,6 @@ export type Section = (typeof Section)[keyof typeof Section];
 
 export const SECTION_TITLES: Record<Section, string> = {
   home: "Home",
-  projects: "Projects",
   tasks: "Tasks",
   watching: "Watching",
   later: "For later",
@@ -42,7 +40,8 @@ export const SECTION_TITLES: Record<Section, string> = {
   fyi: "FYI",
 };
 
-// The walk visits these in order; For later is never offered by Next.
+// The walk visits these in order; For later is never offered by Next, nor is
+// a project row.
 export const WALKED: Section[] = ["tasks", "watching", "advisor", "fyi"];
 
 export type RailItem =
@@ -54,6 +53,8 @@ export type RailItem =
       priority: Priority;
       slipped: boolean;
       at: string;
+      // The project whose row it sits under in Tasks, folding with it.
+      group: number | null;
     }
   | ({ type: "project"; key: string; at: string } & RailProject)
   | { type: "idea"; key: string; idea: IdeaRow; at: string }
@@ -62,12 +63,14 @@ export type RailItem =
 export interface RailSection {
   section: Section;
   items: RailItem[];
+  // Tasks in it, folded ones included; project rows are not counted.
+  count: number;
 }
 
 export interface RailInput {
   // The Home thread, first on the rail and never walked.
   home?: TaskRow | null;
-  // Active projects, under Home and never walked.
+  // Active projects: each a row in Tasks with its tasks under it.
   projects?: RailProject[];
   tasks: TaskRow[];
   pendingActions: Set<number>;
@@ -94,7 +97,6 @@ export function isSlipped(
 export function buildRail(input: RailInput): RailSection[] {
   const sections: Record<Section, RailItem[]> = {
     home: [],
-    projects: [],
     tasks: [],
     watching: [],
     later: [],
@@ -111,15 +113,10 @@ export function buildRail(input: RailInput): RailSection[] {
       priority: input.home.priority,
       slipped: false,
       at: input.home.created_at,
+      group: null,
     });
 
-  for (const p of input.projects ?? [])
-    sections.projects.push({
-      type: "project",
-      key: `p${p.project.id}`,
-      at: p.project.created_at,
-      ...p,
-    });
+  const projectIds = new Set((input.projects ?? []).map((p) => p.project.id));
 
   for (const task of input.tasks) {
     const lane = laneOf(task, {
@@ -133,6 +130,7 @@ export function buildRail(input: RailInput): RailSection[] {
       priority: task.priority,
       slipped: isSlipped(task, input.lastHeard.get(task.id), input.now),
       at: task.created_at,
+      group: null,
     };
     if (task.status === TaskStatus.done) {
       // An agent-closed task stays until you have read its result.
@@ -169,12 +167,58 @@ export function buildRail(input: RailInput): RailSection[] {
 
   const byAt = (a: RailItem, b: RailItem) =>
     a.at < b.at ? -1 : a.at > b.at ? 1 : a.key < b.key ? -1 : 1;
+  const sorted = (items: RailItem[]) => [...items].sort(byAt);
+  const groupOf = (item: RailItem) =>
+    item.type === "task" &&
+    item.task.project_id !== null &&
+    projectIds.has(item.task.project_id)
+      ? item.task.project_id
+      : null;
+
+  // Tasks: each project's row with its tasks under it, then the tasks in no
+  // project.
+  const loose = sections.tasks.filter((i) => groupOf(i) === null);
+  const grouped: RailItem[] = [];
+  for (const p of input.projects ?? []) {
+    grouped.push({
+      type: "project",
+      key: `p${p.project.id}`,
+      at: p.project.created_at,
+      ...p,
+    });
+    for (const item of sorted(
+      sections.tasks.filter((i) => groupOf(i) === p.project.id),
+    ))
+      if (item.type === "task") grouped.push({ ...item, group: p.project.id });
+  }
+
   return (Object.keys(sections) as Section[])
-    .map((section) => ({
-      section,
-      items: [...sections[section]].sort(byAt),
-    }))
+    .map((section) => {
+      const items =
+        section === Section.tasks
+          ? [...grouped, ...sorted(loose)]
+          : sorted(sections[section]);
+      return {
+        section,
+        items,
+        count: items.filter((i) => i.type !== "project").length,
+      };
+    })
     .filter((s) => s.items.length > 0);
+}
+
+// What the rail shows: a folded project keeps its row and hides its tasks.
+export function foldRail(
+  sections: RailSection[],
+  folded: Set<number>,
+): RailSection[] {
+  if (folded.size === 0) return sections;
+  return sections.map((s) => ({
+    ...s,
+    items: s.items.filter(
+      (i) => i.type !== "task" || i.group === null || !folded.has(i.group),
+    ),
+  }));
 }
 
 export function flattenRail(sections: RailSection[]): RailItem[] {

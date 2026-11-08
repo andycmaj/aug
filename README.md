@@ -173,10 +173,12 @@ work with them from any tmux client.
   kept and aug says so. A project made for one task is archived when that task
   is done. `x` on the Board archives a project; `M` moves a task (its window
   moves with it).
-- **On the rail.** Active projects sit under Home, never walked: open and
-  working counts and repos. `enter` puts one on the table (its open tasks with
-  their lanes) and narrows the rail to its tasks; `enter` again shows every
-  project. `T` jumps to its session, `x` archives it, `I` shows everything.
+- **On the rail.** Each active project is a row in Tasks with its tasks under
+  it (open and working counts, repos); tasks in no project come after. `space`
+  folds a project's tasks away (a folded row still shows what they ask of
+  you) and unfolds them; Next skips folded tasks and project rows. `enter`
+  puts a project on the table (its open tasks with their lanes). `T` jumps to
+  its session, `x` archives it, `I` shows everything.
 - **PRs.** A PR whose head branch is a task's branch belongs to that task, so
   its reviews and CI land there. `u` types one line into the agent's window
   telling it to run `aug-tools feedback`. Nothing else is pasted or sent.
@@ -209,7 +211,7 @@ If one of your hooks opens a tmux window for every new worktree, guard it with
 | Where           | Keys                                                                                                                                                                                          |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Anywhere        | `n`/`b` walk next/back · `a` Home (the Assistant) · `v` Chat/Board · `N` new · `D` docs · `C` connections · `^r` check now · `:` palette · `?` help · `Tab` pane · `q` quit                                     |
-| Rail            | `j`/`k` move the cursor · `enter` put the row on the table (on a project: only its tasks, again: all) · `f` cycle one project / all. Moves act on the row under the cursor. |
+| Rail            | `j`/`k` move the cursor · `enter` put the row on the table · `space` on a project: fold / unfold its tasks. Moves act on the row under the cursor. |
 | Rail and table  | `y` send (asks first) · `e` edit draft in `$EDITOR` · `E` redraft · `s` start/continue agent · `S` stop and save · `d` done · `r` remind me · `w` watch · `x` not a task / read · `m` make it a task · `p` priority · `t` kind · `W` waiting on someone · `o` open the link or a file the agent made · `O` edit a made file in `$EDITOR` · `i` type · `I` info (everything aug knows about the row; `c` copies a value) · coding: `T` jump to its tmux window · `u` nudge about feedback · `M` move to a project |
 | Chat box        | `enter` send to the agent · `@` name a task (`tab`/`enter` takes it, `↑`/`↓` pick) · `esc` leave                                                                                              |
 | Agent terminal  | everything goes to the agent · `^]` detach                                                                                                                                                    |

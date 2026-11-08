@@ -667,7 +667,7 @@ function ProjectView(props: {
       </scrollbox>
       <KeyHints
         hints={[
-          ["enter", aug.projectFilter() === p().id ? "show every project" : "rail: only this project"],
+          ["space", "rail: fold / unfold its tasks"],
           ["T", "jump to its tmux session"],
           ["x", "archive"],
           ["I", "info"],

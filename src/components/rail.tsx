@@ -21,7 +21,6 @@ import {
   useFocus,
   useScope,
   useTheme,
-  useToast,
   type Theme,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
@@ -42,6 +41,10 @@ import { ConnectorLine } from "./connector-line";
 import type { ItemMoves } from "./moves";
 
 export const RAIL_WIDTH = 46;
+// A task under its project's row sits this much further in.
+const NEST = 2;
+
+const isNested = (item: RailItem) => item.type === "task" && item.group !== null;
 
 type Node =
   | { type: "section"; title: string; count: number }
@@ -51,34 +54,34 @@ export function Rail(props: { moves: ItemMoves }) {
   const aug = useAug();
   const theme = useTheme();
   const { isPaneFocused, setActivePane } = useFocus();
-  const { showToast } = useToast();
   const focused = () => isPaneFocused("rail");
   let scrollRef: ScrollBoxRenderable | undefined;
   let pane: Renderable | undefined;
 
   const nodes = createMemo<Node[]>(() =>
-    aug.rail().flatMap((s) => [
+    aug.shownRail().flatMap((s) => [
       {
         type: "section" as const,
         title: SECTION_TITLES[s.section],
-        count: s.items.length,
+        count: s.count,
       },
       ...s.items.map((item) => ({ type: "item" as const, item })),
     ]),
   );
 
   // First visit: the first row is on the table. A cursor whose row left the
-  // rail comes back to the table's row.
+  // rail comes back to the table's row, if the rail shows it.
   createEffect(() => {
-    const list = aug.items();
+    const list = aug.shownItems();
     if (list.length === 0) return;
+    const shown = (key: string | null) => list.some((i) => i.key === key);
     if (!aug.selectedKey()) aug.select(list[0].key);
-    else if (!aug.cursorItem())
-      aug.moveCursor(aug.selected() ? aug.selectedKey() : list[0].key);
+    else if (!shown(aug.cursorKey()))
+      aug.moveCursor(shown(aug.selectedKey()) ? aug.selectedKey() : list[0].key);
   });
 
   const cursorIndex = () =>
-    aug.items().findIndex((i) => i.key === aug.cursorKey());
+    aug.shownItems().findIndex((i) => i.key === aug.cursorKey());
 
   function rowOf(key: string | null): { top: number; height: number } {
     let row = 0;
@@ -109,7 +112,7 @@ export function Rail(props: { moves: ItemMoves }) {
   );
 
   function move(next: (i: number, n: number) => number) {
-    const list = aug.items();
+    const list = aug.shownItems();
     if (list.length === 0) return;
     const i = Math.max(0, cursorIndex());
     aug.moveCursor(
@@ -124,23 +127,16 @@ export function Rail(props: { moves: ItemMoves }) {
       [Commands.NAV_UP]: () => move((i) => i - 1),
       [Commands.NAV_TOP]: () => move(() => 0),
       [Commands.NAV_BOTTOM]: () => move((_, n) => n - 1),
-      // enter puts the row under the cursor on the table; on a project it
-      // narrows the rail to that project's tasks (again: every project).
+      // enter puts the row under the cursor on the table; a project's view
+      // has nothing to type into, so the rail keeps focus.
       [Commands.OPEN]: () => {
         const item = aug.cursorItem();
-        if (item?.type === "project") {
-          const id = aug.projectFilter() === item.project.id ? null : item.project.id;
-          aug.setProjectFilter(id);
-          aug.select(item.key);
-          showToast(id ? `Only ${projectChip(id)}` : "Every project");
-          return;
-        }
         aug.select(aug.cursorKey());
-        setActivePane("task");
+        if (item?.type !== "project") setActivePane("task");
       },
-      [Commands.PROJECT_FILTER]: () => {
-        const id = aug.cycleProjectFilter();
-        showToast(id ? `Only ${projectChip(id)}` : "Every project");
+      [Commands.FOLD]: () => {
+        const item = aug.cursorItem();
+        if (item?.type === "project") aug.toggleFold(item.project.id);
       },
       ...props.moves,
     },
@@ -170,13 +166,7 @@ export function Rail(props: { moves: ItemMoves }) {
       width={RAIL_WIDTH}
       ref={(r) => (pane = r)}
     >
-      <PaneHeader
-        title={
-          aug.projectFilter()
-            ? `Work ${projectChip(aug.projectFilter()) ?? ""}`
-            : "Work"
-        }
-      >
+      <PaneHeader title="Work">
         <text>
           <Show when={counts().blocked > 0}>
             <span
@@ -221,6 +211,7 @@ export function Rail(props: { moves: ItemMoves }) {
                   {(n: Accessor<Extract<Node, { type: "item" }>>) => (
                     <RailRow
                       item={n().item}
+                      nested={isNested(n().item)}
                       cursor={aug.cursorKey() === n().item.key}
                       onTable={aug.selectedKey() === n().item.key}
                       focused={focused()}
@@ -254,6 +245,7 @@ function EmptyRail() {
 // on the table always carries a ▸.
 function RailRow(props: {
   item: RailItem;
+  nested: boolean;
   cursor: boolean;
   onTable: boolean;
   focused: boolean;
@@ -305,7 +297,7 @@ function RailRow(props: {
           titleColor: item.priority === "urgent" ? theme().error : theme().text,
           sub: [
             age,
-            projectChip(item.task.project_id) ??
+            (!props.nested && projectChip(item.task.project_id)) ||
               CHANNEL_WORD[item.task.channel],
             taskRef(item.task.id),
             word,
@@ -323,19 +315,29 @@ function RailRow(props: {
           sub: `${ageLabel(item.at, now)} · ${CHANNEL_WORD[item.message.channel]} · ${item.message.reason ?? "fyi"}`,
         };
       case "project": {
-        const filtered = aug.projectFilter() === item.project.id;
+        const folded = aug.folded().has(item.project.id);
+        // Folded, what its hidden tasks want from you still shows here.
+        let asks = 0;
+        let ready = 0;
+        if (folded)
+          for (const i of aug.items()) {
+            if (i.type !== "task" || i.group !== item.project.id) continue;
+            if (i.lane === Lane.blocked) asks++;
+            if (i.lane === Lane.approve) ready++;
+          }
         return {
           bar: item.working ? theme().info : theme().secondary,
           bar2: theme().borderSubtle ?? theme().textMuted,
-          mark: item.working ? aug.spinner() : filtered ? "◉" : "◫",
+          mark: item.working ? aug.spinner() : folded ? "⊞" : "⊟",
           markColor: item.working ? theme().info : theme().secondary,
           title: item.project.name,
           titleColor: theme().text,
           sub: [
             `${item.open} open`,
             item.working ? `${item.working} working` : "",
+            asks ? `${LANE_META.blocked.mark} ${asks}` : "",
+            ready ? `${LANE_META.approve.mark} ${ready}` : "",
             item.repos.join(", ") || "no repo",
-            filtered ? "rail shows only this" : "",
           ]
             .filter(Boolean)
             .join(" · "),
@@ -357,7 +359,7 @@ function RailRow(props: {
   return (
     <box
       flexDirection="column"
-      marginLeft={1}
+      marginLeft={props.nested ? 1 + NEST : 1}
       marginBottom={1}
       backgroundColor={bg()}
     >
@@ -374,13 +376,13 @@ function RailRow(props: {
           fg={lit() ? selFg() : view().titleColor}
           attributes={lit() ? 1 : 0}
         >
-          {truncate(view().title, RAIL_WIDTH - 9)}
+          {truncate(view().title, RAIL_WIDTH - 9 - (props.nested ? NEST : 0))}
         </text>
       </box>
       <box flexDirection="row" gap={1}>
         <text bg={view().bar2}> </text>
         <text fg={lit() ? selFg() : theme().textMuted}>
-          {truncate(view().sub, RAIL_WIDTH - 7)}
+          {truncate(view().sub, RAIL_WIDTH - 7 - (props.nested ? NEST : 0))}
         </text>
       </box>
     </box>

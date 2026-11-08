@@ -17,6 +17,7 @@ import { boardColumnOf, BoardColumn, type LaneFacts } from "../core/lanes";
 import {
   buildRail,
   flattenRail,
+  foldRail,
   nextKey,
   WALKED,
   type RailItem,
@@ -35,8 +36,13 @@ interface AugContextValue {
   status: Accessor<EngineStatus>;
   now: Accessor<Date>;
   spinner: Accessor<string>;
+  // Every row, folded ones included.
   rail: Accessor<RailSection[]>;
   items: Accessor<RailItem[]>;
+  // What the rail shows: folded projects' tasks left out. The cursor and the
+  // walk move over these.
+  shownRail: Accessor<RailSection[]>;
+  shownItems: Accessor<RailItem[]>;
   // On the table: what the canvas shows.
   selectedKey: Accessor<string | null>;
   selected: Accessor<RailItem | null>;
@@ -53,10 +59,9 @@ interface AugContextValue {
   board: Accessor<Record<BoardColumn, TaskRow[]>>;
   mode: Accessor<ViewMode>;
   setMode: (mode: ViewMode) => void;
-  // The rail shows one project's tasks while set.
-  projectFilter: Accessor<number | null>;
-  setProjectFilter: (id: number | null) => void;
-  cycleProjectFilter: () => number | null;
+  // Projects whose tasks the rail hides under their row.
+  folded: Accessor<Set<number>>;
+  toggleFold: (projectId: number) => void;
   // Home: the Assistant's thread, first on the rail.
   homeId: number;
   // Puts Home on the table in Chat and asks for its box to take focus.
@@ -113,17 +118,13 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     return store.tasksWithPendingAction();
   });
 
-  const [projectFilter, setProjectFilter] = createSignal<number | null>(null);
-  // Off, then each active project in turn, then off again.
-  const cycleProjectFilter = (): number | null => {
-    const ids = store
-      .listProjects()
-      .filter((p) => p.status === "active")
-      .map((p) => p.id);
-    const at = ids.indexOf(projectFilter() ?? -1);
-    const next = at + 1 < ids.length ? ids[at + 1] : null;
-    setProjectFilter(next);
-    return next;
+  const [folded, setFolded] = createSignal<Set<number>>(new Set());
+  const setFold = (projectId: number, on: boolean) => {
+    if (folded().has(projectId) === on) return;
+    const next = new Set(folded());
+    if (on) next.add(projectId);
+    else next.delete(projectId);
+    setFolded(next);
   };
 
   const homeId = store.homeTask().id;
@@ -131,10 +132,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
 
   const rail = createMemo(() => {
     version();
-    const only = projectFilter();
-    const tasks = store
-      .listTasks()
-      .filter((t) => only === null || t.project_id === only);
+    const tasks = store.listTasks();
     const lastHeard = new Map<number, string>();
     for (const t of tasks) {
       if (!t.waiting_on) continue;
@@ -157,11 +155,13 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   });
 
   const items = createMemo(() => flattenRail(rail()));
+  const shownRail = createMemo(() => foldRail(rail(), folded()));
+  const shownItems = createMemo(() => flattenRail(shownRail()));
   // The order the walk last saw, so Next from a row that just left the rail
   // (marked done) goes on from where it stood.
   let lastOrder: string[] = [];
   const order = createMemo(() => {
-    const keys = items().map((i) => i.key);
+    const keys = shownItems().map((i) => i.key);
     const current = selectedKey();
     if (current && !keys.includes(current) && lastOrder.includes(current)) {
       // keep the departed key in place for one more Next
@@ -183,7 +183,11 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     return items().find((i) => i.key === key) ?? null;
   });
 
+  // A task put on the table from anywhere (Next, an @ link) unfolds its
+  // project so the rail can show it.
   function select(key: string | null) {
+    const item = items().find((i) => i.key === key);
+    if (item?.type === "task" && item.group !== null) setFold(item.group, false);
     setSelectedKey(key);
     setCursorKey(key);
   }
@@ -203,11 +207,24 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     return items().find((i) => i.key === key) ?? null;
   });
 
+  // Folding a project brings the cursor up to its row.
+  function toggleFold(projectId: number) {
+    const fold = !folded().has(projectId);
+    if (fold) {
+      const under = items().find((i) => i.key === cursorKey());
+      if (under?.type === "task" && under.group === projectId)
+        setCursorKey(`p${projectId}`);
+    }
+    setFold(projectId, fold);
+  }
+
   function walk(direction: 1 | -1): string | null {
     const walkable = new Set(
-      rail()
+      shownRail()
         .filter((s) => WALKED.includes(s.section))
-        .flatMap((s) => s.items.map((i) => i.key)),
+        .flatMap((s) => s.items)
+        .filter((i) => i.type !== "project")
+        .map((i) => i.key),
     );
     const key = nextKey(order(), walkable, selectedKey(), direction);
     if (key) select(key);
@@ -253,6 +270,8 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
         spinner,
         rail,
         items,
+        shownRail,
+        shownItems,
         selectedKey,
         selected,
         select,
@@ -266,13 +285,12 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
         board,
         mode,
         setMode,
-        projectFilter,
-        setProjectFilter,
+        folded,
+        toggleFold,
         homeId,
         goHome,
         wantsInput,
         setWantsInput,
-        cycleProjectFilter,
       }}
     >
       {props.children}

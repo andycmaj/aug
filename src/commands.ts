@@ -26,7 +26,7 @@ export const Commands = {
   JUMP: "agent.jump",
   NUDGE: "agent.nudge",
   MOVE_TO_PROJECT: "task.project",
-  PROJECT_FILTER: "rail.project",
+  FOLD: "rail.fold",
   PROJECT_ADOPT: "project.adopt",
   PROJECT_ARCHIVE: "project.archive",
   SEND: "action.send",

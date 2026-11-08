@@ -90,7 +90,7 @@ export function useActions(dialogs: Dialogs) {
     if (aug.cursorKey() === key) {
       aug.moveCursor(
         neighborKey(
-          aug.items().map((i) => i.key),
+          aug.shownItems().map((i) => i.key),
           key,
         ),
       );

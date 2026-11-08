@@ -227,7 +227,13 @@ export const keymap: KeymapTable<HelpCtx> = {
   rail: [
     ...(listNav as BindingSpec<HelpCtx>[]),
     { key: "return", cmd: Commands.OPEN, desc: "put it on the table" },
-    { key: "f", cmd: Commands.PROJECT_FILTER, desc: "only one project / all" },
+    {
+      key: "space",
+      cmd: Commands.FOLD,
+      desc: "fold / unfold the project's tasks",
+      help: "fold",
+      relevant: (c) => c.item === "project",
+    },
     ...itemMoves,
   ],
   task: [

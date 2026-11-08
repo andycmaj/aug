@@ -15,6 +15,7 @@ function taskItem(task: ReturnType<typeof store.createTask>): RailItem {
     priority: task.priority,
     slipped: false,
     at: task.created_at,
+    group: null,
   };
 }
 
