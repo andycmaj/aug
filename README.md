@@ -57,6 +57,10 @@ bun dev                       # or: bin/aug
 State lives in `~/.aug` (`AUG_HOME` overrides): `aug.db` (SQLite), `config.json`,
 `docs/`, and each general agent's scratch folder under `work/`.
 
+`docs/` is seeded from this repo's `docs/defaults/`; a file you've already
+got is never overwritten. `docs/examples/` holds filled-in ones to copy from,
+e.g. `cp docs/examples/JOB.md ~/.aug/docs/`.
+
 ### Config
 
 `~/.aug/config.json`. Every key is optional:

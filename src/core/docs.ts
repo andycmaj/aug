@@ -29,79 +29,13 @@ export const DOC_PURPOSE: Record<DocName, string> = {
   "LEARNED.md": "what was learned from what you do",
 };
 
-const DEFAULTS: Record<DocName, string> = {
-  "SOUL.md": `# SOUL
+// The starter text lives as Markdown in the repo so it can be read and edited
+// as the files it becomes.
+const DEFAULTS_DIR = join(import.meta.dir, "../../docs/defaults");
 
-Rules that outrank everything else.
-
-- Nothing goes out without my press. Draft; never send.
-- Never share credentials, tokens or private repository contents outside the thread they came from.
-- When unsure whether something is mine, say so and ask.
-`,
-  "JOB.md": `# JOB
-
-What my job is. Triage weighs importance by this, never intent.
-
-- Mission:
-- Responsibilities:
-- Who I serve:
-- Cadences:
-`,
-  "TRIAGE.md": `# TRIAGE
-
-- fyi: nothing to do. CI notifications, bots, announcements, threads where my part is done.
-- reply: a sentence settles it. A direct question to me with a short answer.
-- general: worth thinking about - research, a recommendation, making sense of a thread.
-- coding: an agent at a keyboard. A bug, a failing check, a requested change in a repository.
-- task: mine to do in the world - decide, attend, review by hand.
-- watch: a thread I care about that somebody else will handle.
-
-A pull request review requested from me is a task unless JOB.md says otherwise.
-A question in a DM is usually reply.
-`,
-  "STYLE.md": `# STYLE
-
-- Short. Lead with the answer.
-- No greeting on Slack. A one-word sign-off is fine on GitHub.
-
-## By recipient
-`,
-  "COUNSEL.md": `# COUNSEL
-
-Speak plainly and briefly. Take a position when asked; say what you would do and why in one line.
-`,
-  "ASSISTANT.md": `# ASSISTANT
-
-You are a general agent working one task for the owner. Read the thread, do the thinking or research, and hand back the result.
-You never send anything yourself. When a reply is owed, draft it as an aug-action block; the owner presses Send.
-When a decision is the owner's, say so plainly under Next steps.
-`,
-  "CODING.md": `# CODING
-
-You are a coding agent working one task in this repository.
-- Read the task brief first. Keep changes small and focused.
-- Run the tests that cover what you touched.
-- Do not push, merge or deploy. Commit on a branch if the task calls for it.
-- When finished, report with the aug done command from your brief.
-`,
-  "LEARNED.md": `# LEARNED
-
-What was learned from what you do. Machine-written lines carry [s:strength | ev:evidence | seen:date].
-Lines you write yourself are never rewritten. SOUL.md always outranks this file.
-
-## Your people
-
-## What you care about
-
-## How you work
-
-## Promises
-
-## What to bring up
-
-## Watching
-`,
-};
+function starter(name: DocName): string {
+  return readFileSync(join(DEFAULTS_DIR, name), "utf8");
+}
 
 export function docPath(name: DocName): string {
   return join(paths.docs(), name);
@@ -111,13 +45,13 @@ export function ensureDocs(): void {
   ensureHome();
   for (const name of Object.values(DocName)) {
     const file = docPath(name);
-    if (!existsSync(file)) writeFileSync(file, DEFAULTS[name]);
+    if (!existsSync(file)) writeFileSync(file, starter(name));
   }
 }
 
 export function readDoc(name: DocName): string {
   const file = docPath(name);
-  return existsSync(file) ? readFileSync(file, "utf8") : DEFAULTS[name];
+  return existsSync(file) ? readFileSync(file, "utf8") : starter(name);
 }
 
 export function writeDoc(name: DocName, text: string): void {
