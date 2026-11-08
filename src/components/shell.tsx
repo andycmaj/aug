@@ -1,8 +1,7 @@
 // What both modes share: the app-wide keys, and the modals they open
-// (palette, help, the Assistant, connections, and whatever dialog a move
-// asked for). Each mode has its own FocusProvider, so this runs once per mode.
+// (palette, help, connections, and whatever dialog a move asked for). Each mode has its own FocusProvider, so this runs once per mode.
 
-import { createSignal, Show, type Accessor, type JSX } from "solid-js";
+import { Show, type Accessor, type JSX } from "solid-js";
 import type { Renderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import {
@@ -15,14 +14,9 @@ import {
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
-import type { AssistantExchange } from "../core/assistant";
 import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
 import { useActions, useDialogs, type Actions, type Dialogs } from "./actions";
-import { AssistantModal } from "./assistant-modal";
 import { StatusModal } from "./modals";
-
-// The Assistant's conversation outlives the modal and the view switch.
-const [history, setHistory] = createSignal<AssistantExchange[]>([]);
 
 export interface ShellApi {
   dialogs: Dialogs;
@@ -75,7 +69,7 @@ export function useShell(opts: {
       [Commands.SIDEBAR_TOGGLE]: toggleSidebar,
       [Commands.FOCUS_NEXT]: cyclePane,
       [Commands.VIEW_TOGGLE]: unlessTyping(toggleView),
-      [Commands.ASK_OPEN]: unlessTyping(() => openModal("ask")),
+      [Commands.ASK_OPEN]: unlessTyping(aug.goHome),
       [Commands.NEW_TASK]: unlessTyping(actions.newTask),
       [Commands.POLL_NOW]: pollNow,
       [Commands.DOCS_OPEN]: unlessTyping(actions.docs),
@@ -107,9 +101,9 @@ export function useShell(opts: {
     {
       id: "ask",
       group: "Work",
-      label: "Ask the Assistant",
+      label: "Ask the Assistant (Home)",
       hint: "a",
-      run: () => openModal("ask"),
+      run: aug.goHome,
     },
     {
       id: "view",
@@ -150,14 +144,6 @@ export function useShell(opts: {
     { id: "quit", group: "App", label: "Quit", hint: "q", run: quit },
   ];
 
-  const hands = {
-    open: (taskId: number) => {
-      aug.setMode(ViewMode.chat);
-      aug.selectTask(taskId);
-    },
-    startCoding: (taskId: number) => actions.startCoding(taskId),
-  };
-
   function Modals() {
     return (
       <>
@@ -176,14 +162,6 @@ export function useShell(opts: {
               board: "The Board",
             }}
             footer="Nothing goes out until you press y and confirm."
-          />
-        </Show>
-        <Show when={activeModal() === "ask"}>
-          <AssistantModal
-            history={history}
-            setHistory={setHistory}
-            hands={hands}
-            onClose={closeModal}
           />
         </Show>
         <Show when={activeModal() === "status"}>

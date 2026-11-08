@@ -5,14 +5,8 @@
 
 import { advisorDue, runAdvisor } from "./advisor";
 import { AgentPool, type CodingLaunch } from "./agents";
-import {
-  ask,
-  Verb,
-  type AssistantAnswer,
-  type AssistantExchange,
-} from "./assistant";
 import { loadConfig } from "./config";
-import { now } from "./db";
+import { dataVersion, now } from "./db";
 import { DocName, ensureDocs, readDoc, writeDoc } from "./docs";
 import { pollGithub } from "./ingest/github";
 import { errorMessage, logger } from "./log";
@@ -20,6 +14,7 @@ import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
 import { slackTransport, type SlackTransport } from "./slack/transport";
 import { correct } from "./learn";
 import { nudgeText } from "./feedback";
+import { drainMoves, runMove, type MoveOutcome } from "./moves";
 import * as projects from "./projects";
 import { editPending, sendPending, setSlackSender } from "./outbound";
 import * as store from "./store";
@@ -117,6 +112,7 @@ export class Engine {
 
   start(): void {
     ensureDocs();
+    store.homeTask();
     this.recoverSessions();
     void this.reconcile();
     this.timers.push(
@@ -128,6 +124,7 @@ export class Engine {
     this.watchTmux();
     store.wakeReminders();
     this.timers.push(setInterval(() => store.wakeReminders(), 60_000));
+    this.watchMoves();
     if (this.options.offline) {
       this.setStatus("github", off("fixture mode"));
       this.setStatus("slack", off("fixture mode"));
@@ -215,6 +212,38 @@ export class Engine {
         }
       }
     });
+  }
+
+  // aug-tools asks for moves from another process; its commit bumps
+  // data_version, and the engine drains whatever is pending.
+  private draining = false;
+  private watchMoves(): void {
+    let seen = -1;
+    this.timers.push(
+      setInterval(() => {
+        const v = dataVersion();
+        if (v === seen || this.draining) return;
+        seen = v;
+        void this.drainMoves();
+      }, 250),
+    );
+  }
+
+  async drainMoves(): Promise<number> {
+    this.draining = true;
+    try {
+      return await drainMoves(this);
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  runMove(
+    verb: string,
+    args: Record<string, string>,
+    by = "you",
+  ): Promise<MoveOutcome> {
+    return runMove(this, verb, args, by);
   }
 
   // ── ingest ──────────────────────────────────────────────────────────────
@@ -369,8 +398,19 @@ export class Engine {
 
   private learnedNotice = (line: string) => this.options.onLearned?.(line);
 
-  newTask(title: string, kind: Kind, summary = ""): TaskRow {
-    const task = store.createTask({ title, kind, summary, channel: "owner" });
+  newTask(
+    title: string,
+    kind: Kind,
+    summary = "",
+    place: Pick<store.NewTask, "projectId" | "repo" | "fromTaskId"> = {},
+  ): TaskRow {
+    const task = store.createTask({
+      title,
+      kind,
+      summary,
+      channel: "owner",
+      ...place,
+    });
     if (kind === Kind.coding) {
       store.updateTask(task.id, {
         agent_state: AgentState.queued,
@@ -400,6 +440,9 @@ export class Engine {
   }
 
   startGeneral(taskId: number, note?: string): void {
+    // Home's agent is the Assistant, which answers what the owner says. Start
+    // would run it with nothing new to answer.
+    if (store.getTask(taskId)?.kind === Kind.home) return;
     if (note?.trim())
       store.addTurn({
         taskId,
@@ -724,91 +767,5 @@ export class Engine {
         ? `${text.trimEnd()}\n\n${marker}\n- ${line}\n`
         : text.replace(marker, `${marker}\n- ${line}`);
     writeDoc(DocName.learned, next);
-  }
-
-  // ── the Assistant ───────────────────────────────────────────────────────
-
-  async askAssistant(
-    question: string,
-    tableTaskId: number | null,
-    history: AssistantExchange[],
-    hands: {
-      open: (taskId: number) => void;
-      startCoding: (taskId: number) => void;
-    },
-  ): Promise<AssistantAnswer & { done: string[] }> {
-    const answer = await ask(question, tableTaskId, history);
-    const done: string[] = [];
-    for (const action of answer.actions) {
-      const taskId = action.task
-        ? store.parseTaskRef(action.task)
-        : tableTaskId;
-      const task = taskId ? store.getTask(taskId) : null;
-      if (!task && action.verb !== Verb.remember) continue;
-      const id = task?.id ?? 0;
-      const ref = task ? store.taskRef(task.id) : "";
-      switch (action.verb) {
-        case Verb.done:
-          this.markDone(id);
-          done.push(`${ref} marked done`);
-          break;
-        case Verb.remind: {
-          const at = this.remind(id, Number(action.arg) || 1);
-          done.push(`${ref} back on ${at.slice(0, 10)}`);
-          break;
-        }
-        case Verb.watch:
-          this.watch(id, true);
-          done.push(`watching ${ref}`);
-          break;
-        case Verb.unwatch:
-          this.watch(id, false);
-          done.push(`${ref} back in Tasks`);
-          break;
-        case Verb.start:
-          if (task?.kind === Kind.coding) hands.startCoding(id);
-          else this.startGeneral(id);
-          done.push(`started the agent on ${ref}`);
-          break;
-        case Verb.stop:
-          this.stopAgent(id);
-          done.push(`stopped ${ref}'s agent`);
-          break;
-        case Verb.redraft:
-          this.redraft(id, action.arg ?? "try again");
-          done.push(`asked for a redraft on ${ref}`);
-          break;
-        case Verb.notATask:
-          this.notATask(id, action.arg);
-          done.push(`${ref}: not a task`);
-          break;
-        case Verb.open:
-          hands.open(id);
-          break;
-        case Verb.priority:
-          if (
-            action.arg === "urgent" ||
-            action.arg === "important" ||
-            action.arg === "regular"
-          ) {
-            this.setPriority(id, action.arg);
-            done.push(`${ref} is ${action.arg}`);
-          }
-          break;
-        case Verb.remember:
-          if (action.arg) {
-            this.remember(action.arg);
-            done.push("written to LEARNED.md");
-          }
-          break;
-        case Verb.tell:
-          if (action.arg) {
-            this.say(id, action.arg);
-            done.push(`told ${ref}'s agent`);
-          }
-          break;
-      }
-    }
-    return { ...answer, done };
   }
 }

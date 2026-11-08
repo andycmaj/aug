@@ -36,7 +36,7 @@ function projectChip(projectId: number | null): string | null {
   const name = getProject(projectId)?.tmux_session;
   return name ? `◫ ${name.length > 14 ? `${name.slice(0, 13)}…` : name}` : null;
 }
-import { AgentState } from "../core/types";
+import { AgentState, Kind } from "../core/types";
 import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
 import { ConnectorLine } from "./connector-line";
 import type { ItemMoves } from "./moves";
@@ -124,8 +124,17 @@ export function Rail(props: { moves: ItemMoves }) {
       [Commands.NAV_UP]: () => move((i) => i - 1),
       [Commands.NAV_TOP]: () => move(() => 0),
       [Commands.NAV_BOTTOM]: () => move((_, n) => n - 1),
-      // enter puts the row under the cursor on the table.
+      // enter puts the row under the cursor on the table; on a project it
+      // narrows the rail to that project's tasks (again: every project).
       [Commands.OPEN]: () => {
+        const item = aug.cursorItem();
+        if (item?.type === "project") {
+          const id = aug.projectFilter() === item.project.id ? null : item.project.id;
+          aug.setProjectFilter(id);
+          aug.select(item.key);
+          showToast(id ? `Only ${projectChip(id)}` : "Every project");
+          return;
+        }
         aug.select(aug.cursorKey());
         setActivePane("task");
       },
@@ -263,6 +272,18 @@ function RailRow(props: {
     const now = aug.now();
     switch (item.type) {
       case "task": {
+        if (item.task.kind === Kind.home) {
+          const working = item.task.agent_state === AgentState.working;
+          return {
+            bar: theme().primary,
+            bar2: theme().borderSubtle ?? theme().textMuted,
+            mark: working ? aug.spinner() : "⌂",
+            markColor: theme().primary,
+            title: "Home",
+            titleColor: theme().text,
+            sub: working ? "the Assistant is working" : "ask the Assistant · a",
+          };
+        }
         const meta = LANE_META[item.lane];
         const working =
           item.task.agent_state === AgentState.working &&
@@ -301,6 +322,25 @@ function RailRow(props: {
           titleColor: theme().textMuted,
           sub: `${ageLabel(item.at, now)} · ${CHANNEL_WORD[item.message.channel]} · ${item.message.reason ?? "fyi"}`,
         };
+      case "project": {
+        const filtered = aug.projectFilter() === item.project.id;
+        return {
+          bar: item.working ? theme().info : theme().secondary,
+          bar2: theme().borderSubtle ?? theme().textMuted,
+          mark: item.working ? aug.spinner() : filtered ? "◉" : "◫",
+          markColor: item.working ? theme().info : theme().secondary,
+          title: item.project.name,
+          titleColor: theme().text,
+          sub: [
+            `${item.open} open`,
+            item.working ? `${item.working} working` : "",
+            item.repos.join(", ") || "no repo",
+            filtered ? "rail shows only this" : "",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      }
       case "idea":
         return {
           bar: theme().accent,

@@ -25,6 +25,8 @@ export const Kind = {
   general: "general",
   coding: "coding",
   task: "task",
+  // The one Home thread: you and the Assistant. Not work, never closes.
+  home: "home",
 } as const;
 export type Kind = (typeof Kind)[keyof typeof Kind];
 
@@ -88,6 +90,8 @@ export interface TaskRow {
   // Set once the task has a worktree; (repo, branch) is how a PR finds it.
   branch: string | null;
   worktree: string | null;
+  // The task this one was made from (a handoff), which hears when it ends.
+  from_task_id: number | null;
 }
 
 export const ProjectStatus = {
@@ -95,6 +99,26 @@ export const ProjectStatus = {
   archived: "archived",
 } as const;
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
+
+export const MoveStatus = {
+  pending: "pending",
+  running: "running",
+  done: "done",
+  failed: "failed",
+} as const;
+export type MoveStatus = (typeof MoveStatus)[keyof typeof MoveStatus];
+
+export interface MoveRow {
+  id: number;
+  verb: string;
+  // JSON object of string args, as aug-tools passed them.
+  args: string;
+  asked_by: string;
+  status: MoveStatus;
+  result: string | null;
+  created_at: string;
+  finished_at: string | null;
+}
 
 // One tmux session. The session carries @aug_project; tmux_session is only
 // the name it had when aug last looked.

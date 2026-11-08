@@ -22,6 +22,7 @@ import {
   type RailItem,
   type RailSection,
 } from "../core/rail";
+import { railProjects } from "../core/lookup";
 import * as store from "../core/store";
 import { AgentState, type TaskRow } from "../core/types";
 
@@ -54,7 +55,15 @@ interface AugContextValue {
   setMode: (mode: ViewMode) => void;
   // The rail shows one project's tasks while set.
   projectFilter: Accessor<number | null>;
+  setProjectFilter: (id: number | null) => void;
   cycleProjectFilter: () => number | null;
+  // Home: the Assistant's thread, first on the rail.
+  homeId: number;
+  // Puts Home on the table in Chat and asks for its box to take focus.
+  goHome: () => void;
+  // Chat focuses the box once it is mounted, then clears this.
+  wantsInput: Accessor<boolean>;
+  setWantsInput: (on: boolean) => void;
 }
 
 const [AugContext, useAug] = createRequiredContext<AugContextValue>("Aug");
@@ -107,12 +116,18 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   const [projectFilter, setProjectFilter] = createSignal<number | null>(null);
   // Off, then each active project in turn, then off again.
   const cycleProjectFilter = (): number | null => {
-    const ids = store.listProjects().map((p) => p.id);
+    const ids = store
+      .listProjects()
+      .filter((p) => p.status === "active")
+      .map((p) => p.id);
     const at = ids.indexOf(projectFilter() ?? -1);
     const next = at + 1 < ids.length ? ids[at + 1] : null;
     setProjectFilter(next);
     return next;
   };
+
+  const homeId = store.homeTask().id;
+  const [wantsInput, setWantsInput] = createSignal(false);
 
   const rail = createMemo(() => {
     version();
@@ -130,6 +145,8 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     }
     const since = new Date(now().getTime() - FYI_DAYS * 86400000).toISOString();
     return buildRail({
+      home: store.getTask(homeId),
+      projects: railProjects(),
       tasks,
       pendingActions: pending(),
       ideas: store.openIdeas(),
@@ -173,6 +190,12 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
 
   function selectTask(taskId: number) {
     select(`t${taskId}`);
+  }
+
+  function goHome() {
+    setMode(ViewMode.chat);
+    selectTask(homeId);
+    setWantsInput(true);
   }
 
   const cursorItem = createMemo(() => {
@@ -244,6 +267,11 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
         mode,
         setMode,
         projectFilter,
+        setProjectFilter,
+        homeId,
+        goHome,
+        wantsInput,
+        setWantsInput,
         cycleProjectFilter,
       }}
     >

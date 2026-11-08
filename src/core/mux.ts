@@ -18,7 +18,7 @@ export interface MuxSession {
   id: string;
   name: string;
   projectId: number | null;
-  // aug's own grouped viewers, never offered for adoption.
+  // aug's own viewers, never offered for adoption.
   viewer: boolean;
 }
 
@@ -67,13 +67,15 @@ export interface Mux {
   tagWindow(windowId: string, taskId: number): Promise<void>;
   killWindow(windowId: string): Promise<void>;
   killSession(sessionId: string): Promise<void>;
-  moveWindow(windowId: string, sessionId: string): Promise<void>;
+  // From names the session to take it out of: a viewer links the same
+  // window, and tmux would otherwise pick whichever session it likes.
+  moveWindow(windowId: string, fromSessionId: string, toSessionId: string): Promise<void>;
   // Types a line into the window's pane, then Enter.
   sendLine(windowId: string, text: string): Promise<void>;
   // Moves your own tmux client (the one aug runs in) to the window.
   switchClient(windowId: string): Promise<void>;
-  // argv for the embedded terminal: attaches a grouped session of its own,
-  // so showing a window never moves your real client.
+  // argv for the embedded terminal: attaches a session of its own holding
+  // just that window, so showing it never moves your real client.
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[];
   paneInfo(paneId: string): Promise<PaneInfo | null>;
   // Calls onChange when windows or sessions come and go, until the signal
@@ -270,7 +272,7 @@ export class TmuxMux implements Mux {
         viewer: name.startsWith(VIEWER_PREFIX),
       };
     });
-    // A grouped viewer lists every window again; report each window once,
+    // A viewer lists its task's window again; report each window once,
     // under its project session.
     const viewers = new Set(sessions.filter((s) => s.viewer).map((s) => s.id));
     const seen = new Set<string>();
@@ -317,8 +319,8 @@ export class TmuxMux implements Mux {
     await this.cmd("kill-session", ["-t", sessionId]);
   }
 
-  async moveWindow(windowId: string, sessionId: string): Promise<void> {
-    await this.cmd("move-window", ["-d", "-s", windowId, "-t", `${sessionId}:`]);
+  async moveWindow(windowId: string, fromSessionId: string, toSessionId: string): Promise<void> {
+    await this.cmd("move-window", ["-d", "-s", `${fromSessionId}:${windowId}`, "-t", `${toSessionId}:`]);
   }
 
   async sendLine(windowId: string, text: string): Promise<void> {
@@ -331,18 +333,35 @@ export class TmuxMux implements Mux {
   }
 
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {
-    // One client process creates the grouped session and attaches to it; the
-    // options make it a plain view: no status bar, no prefix (keys reach
-    // claude), gone as soon as aug detaches. aug itself may run inside tmux,
-    // which refuses to nest while TMUX is set.
+    // One client process makes a session of its own, links the task's window
+    // into it and drops the placeholder, so the session holds claude and
+    // nothing else. Linked, not grouped: tmux 3.7's choose-tree draws nothing
+    // at all while any session group exists. The options make it a plain
+    // view: no status bar, no prefix (keys reach claude), gone as soon as aug
+    // detaches. aug itself may run inside tmux, which refuses to nest while
+    // TMUX is set.
+    // It is still an ordinary session, the most recent one, so a bare
+    // `tmux a`, switch-client or a destroyed session can drop your own
+    // terminal in here with no prefix (and keep it alive past aug). Any
+    // client but aug's is sent on to the project session. The id is escaped
+    // because tmux expands $VARS when the hook runs.
+    const bounce =
+      `if -F "#{!=:#{client_name},#{@aug_client}}" ` +
+      `"switch-client -t '${sessionId.replaceAll("$", "\\$")}'"`;
+    const placeholder = "aug-placeholder";
     return [
       "env", "-u", "TMUX",
       ...this.tmuxArgs(),
-      "new-session", "-t", sessionId, "-s", viewerName,
+      // cat holds the window open without starting your shell.
+      "new-session", "-s", viewerName, "-n", placeholder, "cat",
       ";", "set-option", "status", "off",
       ";", "set-option", "prefix", "None",
       ";", "set-option", "destroy-unattached", "on",
-      ";", "select-window", "-t", windowId,
+      ";", "set-option", "-F", "@aug_client", "#{client_name}",
+      ";", "set-hook", "client-attached", bounce,
+      ";", "set-hook", "client-session-changed", bounce,
+      ";", "link-window", "-s", windowId, "-t", `=${viewerName}:`,
+      ";", "kill-window", "-t", `=${viewerName}:=${placeholder}`,
     ];
   }
 

@@ -157,6 +157,18 @@ function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
             {props.turn.body}
           </text>
         </Match>
+        {/* Home is a conversation: every answer stays whole, unheaded. */}
+        <Match when={props.turn.author === "aug"}>
+          <box flexDirection="column" paddingLeft={2}>
+            <Markdown
+              text={props.turn.did ?? props.turn.body}
+              width={Math.max(20, props.width - 4)}
+            />
+            <Show when={files().length > 0}>
+              <WhatItMade files={files()} width={props.width - 4} />
+            </Show>
+          </box>
+        </Match>
         <Match when={!props.latest}>
           <box flexDirection="column" paddingLeft={2}>
             <text fg={theme.textMuted} wrapMode="word">

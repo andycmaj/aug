@@ -153,6 +153,20 @@ CREATE TABLE IF NOT EXISTS task_threads (
   PRIMARY KEY (thread_key, task_id)
 );
 
+-- Moves asked for from another process (aug-tools, run by the Assistant or
+-- an agent). The engine claims each one, runs it, and writes the result back.
+CREATE TABLE IF NOT EXISTS moves (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  verb TEXT NOT NULL,
+  args TEXT NOT NULL DEFAULT '{}',
+  asked_by TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  result TEXT,
+  created_at TEXT NOT NULL,
+  finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS moves_status ON moves(status);
+
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -179,6 +193,7 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "tasks", column: "branch", ddl: "TEXT" },
   { table: "tasks", column: "worktree", ddl: "TEXT" },
   { table: "sessions", column: "tmux_window", ddl: "TEXT" },
+  { table: "tasks", column: "from_task_id", ddl: "INTEGER REFERENCES tasks(id)" },
 ];
 
 function columns(db: Database, table: string): string[] {

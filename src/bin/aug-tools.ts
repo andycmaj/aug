@@ -3,7 +3,7 @@
 // with. Plain TypeScript: runs under bare `bun`, no Solid preload, so a hook
 // costs a process start and one SQLite write.
 
-import { defineCommand, runMain } from "citty";
+import { defineCommand, runMain, type ArgsDef } from "citty";
 import { adoptHook, paneEnv } from "../core/adopt";
 import {
   formatFeedback,
@@ -13,9 +13,11 @@ import {
 } from "../core/feedback";
 import { handleDone, handleHook, type HookEnv, type HookPayload } from "../core/hooks";
 import { logger } from "../core/log";
+import { findTasks, projectLine, taskDetail, taskLine } from "../core/lookup";
+import { MOVES, waitForMove } from "../core/moves";
 import { setMux, socketFromEnv, TmuxMux } from "../core/mux";
 import * as store from "../core/store";
-import { NoteLabel } from "../core/types";
+import { MoveStatus, NoteLabel } from "../core/types";
 
 // Inside a pane, talk to the tmux server the pane lives on.
 function usePaneServer(): void {
@@ -51,6 +53,7 @@ async function readPayload(): Promise<HookPayload> {
 }
 
 function author(): string {
+  if (process.env.AUG_ASKED_BY) return process.env.AUG_ASKED_BY;
   const id = Number(process.env.AUG_TASK_ID);
   return id ? `agent ${store.taskRef(id)}` : "you";
 }
@@ -237,6 +240,94 @@ const hubList = defineCommand({
   },
 });
 
+// ── looking things up ────────────────────────────────────────────────────
+
+const tasks = defineCommand({
+  meta: { name: "tasks", description: "List open tasks (and For later)" },
+  args: {
+    query: { type: "positional", required: false, description: "words to match" },
+    all: { type: "boolean", description: "include done and closed" },
+    project: { type: "string", description: "only this project's tasks" },
+  },
+  run({ args }) {
+    const found = findTasks({
+      all: args.all,
+      project: args.project,
+      query: args.query ? String(args.query) : undefined,
+    });
+    for (const t of found) console.log(taskLine(t));
+    if (found.length === 0) console.log("no tasks match");
+  },
+});
+
+const task = defineCommand({
+  meta: { name: "task", description: "Show one task and its recent chat" },
+  args: { ref: { type: "positional", required: true, description: "AUG-0012" } },
+  run({ args }) {
+    const id = store.parseTaskRef(String(args.ref));
+    const row = id ? store.getTask(id) : null;
+    if (!row) {
+      console.error(`no task ${args.ref}`);
+      process.exit(1);
+    }
+    console.log(taskDetail(row));
+  },
+});
+
+const projectsList = defineCommand({
+  meta: { name: "projects", description: "List projects and their repos" },
+  args: { all: { type: "boolean", description: "include archived" } },
+  run({ args }) {
+    const rows = store
+      .listProjects()
+      .filter((p) => args.all || p.status === "active");
+    for (const p of rows) console.log(projectLine(p));
+    if (rows.length === 0) console.log("no projects");
+  },
+});
+
+// ── moves: asked here, made by the running aug ───────────────────────────
+
+function moveCommand(verb: string) {
+  const spec = MOVES[verb];
+  const args: ArgsDef = {};
+  if (spec.task)
+    args.task = { type: "positional", required: true, description: "AUG-0012" };
+  for (const [name, arg] of Object.entries(spec.args))
+    args[name] =
+      name === spec.positional
+        ? { type: "positional", required: arg.required, description: arg.help }
+        : { type: "string", required: arg.required, description: arg.help };
+  return defineCommand({
+    meta: { name: verb, description: spec.help },
+    args,
+    async run({ args: given }) {
+      const values: Record<string, string> = {};
+      for (const name of Object.keys(args)) {
+        const value = given[name];
+        if (value !== undefined && value !== "") values[name] = String(value);
+      }
+      const move = store.enqueueMove(verb, values, author());
+      const row = await waitForMove(move.id);
+      if (row.status === MoveStatus.done) console.log(row.result);
+      else {
+        console.error(row.result);
+        process.exit(1);
+      }
+    },
+  });
+}
+
+const move = defineCommand({
+  meta: {
+    name: "move",
+    description: "Ask the running aug to make a move (done, remind, start...)",
+  },
+  subCommands: Object.fromEntries(
+    Object.keys(MOVES).map((verb) => [verb, moveCommand(verb)]),
+  ),
+});
+
 const main = defineCommand({
   meta: { name: "aug-tools", description: "aug's callback tools for agents" },
   subCommands: {
@@ -247,6 +338,10 @@ const main = defineCommand({
     feedback,
     note,
     notes,
+    tasks,
+    task,
+    projects: projectsList,
+    move,
     hub: defineCommand({
       meta: {
         name: "hub",

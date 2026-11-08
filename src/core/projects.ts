@@ -375,8 +375,8 @@ export async function archiveProject(projectId: number): Promise<void> {
   await archive(project, await mux().state());
 }
 
-// Windows go first: a grouped viewer would otherwise keep them (and their
-// claudes) alive after the session is gone.
+// Windows go first: a viewer links one, and would otherwise keep it (and its
+// claude) alive after the session is gone.
 async function archive(project: ProjectRow, state: MuxState): Promise<void> {
   const live = liveSessionFor(state, project.id);
   if (live) {
@@ -401,7 +401,7 @@ export async function moveTask(taskId: number, projectId: number): Promise<void>
   const session = await ensureSession(target);
   const state = await mux().state();
   for (const w of state.windows.filter((w) => w.taskId === taskId))
-    await mux().moveWindow(w.id, session.id);
+    await mux().moveWindow(w.id, w.sessionId, session.id);
   store.updateTask(taskId, { project_id: projectId });
   if (task.repo) store.addProjectRepo(projectId, task.repo);
   if (from?.solo && store.tasksForProject(from.id).length === 0)
@@ -422,7 +422,7 @@ export async function nudge(taskId: number, text: string): Promise<boolean> {
   return true;
 }
 
-// One viewer per task: each is a grouped session showing that task's window,
+// One viewer per task: each is a session holding just that task's window,
 // so the Wall can show several agents of one project at once.
 export async function jumpToProject(projectId: number): Promise<boolean> {
   const project = store.getProject(projectId);
@@ -440,7 +440,7 @@ export async function viewerArgv(taskId: number): Promise<string[] | null> {
   const state = await mux().state();
   const window = state.windows.find((w) => w.taskId === taskId);
   if (!window) return null;
-  // Group with the tagged project session, not whichever session listed it.
+  // Strays land in the tagged project session, not whichever session listed it.
   const projectId = store.getTask(taskId)?.project_id;
   const session =
     (projectId ? liveSessionFor(state, projectId) : null)?.id ?? window.sessionId;

@@ -6,7 +6,9 @@ import {
   nextKey,
   isSlipped,
   ageLabel,
+  WALKED,
 } from "../src/core/rail";
+import { railProjects } from "../src/core/lookup";
 import * as store from "../src/core/store";
 import { AgentState, Kind, TurnRole } from "../src/core/types";
 import { freshHome } from "./helpers";
@@ -181,5 +183,47 @@ describe("rail", () => {
     expect(store.wakeReminders(at(2))).toBe(1);
     expect(store.getTask(t.id)!.status).toBe("open");
     expect(store.turnsForTask(t.id).at(-1)!.role).toBe(TurnRole.trigger);
+  });
+});
+
+describe("projects on the rail", () => {
+  beforeEach(() => freshHome());
+
+  test("each active project is a row under Home, with its open and working counts", () => {
+    const home = store.homeTask();
+    const api = store.createProject({ name: "api", tmuxSession: "api", repos: ["acme/api"] });
+    const old = store.createProject({ name: "old", tmuxSession: "old" });
+    store.archiveProject(old.id);
+    const a = store.createTask({ title: "a", kind: Kind.coding, channel: "owner", projectId: api.id });
+    store.createTask({ title: "b", kind: Kind.coding, channel: "owner", projectId: api.id });
+    const c = store.createTask({ title: "c", kind: Kind.coding, channel: "owner", projectId: api.id });
+    store.updateTask(a.id, { agent_state: AgentState.working });
+    store.markDone(c.id);
+
+    const rail = buildRail({
+      home,
+      projects: railProjects(),
+      tasks: store.listTasks(),
+      pendingActions: new Set(),
+      ideas: [],
+      fyi: [],
+      lastHeard: new Map(),
+      now: new Date(),
+    });
+    expect(rail.map((s) => s.section)).toEqual(["home", "projects", "tasks"]);
+    const rows = rail[1].items;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "project",
+      key: `p${api.id}`,
+      open: 2,
+      working: 1,
+      repos: ["acme/api"],
+    });
+  });
+
+  test("projects are never walked", () => {
+    expect(WALKED).not.toContain("projects");
+    expect(WALKED).not.toContain("home");
   });
 });

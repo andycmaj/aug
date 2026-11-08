@@ -133,11 +133,25 @@ export function itemInfo(item: RailItem, now = new Date()): InfoSection[] {
           ["body", item.idea.body],
         ]),
       ];
+    case "project":
+      return [
+        section("Project", [
+          ["name", item.project.name],
+          ["id", String(item.project.id)],
+          ["tmux session", item.project.tmux_session],
+          ["repos", item.repos.join(", ") || null],
+          ["open tasks", String(item.open)],
+          ["working", item.working ? String(item.working) : null],
+          ["solo", item.project.solo ? "yes: archived when its task is done" : null],
+          ["created", when(item.project.created_at, now)],
+        ]),
+      ];
   }
 }
 
 export function infoTitle(item: RailItem): string {
   if (item.type === "task") return `${store.taskRef(item.task.id)} · ${item.task.title}`;
   if (item.type === "fyi") return `FYI from ${item.message.author_name}`;
+  if (item.type === "project") return `Project ${item.project.name}`;
   return item.idea.title;
 }

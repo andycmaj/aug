@@ -139,9 +139,18 @@ does the work, and whatever comes out waits for you.
 - **The Advisor** reads your open work every few hours and leaves at most three
   ideas on the rail. It also marks a thread *slipped* when it has waited on
   someone for too long.
-- **The Assistant** (`a`) answers about the item on the table and moves things
-  when you ask: done, remind, watch, start, redraft, not a task, priority,
-  remember. It never sends.
+- **Home is the Assistant**, first on the rail; `a` jumps there from anywhere.
+  It is one long chat about all your work: `@` names a task (it offers matches
+  as you type), and the Assistant reads it before answering. It runs aug for
+  you through `aug-tools`: it looks up tasks and projects, makes tasks
+  (`move new`, a coding task in a named project with a brief), moves them,
+  starts and stops agents, and archives projects after you confirm. It never
+  sends.
+- **Moves go through the engine.** `aug-tools move <verb>` writes the move to
+  the `moves` table and waits. The running aug makes it and prints one line
+  back, or why it could not ("no project X; projects: ..."). A task's own agent
+  may make tasks (`--from` its task, which then hears about it) and edit its
+  own task; starting, stopping and closing stay yours and the Assistant's.
 
 ## Projects
 
@@ -164,6 +173,10 @@ work with them from any tmux client.
   kept and aug says so. A project made for one task is archived when that task
   is done. `x` on the Board archives a project; `M` moves a task (its window
   moves with it).
+- **On the rail.** Active projects sit under Home, never walked: open and
+  working counts and repos. `enter` puts one on the table (its open tasks with
+  their lanes) and narrows the rail to its tasks; `enter` again shows every
+  project. `T` jumps to its session, `x` archives it, `I` shows everything.
 - **PRs.** A PR whose head branch is a task's branch belongs to that task, so
   its reviews and CI land there. `u` types one line into the agent's window
   telling it to run `aug-tools feedback`. Nothing else is pasted or sent.
@@ -195,10 +208,10 @@ If one of your hooks opens a tmux window for every new worktree, guard it with
 
 | Where           | Keys                                                                                                                                                                                          |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Anywhere        | `n`/`b` walk next/back · `a` ask · `v` Chat/Board · `N` new · `D` docs · `C` connections · `^r` check now · `:` palette · `?` help · `Tab` pane · `q` quit                                     |
-| Rail            | `j`/`k` move the cursor · `enter` put the row on the table · `f` one project / all. Moves act on the row under the cursor. |
+| Anywhere        | `n`/`b` walk next/back · `a` Home (the Assistant) · `v` Chat/Board · `N` new · `D` docs · `C` connections · `^r` check now · `:` palette · `?` help · `Tab` pane · `q` quit                                     |
+| Rail            | `j`/`k` move the cursor · `enter` put the row on the table (on a project: only its tasks, again: all) · `f` cycle one project / all. Moves act on the row under the cursor. |
 | Rail and table  | `y` send (asks first) · `e` edit draft in `$EDITOR` · `E` redraft · `s` start/continue agent · `S` stop and save · `d` done · `r` remind me · `w` watch · `x` not a task / read · `m` make it a task · `p` priority · `t` kind · `W` waiting on someone · `o` open the link or a file the agent made · `O` edit a made file in `$EDITOR` · `i` type · `I` info (everything aug knows about the row; `c` copies a value) · coding: `T` jump to its tmux window · `u` nudge about feedback · `M` move to a project |
-| Chat box        | `enter` send to the agent · `esc` leave                                                                                                                                                       |
+| Chat box        | `enter` send to the agent · `@` name a task (`tab`/`enter` takes it, `↑`/`↓` pick) · `esc` leave                                                                                              |
 | Agent terminal  | everything goes to the agent · `^]` detach                                                                                                                                                    |
 | Board           | `1`–`5` Columns / Wall / Live handoffs / Hub / Projects · `h j k l` move · `enter` open or attach · `c` write a note or Hub entry (new project on tab 5) · `L` tiles across · `A` adopt a tmux session · `x` archive a project · `M` move a task |
 

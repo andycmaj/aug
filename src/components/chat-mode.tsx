@@ -1,7 +1,7 @@
 // Chat: the rail beside the table. The regular workflow - walk what waits,
 // one item at a time, each task one chat.
 
-import { createMemo, Show } from "solid-js";
+import { createEffect, createMemo, Show } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
 import { useFocus, useTheme } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
@@ -21,6 +21,13 @@ export function ChatMode() {
   const dims = useTerminalDimensions();
   const { sidebarVisible, isPaneFocused, setActivePane } = useFocus();
   const shell = useShell({ typing: () => isPaneFocused("input") });
+
+  // `a` from anywhere (the Board too) lands in Home's box.
+  createEffect(() => {
+    if (!aug.wantsInput() || aug.selectedKey() !== `t${aug.homeId}`) return;
+    aug.setWantsInput(false);
+    setActivePane("input");
+  });
 
   // A key on the rail acts on the row under the cursor; on the table, on the
   // row on the table.

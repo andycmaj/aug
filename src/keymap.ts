@@ -12,7 +12,7 @@ import { Commands } from "./commands";
 
 // What the footer needs to know to show only the moves that apply.
 export interface HelpCtx {
-  item: "task" | "fyi" | "idea" | null;
+  item: "task" | "fyi" | "idea" | "project" | null;
   kind: string | null;
   hasDraft: boolean;
   live: boolean;
@@ -40,6 +40,8 @@ const listNav = navBindings().filter(
 );
 
 const isTask = (c: HelpCtx) => c.item === "task";
+// Home is a task row but not work: no done, later, kind or priority.
+const isWork = (c: HelpCtx) => isTask(c) && c.kind !== "home";
 
 // The moves on an item, the same from the rail row and from the table.
 const itemMoves: BindingSpec<HelpCtx>[] = [
@@ -68,7 +70,7 @@ const itemMoves: BindingSpec<HelpCtx>[] = [
     cmd: Commands.START,
     desc: "start / continue the agent",
     help: "start",
-    relevant: (c) => isTask(c) && !c.live,
+    relevant: (c) => isWork(c) && !c.live,
   },
   {
     key: "shift+s",
@@ -82,7 +84,7 @@ const itemMoves: BindingSpec<HelpCtx>[] = [
     cmd: Commands.JUMP,
     desc: "jump your tmux client to the agent's window",
     help: "jump",
-    relevant: (c) => c.coding,
+    relevant: (c) => c.coding || c.item === "project",
   },
   {
     key: "shift+m",
@@ -102,27 +104,34 @@ const itemMoves: BindingSpec<HelpCtx>[] = [
     cmd: Commands.DONE,
     desc: "mark done",
     help: "done",
-    relevant: isTask,
+    relevant: isWork,
   },
   {
     key: "r",
     cmd: Commands.REMIND,
     desc: "remind me later",
     help: "later",
-    relevant: isTask,
+    relevant: isWork,
   },
   {
     key: "w",
     cmd: Commands.WATCH,
     desc: "watch it / stop watching",
-    relevant: isTask,
+    relevant: isWork,
   },
   {
     key: "x",
     cmd: Commands.NOT_TASK,
     desc: "not a task / read / dismiss",
     help: "not a task",
-    relevant: (c) => c.item !== null,
+    relevant: (c) => c.item !== null && c.item !== "project" && c.kind !== "home",
+  },
+  {
+    key: "x",
+    cmd: Commands.PROJECT_ARCHIVE,
+    desc: "archive the project",
+    help: "archive",
+    relevant: (c) => c.item === "project",
   },
   {
     key: "m",
@@ -135,19 +144,19 @@ const itemMoves: BindingSpec<HelpCtx>[] = [
     key: "p",
     cmd: Commands.PRIORITY,
     desc: "cycle priority",
-    relevant: isTask,
+    relevant: isWork,
   },
   {
     key: "t",
     cmd: Commands.KIND,
     desc: "change what kind of work it is",
-    relevant: isTask,
+    relevant: isWork,
   },
   {
     key: "shift+w",
     cmd: Commands.WAIT_ON,
     desc: "hand it to a person (waiting on them)",
-    relevant: isTask,
+    relevant: isWork,
   },
   {
     key: "o",
@@ -188,8 +197,8 @@ export const keymap: KeymapTable<HelpCtx> = {
     {
       key: "a",
       cmd: Commands.ASK_OPEN,
-      desc: "ask the Assistant",
-      help: "ask",
+      desc: "Home: ask the Assistant anything",
+      help: "home",
     },
     {
       key: "n",
@@ -227,7 +236,10 @@ export const keymap: KeymapTable<HelpCtx> = {
     ...quietWhileTyping(itemMoves),
   ],
   input: [
-    { key: "return", cmd: Commands.INPUT_SUBMIT, desc: "send to the agent" },
+    { key: "return", cmd: Commands.INPUT_SUBMIT, desc: "send (or take the @ suggestion)" },
+    { key: "tab", cmd: Commands.INPUT_COMPLETE, desc: "@: take the suggestion" },
+    { key: "up", cmd: Commands.INPUT_PICK_UP, desc: "@: previous suggestion" },
+    { key: "down", cmd: Commands.INPUT_PICK_DOWN, desc: "@: next suggestion" },
     {
       key: "ctrl+g",
       cmd: Commands.INPUT_EDITOR,

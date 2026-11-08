@@ -29,6 +29,8 @@ export interface BrainCall {
   // "user" loads the user's settings, which is the only way claude.ai
   // connectors (MCP servers) load. Default skips them.
   settingSources?: "" | "user";
+  // Added to the child's environment (aug-tools reads who is asking here).
+  env?: Record<string, string>;
   onStep?: (step: string) => void;
   signal?: AbortSignal;
 }
@@ -178,7 +180,7 @@ async function claudeBrain(call: BrainCall): Promise<BrainResult> {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "aug" },
+    env: { ...process.env, ...call.env, CLAUDE_CODE_ENTRYPOINT: "aug" },
   });
   const abort = () => proc.kill();
   call.signal?.addEventListener("abort", abort);

@@ -64,7 +64,7 @@ function seedTask(
   t: {
     title: string;
     summary: string;
-    kind: Kind;
+    kind: Exclude<Kind, "home">;
     priority?: Priority;
     reason: string;
     repo?: string;
@@ -520,6 +520,15 @@ export function seedDemo(): void {
       "Transfers between Northwind entities post on both sides. The GL export must keep them; the consolidation step removes the pair.",
       "agent AUG-0006",
     );
+
+    // A project holding both ledger fixes, so the rail has one to show.
+    const ledger = store.createProject({
+      name: "ledger fixes",
+      tmuxSession: "ledger-fixes",
+      repos: ["northwind/ledger"],
+    });
+    store.updateTask(exp, { project_id: ledger.id });
+    store.updateTask(csv, { project_id: ledger.id });
   });
 
   const learned = readDoc(DocName.learned)
@@ -591,17 +600,20 @@ async function demoBrain(call: BrainCall): Promise<BrainResult> {
         : {}),
     });
   }
-  if ("actions" in props) {
-    const q = call.prompt.split("The owner says: ").pop()?.toLowerCase() ?? "";
-    const actions = /\bdone\b|close it/.test(q)
-      ? [{ verb: "done" }]
-      : /remind|later|tomorrow/.test(q)
-        ? [{ verb: "remind", arg: "1" }]
-        : [];
-    const reply = actions.length
-      ? "Done."
-      : 'This is the demo, so I answer from a script. Try "mark it done" or "remind me tomorrow" - those move the task on the table.';
-    return done({ reply, actions });
+  // Home: the Assistant answers in words, after looking things up.
+  if (call.env?.AUG_ASKED_BY === "assistant") {
+    const named = [...call.prompt.matchAll(/^(AUG-\d{4}) \[[^\]]*\] (.+?)(?: \(project .+\))?$/gm)];
+    const asked = call.prompt.includes("## Tasks the owner named")
+      ? call.prompt.split("## Tasks the owner named\n")[1].split("\n")[0]
+      : null;
+    for (const step of ["Bash aug-tools tasks", ...(asked ? [`Bash aug-tools task ${asked.slice(0, 8)}`] : [])]) {
+      await sleep(600);
+      call.onStep?.(step);
+    }
+    const text = asked
+      ? `This is the demo, so I answer from a script. You named **${asked}**. In your own aug I'd read it, answer, and move it if you asked: make a coding task from it, put it in a project, start its agent.`
+      : `This is the demo, so I answer from a script. There are ${named.length} open tasks. Name one with @ and ask me about it, or tell me to make, move, start or close something.`;
+    return { ...done(null), text };
   }
   if ("ideas" in props) return done({ ideas: [] });
   if ("verdict" in props)

@@ -7,6 +7,7 @@ import { db, now } from "./db";
 import {
   ActionState,
   AgentState,
+  MoveStatus,
   ProjectStatus,
   TaskStatus,
   TurnRole,
@@ -17,6 +18,7 @@ import {
   type IdeaRow,
   type Kind,
   type MessageRow,
+  type MoveRow,
   type NoteLabel,
   type NoteRow,
   type Priority,
@@ -106,13 +108,14 @@ export interface NewTask {
   createdAt?: string;
   projectId?: number | null;
   branch?: string | null;
+  fromTaskId?: number | null;
 }
 
 export function createTask(t: NewTask): TaskRow {
   const at = t.createdAt ?? now();
   const id = run(
-    `INSERT INTO tasks (title, summary, kind, priority, watching, repo, thread_key, channel, url, triage_reason, created_at, updated_at, project_id, branch)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (title, summary, kind, priority, watching, repo, thread_key, channel, url, triage_reason, created_at, updated_at, project_id, branch, from_task_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     t.title,
     t.summary ?? "",
     t.kind,
@@ -127,6 +130,7 @@ export function createTask(t: NewTask): TaskRow {
     at,
     t.projectId ?? null,
     t.branch ?? null,
+    t.fromTaskId ?? null,
   );
   return getTask(id)!;
 }
@@ -135,9 +139,19 @@ export function getTask(id: number): TaskRow | null {
   return one<TaskRow>("SELECT * FROM tasks WHERE id = ?", id);
 }
 
+// Work only: Home is not a task, and nothing that lists work sees it.
 export function listTasks(): TaskRow[] {
   return all<TaskRow>(
-    "SELECT * FROM tasks WHERE status != 'dropped' ORDER BY created_at, id",
+    "SELECT * FROM tasks WHERE status != 'dropped' AND kind != 'home' ORDER BY created_at, id",
+  );
+}
+
+export function homeTask(): TaskRow {
+  const found = one<TaskRow>(
+    "SELECT * FROM tasks WHERE kind = 'home' ORDER BY id LIMIT 1",
+  );
+  return (
+    found ?? createTask({ title: "Home", kind: "home", channel: "owner" })
   );
 }
 
@@ -751,4 +765,63 @@ export function wakeReminders(at = now()): number {
     }
   });
   return due.length;
+}
+
+// ── moves ────────────────────────────────────────────────────────────────
+
+export function enqueueMove(
+  verb: string,
+  args: Record<string, string>,
+  askedBy: string,
+): MoveRow {
+  const id = run(
+    "INSERT INTO moves (verb, args, asked_by, created_at) VALUES (?, ?, ?, ?)",
+    verb,
+    JSON.stringify(args),
+    askedBy,
+    now(),
+  );
+  return getMove(id)!;
+}
+
+export function getMove(id: number): MoveRow | null {
+  return one<MoveRow>("SELECT * FROM moves WHERE id = ?", id);
+}
+
+export function pendingMoves(): MoveRow[] {
+  return all<MoveRow>(
+    "SELECT * FROM moves WHERE status = 'pending' ORDER BY id",
+  );
+}
+
+// Only one claimer wins, so a move never runs twice.
+export function claimMove(id: number): boolean {
+  const result = db()
+    .query(
+      "UPDATE moves SET status = 'running' WHERE id = ? AND status = 'pending'",
+    )
+    .run(id);
+  changed();
+  return result.changes === 1;
+}
+
+export function finishMove(id: number, ok: boolean, result: string): void {
+  run(
+    "UPDATE moves SET status = ?, result = ?, finished_at = ? WHERE id = ?",
+    ok ? MoveStatus.done : MoveStatus.failed,
+    result,
+    now(),
+    id,
+  );
+}
+
+// A move nobody picked up is failed, not left to run whenever aug next starts.
+export function abandonMove(id: number, why: string): boolean {
+  const result = db()
+    .query(
+      "UPDATE moves SET status = 'failed', result = ?, finished_at = ? WHERE id = ? AND status = 'pending'",
+    )
+    .run(why, now(), id);
+  changed();
+  return result.changes === 1;
 }

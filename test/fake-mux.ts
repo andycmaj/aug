@@ -76,9 +76,9 @@ export class FakeMux implements Mux {
     this.windows = this.windows.filter((w) => w.sessionId !== sessionId);
   }
 
-  async moveWindow(windowId: string, sessionId: string): Promise<void> {
+  async moveWindow(windowId: string, _fromSessionId: string, toSessionId: string): Promise<void> {
     const w = this.windows.find((w) => w.id === windowId);
-    if (w) w.sessionId = sessionId;
+    if (w) w.sessionId = toSessionId;
   }
 
   async sendLine(windowId: string, text: string): Promise<void> {
@@ -90,7 +90,7 @@ export class FakeMux implements Mux {
   }
 
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {
-    return ["tmux", "new-session", "-t", sessionId, "-s", viewerName, ";", "select-window", "-t", windowId];
+    return ["tmux", "new-session", "-s", viewerName, ";", "link-window", "-s", windowId, "-t", `=${viewerName}:`];
   }
 
   // In the fake a pane id is its window id.

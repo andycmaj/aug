@@ -9,10 +9,21 @@ import {
   type IdeaRow,
   type MessageRow,
   type Priority,
+  type ProjectRow,
   type TaskRow,
 } from "./types";
 
+// A project as the rail shows it: what is open in it and what is running.
+export interface RailProject {
+  project: ProjectRow;
+  open: number;
+  working: number;
+  repos: string[];
+}
+
 export const Section = {
+  home: "home",
+  projects: "projects",
   tasks: "tasks",
   watching: "watching",
   later: "later",
@@ -22,6 +33,8 @@ export const Section = {
 export type Section = (typeof Section)[keyof typeof Section];
 
 export const SECTION_TITLES: Record<Section, string> = {
+  home: "Home",
+  projects: "Projects",
   tasks: "Tasks",
   watching: "Watching",
   later: "For later",
@@ -42,6 +55,7 @@ export type RailItem =
       slipped: boolean;
       at: string;
     }
+  | ({ type: "project"; key: string; at: string } & RailProject)
   | { type: "idea"; key: string; idea: IdeaRow; at: string }
   | { type: "fyi"; key: string; message: MessageRow; at: string };
 
@@ -51,6 +65,10 @@ export interface RailSection {
 }
 
 export interface RailInput {
+  // The Home thread, first on the rail and never walked.
+  home?: TaskRow | null;
+  // Active projects, under Home and never walked.
+  projects?: RailProject[];
   tasks: TaskRow[];
   pendingActions: Set<number>;
   ideas: IdeaRow[];
@@ -75,12 +93,33 @@ export function isSlipped(
 
 export function buildRail(input: RailInput): RailSection[] {
   const sections: Record<Section, RailItem[]> = {
+    home: [],
+    projects: [],
     tasks: [],
     watching: [],
     later: [],
     advisor: [],
     fyi: [],
   };
+
+  if (input.home)
+    sections.home.push({
+      type: "task",
+      key: `t${input.home.id}`,
+      task: input.home,
+      lane: laneOf(input.home, { hasPendingAction: false }),
+      priority: input.home.priority,
+      slipped: false,
+      at: input.home.created_at,
+    });
+
+  for (const p of input.projects ?? [])
+    sections.projects.push({
+      type: "project",
+      key: `p${p.project.id}`,
+      at: p.project.created_at,
+      ...p,
+    });
 
   for (const task of input.tasks) {
     const lane = laneOf(task, {

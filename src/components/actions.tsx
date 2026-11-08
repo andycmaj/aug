@@ -457,6 +457,7 @@ export function useActions(dialogs: Dialogs) {
   // ── on a task ─────────────────────────────────────────────────────────
 
   function start(task: TaskRow) {
+    if (task.kind === Kind.home) return;
     if (task.kind === Kind.coding) startCoding(task.id);
     else {
       engine.startGeneral(task.id);
@@ -880,19 +881,28 @@ export function useActions(dialogs: Dialogs) {
     get: () => RailItem | null,
     typeInto: () => void,
   ): ItemMoves {
-    const onTask = (fn: (t: TaskRow) => void) => () => {
-      const item = get();
-      if (item?.type !== "task") return false;
-      const fresh = store.getTask(item.task.id);
-      if (fresh) fn(fresh);
-    };
+    // Home is a conversation, not work: only typing, start/stop and info
+    // reach it.
+    const onTask =
+      (fn: (t: TaskRow) => void, home = false) =>
+      () => {
+        const item = get();
+        if (item?.type !== "task") return false;
+        const fresh = store.getTask(item.task.id);
+        if (!fresh || (fresh.kind === Kind.home && !home)) return false;
+        fn(fresh);
+      };
     return {
       [Commands.SEND]: onTask(send),
       [Commands.EDIT_DRAFT]: onTask(editDraft),
       [Commands.REDRAFT]: onTask(redraft),
-      [Commands.START]: onTask(start),
-      [Commands.STOP]: onTask(stop),
-      [Commands.JUMP]: onTask((task) => void jumpTo(task.id)),
+      [Commands.START]: onTask(start, true),
+      [Commands.STOP]: onTask(stop, true),
+      [Commands.JUMP]: () => {
+        const item = get();
+        if (item?.type === "project") return void jumpToProject(item.project.id);
+        return onTask((task) => void jumpTo(task.id))();
+      },
       [Commands.NUDGE]: onTask((task) => void nudge(task.id)),
       [Commands.MOVE_TO_PROJECT]: onTask(moveToProject),
       [Commands.DONE]: onTask(done),
@@ -901,12 +911,20 @@ export function useActions(dialogs: Dialogs) {
       [Commands.PRIORITY]: onTask(cyclePriority),
       [Commands.KIND]: onTask(changeKind),
       [Commands.WAIT_ON]: onTask(waitOn),
-      [Commands.TYPE]: onTask(() => typeInto()),
+      [Commands.TYPE]: onTask(() => typeInto(), true),
       [Commands.NOT_TASK]: () => {
         const item = get();
         if (!item) return false;
+        if (item.type === "task" && item.task.kind === Kind.home) return false;
+        if (item.type === "project") return false;
         if (item.type === "task") notATask(item.task);
         else dismiss(item);
+      },
+      // Shares x with not-a-task; each declines the other's rows.
+      [Commands.PROJECT_ARCHIVE]: () => {
+        const item = get();
+        if (item?.type !== "project") return false;
+        archiveProject(item.project.id);
       },
       [Commands.MAKE_TASK]: () => {
         const item = get();

@@ -37,6 +37,17 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 - **The engine owns every owner move.** Components call
   `components/actions.tsx`, which talks to the engine. Triage returns effects
   and does not start agents itself.
+- **Other processes ask for moves through `core/moves.ts`.** One registry
+  (verb, args, help, run) feeds `aug-tools move <verb>`, the Assistant's
+  prompt and the engine's dispatch. aug-tools inserts a `moves` row and waits;
+  the engine claims it on `data_version`, runs it, and writes one line back. A
+  new verb goes in the registry, nowhere else. A move that would open a dialog
+  answers `needs ...` in words instead. `AGENT_MOVES` is what a task's agent
+  may ask for.
+- **Home is a `kind: home` task** (`store.homeTask()`), and its agent is the
+  Assistant (`core/assistant.ts`): a resumed `claude -p` allowed only
+  `aug-tools`. `listTasks()` never returns it, so nothing that lists work
+  sees it.
 - **Logging is `core/log.ts`**: `logger(scope)` writes lines to `aug.log`
   under `AUG_HOME`, never to the terminal (the TUI owns it). It is off unless
   `AUG_LOG`, `log.enabled` in config, or `AUG_DEV` (set by `bun run dev`)
