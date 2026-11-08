@@ -21,7 +21,12 @@ import { FakeMux } from "./fake-mux";
 import { freshHome } from "./helpers";
 
 let fake: FakeMux;
-const git: GitInfo = { branch: "fix-bom", toplevel: "/src/ledger.fix-bom", repo: "acme/ledger" };
+const git: GitInfo = {
+  branch: "fix-bom",
+  toplevel: "/src/ledger.fix-bom",
+  repo: "acme/ledger",
+  worktree: true,
+};
 const probe = () => git;
 
 beforeEach(() => {
@@ -38,12 +43,18 @@ async function projectWindow(): Promise<{ projectId: number; windowId: string }>
 }
 
 describe("titles and remotes", () => {
-  test("branch first, then the first prompt line, then the window", () => {
+  test("worktree branch first, then the first prompt line, then the window", () => {
     expect(adoptedTitle(git, "anything", "zsh")).toBe("fix-bom");
     const main = { ...git, branch: "main" };
     expect(adoptedTitle(main, "Make the export\nkeep transfers", "zsh")).toBe("Make the export");
     expect(adoptedTitle(main, undefined, "api")).toBe("api");
     expect(adoptedTitle(main, "x".repeat(100), "zsh")).toHaveLength(80);
+  });
+
+  test("a branch checked out in the main checkout is not the task's name", () => {
+    const shared = { ...git, branch: "projects", worktree: false };
+    expect(adoptedTitle(shared, "Retitle adopted tasks", "zsh")).toBe("Retitle adopted tasks");
+    expect(adoptedTitle(shared, undefined, "api")).toBe("api");
   });
 
   test("owner/repo from ssh and https remotes", () => {

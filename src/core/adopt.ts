@@ -28,6 +28,9 @@ export interface GitInfo {
   branch: string | null;
   toplevel: string | null;
   repo: string | null;
+  // A linked worktree, whose branch was cut for one piece of work. The main
+  // checkout's branch is shared by whatever runs there, so it names nothing.
+  worktree: boolean;
 }
 
 function git(cwd: string, args: string[]): string | null {
@@ -47,10 +50,13 @@ export function repoFromRemote(url: string | null): string | null {
 
 export function gitInfo(cwd: string): GitInfo {
   const branch = git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const dirs = git(cwd, ["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"]);
+  const [gitDir, commonDir] = dirs?.split("\n") ?? [];
   return {
     branch: branch === "HEAD" ? null : branch,
     toplevel: git(cwd, ["rev-parse", "--show-toplevel"]),
     repo: repoFromRemote(git(cwd, ["remote", "get-url", "origin"])),
+    worktree: !!gitDir && !!commonDir && gitDir !== commonDir,
   };
 }
 
@@ -61,7 +67,7 @@ export function adoptedTitle(
   prompt: string | undefined,
   windowName: string,
 ): string {
-  if (info.branch && !DEFAULT_BRANCHES.has(info.branch)) return info.branch;
+  if (info.worktree && info.branch && !DEFAULT_BRANCHES.has(info.branch)) return info.branch;
   const line = prompt?.trim().split("\n")[0]?.trim();
   if (line) return line.length > 80 ? `${line.slice(0, 79)}…` : line;
   return windowName.trim() || "claude";
