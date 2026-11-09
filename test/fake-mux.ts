@@ -6,6 +6,7 @@ import type {
   MadeWorktree,
   NewWindow,
   PaneInfo,
+  SplitPane,
   Worktree,
 } from "../src/core/mux";
 
@@ -16,6 +17,8 @@ export class FakeMux implements Mux {
   worktrees: (Worktree & { path: string })[] = [];
   removed: { repoPath: string; branch: string }[] = [];
   sent: { windowId: string; text: string }[] = [];
+  splits: (SplitPane & { id: string })[] = [];
+  livePanes = new Set<string>();
   switched: string[] = [];
   removeFails: string | null = null;
   tagFails: string | null = null;
@@ -83,6 +86,17 @@ export class FakeMux implements Mux {
 
   async sendLine(windowId: string, text: string): Promise<void> {
     this.sent.push({ windowId, text });
+  }
+
+  async splitPane(s: SplitPane): Promise<string> {
+    const id = `%${this.next++}`;
+    this.splits.push({ ...s, id });
+    this.livePanes.add(id);
+    return id;
+  }
+
+  async paneAlive(paneId: string): Promise<boolean> {
+    return this.livePanes.has(paneId);
   }
 
   async switchClient(sessionId: string, windowId?: string): Promise<void> {

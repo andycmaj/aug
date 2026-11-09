@@ -8,11 +8,15 @@
 import { Server, TmuxServerRestartedError } from "libtmux";
 import { loadConfig } from "./config";
 import { logger } from "./log";
+import { toolsCommand } from "./self";
 
 const log = logger("mux");
 
 export const PROJECT_OPTION = "@aug_project";
 export const TASK_OPTION = "@aug_task";
+// How a script in a task's pane calls aug-tools: a hand-started claude has no
+// AUG_* env, but its window carries this beside the task tag.
+export const TOOLS_OPTION = "@aug_tools";
 
 export interface MuxSession {
   id: string;
@@ -51,6 +55,19 @@ export interface NewWindow {
   argv: string[];
 }
 
+// A pane split off a task's own window, so whatever it runs (a diff viewer)
+// shows wherever that window does, aug's viewer included, instead of in a
+// window of its own.
+export interface SplitPane {
+  paneId: string;
+  cwd: string;
+  argv: string[];
+  // Fills the window until the command exits.
+  zoom: boolean;
+  // Gets the command's exit code, for a caller that waits on it.
+  exitFile?: string;
+}
+
 export interface Worktree {
   repoPath: string;
   branch: string;
@@ -70,8 +87,12 @@ export interface Mux {
   // From names the session to take it out of: a viewer links the same
   // window, and tmux would otherwise pick whichever session it likes.
   moveWindow(windowId: string, fromSessionId: string, toSessionId: string): Promise<void>;
-  // Types a line into the window's pane, then Enter.
+  // Types a line into the window's first pane (claude, even while a split
+  // has focus), then Enter.
   sendLine(windowId: string, text: string): Promise<void>;
+  // Answers the new pane's id.
+  splitPane(s: SplitPane): Promise<string>;
+  paneAlive(paneId: string): Promise<boolean>;
   // Moves your own tmux client (the one aug runs in) to the session, or to
   // one of its windows. The session is named because a viewer links the
   // same window, and tmux would otherwise land you in the viewer.
@@ -103,6 +124,13 @@ export function shellQuote(arg: string): string {
 // exits and you can resume or look around.
 export function windowCommand(argv: string[]): string {
   return `${argv.map(shellQuote).join(" ")}; exec "\${SHELL:-/bin/sh}" -l`;
+}
+
+// A split pane closes when its command exits; the exit code goes to a file
+// first so the caller waiting on it can pass it on.
+export function paneCommand(argv: string[], exitFile?: string): string {
+  const command = argv.map(shellQuote).join(" ");
+  return exitFile ? `${command}; echo $? > ${shellQuote(exitFile)}` : command;
 }
 
 export function fillTemplate(
@@ -311,6 +339,7 @@ export class TmuxMux implements Mux {
 
   async tagWindow(windowId: string, taskId: number): Promise<void> {
     await this.cmd("set-option", ["-w", "-t", windowId, TASK_OPTION, String(taskId)]);
+    await this.cmd("set-option", ["-w", "-t", windowId, TOOLS_OPTION, toolsCommand()]);
   }
 
   async killWindow(windowId: string): Promise<void> {
@@ -326,8 +355,32 @@ export class TmuxMux implements Mux {
   }
 
   async sendLine(windowId: string, text: string): Promise<void> {
-    await this.cmd("send-keys", ["-t", windowId, "-l", text]);
-    await this.cmd("send-keys", ["-t", windowId, "Enter"]);
+    // A bare window target is its active pane, which is a diff viewer while
+    // one is split off; {top-left} is too, while that split is zoomed.
+    const [first] = await this.cmd("list-panes", ["-t", windowId, "-F", "#{pane_id}"]);
+    const target = first?.trim() || windowId;
+    await this.cmd("send-keys", ["-t", target, "-l", text]);
+    await this.cmd("send-keys", ["-t", target, "Enter"]);
+  }
+
+  async splitPane(s: SplitPane): Promise<string> {
+    const args = ["-P", "-F", "#{pane_id}", "-t", s.paneId, "-c", s.cwd];
+    if (s.zoom) args.push("-Z");
+    args.push(paneCommand(s.argv, s.exitFile));
+    const [id] = await this.cmd("split-window", args);
+    if (!id) throw new MuxError("tmux split-window printed no pane id");
+    return id.trim();
+  }
+
+  // display-message answers for a pane that is gone (it falls back to the
+  // current one), so look for the id among the live ones.
+  async paneAlive(paneId: string): Promise<boolean> {
+    try {
+      const panes = await this.cmd("list-panes", ["-a", "-F", "#{pane_id}"]);
+      return panes.some((p) => p.trim() === paneId);
+    } catch {
+      return false;
+    }
   }
 
   async switchClient(sessionId: string, windowId?: string): Promise<void> {

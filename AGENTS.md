@@ -27,6 +27,11 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `libtmux` (alpha, pinned exactly). Identity is the `@aug_project` /
   `@aug_task` user options, never names. Tests use `test/fake-mux.ts`; real
   tmux checks use a private server (`-L`), never the default one.
+- **A terminal program an agent opens (a diff viewer) splits its own
+  window**: `aug-tools pane [--zoom] [--wait] -- cmd`, so it shows in the
+  viewer instead of a window of its own. `tagWindow` also sets `@aug_tools`
+  (how to call aug-tools) for scripts in that pane; `contrib/revdiff/` is
+  revdiff's user-layer launcher that does this.
 - **Slack goes through a `SlackTransport`** (`core/slack/`): `token`,
   `claude-mcp` (a persistent `claude -p` whose session can only read, plus a
   one-shot send call), or `mcp` (a stub). claude.ai connectors load only with

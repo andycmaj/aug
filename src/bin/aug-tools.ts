@@ -16,6 +16,7 @@ import { logger } from "../core/log";
 import { findTasks, projectLine, taskDetail, taskLine } from "../core/lookup";
 import { MOVES, waitForMove } from "../core/moves";
 import { setMux, socketFromEnv, TmuxMux } from "../core/mux";
+import { runInPane } from "../core/pane";
 import * as store from "../core/store";
 import { MoveStatus, NoteLabel } from "../core/types";
 
@@ -286,6 +287,42 @@ const projectsList = defineCommand({
   },
 });
 
+// A diff viewer (revdiff) an agent opens goes here, so it shows in the task's
+// own window instead of a window of its own.
+const pane = defineCommand({
+  meta: {
+    name: "pane",
+    description: "Run a command in a split of this tmux window: aug-tools pane [--zoom] [--wait] -- <command...>",
+  },
+  args: {
+    zoom: { type: "boolean", description: "fill the window until the command exits" },
+    wait: { type: "boolean", description: "block until it exits, and exit with its code" },
+    cwd: { type: "string", description: "start directory (default: here)" },
+  },
+  async run({ args }) {
+    const argv = args._.map(String);
+    const paneId = process.env.TMUX_PANE;
+    if (!paneId) {
+      console.error("aug-tools pane: not inside tmux (TMUX_PANE is not set)");
+      process.exit(2);
+    }
+    if (argv.length === 0) {
+      console.error("aug-tools pane: no command (aug-tools pane -- <command...>)");
+      process.exit(2);
+    }
+    usePaneServer();
+    const result = await runInPane({
+      paneId,
+      cwd: args.cwd ?? process.cwd(),
+      argv,
+      zoom: Boolean(args.zoom),
+      wait: Boolean(args.wait),
+    });
+    if (result.exitCode === null) console.log(result.paneId);
+    else process.exit(result.exitCode);
+  },
+});
+
 // ── moves: asked here, made by the running aug ───────────────────────────
 
 function moveCommand(verb: string) {
@@ -341,6 +378,7 @@ const main = defineCommand({
     tasks,
     task,
     projects: projectsList,
+    pane,
     move,
     hub: defineCommand({
       meta: {

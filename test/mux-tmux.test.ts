@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { TmuxMux } from "../src/core/mux";
 
 // Real tmux on private servers. Clients need a terminal, so a second server
@@ -118,5 +120,51 @@ describe.skipIf(!hasTmux)("viewer session", () => {
       .filter((w) => w.endsWith(` ${windowId}`))
       .map((w) => w.split(" ")[0]);
     expect(holders.sort()).toEqual(["aug-view-test", "outer"]);
+  });
+});
+
+describe.skipIf(!hasTmux)("split pane", () => {
+  test("a diff viewer splits the viewed window, so the viewer shows it", async () => {
+    const { s, windowId } = await withViewer();
+    const claude = tmux(s, "display", "-p", "-t", windowId, "#{pane_id}");
+    const mux = new TmuxMux(s);
+
+    const paneId = await mux.splitPane({ paneId: claude, cwd: "/tmp", argv: ["cat"], zoom: true });
+    expect(tmux(s, "display", "-p", "-t", "aug-view-test:", "#{pane_id} #{window_zoomed_flag}")).toBe(
+      `${paneId} 1`,
+    );
+    expect(windows(s).filter((w) => w.endsWith(` ${windowId}`))).toHaveLength(2);
+    expect(await mux.paneAlive(paneId)).toBe(true);
+
+    // aug's lines still reach claude, not the viewer that has focus.
+    await mux.sendLine(windowId, "hello");
+    await until(() => tmux(s, "capture-pane", "-p", "-t", claude).includes("hello"));
+    expect(tmux(s, "capture-pane", "-p", "-t", paneId)).not.toContain("hello");
+
+    tmux(s, "kill-pane", "-t", paneId);
+    expect(await mux.paneAlive(paneId)).toBe(false);
+    expect(tmux(s, "display", "-p", "-t", windowId, "#{window_panes} #{window_zoomed_flag}")).toBe("1 0");
+  });
+
+  test("the exit code reaches the file a waiting caller reads", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const claude = tmux(s, "display", "-p", "-t", "proj:", "#{pane_id}");
+    const exitFile = `${tmpdir()}/aug-pane-exit-${process.pid}`;
+    const mux = new TmuxMux(s);
+
+    const paneId = await mux.splitPane({ paneId: claude, cwd: "/tmp", argv: ["sh", "-c", "exit 10"], zoom: false, exitFile });
+    await until(() => !tmux(s, "list-panes", "-a", "-F", "#{pane_id}").split("\n").includes(paneId));
+    expect(readFileSync(exitFile, "utf8").trim()).toBe("10");
+    rmSync(exitFile, { force: true });
+  });
+
+  test("a tagged window says how to reach aug-tools", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    await new TmuxMux(s).tagWindow(windowId, 7);
+    expect(tmux(s, "display", "-p", "-t", windowId, "#{@aug_task}")).toBe("7");
+    expect(tmux(s, "display", "-p", "-t", windowId, "#{@aug_tools}")).toContain("aug-tools.ts");
   });
 });

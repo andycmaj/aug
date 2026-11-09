@@ -507,6 +507,7 @@ export function codingBrief(task: TaskRow): string {
     `Durable discoveries go in the Hub: ${toolsCommand("hub", "add", "--topic", "<topic>", "--title", "<title>", "<body>")}`,
     `Work that belongs in a task of its own: ${toolsCommand("move", "new", "<title>", "--kind", "coding", "--brief", "<what to do>", "--from", ref)} (look up projects with ${toolsCommand("projects")}).`,
     `Search it: ${toolsCommand("hub", "search", "<words>")}`,
+    `To show the owner a terminal program (a diff viewer), run it in a split of your own pane, not a new tmux window: ${toolsCommand("pane", "--zoom", "--wait", "--", "<command...>")}`,
     "",
     "## LEARNED.md (lines in use)",
     learnedInUse(),
