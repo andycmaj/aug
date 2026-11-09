@@ -23,4 +23,12 @@ if (cli.fixture) {
 }
 engine.start();
 
-await runApp(() => <App engine={engine} theme={loadConfig().theme} />);
+// opentui answers SIGHUP/SIGTERM by tearing the renderer down and nothing
+// more, so the engine's timers kept a closed window's aug running headless
+// forever. The terminal is restored by the time this runs.
+await runApp(() => <App engine={engine} theme={loadConfig().theme} />, {
+  onDestroy: () => {
+    engine.stop();
+    process.exit(0);
+  },
+});
