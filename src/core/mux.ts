@@ -101,6 +101,9 @@ export interface Mux {
   // just that window, so showing it never moves your real client.
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[];
   paneInfo(paneId: string): Promise<PaneInfo | null>;
+  // The window aug itself runs in, when that is on this server: a viewer of
+  // it would show aug showing the viewer, nested without end.
+  hostWindow(): Promise<string | null>;
   // Calls onChange when windows or sessions come and go, until the signal
   // aborts or the server goes away. Resolves at once with no server.
   watch(onChange: () => void, signal: AbortSignal): Promise<void>;
@@ -277,6 +280,26 @@ export class TmuxMux implements Mux {
       if (!line) return null;
       const [windowId, windowName, sessionId, task, project] = line.split(SEP);
       return { windowId, windowName, sessionId, taskId: idOf(task), projectId: idOf(project) };
+    } catch {
+      return null;
+    }
+  }
+
+  async hostWindow(): Promise<string | null> {
+    const pane = process.env.TMUX_PANE;
+    const serverPid = process.env.TMUX?.split(",")[1];
+    if (!pane || !serverPid) return null;
+    try {
+      // tmux answers for some other pane when this one is not on the server,
+      // so both the server and the pane have to match.
+      const [line] = await this.cmd("display-message", [
+        "-p",
+        "-t",
+        pane,
+        ["#{pid}", "#{pane_id}", "#{window_id}"].join(SEP),
+      ]);
+      const [pid, paneId, windowId] = (line ?? "").split(SEP);
+      return pid === serverPid && paneId === pane && windowId ? windowId : null;
     } catch {
       return null;
     }

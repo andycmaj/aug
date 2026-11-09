@@ -168,3 +168,38 @@ describe.skipIf(!hasTmux)("split pane", () => {
     expect(tmux(s, "display", "-p", "-t", windowId, "#{@aug_tools}")).toContain("aug-tools.ts");
   });
 });
+
+describe.skipIf(!hasTmux)("host window", () => {
+  function inPane(s: string, pane: string): Record<string, string> {
+    const pid = tmux(s, "display", "-p", "-t", pane, "#{pid}");
+    return { TMUX: `/tmp/whatever,${pid},0`, TMUX_PANE: pane };
+  }
+
+  async function hostWith(env: Record<string, string>, s: string): Promise<string | null> {
+    const saved = { TMUX: process.env.TMUX, TMUX_PANE: process.env.TMUX_PANE };
+    Object.assign(process.env, env);
+    try {
+      return await new TmuxMux(s).hostWindow();
+    } finally {
+      for (const [k, v] of Object.entries(saved))
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+    }
+  }
+
+  test("names the window aug's own pane is in", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const pane = tmux(s, "display", "-p", "-t", "proj:", "#{pane_id}");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    expect(await hostWith(inPane(s, pane), s)).toBe(windowId);
+  });
+
+  test("is nothing when aug runs on another server, even with a pane id that exists here", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const pane = tmux(s, "display", "-p", "-t", "proj:", "#{pane_id}");
+    expect(await hostWith({ TMUX: "/tmp/other,1,0", TMUX_PANE: pane }, s)).toBeNull();
+    expect(await hostWith({ TMUX: "", TMUX_PANE: "" }, s)).toBeNull();
+  });
+});

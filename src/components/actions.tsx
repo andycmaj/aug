@@ -67,6 +67,8 @@ const EDITOR_ID = "editor";
 
 // Both modes mount the actions; one viewer attach per task at a time.
 const attaching = new Set<number>();
+// Tasks whose window aug runs in (no viewer for those), told once.
+const refused = new Set<number>();
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -237,8 +239,14 @@ export function useActions(dialogs: Dialogs) {
     if (attaching.has(taskId)) return false;
     attaching.add(taskId);
     try {
-      const argv = await projects.viewerArgv(taskId);
-      if (!argv || terminals.forTask(taskId)?.running) return Boolean(argv);
+      const viewer = await projects.viewerArgv(taskId);
+      if (viewer && "refused" in viewer) {
+        if (!refused.has(taskId)) showToast(viewer.refused, 6000, "error");
+        refused.add(taskId);
+        return false;
+      }
+      if (!viewer || terminals.forTask(taskId)?.running) return Boolean(viewer);
+      const { argv } = viewer;
       const id = `view-${taskId}`;
       terminals.close(id);
       terminals.open({

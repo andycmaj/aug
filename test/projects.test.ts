@@ -21,6 +21,7 @@ import {
   setTaskRepo,
   slug,
   startTask,
+  viewerArgv,
   watchTmux,
 } from "../src/core/projects";
 import * as store from "../src/core/store";
@@ -133,6 +134,22 @@ describe("projects", () => {
     expect(p.tmux_session).toBe("home");
     expect(fake.sessions[0].projectId).toBe(p.id);
     expect(adoptSession("$1")).rejects.toThrow("already a project");
+  });
+});
+
+describe("viewer", () => {
+  test("a running task's window gets a viewer", async () => {
+    const t = codingTask();
+    await startTask(t.id);
+    expect(await viewerArgv(t.id)).toMatchObject({ argv: expect.any(Array) });
+  });
+
+  test("aug never views the window it runs in, which would nest without end", async () => {
+    const t = codingTask();
+    await startTask(t.id);
+    fake.host = fake.windows[0].id;
+    const viewer = await viewerArgv(t.id);
+    expect(viewer && "refused" in viewer && viewer.refused).toContain("own tmux window");
   });
 });
 

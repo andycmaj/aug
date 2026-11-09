@@ -437,17 +437,24 @@ export function viewerName(taskId: number): string {
   return `${VIEWER_PREFIX}${process.pid}-${taskId}`;
 }
 
-export async function viewerArgv(taskId: number): Promise<string[] | null> {
+export type Viewer = { argv: string[] } | { refused: string };
+
+export async function viewerArgv(taskId: number): Promise<Viewer | null> {
   const state = await mux().state();
   const window = state.windows.find((w) => w.taskId === taskId);
   if (!window) return null;
+  // aug started in a pane of this very window would embed itself.
+  if (window.id === (await mux().hostWindow()))
+    return {
+      refused: `aug is running in ${store.taskRef(taskId)}'s own tmux window, so it can't show it here. Run aug from another window.`,
+    };
   // Strays land in the tagged project session, not whichever session listed it.
   const projectId = store.getTask(taskId)?.project_id;
   const session =
     (projectId ? liveSessionFor(state, projectId) : null)?.id ?? window.sessionId;
   const argv = mux().viewerArgv(viewerName(taskId), session, window.id);
   log.debug("viewer", { task: taskId, argv: argv.join(" ") });
-  return argv;
+  return { argv };
 }
 
 // ── reconcile ────────────────────────────────────────────────────────────

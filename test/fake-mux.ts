@@ -121,6 +121,12 @@ export class FakeMux implements Mux {
     };
   }
 
+  host: string | null = null;
+
+  async hostWindow(): Promise<string | null> {
+    return this.host;
+  }
+
   watchers: (() => void)[] = [];
 
   async watch(onChange: () => void, signal: AbortSignal): Promise<void> {
