@@ -22,6 +22,7 @@ import {
   useScope,
   useTheme,
   type Theme,
+  type ThemeColor,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug } from "../context/aug";
@@ -44,7 +45,8 @@ export const RAIL_WIDTH = 46;
 // A task under its project's row sits this much further in.
 const NEST = 2;
 
-const isNested = (item: RailItem) => item.type === "task" && item.group !== null;
+const isNested = (item: RailItem) =>
+  item.type === "task" && item.group !== null;
 
 type Node =
   | { type: "section"; title: string; count: number }
@@ -77,7 +79,9 @@ export function Rail(props: { moves: ItemMoves }) {
     const shown = (key: string | null) => list.some((i) => i.key === key);
     if (!aug.selectedKey()) aug.select(list[0].key);
     else if (!shown(aug.cursorKey()))
-      aug.moveCursor(shown(aug.selectedKey()) ? aug.selectedKey() : list[0].key);
+      aug.moveCursor(
+        shown(aug.selectedKey()) ? aug.selectedKey() : list[0].key,
+      );
   });
 
   const cursorIndex = () =>
@@ -384,6 +388,107 @@ function RailRow(props: {
         <text fg={lit() ? selFg() : theme().textMuted}>
           {truncate(view().sub, RAIL_WIDTH - 7 - (props.nested ? NEST : 0))}
         </text>
+      </box>
+    </box>
+  );
+}
+
+interface LegendEntry {
+  bar: ThemeColor;
+  mark: string;
+  markColor: ThemeColor;
+  word: string;
+}
+
+// Done never reaches the rail, so it has no place in the key.
+const LEGEND_LANES = (Object.keys(LANE_META) as Lane[]).filter(
+  (l) => l !== Lane.done,
+);
+const LEGEND_COLUMN = 28;
+
+// The help dialog's key to the rail's colors and marks. Lanes come from
+// LANE_META, so a new lane shows here without anyone remembering to add it.
+export function RailLegend() {
+  const theme = useTheme();
+  const entries = (): LegendEntry[] => [
+    ...LEGEND_LANES.map((lane) => {
+      const meta = LANE_META[lane];
+      const color = toneColor(theme, meta.tone);
+      return { bar: color, mark: meta.mark, markColor: color, word: meta.word };
+    }),
+    {
+      bar: theme.error,
+      mark: LANE_META.theirs.mark,
+      markColor: theme.textMuted,
+      word: "slipped, quiet 3+ days",
+    },
+    {
+      bar: theme.primary,
+      mark: "⌂",
+      markColor: theme.primary,
+      word: "Home",
+    },
+    {
+      bar: theme.secondary,
+      mark: "⊟",
+      markColor: theme.secondary,
+      word: "project",
+    },
+    {
+      bar: theme.info,
+      mark: "⊟",
+      markColor: theme.info,
+      word: "project, agents working",
+    },
+    {
+      bar: theme.accent,
+      mark: "*",
+      markColor: theme.accent,
+      word: "advisor idea",
+    },
+    {
+      bar: theme.textMuted,
+      mark: "·",
+      markColor: theme.textMuted,
+      word: "fyi",
+    },
+  ];
+  const columns = () => {
+    const all = entries();
+    const half = Math.ceil(all.length / 2);
+    return [all.slice(0, half), all.slice(half)];
+  };
+
+  return (
+    <box flexDirection="column">
+      <text fg={theme.accent} attributes={1}>
+        The rail's colors
+      </text>
+      <box flexDirection="row">
+        <For each={columns()}>
+          {(column) => (
+            <box flexDirection="column" width={LEGEND_COLUMN} flexShrink={0}>
+              <For each={column}>
+                {(e) => (
+                  <box flexDirection="row" gap={1}>
+                    <text bg={e.bar}> </text>
+                    <text fg={e.markColor}>{e.mark}</text>
+                    <text fg={theme.textMuted}>{e.word}</text>
+                  </box>
+                )}
+              </For>
+            </box>
+          )}
+        </For>
+      </box>
+      <box flexDirection="row" gap={1} marginTop={1}>
+        <text fg={theme.textMuted}>lower bar</text>
+        <text bg={theme.error}> </text>
+        <text fg={theme.textMuted}>urgent</text>
+        <text bg={theme.secondary}> </text>
+        <text fg={theme.textMuted}>important</text>
+        <text fg={theme.accent}>▸</text>
+        <text fg={theme.textMuted}>on the table</text>
       </box>
     </box>
   );
