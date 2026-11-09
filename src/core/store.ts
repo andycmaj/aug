@@ -710,6 +710,12 @@ export function markDone(taskId: number, by = "you"): void {
   batch(() => {
     retirePendingActions(taskId);
     const task = getTask(taskId);
+    if (task && task.status !== TaskStatus.done)
+      tellFromTask(
+        task,
+        `marked done by ${by}`,
+        latestSession(taskId)?.result ?? null,
+      );
     const agentLive =
       task &&
       (task.agent_state === AgentState.working ||
@@ -727,6 +733,21 @@ export function markDone(taskId: number, by = "you"): void {
     for (const session of liveSessions().filter((s) => s.task_id === taskId)) {
       updateSession(session.id, { ended_at: now(), state: AgentState.saved });
     }
+  });
+}
+
+// A task made --from another reports back to it when it ends, so whoever
+// made it (a project lead, an agent) can see the result and decide what next.
+export function tellFromTask(
+  task: TaskRow,
+  what: string,
+  result: string | null,
+): void {
+  if (!task.from_task_id || !getTask(task.from_task_id)) return;
+  addTurn({
+    taskId: task.from_task_id,
+    role: TurnRole.trigger,
+    body: `${taskRef(task.id)} ${what}: ${task.title}${result ? `\nResult: ${result}` : ""}`,
   });
 }
 

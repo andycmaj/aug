@@ -4,7 +4,8 @@ import { Engine } from "../src/core/engine";
 import { drainMoves, MOVE_STALE_MS, waitForMove } from "../src/core/moves";
 import { setMux } from "../src/core/mux";
 import * as store from "../src/core/store";
-import { Kind, MoveStatus, TaskStatus } from "../src/core/types";
+import { handleDone } from "../src/core/hooks";
+import { Kind, MoveStatus, SessionKind, TaskStatus } from "../src/core/types";
 import { FakeMux } from "./fake-mux";
 import { fakeBrain, freshHome } from "./helpers";
 
@@ -210,6 +211,61 @@ describe("making and placing tasks", () => {
       kind: Kind.coding,
       waiting_on: "Sam",
     });
+  });
+
+  async function child(parentTitle: string, by = "agent AUG-0001") {
+    const parent = engine.newTask(parentTitle, Kind.general);
+    await engine.runMove(
+      "new",
+      { title: "Fill in JOB.md", kind: "coding", from: store.taskRef(parent.id) },
+      by,
+    );
+    const made = store.listTasks().find((t) => t.title === "Fill in JOB.md")!;
+    return { parent, made, last: () => store.turnsForTask(parent.id).at(-1)! };
+  }
+
+  test("the task it was made from hears back when it is marked done", async () => {
+    const { parent, made, last } = await child("JOB.md is empty");
+    await engine.runMove("done", { task: store.taskRef(made.id) });
+    expect(last().role).toBe("trigger");
+    expect(last().body).toBe(`${store.taskRef(made.id)} marked done by you: Fill in JOB.md`);
+    // done again (closeCoding after the agent closed it) says nothing new
+    const count = store.turnsForTask(parent.id).length;
+    await engine.closeCoding(made.id);
+    expect(store.turnsForTask(parent.id)).toHaveLength(count);
+  });
+
+  test("when its agent finishes, the result line goes back to the task it came from", async () => {
+    const { parent, made, last } = await child("JOB.md is empty");
+    store.createSession({ id: "s1", taskId: made.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "aug" });
+    handleDone({ taskId: made.id, sessionId: "s1" }, { summary: "JOB.md written; 3 sections" });
+    expect(store.getTask(made.id)!.status).toBe(TaskStatus.done);
+    expect(last().body).toBe(
+      `${store.taskRef(made.id)} finished: Fill in JOB.md\nResult: JOB.md written; 3 sections`,
+    );
+    const count = store.turnsForTask(parent.id).length;
+    engine.markDone(made.id);
+    expect(store.turnsForTask(parent.id)).toHaveLength(count);
+  });
+
+  test("an agent that finishes but leaves the task to its owner says so, then the close follows", async () => {
+    const { made, last } = await child("JOB.md is empty");
+    store.createSession({ id: "s1", taskId: made.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "owner" });
+    handleDone({ taskId: made.id, sessionId: "s1" }, { summary: "PR opened" });
+    expect(last().body).toBe(
+      `${store.taskRef(made.id)} finished; it waits for the owner: Fill in JOB.md\nResult: PR opened`,
+    );
+    engine.markDone(made.id);
+    expect(last().body).toBe(
+      `${store.taskRef(made.id)} marked done by you: Fill in JOB.md\nResult: PR opened`,
+    );
+  });
+
+  test("a task made from nothing tells no one", async () => {
+    const made = engine.newTask("Alone", Kind.general);
+    const before = store.listTasks().flatMap((t) => store.turnsForTask(t.id)).length;
+    engine.markDone(made.id);
+    expect(store.listTasks().flatMap((t) => store.turnsForTask(t.id)).length).toBe(before);
   });
 });
 

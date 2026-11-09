@@ -157,6 +157,12 @@ export function handleDone(env: HookEnv, args: DoneArgs): string {
         ? { status: TaskStatus.done, closed_at: now(), closed_by: "agent" }
         : {}),
     });
+    if (task.status !== TaskStatus.done)
+      store.tellFromTask(
+        task,
+        closes ? "finished" : "finished; it waits for the owner",
+        args.summary,
+      );
   });
   return action
     ? `${store.taskRef(task.id)}: finished; reply waits for the owner's Send`
