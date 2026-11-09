@@ -5,7 +5,7 @@
     "": {
       "name": "@andycmaj/aug",
       "dependencies": {
-        "@andycmaj/opentui-app": "0.3.1",
+        "@andycmaj/opentui-app": "^0.4.0",
         "@opentui/core": "0.5.12",
         "@opentui/solid": "0.5.12",
         "citty": "^0.2.2",
@@ -24,7 +24,7 @@
   "packages": {
     "@ampproject/remapping": ["@ampproject/remapping@2.3.0", "", { "dependencies": { "@jridgewell/gen-mapping": "^0.3.5", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw=="],
 
-    "@andycmaj/opentui-app": ["@andycmaj/opentui-app@0.3.1", "", { "dependencies": { "@ansi-tools/parser": "^1.1.0", "@opentui/keymap": "0.5.12", "marked": "^17.0.1" }, "peerDependencies": { "@opentui/core": "0.5.12", "@opentui/solid": "0.5.12", "solid-js": "1.9.12" } }, "sha512-AtJdBYxb/6ZTITL+1kduo5O7cfgHQS14AIQQd5XU1Gub2atnjM8LVV0rY8Z2HJoFqW+UI5oxcE0RP5/7Vz9NOQ=="],
+    "@andycmaj/opentui-app": ["@andycmaj/opentui-app@0.4.1", "", { "dependencies": { "@ansi-tools/parser": "^1.1.0", "@opentui/keymap": "0.5.12", "marked": "^17.0.1" }, "peerDependencies": { "@opentui/core": "0.5.12", "@opentui/solid": "0.5.12", "solid-js": "1.9.12" } }, "sha512-Y18K5v/ED/M/NtyoXVeNOp72G2MSw8HgFkZpbquqQ9iUlhUi23oFgG67sAR025fa0KRKqsJyXq9W7cKZj7T1mg=="],
 
     "@ansi-tools/parser": ["@ansi-tools/parser@1.1.0", "", {}, "sha512-jPLW4AF9KkhinubLrc5yQt8aE3cbXQ7qzVCffmrCEDCe0XnRmW7/QmljKItg9G6j7/LeJ++xT5bQFgZLny7HnQ=="],
 

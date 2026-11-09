@@ -6,9 +6,11 @@ import type { Renderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import {
   CommandPalette,
+  KeyboardHelp,
   useFocus,
   useScope,
   useToast,
+  useTheme,
   type PaletteAction,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
@@ -16,7 +18,7 @@ import { useAug, ViewMode } from "../context/aug";
 import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
 import { useActions, useDialogs, type Actions, type Dialogs } from "./actions";
 import { StatusModal } from "./modals";
-import { HelpModal } from "./help";
+import { RailLegend } from "./rail";
 
 export interface ShellApi {
   dialogs: Dialogs;
@@ -35,6 +37,7 @@ export function useShell(opts: {
   const { activeModal, openModal, closeModal, toggleSidebar, cyclePane } =
     useFocus();
   const { showToast } = useToast();
+  const theme = useTheme();
   const dialogs = useDialogs();
   const actions = useActions(dialogs);
   let layout: Renderable | undefined;
@@ -151,8 +154,11 @@ export function useShell(opts: {
           <CommandPalette actions={paletteActions()} onClose={closeModal} />
         </Show>
         <Show when={activeModal() === "help"}>
-          <HelpModal
+          <KeyboardHelp
             onClose={closeModal}
+            width={66}
+            padding={{ y: 1 }}
+            sectionPadding={{ x: 4, y: 1 }}
             scopeLabels={{
               app: "Anywhere",
               rail: "The rail",
@@ -161,7 +167,14 @@ export function useShell(opts: {
               terminal: "An agent's terminal",
               board: "The Board",
             }}
-            footer="Nothing goes out until you press y and confirm."
+            footer={
+              <box flexDirection="column">
+                <RailLegend />
+                <text fg={theme.textMuted} marginTop={1}>
+                  Nothing goes out until you press y and confirm.
+                </text>
+              </box>
+            }
           />
         </Show>
         <Show when={activeModal() === "status"}>
