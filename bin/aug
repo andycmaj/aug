@@ -1,4 +1,21 @@
 #!/bin/sh
 # Launch aug from anywhere: the Solid preload resolves from the repo.
+# Exit code 75 means aug asked for a fresh process (src/core/restart.ts):
+# start it again, unless it keeps asking (3 times inside a minute).
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
-exec bun run --cwd "$DIR" --conditions=browser --preload @opentui/solid/preload "$DIR/src/index.tsx" "$@"
+recent=""
+while :; do
+  bun run --cwd "$DIR" --conditions=browser --preload @opentui/solid/preload "$DIR/src/index.tsx" "$@"
+  code=$?
+  [ "$code" -eq 75 ] || exit "$code"
+  now=$(date +%s)
+  kept=""
+  for t in $recent; do [ $((now - t)) -lt 60 ] && kept="$kept $t"; done
+  recent="$kept $now"
+  if [ "$(echo $recent | wc -w)" -gt 3 ]; then
+    echo "aug: restarted 3 times in a minute; giving up (see ~/.aug/aug.log)" >&2
+    exit "$code"
+  fi
+  echo "aug: restarting after a fatal UI error (see ~/.aug/aug.log)" >&2
+  sleep 1
+done
