@@ -11,6 +11,7 @@ import {
   type ParentProps,
 } from "solid-js";
 import { createRequiredContext } from "@andycmaj/opentui-app";
+import { coalesce } from "../core/coalesce";
 import { dataVersion } from "../core/db";
 import { Engine, type EngineStatus } from "../core/engine";
 import { boardColumnOf, BoardColumn, type LaneFacts } from "../core/lanes";
@@ -86,7 +87,11 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   const [mode, setMode] = createSignal<ViewMode>(ViewMode.chat);
   const [selectedKey, setSelectedKey] = createSignal<string | null>(null);
   const [cursorKey, setCursorKey] = createSignal<string | null>(null);
-  const bump = () => setVersion((v) => v + 1);
+  // Writes come in bursts (a poll files a dozen messages, each with a few
+  // writes), and every bump re-runs the rail and the views on it. One redraw
+  // per burst keeps that from churning thousands of native text buffers.
+  const redraw = coalesce(() => setVersion((v) => v + 1));
+  const bump = () => redraw.schedule();
 
   onMount(() => {
     const offChange = store.onChange(bump);
@@ -110,6 +115,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
       clearInterval(poll);
       clearInterval(clock);
       clearInterval(spin);
+      redraw.cancel();
     });
   });
 
@@ -186,8 +192,11 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   // A task put on the table from anywhere (Next, an @ link) unfolds its
   // project so the rail can show it.
   function select(key: string | null) {
+    // A row written a moment ago (a new task) is on the rail before we look.
+    redraw.flush();
     const item = items().find((i) => i.key === key);
-    if (item?.type === "task" && item.group !== null) setFold(item.group, false);
+    if (item?.type === "task" && item.group !== null)
+      setFold(item.group, false);
     setSelectedKey(key);
     setCursorKey(key);
   }
@@ -209,6 +218,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
 
   // Folding a project brings the cursor up to its row.
   function toggleFold(projectId: number) {
+    redraw.flush();
     const fold = !folded().has(projectId);
     if (fold) {
       const under = items().find((i) => i.key === cursorKey());
@@ -219,6 +229,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   }
 
   function walk(direction: 1 | -1): string | null {
+    redraw.flush();
     const walkable = new Set(
       shownRail()
         .filter((s) => WALKED.includes(s.section))
