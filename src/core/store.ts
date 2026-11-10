@@ -355,6 +355,24 @@ export function messagesForTask(taskId: number): MessageRow[] {
   );
 }
 
+// Every rail task's messages in one query, for search.
+export function messagesForTasks(
+  taskIds: number[],
+): Map<number, MessageRow[]> {
+  const out = new Map<number, MessageRow[]>();
+  const rows = all<MessageRow>(
+    "SELECT * FROM messages WHERE task_id IN (SELECT value FROM json_each(?)) ORDER BY received_at, id",
+    JSON.stringify(taskIds),
+  );
+  for (const m of rows) {
+    if (m.task_id === null) continue;
+    const list = out.get(m.task_id);
+    if (list) list.push(m);
+    else out.set(m.task_id, [m]);
+  }
+  return out;
+}
+
 export function messagesForThread(threadKey: string): MessageRow[] {
   return all<MessageRow>(
     "SELECT * FROM messages WHERE thread_key = ? ORDER BY received_at, id",

@@ -14,6 +14,7 @@ export const Commands = {
   STATUS_OPEN: "status.open",
   WALK_NEXT: "walk.next",
   WALK_BACK: "walk.back",
+  SEARCH_OPEN: "search.open",
 
   // On the item at the cursor / on the table
   OPEN: "item.open",

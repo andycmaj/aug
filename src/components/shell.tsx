@@ -17,7 +17,7 @@ import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
 import { useActions, useDialogs, type Actions, type Dialogs } from "./actions";
-import { StatusModal } from "./modals";
+import { SearchModal, StatusModal } from "./modals";
 import { RailLegend } from "./rail";
 
 export interface ShellApi {
@@ -58,6 +58,11 @@ export function useShell(opts: {
     showToast("Checking GitHub and Slack...");
     void aug.engine.pollNow();
   };
+  // A row found from the Board opens in Chat, where the table is.
+  const openFromSearch = (key: string) => {
+    aug.setMode(ViewMode.chat);
+    aug.select(key);
+  };
   const advisor = () => {
     showToast("The Advisor is reading your work...");
     void aug.engine.advisorNow();
@@ -82,6 +87,7 @@ export function useShell(opts: {
         actions.walk(1);
       }),
       [Commands.WALK_BACK]: unlessTyping(() => actions.walk(-1)),
+      [Commands.SEARCH_OPEN]: unlessTyping(() => openModal("search")),
     },
     { target: () => layout },
   );
@@ -93,6 +99,13 @@ export function useShell(opts: {
       label: "Walk me through my tasks",
       hint: "n",
       run: () => actions.walk(1),
+    },
+    {
+      id: "search",
+      group: "Work",
+      label: "Search the rail",
+      hint: "/",
+      run: () => openModal("search"),
     },
     {
       id: "new",
@@ -176,6 +189,9 @@ export function useShell(opts: {
               </box>
             }
           />
+        </Show>
+        <Show when={activeModal() === "search"}>
+          <SearchModal onClose={closeModal} onPick={openFromSearch} />
         </Show>
         <Show when={activeModal() === "status"}>
           <StatusModal

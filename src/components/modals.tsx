@@ -14,15 +14,20 @@ import {
   ModalHeader,
   modalNavBindings,
   useTheme,
+  truncate,
+  useListNavigation,
   type BindingSpec,
 } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
 import { paths } from "../core/paths";
 import type { InfoSection } from "../core/info";
 import { actionText, describeAction } from "../core/outbound";
-import type { DraftAction } from "../core/types";
+import type { RailItem } from "../core/rail";
+import { search, searchIndex } from "../core/search";
+import { messagesForTasks, taskRef } from "../core/store";
+import { Kind, type DraftAction } from "../core/types";
 import { stateColor, stateGlyph } from "./connector-line";
-import { dayClock } from "./ui";
+import { CHANNEL_WORD, dayClock } from "./ui";
 
 export function PromptModal(props: {
   title: string;
@@ -370,6 +375,121 @@ export function InfoModal(props: {
           )}
         </For>
         <box height={1} />
+      </scrollbox>
+    </Modal>
+  );
+}
+
+const SEARCH_ROWS = 14;
+const SEARCH_HINT_MAX = 30;
+
+function searchTag(item: RailItem): string {
+  switch (item.type) {
+    case "task":
+      return item.task.kind === Kind.home ? "home" : taskRef(item.task.id);
+    case "project":
+      return "project";
+    case "idea":
+      return "idea";
+    case "fyi":
+      return CHANNEL_WORD[item.message.channel];
+  }
+}
+
+// /: every row on the rail, folded and For later ones too. Picking one puts
+// it on the table.
+export function SearchModal(props: {
+  onPick: (key: string) => void;
+  onClose: () => void;
+}) {
+  const theme = useTheme();
+  const aug = useAug();
+  let scrollRef: ScrollBoxRenderable | undefined;
+  // Re-read only when the store moves, not on every keystroke.
+  const docs = createMemo(() => {
+    const sections = aug.rail();
+    const ids = sections
+      .flatMap((s) => s.items)
+      .flatMap((i) => (i.type === "task" ? [i.task.id] : []));
+    return searchIndex(sections, messagesForTasks(ids));
+  });
+  const nav = useListNavigation({
+    itemCount: () => hits().length,
+    scrollRef: () => scrollRef,
+    visibleItems: SEARCH_ROWS,
+  });
+  const hits = createMemo(() => search(docs(), nav.filter()));
+  return (
+    <Modal
+      size="lg"
+      onClose={props.onClose}
+      bindings={modalNavBindings}
+      commands={{
+        [ModalCommands.MODAL_DOWN]: () => nav.move(1),
+        [ModalCommands.MODAL_UP]: () => nav.move(-1),
+        [ModalCommands.MODAL_SELECT]: () => {
+          const hit = hits()[nav.selected()];
+          if (!hit) return;
+          props.onClose();
+          props.onPick(hit.item.key);
+        },
+      }}
+    >
+      <ModalHeader title="Search the rail" hint="↵ open · esc" />
+      <ModalFilterInput
+        onInput={nav.setFilter}
+        placeholder="words, AUG-23, #412, @someone (Slack or GitHub)"
+      />
+      <scrollbox
+        ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
+        maxHeight={SEARCH_ROWS}
+        paddingLeft={2}
+        paddingRight={2}
+        paddingBottom={1}
+      >
+        <Show
+          when={hits().length > 0}
+          fallback={
+            <text fg={theme.textMuted}>Nothing on the rail matches</text>
+          }
+        >
+          <For each={hits()}>
+            {(hit, i) => {
+              const on = () => i() === nav.selected();
+              const fg = () =>
+                on() ? contrastingForeground(theme.primary) : undefined;
+              return (
+                <box
+                  flexDirection="row"
+                  gap={1}
+                  paddingLeft={1}
+                  paddingRight={1}
+                  backgroundColor={on() ? theme.primary : undefined}
+                >
+                  <text width={8} flexShrink={0} fg={fg() ?? theme.accent}>
+                    {searchTag(hit.item)}
+                  </text>
+                  {/* A long title is cut here, not over the hint. */}
+                  <box flexGrow={1} flexShrink={1} overflow="hidden">
+                    <text
+                      wrapMode="none"
+                      fg={fg() ?? theme.text}
+                      attributes={on() ? 1 : 0}
+                    >
+                      {hit.title}
+                    </text>
+                  </box>
+                  <text flexShrink={0} fg={fg() ?? theme.textMuted}>
+                    {truncate(
+                      hit.why ? `${hit.why} · ${hit.section}` : hit.section,
+                      SEARCH_HINT_MAX,
+                    )}
+                  </text>
+                </box>
+              );
+            }}
+          </For>
+        </Show>
       </scrollbox>
     </Modal>
   );

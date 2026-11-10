@@ -218,6 +218,12 @@ export const keymap: KeymapTable<HelpCtx> = {
       help: "next",
     },
     { key: "b", cmd: Commands.WALK_BACK, desc: "back" },
+    {
+      key: "/",
+      cmd: Commands.SEARCH_OPEN,
+      desc: "search the rail: words, AUG-23, #412, @someone",
+      help: "search",
+    },
     { key: "shift+n", cmd: Commands.NEW_TASK, desc: "new task" },
     {
       key: "ctrl+r",
