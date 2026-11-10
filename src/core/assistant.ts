@@ -4,6 +4,7 @@
 // the running engine makes. It never sends: a Send is only ever the owner's
 // press.
 
+import { capabilityAllow } from "./capabilities";
 import { loadConfig } from "./config";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
 import { findTasks, projectLine, taskDetail, taskLine } from "./lookup";
@@ -26,7 +27,7 @@ export const ASSISTANT_TOOLS = ["Bash", ...READS];
 
 // aug-tools and nothing else on the shell; anything else is denied unasked.
 export function assistantAllow(): string[] {
-  return [`Bash(${toolsCommand()}:*)`, ...READS];
+  return [`Bash(${toolsCommand()}:*)`, ...READS, ...capabilityAllow("assistant")];
 }
 
 // The moves as the model calls them, from the one registry.

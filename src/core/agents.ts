@@ -9,6 +9,7 @@ import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { assistantCall } from "./assistant";
 import { think, BrainError } from "./brain";
+import { capabilityAllow } from "./capabilities";
 import { loadConfig } from "./config";
 import { now } from "./db";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
@@ -129,7 +130,7 @@ function agentToolRules(): string[] {
 }
 
 export function generalAllow(): string[] {
-  return [...GENERAL_ALLOW, ...agentToolRules()];
+  return [...GENERAL_ALLOW, ...agentToolRules(), ...capabilityAllow("general")];
 }
 
 export function lastIncoming(taskId: number): MessageRow | null {
