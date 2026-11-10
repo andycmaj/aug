@@ -621,15 +621,31 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
-  function editDraft(task: TaskRow) {
+  function editDraft(task: TaskRow): false | void {
     const pending = store.pendingAction(task.id);
-    if (!pending) return;
+    if (!pending) return false;
     const file = join(paths.drafts(), `${store.taskRef(task.id)}.md`);
     writeFileSync(file, actionText(pending.action));
     openEditor(file, `draft for ${store.taskRef(task.id)}`, () => {
       if (!existsSync(file)) return;
       const text = readFileSync(file, "utf8").trimEnd();
       if (text && engine.editDraft(task.id, text)) showToast("Draft updated");
+    });
+  }
+
+  // The brief in $EDITOR, while the agent has not started from it yet.
+  function editBrief(task: TaskRow): false | void {
+    if (!engine.briefEditable(task.id)) return false;
+    const ref = store.taskRef(task.id);
+    const file = join(paths.drafts(), `${ref}-brief.md`);
+    writeFileSync(file, task.summary ? `${task.summary}\n` : "");
+    openEditor(file, `brief for ${ref}`, () => {
+      if (!existsSync(file)) return;
+      const text = readFileSync(file, "utf8").trim();
+      rmSync(file, { force: true });
+      if (text === task.summary.trim()) return;
+      if (engine.editBrief(task.id, text)) showToast(`${ref}: brief updated`);
+      else if (!text) showToast("An empty brief was not saved", 3000, "error");
     });
   }
 
@@ -884,17 +900,19 @@ export function useActions(dialogs: Dialogs) {
     // Home is a conversation, not work: only typing, start/stop and info
     // reach it.
     const onTask =
-      (fn: (t: TaskRow) => void, home = false) =>
+      (fn: (t: TaskRow) => false | void, home = false) =>
       () => {
         const item = get();
         if (item?.type !== "task") return false;
         const fresh = store.getTask(item.task.id);
         if (!fresh || (fresh.kind === Kind.home && !home)) return false;
-        fn(fresh);
+        return fn(fresh);
       };
     return {
       [Commands.SEND]: onTask(send),
+      // Share e; each declines when the other applies.
       [Commands.EDIT_DRAFT]: onTask(editDraft),
+      [Commands.EDIT_BRIEF]: onTask(editBrief),
       [Commands.REDRAFT]: onTask(redraft),
       [Commands.START]: onTask(start, true),
       [Commands.STOP]: onTask(stop, true),

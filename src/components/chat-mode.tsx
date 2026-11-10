@@ -64,6 +64,7 @@ export function ChatMode() {
         live: false,
         coding: false,
         watching: false,
+        started: false,
       };
     if (item.type !== "task")
       return {
@@ -73,6 +74,7 @@ export function ChatMode() {
         live: false,
         coding: false,
         watching: false,
+        started: false,
       };
     const t = item.task;
     const live =
@@ -86,6 +88,7 @@ export function ChatMode() {
       live,
       coding: t.kind === Kind.coding,
       watching: Boolean(t.watching),
+      started: !aug.engine.briefEditable(t.id),
     };
   });
 

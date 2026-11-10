@@ -213,6 +213,30 @@ describe("making and placing tasks", () => {
     });
   });
 
+  test("a brief can be rewritten until the agent starts", async () => {
+    const task = engine.newTask("Add a flag", Kind.coding, "add --dry-run");
+    const t = store.taskRef(task.id);
+    const out = await engine.runMove("brief", {
+      task: t,
+      text: "  add --dry-run to sync, and test it\n",
+    });
+    expect(out).toEqual({ ok: true, result: `${t}'s brief rewritten` });
+    expect(store.getTask(task.id)!.summary).toBe("add --dry-run to sync, and test it");
+
+    store.createSession({ id: "s1", taskId: task.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "owner" });
+    const late = await engine.runMove("brief", { task: t, text: "something else" });
+    expect(late.ok).toBe(false);
+    expect(late.result).toContain("already started");
+    expect(store.getTask(task.id)!.summary).toBe("add --dry-run to sync, and test it");
+  });
+
+  test("an empty brief is refused", async () => {
+    const task = engine.newTask("Add a flag", Kind.general, "keep me");
+    const out = await engine.runMove("brief", { task: store.taskRef(task.id), text: "   " });
+    expect(out.ok).toBe(false);
+    expect(store.getTask(task.id)!.summary).toBe("keep me");
+  });
+
   async function child(parentTitle: string, by = "agent AUG-0001") {
     const parent = engine.newTask(parentTitle, Kind.general);
     await engine.runMove(

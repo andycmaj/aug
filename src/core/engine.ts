@@ -420,6 +420,19 @@ export class Engine {
     return store.getTask(task.id) ?? task;
   }
 
+  // The brief is what the agent starts from. Once it has started, a new
+  // brief would say something the agent never read: tell it instead.
+  briefEditable(taskId: number): boolean {
+    const task = store.getTask(taskId);
+    return Boolean(task) && task?.kind !== Kind.home && !store.latestSession(taskId);
+  }
+
+  editBrief(taskId: number, text: string): boolean {
+    if (!text.trim() || !this.briefEditable(taskId)) return false;
+    store.updateTask(taskId, { summary: text.trim() });
+    return true;
+  }
+
   // Typing always continues: same agent, same conversation, whether it is
   // working, finished or stopped. A closed task's chat reopens it.
   say(taskId: number, text: string): void {

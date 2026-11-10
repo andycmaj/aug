@@ -301,6 +301,19 @@ export const MOVES: Record<string, MoveSpec> = {
       return `${ref(task)} is now: ${args.title.trim()}`;
     },
   },
+  brief: {
+    help: "Rewrite the task's brief, before its agent starts (after, tell it)",
+    task: true,
+    args: { text: { help: "the whole new brief", required: true } },
+    run(engine, task, args) {
+      if (!engine.briefEditable(task!.id))
+        throw new MoveError(
+          `${ref(task)}'s agent already started from its brief: tell it what changed instead`,
+        );
+      engine.editBrief(task!.id, args.text);
+      return `${ref(task)}'s brief rewritten`;
+    },
+  },
   kind: {
     help: "Change what kind of work the task is",
     task: true,

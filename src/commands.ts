@@ -31,6 +31,7 @@ export const Commands = {
   PROJECT_ARCHIVE: "project.archive",
   SEND: "action.send",
   EDIT_DRAFT: "action.edit",
+  EDIT_BRIEF: "task.brief",
   REDRAFT: "action.redraft",
   PRIORITY: "task.priority",
   KIND: "task.kind",

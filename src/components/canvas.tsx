@@ -318,6 +318,11 @@ function TaskChat(props: {
   const latestAgentId = createMemo(
     () => [...turns()].reverse().find((t) => t.role === "agent")?.id ?? null,
   );
+  // Shown until the agent starts from it; after that the chat carries on.
+  const brief = createMemo((): string | null => {
+    aug.version();
+    return aug.engine.briefEditable(props.task.id) ? props.task.summary : null;
+  });
   const hint = createMemo((): [string, string][] => {
     const t = props.task;
     if (t.kind === Kind.home)
@@ -326,15 +331,19 @@ function TaskChat(props: {
         ["@", "name a task"],
         ["a", "back here from anywhere"],
       ];
+    const edit: [string, string][] =
+      brief() === null ? [] : [["e", "edit the brief"]];
     if (t.kind === Kind.coding)
       return [
         ["s", "start the coding agent"],
+        ...edit,
         ["i", "add a note first"],
         ["d", "mark done"],
       ];
     if (t.kind === Kind.task)
       return [
         ["s", "hand it to an agent"],
+        ...edit,
         ["d", "mark done"],
         ["r", "later"],
       ];
@@ -356,6 +365,14 @@ function TaskChat(props: {
       stickyScroll
       stickyStart="bottom"
     >
+      <Show when={brief()}>
+        {(text: Accessor<string>) => (
+          <box flexDirection="column" marginBottom={1}>
+            <text fg={theme.textMuted}>brief</text>
+            <text wrapMode="word">{text()}</text>
+          </box>
+        )}
+      </Show>
       <For each={turns()}>
         {(turn) => (
           <ChatTurn

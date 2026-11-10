@@ -18,6 +18,8 @@ export interface HelpCtx {
   live: boolean;
   coding: boolean;
   watching: boolean;
+  // Its agent has run at least once: the brief is settled.
+  started: boolean;
   // A text box has focus: only its own keys are worth showing.
   typing?: boolean;
 }
@@ -58,6 +60,15 @@ const itemMoves: BindingSpec<HelpCtx>[] = [
     desc: "edit the draft in $EDITOR",
     help: "edit",
     relevant: (c) => c.hasDraft,
+  },
+  // Shares e with the draft; a task with a draft has started, so they never
+  // both apply.
+  {
+    key: "e",
+    cmd: Commands.EDIT_BRIEF,
+    desc: "edit the brief in $EDITOR (before it starts)",
+    help: "brief",
+    relevant: (c) => isWork(c) && !c.started && !c.hasDraft,
   },
   {
     key: "shift+e",

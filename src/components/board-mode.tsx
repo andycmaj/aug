@@ -315,6 +315,7 @@ export function BoardMode() {
     live: false,
     coding: target()?.kind === "coding",
     watching: false,
+    started: false,
   });
 
   return (
