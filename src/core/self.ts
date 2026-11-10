@@ -20,3 +20,12 @@ export function shellQuote(s: string): string {
 export function toolsCommand(...args: string[]): string {
   return [...toolsArgv(), ...args].map(shellQuote).join(" ");
 }
+
+// The environment for a claude aug runs itself. TMUX_PANE goes: aug may run
+// in a pane of a task's window, and a claude that loads user settings would
+// have its hooks adopt it into that task (and aug-tools would take the pane's
+// task for its own).
+export function claudeEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
+  const { TMUX_PANE: _, ...env } = process.env;
+  return { ...env, ...extra, CLAUDE_CODE_ENTRYPOINT: "aug" };
+}

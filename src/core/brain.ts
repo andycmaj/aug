@@ -7,6 +7,7 @@
 // from the logged-in CLI.
 
 import { logger } from "./log";
+import { claudeEnv } from "./self";
 
 const log = logger("brain");
 
@@ -180,7 +181,7 @@ async function claudeBrain(call: BrainCall): Promise<BrainResult> {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, ...call.env, CLAUDE_CODE_ENTRYPOINT: "aug" },
+    env: claudeEnv(call.env),
   });
   const abort = () => proc.kill();
   call.signal?.addEventListener("abort", abort);

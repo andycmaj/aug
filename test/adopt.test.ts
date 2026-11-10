@@ -14,6 +14,7 @@ import {
   type GitInfo,
 } from "../src/core/adopt";
 import { setMux } from "../src/core/mux";
+import { realSpawn } from "../src/core/slack/claude-mcp";
 import { createProject } from "../src/core/projects";
 import * as store from "../src/core/store";
 import { AgentState, SessionKind } from "../src/core/types";
@@ -158,5 +159,24 @@ describe("user settings", () => {
     expect(lines.findIndex((l) => l.includes("AUG_TASK_ID"))).toBeLessThan(exec);
     expect(lines.findIndex((l) => l.includes("@aug_project"))).toBeLessThan(exec);
     expect(script).toContain('adopt-hook "$1"');
+  });
+});
+
+describe("aug's own claudes", () => {
+  // aug run in a pane of a task's window once had its Slack claude (which
+  // loads user settings, so the guard) adopted as that task's newest
+  // session; s then resumed an id claude had no conversation for.
+  test("carry no pane, so the guard never adopts them", async () => {
+    const before = process.env.TMUX_PANE;
+    process.env.TMUX_PANE = "%5";
+    try {
+      const proc = realSpawn(["sh", "-c", 'echo "pane=${TMUX_PANE:-none}"']);
+      const seen: string[] = [];
+      for await (const line of proc.lines) seen.push(line);
+      expect(seen).toEqual(["pane=none"]);
+    } finally {
+      if (before === undefined) delete process.env.TMUX_PANE;
+      else process.env.TMUX_PANE = before;
+    }
   });
 });

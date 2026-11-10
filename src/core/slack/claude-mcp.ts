@@ -10,6 +10,7 @@
 
 import { think } from "../brain";
 import { logger } from "../log";
+import { claudeEnv } from "../self";
 import {
   rawToNewMessage,
   type PollContext,
@@ -92,7 +93,7 @@ export const realSpawn: SpawnFn = (argv) => {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "ignore",
-    env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "aug" },
+    env: claudeEnv(),
   });
   async function* lines(): AsyncGenerator<string> {
     const decoder = new TextDecoder();
