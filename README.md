@@ -84,7 +84,7 @@ e.g. `cp docs/examples/JOB.md ~/.aug/docs/`.
   "theme": "default",
   "log": { "enabled": false, "level": "info" },
   "capabilities": {
-    "grants": { "general": ["slack.read", "docs.read"], "assistant": ["slack.read"] }
+    "grants": { "general": ["slack.read", "docs.read", "notion.read"], "assistant": ["slack.read", "notion.read"] }
   }
 }
 ```
@@ -108,11 +108,13 @@ Home), the capabilities that role may use:
 - `slack.read`: read and search Slack through the claude.ai Slack connector
   (threads, channels, canvases, files, lists, profiles, search)
 - `docs.read`: read, export and query Claude Docs
+- `notion.read`: fetch and search Notion pages and read their comments, through
+  the claude.ai Notion connector
 
 Sessions run with `--permission-mode dontAsk`, so any tool that isn't granted is
 denied without a prompt. There is no capability for sending, drafting,
-scheduling or reacting. A send is only ever your press. `capabilities.servers`
-(capability to MCP server name, e.g. `"slack.read": "slack"`) and
+scheduling, reacting, or creating, editing or moving pages. A send is only
+ever your press. `capabilities.servers` (capability to MCP server name, e.g. `"slack.read": "slack"`) and
 `capabilities.tools` (capability to bare tool names) override the built-in
 mapping, for example to point at a different Slack server. These overrides
 still fail closed: an unknown capability grants nothing, and a tool name that

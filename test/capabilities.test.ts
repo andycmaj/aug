@@ -85,6 +85,65 @@ describe("capabilities", () => {
     ]);
   });
 
+  test("notion.read resolves to Notion read tools only", () => {
+    expect(
+      capabilityAllow(
+        "assistant",
+        withCaps({ grants: { assistant: ["notion.read"] } }),
+      ),
+    ).toEqual([
+      "mcp__claude_ai_Notion__notion-fetch",
+      "mcp__claude_ai_Notion__notion-search",
+      "mcp__claude_ai_Notion__notion-get-comments",
+    ]);
+  });
+
+  test("Notion write and session tools are dropped from an override", () => {
+    const writes = [
+      "notion-create-pages",
+      "notion-create-comment",
+      "notion-update-page",
+      "notion-update-comment",
+      "notion-delete-pages",
+      "notion-delete-comment",
+      "notion-move-pages",
+      "notion-duplicate-page",
+      "notion-restore-pages",
+      "notion-restore-version",
+      "notion-set-comment-reaction",
+      "notion-set-discussion-resolved",
+      "notion-resolve-suggested-edit",
+      "notion-create-suggested-edit",
+      "notion-upload-skill",
+      "notion-convert-page-to-skill",
+      "notion-link-meeting-note-to-calendar-event",
+      "notion-calendar-cancel-events",
+      "notion-calendar-create-events",
+      "notion-spawn-session",
+      "notion-stop-session",
+      "notion-send-message-to-session",
+      "notion-wait-session",
+      "notion-query-sessions",
+    ];
+    for (const tool of writes) expect(WRITE_VERB.test(tool)).toBe(true);
+    const config = withCaps({
+      tools: { "notion.read": ["notion-fetch", ...writes] },
+      grants: { general: ["notion.read"] },
+    });
+    expect(capabilityAllow("general", config)).toEqual([
+      "mcp__claude_ai_Notion__notion-fetch",
+    ]);
+  });
+
+  test("an unknown Notion capability grants nothing", () => {
+    expect(
+      capabilityAllow(
+        "general",
+        withCaps({ grants: { general: ["notion.write"] } }),
+      ),
+    ).toEqual([]);
+  });
+
   test("globs and bare servers never pass", () => {
     const caps = withCaps({
       tools: { "slack.read": ["*", "slack_read_thread", ""] },

@@ -15,7 +15,7 @@ const log = logger("capabilities");
 
 // Wins over everything: a capability tool matching this is never allowed.
 export const WRITE_VERB =
-  /send|post|reply|create|update|delete|edit|schedule|upload|invite|join|leave|archive|set_|set-|add_|add-|remove|pin|kick|rename|spawn|stop|move|duplicate|restore|resolve|share|certify|batch|complete/i;
+  /send|post|reply|create|update|delete|edit|schedule|upload|invite|join|leave|archive|set_|set-|add_|add-|remove|pin|kick|rename|spawn|stop|move|duplicate|restore|resolve|share|certify|batch|complete|convert|link|cancel|session|wait/i;
 
 // A bare name, so an override can never widen to a whole server or a glob.
 const NAME = /^[A-Za-z0-9_-]+$/;
@@ -44,6 +44,10 @@ export const CAPABILITIES: Record<string, CapabilitySpec> = {
   "docs.read": {
     server: "claude_ai_Claude_Docs",
     tools: ["read", "export", "guide", "query"],
+  },
+  "notion.read": {
+    server: "claude_ai_Notion",
+    tools: ["notion-fetch", "notion-search", "notion-get-comments"],
   },
 };
 
