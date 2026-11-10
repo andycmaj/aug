@@ -82,7 +82,10 @@ e.g. `cp docs/examples/JOB.md ~/.aug/docs/`.
   "autostart": true,
   "learning": true,
   "theme": "default",
-  "log": { "enabled": false, "level": "info" }
+  "log": { "enabled": false, "level": "info" },
+  "capabilities": {
+    "grants": { "general": ["slack.read", "docs.read"], "assistant": ["slack.read"] }
+  }
 }
 ```
 
@@ -95,6 +98,27 @@ agents on a private tmux server (`-L`); unset means your default one. `slack.cha
 Anywhere else, only DMs and mentions of you are triaged. `opener` opens links
 and files the agent made: a command or an argv array, with the target appended.
 It defaults to `open` on macOS, `wslview` on WSL and `xdg-open` on Linux.
+
+### Capabilities
+
+Agents and the Home assistant get no connector tools unless you grant them.
+`capabilities.grants` lists, per role (`general` for agents, `assistant` for
+Home), the capabilities that role may use:
+
+- `slack.read`: read and search Slack through the claude.ai Slack connector
+  (threads, channels, canvases, files, lists, profiles, search)
+- `docs.read`: read, export and query Claude Docs
+
+Sessions run with `--permission-mode dontAsk`, so any tool that isn't granted is
+denied without a prompt. There is no capability for sending, drafting,
+scheduling or reacting. A send is only ever your press. `capabilities.servers`
+(capability to MCP server name, e.g. `"slack.read": "slack"`) and
+`capabilities.tools` (capability to bare tool names) override the built-in
+mapping, for example to point at a different Slack server. These overrides
+still fail closed: an unknown capability grants nothing, and a tool name that
+looks like a write (send, post, update, delete, add, …) or isn't a plain name
+(a glob, say) is dropped with a warning in the log. The mapping lives in
+`src/core/capabilities.ts`.
 
 ### Logging
 
