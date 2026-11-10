@@ -6,6 +6,7 @@ import {
   createEffect,
   createMemo,
   For,
+  Index,
   Match,
   on,
   Show,
@@ -195,14 +196,18 @@ export function Rail(props: { moves: ItemMoves }) {
         stickyScroll={false}
       >
         <Show when={nodes().length > 0} fallback={<EmptyRail />}>
-          <For each={nodes()}>
+          {/* Index, not For: the rail is rebuilt with fresh objects on every
+              store write, and For would recreate every row (thousands of
+              native text buffers) each time. By position, rows are reused
+              and only their contents change. */}
+          <Index each={nodes()}>
             {(node, index) => (
               <Switch>
-                <Match when={node.type === "section" && node}>
+                <Match when={node().type === "section" && node()}>
                   {(s: Accessor<Extract<Node, { type: "section" }>>) => (
                     <box
                       paddingLeft={1}
-                      marginTop={index() > 0 ? 1 : 0}
+                      marginTop={index > 0 ? 1 : 0}
                       flexDirection="row"
                     >
                       <text fg={theme.accent} attributes={1}>
@@ -211,7 +216,7 @@ export function Rail(props: { moves: ItemMoves }) {
                     </box>
                   )}
                 </Match>
-                <Match when={node.type === "item" && node}>
+                <Match when={node().type === "item" && node()}>
                   {(n: Accessor<Extract<Node, { type: "item" }>>) => (
                     <RailRow
                       item={n().item}
@@ -225,7 +230,7 @@ export function Rail(props: { moves: ItemMoves }) {
                 </Match>
               </Switch>
             )}
-          </For>
+          </Index>
         </Show>
       </scrollbox>
 
