@@ -85,11 +85,30 @@ describe.skipIf(!hasTmux)("viewer session", () => {
     tmux(host, "new-window", "-t", "aug:", `${attach} outer`);
     await until(() => clients(s).length === 3);
     const other = clients(s).find((c) => c.session === "outer")?.name ?? "";
+    // aug's client is the viewer's most recent one; a hook's own client is
+    // not the one that came in.
+    tmux(host, "send-keys", "-t", "aug:0", "x");
+    await Bun.sleep(50);
     tmux(s, "switch-client", "-c", other, "-t", "aug-view-test");
 
     await until(() => clients(s).filter((c) => c.session === "proj").length === 2);
     expect(clients(s).find((c) => c.name === augClient)?.session).toBe("aug-view-test");
     expect(tmux(s, "show-options", "-v", "-t", "proj:", "prefix")).toBe("");
+  });
+
+  test("jumping to a viewed window lands in the project, not the viewer", async () => {
+    const { s, host, projId, windowId } = await withViewer();
+    tmux(host, "new-window", "-t", "aug:", `env -u TMUX tmux -L ${s} attach -t outer`);
+    await until(() => clients(s).length === 2);
+    const other = clients(s).find((c) => c.session === "outer")?.name ?? "";
+
+    // Unscoped, tmux picks the newest session holding the window: the
+    // viewer, with no prefix and no status bar.
+    await new TmuxMux(s).switchClient(projId, windowId);
+
+    await until(() => clients(s).find((c) => c.name === other)?.session !== "outer");
+    expect(clients(s).find((c) => c.name === other)?.session).toBe("proj");
+    expect(tmux(s, "display", "-p", "-c", other, "#{window_id}")).toBe(windowId);
   });
 
   test("moving a viewed window takes it out of the project, not the viewer", async () => {

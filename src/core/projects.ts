@@ -409,9 +409,10 @@ export async function moveTask(taskId: number, projectId: number): Promise<void>
 }
 
 export async function jump(taskId: number): Promise<boolean> {
-  const window = await liveWindow(taskId);
+  const state = await mux().state();
+  const window = state.windows.find((w) => w.taskId === taskId);
   if (!window) return false;
-  await mux().switchClient(window);
+  await mux().switchClient(window.sessionId, window.id);
   return true;
 }
 

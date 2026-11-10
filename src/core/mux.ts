@@ -72,8 +72,10 @@ export interface Mux {
   moveWindow(windowId: string, fromSessionId: string, toSessionId: string): Promise<void>;
   // Types a line into the window's pane, then Enter.
   sendLine(windowId: string, text: string): Promise<void>;
-  // Moves your own tmux client (the one aug runs in) to the window.
-  switchClient(windowId: string): Promise<void>;
+  // Moves your own tmux client (the one aug runs in) to the session, or to
+  // one of its windows. The session is named because a viewer links the
+  // same window, and tmux would otherwise land you in the viewer.
+  switchClient(sessionId: string, windowId?: string): Promise<void>;
   // argv for the embedded terminal: attaches a session of its own holding
   // just that window, so showing it never moves your real client.
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[];
@@ -328,8 +330,8 @@ export class TmuxMux implements Mux {
     await this.cmd("send-keys", ["-t", windowId, "Enter"]);
   }
 
-  async switchClient(windowId: string): Promise<void> {
-    await this.cmd("switch-client", ["-t", windowId]);
+  async switchClient(sessionId: string, windowId?: string): Promise<void> {
+    await this.cmd("switch-client", ["-t", windowId ? `${sessionId}:${windowId}` : sessionId]);
   }
 
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {
@@ -343,11 +345,14 @@ export class TmuxMux implements Mux {
     // It is still an ordinary session, the most recent one, so a bare
     // `tmux a`, switch-client or a destroyed session can drop your own
     // terminal in here with no prefix (and keep it alive past aug). Any
-    // client but aug's is sent on to the project session. The id is escaped
-    // because tmux expands $VARS when the hook runs.
+    // client but aug's is sent on to the project session. In a hook,
+    // client_name is the session's most recent client (usually aug's), so
+    // the one that came in is hook_client, and only run-shell -C expands it
+    // for -c. The id is escaped because tmux expands $VARS when the hook
+    // runs.
     const bounce =
-      `if -F "#{!=:#{client_name},#{@aug_client}}" ` +
-      `"switch-client -t '${sessionId.replaceAll("$", "\\$")}'"`;
+      `if -F "#{!=:#{hook_client},#{@aug_client}}" ` +
+      `"run-shell -C \\"switch-client -c '#{hook_client}' -t '${sessionId.replaceAll("$", "\\\\$")}'\\""`;
     const placeholder = "aug-placeholder";
     return [
       "env", "-u", "TMUX",

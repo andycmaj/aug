@@ -85,8 +85,8 @@ export class FakeMux implements Mux {
     this.sent.push({ windowId, text });
   }
 
-  async switchClient(windowId: string): Promise<void> {
-    this.switched.push(windowId);
+  async switchClient(sessionId: string, windowId?: string): Promise<void> {
+    this.switched.push(windowId ?? sessionId);
   }
 
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {
