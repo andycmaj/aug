@@ -3,13 +3,6 @@
 Your work manager in a terminal. GitHub and Slack become tasks, Claude does the
 work, and nothing goes out until you approve it.
 
-aug is a TUI clone of [Taskuary](https://taskuary.com/) ([source](https://github.com/ldbumble/taskuary))
-built on [`@andycmaj/opentui-app`](https://github.com/andycmaj/opentui-app),
-in the visual style of [tilt-tui](https://github.com/andycmaj/tilt-tui). It
-covers Taskuary's **Chat** and **Board** views with **GitHub** and **Slack** as
-the only connections. Game mode, reports, dashboards, the browser hand-over and
-the other connectors are out of scope.
-
 ## Try it
 
 ```sh
@@ -37,14 +30,14 @@ bun dev                       # or: bin/aug
   notifications: review requests, mentions, assignments, and comments on threads
   you are part of. aug never marks a notification read.
 - **Slack** has three transports, set with `slack.transport`:
-  - **`token`** (default) uses a Slack *user* token in `SLACK_TOKEN`, so
+  - **`token`** (default) uses a Slack _user_ token in `SLACK_TOKEN`, so
     replies go back as you. Scopes:
     `im:read mpim:read im:history mpim:history channels:history groups:history users:read chat:write`,
     plus `search:read` for mentions outside DMs.
   - **`claude-mcp`** is for when you have no token. aug runs a long-lived
     `claude -p` with a Slack MCP, such as the Slack connector added on
     claude.ai, and asks it each poll for new messages as JSON.
-    - That reading session gets the Slack *read* tools only. Every write tool is
+    - That reading session gets the Slack _read_ tools only. Every write tool is
       denied, so text inside a message has nothing to post with.
     - Each Send is a separate one-shot call whose only tool is the send tool
       and whose only input is your approved words.
@@ -72,8 +65,17 @@ e.g. `cp docs/examples/JOB.md ~/.aug/docs/`.
     "mergeMethod": "squash",
     "repos": { "northwind/ledger": "/Users/me/src/ledger" }
   },
-  "slack": { "transport": "token", "pollSeconds": 60, "channels": ["C0123ABC"] },
-  "brain": { "triageModel": "haiku", "agentModel": "sonnet", "assistantModel": "sonnet", "slackModel": "haiku" },
+  "slack": {
+    "transport": "token",
+    "pollSeconds": 60,
+    "channels": ["C0123ABC"]
+  },
+  "brain": {
+    "triageModel": "haiku",
+    "agentModel": "sonnet",
+    "assistantModel": "sonnet",
+    "slackModel": "haiku"
+  },
   "opener": "open",
   "maxActiveAgents": 4,
   "worktreeCommand": "wt -C {repo_path} switch {create} {branch} --no-cd --format json -y",
@@ -122,8 +124,8 @@ does the work, and whatever comes out waits for you.
   assumed to be work.
 - **A general or reply task is one chat.** Each agent turn is a headless
   `claude -p` call, resumed by session id. Its tool steps stream onto the turn
-  live. It answers in three sections (*What this is about*, *What I did*,
-  *Next steps*), and when a reply is owed it sets one up for you to send. Its
+  live. It answers in three sections (_What this is about_, _What I did_,
+  _Next steps_), and when a reply is owed it sets one up for you to send. Its
   tools are read-only look-ups plus writes in its own scratch folder; anything
   else is denied without asking. Files it writes there show under **What it
   made**: markdown rendered, CSV/TSV as a small table, anything else listed.
@@ -136,12 +138,12 @@ does the work, and whatever comes out waits for you.
 - **Nothing sends itself.** A draft (a Slack reply, or a GitHub comment with
   merge, close or approve riding along) goes out only on `y` plus a confirm.
   Sending never closes a task. Mark done (`d`) does.
-- **Correcting it teaches it.** *Not a task*, a changed kind or priority, an
+- **Correcting it teaches it.** _Not a task_, a changed kind or priority, an
   edited draft and a redraft are each recorded. A small model call turns each
   one into a line in `LEARNED.md`. New lines start at strength 2 under
-  *Watching*, where nothing reads them, and move into use at strength 4.
+  _Watching_, where nothing reads them, and move into use at strength 4.
 - **The Advisor** reads your open work every few hours and leaves at most three
-  ideas on the rail. It also marks a thread *slipped* when it has waited on
+  ideas on the rail. It also marks a thread _slipped_ when it has waited on
   someone for too long.
 - **Home is the Assistant**, first on the rail; `a` jumps there from anywhere.
   It is one long chat about all your work: `@` names a task (it offers matches
@@ -198,13 +200,13 @@ Every command aug runs for a task (the worktree command, the tmux window, the
 claude in it) gets these, so your own wt and tmux hooks can skip what aug
 already does with `[ -n "$AUG" ] && exit 0`:
 
-| Variable         | Value                              |
-| ---------------- | ---------------------------------- |
-| `AUG`            | `1`                                |
-| `AUG_HOME`       | aug's home directory               |
-| `AUG_PROJECT`    | the project id                     |
-| `AUG_TASK_ID`    | the task id                        |
-| `AUG_BRANCH`     | the branch                         |
+| Variable         | Value                               |
+| ---------------- | ----------------------------------- |
+| `AUG`            | `1`                                 |
+| `AUG_HOME`       | aug's home directory                |
+| `AUG_PROJECT`    | the project id                      |
+| `AUG_TASK_ID`    | the task id                         |
+| `AUG_BRANCH`     | the branch                          |
 | `AUG_SESSION_ID` | the claude session id (claude only) |
 
 If one of your hooks opens a tmux window for every new worktree, guard it with
@@ -212,31 +214,31 @@ If one of your hooks opens a tmux window for every new worktree, guard it with
 
 ## Keys
 
-| Where           | Keys                                                                                                                                                                                          |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Anywhere        | `n`/`b` walk next/back · `a` Home (the Assistant) · `v` Chat/Board · `N` new · `D` docs · `C` connections · `^r` check now · `:` palette · `?` help · `Tab` pane · `q` quit                                     |
-| Rail            | `j`/`k` move the cursor · `enter` put the row on the table · `space` on a project: fold / unfold its tasks. Moves act on the row under the cursor. |
-| Rail and table  | `y` send (asks first) · `e` edit draft in `$EDITOR` · `E` redraft · `s` start/continue agent · `S` stop and save · `d` done · `r` remind me · `w` watch · `x` not a task / read · `m` make it a task · `p` priority · `t` kind · `W` waiting on someone · `o` open the link or a file the agent made · `O` edit a made file in `$EDITOR` · `i` type · `I` info (everything aug knows about the row; `c` copies a value) · coding: `T` jump to its tmux window · `u` nudge about feedback · `M` move to a project |
-| Chat box        | `enter` send to the agent · `@` name a task (`tab`/`enter` takes it, `↑`/`↓` pick) · `esc` leave                                                                                              |
-| Agent terminal  | everything goes to the agent · `^]` detach                                                                                                                                                    |
-| Board           | `1`–`5` Columns / Wall / Live handoffs / Hub / Projects · `h j k l` move · `enter` open or attach · `c` write a note or Hub entry (new project on tab 5) · `L` tiles across · `A` adopt a tmux session · `x` archive a project · `M` move a task |
+| Where          | Keys                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Anywhere       | `n`/`b` walk next/back · `a` Home (the Assistant) · `v` Chat/Board · `N` new · `D` docs · `C` connections · `^r` check now · `:` palette · `?` help · `Tab` pane · `q` quit                                                                                                                                                                                                                                                                                                                                      |
+| Rail           | `j`/`k` move the cursor · `enter` put the row on the table · `space` on a project: fold / unfold its tasks. Moves act on the row under the cursor.                                                                                                                                                                                                                                                                                                                                                               |
+| Rail and table | `y` send (asks first) · `e` edit draft in `$EDITOR` · `E` redraft · `s` start/continue agent · `S` stop and save · `d` done · `r` remind me · `w` watch · `x` not a task / read · `m` make it a task · `p` priority · `t` kind · `W` waiting on someone · `o` open the link or a file the agent made · `O` edit a made file in `$EDITOR` · `i` type · `I` info (everything aug knows about the row; `c` copies a value) · coding: `T` jump to its tmux window · `u` nudge about feedback · `M` move to a project |
+| Chat box       | `enter` send to the agent · `@` name a task (`tab`/`enter` takes it, `↑`/`↓` pick) · `esc` leave                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Agent terminal | everything goes to the agent · `^]` detach                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Board          | `1`–`5` Columns / Wall / Live handoffs / Hub / Projects · `h j k l` move · `enter` open or attach · `c` write a note or Hub entry (new project on tab 5) · `L` tiles across · `A` adopt a tmux session · `x` archive a project · `M` move a task                                                                                                                                                                                                                                                                 |
 
 ## What changed for a terminal
 
 These Taskuary features were rethought for a TUI:
 
-| Taskuary (web)                                    | aug (TUI)                                                                                         |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Chat / Board / Game switch                        | `v` toggles Chat and Board. Game is not built.                                                    |
-| One-press **Send** button                         | `y` opens a confirm that shows the exact words; a stray key never sends.                         |
-| Draft edited in place                             | `e` opens the draft in `$EDITOR` inside an embedded terminal. Saving updates it and teaches voice. |
-| Live terminal on the task page and on the Wall    | The agent runs in tmux; aug embeds a view of its window ([ghostty-opentui](https://www.npmjs.com/package/ghostty-opentui)): attach by focusing it, `^]` to detach, `T` to jump there in your own tmux. |
-| Docs page with an editor                          | `D` picks a doc, which opens in `$EDITOR`.                                                         |
-| Rail click opens the task                         | Same as Taskuary: the cursor moves freely, `enter` puts the row on the table (marked `▸`), `n`/`b` walk the table. |
-| Chat pill in the corner                           | `a` opens the Assistant as a modal. Its conversation survives the view switch.                      |
-| File previews (workbooks, images)                 | **What it made** renders markdown and CSV/TSV inline. `o` opens any file with your opener (`open`, `wslview`, ...), and `O` opens it in `$EDITOR`. No Slack attachments yet. |
-| Browser hand-over, voice, attachments             | Not built.                                                                                         |
-| Morning digest, reports, dashboards, routines     | Not built.                                                                                         |
+| Taskuary (web)                                 | aug (TUI)                                                                                                                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chat / Board / Game switch                     | `v` toggles Chat and Board. Game is not built.                                                                                                                                                         |
+| One-press **Send** button                      | `y` opens a confirm that shows the exact words; a stray key never sends.                                                                                                                               |
+| Draft edited in place                          | `e` opens the draft in `$EDITOR` inside an embedded terminal. Saving updates it and teaches voice.                                                                                                     |
+| Live terminal on the task page and on the Wall | The agent runs in tmux; aug embeds a view of its window ([ghostty-opentui](https://www.npmjs.com/package/ghostty-opentui)): attach by focusing it, `^]` to detach, `T` to jump there in your own tmux. |
+| Docs page with an editor                       | `D` picks a doc, which opens in `$EDITOR`.                                                                                                                                                             |
+| Rail click opens the task                      | Same as Taskuary: the cursor moves freely, `enter` puts the row on the table (marked `▸`), `n`/`b` walk the table.                                                                                     |
+| Chat pill in the corner                        | `a` opens the Assistant as a modal. Its conversation survives the view switch.                                                                                                                         |
+| File previews (workbooks, images)              | **What it made** renders markdown and CSV/TSV inline. `o` opens any file with your opener (`open`, `wslview`, ...), and `O` opens it in `$EDITOR`. No Slack attachments yet.                           |
+| Browser hand-over, voice, attachments          | Not built.                                                                                                                                                                                             |
+| Morning digest, reports, dashboards, routines  | Not built.                                                                                                                                                                                             |
 
 ## Develop
 
@@ -247,3 +249,8 @@ bun run demo        # drive in tmux: tmux new -d -s aug 'bun run demo'; tmux cap
 ```
 
 See [AGENTS.md](AGENTS.md) for the layout and conventions.
+
+# Credit
+
+aug is inspired by [Taskuary](https://taskuary.com/) ([source](https://github.com/ldbumble/taskuary))
+and built on [`@andycmaj/opentui-app`](https://github.com/andycmaj/opentui-app).
