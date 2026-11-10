@@ -64,6 +64,15 @@ export interface AugConfig {
     // Rolls over to <file>.1 past this; default 10 MB.
     maxBytes?: number;
   };
+  // Connector tools agents may call, by capability (core/capabilities.ts).
+  // Opt-in: nothing is granted until a role lists a capability.
+  capabilities: {
+    // capability -> MCP server segment, overriding the built-in one.
+    servers: Record<string, string>;
+    // capability -> bare tool names, overriding the built-in list.
+    tools: Record<string, string[]>;
+    grants: { general?: string[]; assistant?: string[] };
+  };
 }
 
 export const DEFAULT_CONFIG: AugConfig = {
@@ -82,6 +91,7 @@ export const DEFAULT_CONFIG: AugConfig = {
   learning: true,
   theme: "default",
   log: { enabled: false, level: "info" },
+  capabilities: { servers: {}, tools: {}, grants: {} },
 };
 
 let cached: AugConfig | undefined;
@@ -117,6 +127,11 @@ export function mergeConfig(
     slack: { ...DEFAULT_CONFIG.slack, ...raw.slack, pollSeconds: slackPoll },
     brain: { ...DEFAULT_CONFIG.brain, ...raw.brain },
     log: { ...DEFAULT_CONFIG.log, ...raw.log },
+    capabilities: {
+      servers: { ...raw.capabilities?.servers },
+      tools: { ...raw.capabilities?.tools },
+      grants: { ...raw.capabilities?.grants },
+    },
   } as AugConfig;
 }
 
