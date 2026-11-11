@@ -3,6 +3,7 @@
 // Sending never closes the task: Mark done does.
 
 import { loadConfig } from "./config";
+import { draftSent } from "./lifecycle";
 import { logger } from "./log";
 import * as store from "./store";
 import { ActionState, TurnRole, type DraftAction } from "./types";
@@ -149,9 +150,7 @@ export async function sendPending(taskId: number): Promise<string> {
         role: TurnRole.trigger,
         body: `Sent: ${receipt}`,
       });
-      const task = store.getTask(taskId);
-      if (task?.agent_state === "blocked")
-        store.updateTask(taskId, { agent_says: null });
+      draftSent(taskId);
     });
     return receipt;
   } catch (err) {

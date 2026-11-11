@@ -151,9 +151,7 @@ export function homeTask(): TaskRow {
   const found = one<TaskRow>(
     "SELECT * FROM tasks WHERE kind = 'home' ORDER BY id LIMIT 1",
   );
-  return (
-    found ?? createTask({ title: "Home", kind: "home", channel: "owner" })
-  );
+  return found ?? createTask({ title: "Home", kind: "home", channel: "owner" });
 }
 
 // A task owns its own thread plus any linked to it (task_threads).
@@ -398,9 +396,7 @@ export function messagesForTask(taskId: number): MessageRow[] {
 }
 
 // Every rail task's messages in one query, for search.
-export function messagesForTasks(
-  taskIds: number[],
-): Map<number, MessageRow[]> {
+export function messagesForTasks(taskIds: number[]): Map<number, MessageRow[]> {
   const out = new Map<number, MessageRow[]>();
   const rows = all<MessageRow>(
     "SELECT * FROM messages WHERE task_id IN (SELECT value FROM json_each(?)) ORDER BY received_at, id",
@@ -804,39 +800,7 @@ export function kvSet(key: string, value: string): void {
     .run(key, value);
 }
 
-// ── task lifecycle moves (the owner's buttons) ───────────────────────────
-
-// Mark done always does the same things: closed, unsent draft retired, any
-// live agent stopped (the caller kills the process), off the rail.
-export function markDone(taskId: number, by = "you"): void {
-  batch(() => {
-    retirePendingActions(taskId);
-    const task = getTask(taskId);
-    if (task && task.status !== TaskStatus.done)
-      tellFromTask(
-        task,
-        `marked done by ${by}`,
-        latestSession(taskId)?.result ?? null,
-      );
-    const agentLive =
-      task &&
-      (task.agent_state === AgentState.working ||
-        task.agent_state === AgentState.blocked ||
-        task.agent_state === AgentState.queued);
-    updateTask(taskId, {
-      status: TaskStatus.done,
-      closed_at: now(),
-      closed_by: by,
-      unread_result: 0,
-      watching: 0,
-      remind_at: null,
-      ...(agentLive ? { agent_state: AgentState.saved } : {}),
-    });
-    for (const session of liveSessions().filter((s) => s.task_id === taskId)) {
-      updateSession(session.id, { ended_at: now(), state: AgentState.saved });
-    }
-  });
-}
+// ── task status (the row-level half; lifecycle.ts owns the agent's side) ─
 
 // A task made --from another reports back to it when it ends, so whoever
 // made it (a project lead, an agent) can see the result and decide what next.

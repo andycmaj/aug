@@ -14,6 +14,12 @@ import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
 import { slackTransport, type SlackTransport } from "./slack/transport";
 import { correct } from "./learn";
 import { nudgeText } from "./feedback";
+import {
+  holdForStart,
+  recoverAtBoot,
+  startCancelled,
+  taskClosed,
+} from "./lifecycle";
 import { drainMoves, runMove, type MoveOutcome } from "./moves";
 import * as projects from "./projects";
 import { editPending, sendPending, setSlackSender } from "./outbound";
@@ -181,37 +187,13 @@ export class Engine {
     this.pool.stopAll();
   }
 
-  // Sessions alive when aug last quit are not alive now: a chat turn cut off
-  // or a terminal closed reads as stopped, with Continue.
   // tmux keeps coding agents alive across restarts; reconcile asks it which
   // still are. Anything else that was live died with the last aug.
   private recoverSessions(): void {
-    store.batch(() => {
-      for (const s of store.liveSessions()) {
-        if (s.kind === SessionKind.tmux) continue;
-        store.updateSession(s.id, {
-          state: AgentState.stopped,
-          ended_at: now(),
-        });
-        const task = store.getTask(s.task_id);
-        if (
-          task &&
-          (task.agent_state === AgentState.working ||
-            task.agent_state === AgentState.blocked)
-        ) {
-          store.updateTask(task.id, { agent_state: AgentState.stopped });
-        }
-      }
-      for (const task of store.listTasks()) {
-        if (
-          task.agent_state === AgentState.working &&
-          !store.liveSessions().some((s) => s.task_id === task.id) &&
-          !this.pool.isRunning(task.id)
-        ) {
-          store.updateTask(task.id, { agent_state: AgentState.stopped });
-        }
-      }
-    });
+    recoverAtBoot(
+      (taskId) => this.pool.isRunning(taskId),
+      (s) => s.kind === SessionKind.tmux,
+    );
   }
 
   // aug-tools asks for moves from another process; its commit bumps
@@ -273,7 +255,8 @@ export class Engine {
       const session = store.latestSession(effect.taskId);
       if (
         effect.type === "agent-message" &&
-        (session?.kind === SessionKind.pty || session?.kind === SessionKind.tmux)
+        (session?.kind === SessionKind.pty ||
+          session?.kind === SessionKind.tmux)
       )
         continue;
       const reason =
@@ -411,12 +394,7 @@ export class Engine {
       channel: "owner",
       ...place,
     });
-    if (kind === Kind.coding) {
-      store.updateTask(task.id, {
-        agent_state: AgentState.queued,
-        queue_reason: "held for you: press Start",
-      });
-    }
+    if (kind === Kind.coding) holdForStart(task.id);
     return store.getTask(task.id) ?? task;
   }
 
@@ -424,7 +402,9 @@ export class Engine {
   // brief would say something the agent never read: tell it instead.
   briefEditable(taskId: number): boolean {
     const task = store.getTask(taskId);
-    return Boolean(task) && task?.kind !== Kind.home && !store.latestSession(taskId);
+    return (
+      Boolean(task) && task?.kind !== Kind.home && !store.latestSession(taskId)
+    );
   }
 
   editBrief(taskId: number, text: string): boolean {
@@ -468,7 +448,8 @@ export class Engine {
     const ids = turns.map((t) => t.id);
     store.setPending(ids, false);
     try {
-      if (await projects.tell(taskId, turns.map((t) => t.body).join("\n\n"))) return true;
+      if (await projects.tell(taskId, turns.map((t) => t.body).join("\n\n")))
+        return true;
     } catch (err) {
       log.warn("tell failed", { task: taskId, err: errorMessage(err) });
     }
@@ -511,7 +492,11 @@ export class Engine {
       noWorktree: opts.noWorktree || this.options.noWorktrees,
       launchOverride: this.options.launchOverride,
     });
-    if (result.type === "started") store.setPending(pending.map((t) => t.id), false);
+    if (result.type === "started")
+      store.setPending(
+        pending.map((t) => t.id),
+        false,
+      );
     return result;
   }
 
@@ -596,12 +581,7 @@ export class Engine {
 
   stopAgent(taskId: number): void {
     this.pool.stop(taskId);
-    const task = store.getTask(taskId);
-    if (task?.agent_state === AgentState.queued)
-      store.updateTask(taskId, {
-        agent_state: AgentState.saved,
-        queue_reason: null,
-      });
+    startCancelled(taskId);
   }
 
   async send(taskId: number): Promise<string> {
@@ -635,7 +615,7 @@ export class Engine {
 
   markDone(taskId: number): void {
     this.pool.stop(taskId);
-    store.markDone(taskId);
+    taskClosed(taskId);
   }
 
   remind(taskId: number, days: number): string {
@@ -676,7 +656,7 @@ export class Engine {
       },
       this.learnedNotice,
     );
-    if (worked) store.markDone(taskId);
+    if (worked) taskClosed(taskId);
     else {
       this.pool.stop(taskId);
       store.updateTask(taskId, {
@@ -707,14 +687,10 @@ export class Engine {
   setKind(taskId: number, kind: Kind): void {
     const task = store.getTask(taskId);
     if (!task || task.kind === kind) return;
-    store.updateTask(taskId, {
-      kind,
-      ...(kind === Kind.coding && task.agent_state === AgentState.none
-        ? {
-            agent_state: AgentState.queued,
-            queue_reason: "held for you: press Start",
-          }
-        : {}),
+    store.batch(() => {
+      store.updateTask(taskId, { kind });
+      if (kind === Kind.coding && task.agent_state === AgentState.none)
+        holdForStart(taskId);
     });
     correct(
       {

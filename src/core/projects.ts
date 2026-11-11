@@ -5,7 +5,7 @@
 import { homedir } from "node:os";
 import { codingCwd, codingLaunch, type CodingLaunch } from "./agents";
 import { loadConfig, saveConfig } from "./config";
-import { now } from "./db";
+import { sessionEnded, sessionStarted, type SessionEnd } from "./lifecycle";
 import { logger } from "./log";
 import { mux, VIEWER_PREFIX, type MuxSession, type MuxState } from "./mux";
 import { paths } from "./paths";
@@ -270,29 +270,13 @@ function recordStart(
   resume: string | undefined,
 ): SessionRow {
   return store.batch(() => {
-    if (resume && store.getSession(resume)) {
-      store.updateSession(resume, {
-        state: AgentState.working,
-        ended_at: null,
-        tmux_window: windowId,
-        kind: SessionKind.tmux,
-      });
-    } else {
-      store.createSession({
-        id: launch.sessionId,
-        taskId: task.id,
-        kind: SessionKind.tmux,
-        cwd: launch.cwd,
-        startedBy: "owner",
-        tmuxWindow: windowId,
-      });
-    }
-    if (task.status !== TaskStatus.open) store.reopen(task.id);
-    store.updateTask(task.id, {
-      agent_state: AgentState.working,
-      queue_reason: null,
-      agent_says: null,
-      unread_result: 0,
+    const session = sessionStarted({
+      id: launch.sessionId,
+      taskId: task.id,
+      kind: SessionKind.tmux,
+      cwd: launch.cwd,
+      startedBy: "owner",
+      tmuxWindow: windowId,
     });
     store.addTurn({
       taskId: task.id,
@@ -301,7 +285,7 @@ function recordStart(
         ? "Continued the coding session"
         : `Started a coding session in ${launch.cwd}`,
     });
-    return store.getSession(resume ?? launch.sessionId)!;
+    return session;
   });
 }
 
@@ -352,12 +336,7 @@ export async function stopTask(taskId: number): Promise<void> {
   const state = await mux().state();
   for (const w of state.windows.filter((w) => w.taskId === taskId))
     await mux().killWindow(w.id);
-  store.batch(() => {
-    for (const s of store.sessionsForTask(taskId))
-      if (s.kind === SessionKind.tmux && !s.ended_at)
-        store.updateSession(s.id, { state: AgentState.saved, ended_at: now() });
-    store.updateTask(taskId, { agent_state: AgentState.saved });
-  });
+  endTmuxSessions(taskId, AgentState.saved);
 }
 
 export interface CloseResult {
@@ -501,23 +480,23 @@ export async function viewerArgv(taskId: number): Promise<Viewer | null> {
 
 // ── reconcile ────────────────────────────────────────────────────────────
 
-function endTmuxSessions(taskId: number): void {
-  for (const s of store.sessionsForTask(taskId)) {
-    if (s.kind === SessionKind.tmux && !s.ended_at) markGone(s);
-  }
+// Stopping (saved) keeps the worktree and the claude session id so s resumes
+// it; a window that simply went (stopped) reads the same, with Continue.
+function endTmuxSessions(
+  taskId: number,
+  how: SessionEnd = AgentState.stopped,
+): void {
+  store.batch(() => {
+    for (const s of store.sessionsForTask(taskId))
+      if (s.kind === SessionKind.tmux && !s.ended_at) markGone(s, how);
+  });
 }
 
-function markGone(session: SessionRow): void {
-  const task = store.getTask(session.task_id);
-  const finished = task?.agent_state === AgentState.agentdone;
-  store.batch(() => {
-    store.updateSession(session.id, {
-      state: finished ? AgentState.agentdone : AgentState.stopped,
-      ended_at: now(),
-    });
-    if (task && !finished && task.status === TaskStatus.open)
-      store.updateTask(task.id, { agent_state: AgentState.stopped });
-  });
+function markGone(
+  session: SessionRow,
+  how: SessionEnd = AgentState.stopped,
+): void {
+  sessionEnded({ taskId: session.task_id, sessionId: session.id }, how);
 }
 
 // Live reconcile: tmux events, debounced, while aug runs. The watch ends

@@ -10,6 +10,7 @@ import {
   WALKED,
 } from "../src/core/rail";
 import { railProjects } from "../src/core/lookup";
+import { taskClosed } from "../src/core/lifecycle";
 import * as store from "../src/core/store";
 import { AgentState, Kind, TurnRole } from "../src/core/types";
 import { freshHome } from "./helpers";
@@ -104,7 +105,7 @@ describe("rail", () => {
       channel: "owner",
       createdAt: at(7),
     });
-    store.markDone(gone.id);
+    taskClosed(gone.id);
     const finished = store.createTask({
       title: "finished",
       kind: Kind.coding,
@@ -213,7 +214,7 @@ describe("projects on the rail", () => {
     store.createTask({ title: "loose", kind: Kind.task, channel: "owner", createdAt: at(0) });
     store.createTask({ title: "archived's", kind: Kind.coding, channel: "owner", projectId: old.id, createdAt: at(3) });
     store.updateTask(a.id, { agent_state: AgentState.working });
-    store.markDone(c.id);
+    taskClosed(c.id);
 
     const rail = railNow();
     expect(rail.map((s) => s.section)).toEqual(["home", "tasks"]);

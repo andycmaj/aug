@@ -5,10 +5,15 @@
 // waiting on you.
 
 import { describeStep } from "./brain";
-import { now } from "./db";
 import { actionFor, type TurnAnswer } from "./agents";
+import {
+  sessionActivity,
+  sessionEnded,
+  workFinished,
+  type AgentRef,
+} from "./lifecycle";
 import * as store from "./store";
-import { AgentState, TaskStatus, TurnRole } from "./types";
+import { AgentState, TurnRole } from "./types";
 
 export interface HookPayload {
   session_id?: string;
@@ -22,27 +27,7 @@ export interface HookPayload {
   cwd?: string;
 }
 
-export interface HookEnv {
-  taskId: number;
-  sessionId: string;
-}
-
-function setState(
-  env: HookEnv,
-  state: AgentState,
-  says: string | null,
-  extra: { last_tool?: string } = {},
-): void {
-  const task = store.getTask(env.taskId);
-  if (!task) return;
-  // Once the agent has said it is finished, its winding down is not news.
-  if (task.agent_state === AgentState.agentdone && state !== AgentState.working)
-    return;
-  store.batch(() => {
-    store.updateSession(env.sessionId, { state, says, ...extra });
-    store.updateTask(env.taskId, { agent_state: state, agent_says: says });
-  });
-}
+export type HookEnv = AgentRef;
 
 export function handleHook(
   event: string,
@@ -51,26 +36,22 @@ export function handleHook(
 ): void {
   switch (event) {
     case "prompt":
-      setState(env, AgentState.working, null);
+      sessionActivity(env, AgentState.working, null);
       return;
     case "tool": {
       const step = describeStep(
         payload.tool_name ?? "tool",
         payload.tool_input,
       );
-      if (payload.tool_name === "AskUserQuestion") {
-        setState(env, AgentState.blocked, "asked you something", {
-          last_tool: step,
-        });
-      } else {
-        setState(env, AgentState.working, null, { last_tool: step });
-      }
+      if (payload.tool_name === "AskUserQuestion")
+        sessionActivity(env, AgentState.blocked, "asked you something", step);
+      else sessionActivity(env, AgentState.working, null, step);
       return;
     }
     case "notification": {
       const text = payload.message ?? "needs you";
       const approval = /permission|approve|allow/i.test(text);
-      setState(
+      sessionActivity(
         env,
         AgentState.blocked,
         approval ? `needs your approval: ${text}` : text,
@@ -78,25 +59,11 @@ export function handleHook(
       return;
     }
     case "stop":
-      setState(env, AgentState.blocked, "is waiting at its prompt");
+      sessionActivity(env, AgentState.blocked, "is waiting at its prompt");
       return;
-    case "end": {
-      const task = store.getTask(env.taskId);
-      const finished = task?.agent_state === AgentState.agentdone;
-      store.batch(() => {
-        store.updateSession(env.sessionId, {
-          state: finished ? AgentState.agentdone : AgentState.stopped,
-          ended_at: now(),
-        });
-        if (!finished && task && task.status !== TaskStatus.done) {
-          store.updateTask(env.taskId, {
-            agent_state: AgentState.stopped,
-            agent_says: null,
-          });
-        }
-      });
+    case "end":
+      sessionEnded(env, AgentState.stopped);
       return;
-    }
   }
 }
 
@@ -144,25 +111,10 @@ export function handleDone(env: HookEnv, args: DoneArgs): string {
           : "Nothing left to do here.",
     });
     if (action) store.setTurnAction(turn.id, action);
-    store.updateSession(env.sessionId, {
-      state: AgentState.agentdone,
-      result: args.summary,
+    workFinished(env, {
+      summary: args.summary,
+      closes: !action && !ownerSession && !lastIncomingNeedsReply(task.id),
     });
-    const closes = !action && !ownerSession && !lastIncomingNeedsReply(task.id);
-    store.updateTask(task.id, {
-      agent_state: AgentState.agentdone,
-      agent_says: null,
-      unread_result: 1,
-      ...(closes
-        ? { status: TaskStatus.done, closed_at: now(), closed_by: "agent" }
-        : {}),
-    });
-    if (task.status !== TaskStatus.done)
-      store.tellFromTask(
-        task,
-        closes ? "finished" : "finished; it waits for the owner",
-        args.summary,
-      );
   });
   return action
     ? `${store.taskRef(task.id)}: finished; reply waits for the owner's Send`

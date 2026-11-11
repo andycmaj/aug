@@ -7,6 +7,7 @@ import {
   mentionRef,
   suggestMentions,
 } from "../src/core/lookup";
+import { taskClosed } from "../src/core/lifecycle";
 import * as store from "../src/core/store";
 import { Kind, ProjectStatus, TaskStatus } from "../src/core/types";
 import { freshHome } from "./helpers";
@@ -48,7 +49,7 @@ describe("@ mentions", () => {
     const done = task("Fix old thing");
     const dropped = task("Fix nothing");
     store.updateTask(later.id, { status: TaskStatus.later });
-    store.markDone(done.id);
+    taskClosed(done.id);
     store.updateTask(dropped.id, { status: TaskStatus.dropped });
     expect(suggestTasks("fix").map((t) => t.id)).toEqual([later.id, open.id]);
     expect(suggestTasks(String(done.id))).toEqual([]);

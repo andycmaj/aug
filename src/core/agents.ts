@@ -14,6 +14,12 @@ import { loadConfig } from "./config";
 import { now } from "./db";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
 import { changedFiles, snapshotDir } from "./files";
+import {
+  queued,
+  sessionEnded,
+  sessionStarted,
+  turnFinished,
+} from "./lifecycle";
 import { AGENT_MOVES } from "./moves";
 import { logger } from "./log";
 import { linkLine } from "./lookup";
@@ -258,7 +264,9 @@ export class AgentPool {
   private waiting: { taskId: number; reason: string }[] = [];
 
   constructor(
-    private options: PoolOptions = { limit: () => loadConfig().maxActiveAgents },
+    private options: PoolOptions = {
+      limit: () => loadConfig().maxActiveAgents,
+    },
   ) {}
 
   isRunning(taskId: number): boolean {
@@ -279,10 +287,10 @@ export class AgentPool {
       if (!this.waiting.some((w) => w.taskId === taskId)) {
         this.waiting.push({ taskId, reason });
         log.debug("queued", { task: taskId, reason });
-        store.updateTask(taskId, {
-          agent_state: AgentState.queued,
-          queue_reason: `waiting its turn (${this.options.limit()} agents at once)`,
-        });
+        queued(
+          taskId,
+          `waiting its turn (${this.options.limit()} agents at once)`,
+        );
       }
       return null;
     }
@@ -325,34 +333,24 @@ export class AgentPool {
     const resume =
       prior?.kind === SessionKind.chat && !lastDenials(history).length ? prior.id : undefined;
     const sessionId = resume ?? randomUUID();
-    if (!resume) {
-      store.createSession({
+    const ref = { taskId, sessionId };
+    // Home's agent is the Assistant: it talks, and runs aug with aug-tools.
+    const home = task.kind === Kind.home;
+    const turn = store.batch(() => {
+      sessionStarted({
         id: sessionId,
         taskId,
         kind: SessionKind.chat,
         cwd,
         startedBy: "aug",
       });
-    } else {
-      store.updateSession(sessionId, {
-        state: AgentState.working,
-        ended_at: null,
+      return store.addTurn({
+        taskId,
+        role: TurnRole.agent,
+        author: home ? "aug" : "agent",
+        status: "running",
+        sessionId,
       });
-    }
-
-    // Home's agent is the Assistant: it talks, and runs aug with aug-tools.
-    const home = task.kind === Kind.home;
-    const turn = store.addTurn({
-      taskId,
-      role: TurnRole.agent,
-      author: home ? "aug" : "agent",
-      status: "running",
-      sessionId,
-    });
-    store.updateTask(taskId, {
-      agent_state: AgentState.working,
-      queue_reason: null,
-      agent_says: null,
     });
     const abort = new AbortController();
     this.running.set(taskId, { turnId: turn.id, abort });
@@ -403,37 +401,32 @@ export class AgentPool {
       const answer = result.structured as TurnAnswer | null;
       const finished = now();
       recordFiles();
-      if (!answer) {
-        store.updateTurn(turn.id, {
-          status: "done",
-          body: result.text,
-          did: result.text,
-          next: "",
-          finished_at: finished,
-        });
-        store.updateTask(taskId, { agent_state: AgentState.agentdone });
-      } else {
-        const action = actionFor(store.getTask(taskId) ?? task, answer.action);
-        store.batch(() => {
+      store.batch(() => {
+        if (!answer) {
           store.updateTurn(turn.id, {
             status: "done",
-            about: answer.about,
-            did: answer.did,
-            next: answer.next,
-            body: answer.did,
+            body: result.text,
+            did: result.text,
+            next: "",
             finished_at: finished,
           });
-          if (action) store.setTurnAction(turn.id, action);
-          const blocked = answer.state === "asking";
-          store.updateTask(taskId, {
-            agent_state: blocked ? AgentState.blocked : AgentState.agentdone,
-            agent_says: blocked ? answer.next : null,
-          });
+          turnFinished(ref, { asking: null, at: finished });
+          return;
+        }
+        const action = actionFor(store.getTask(taskId) ?? task, answer.action);
+        store.updateTurn(turn.id, {
+          status: "done",
+          about: answer.about,
+          did: answer.did,
+          next: answer.next,
+          body: answer.did,
+          finished_at: finished,
         });
-      }
-      store.updateSession(sessionId, {
-        state: AgentState.agentdone,
-        ended_at: finished,
+        if (action) store.setTurnAction(turn.id, action);
+        turnFinished(ref, {
+          asking: answer.state === "asking" ? answer.next : null,
+          at: finished,
+        });
       });
       done();
     } catch (err) {
@@ -454,13 +447,7 @@ export class AgentPool {
           body: stopped ? "Stopped and saved." : `The agent failed: ${message}`,
           finished_at: now(),
         });
-        store.updateTask(taskId, {
-          agent_state: stopped ? AgentState.saved : AgentState.stopped,
-        });
-        store.updateSession(sessionId, {
-          state: stopped ? AgentState.saved : AgentState.stopped,
-          ended_at: now(),
-        });
+        sessionEnded(ref, stopped ? AgentState.saved : AgentState.stopped);
       });
     } finally {
       this.running.delete(taskId);

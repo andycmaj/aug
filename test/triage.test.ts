@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { taskClosed } from "../src/core/lifecycle";
 import * as store from "../src/core/store";
 import { triage } from "../src/core/triage";
 import {
@@ -126,7 +127,7 @@ describe("triage", () => {
   test("they wrote after the close: the task reopens", async () => {
     fakeBrain(() => verdict("task"));
     const first = await triage(ghComment(1, "please look"));
-    store.markDone(first.taskId!);
+    taskClosed(first.taskId!);
     const again = await triage(ghComment(2, "it is broken again"));
     expect(again.taskId).toBe(first.taskId);
     expect(store.getTask(first.taskId!)!.status).toBe(TaskStatus.open);

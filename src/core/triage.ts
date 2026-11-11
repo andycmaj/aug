@@ -10,6 +10,7 @@ import { think } from "./brain";
 import { loadConfig } from "./config";
 import { logger } from "./log";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
+import { finishSuperseded, holdForStart } from "./lifecycle";
 import * as store from "./store";
 import {
   AgentState,
@@ -194,13 +195,8 @@ function attach(message: MessageRow, task: TaskRow): TriageOutcome {
     if (task.status === TaskStatus.done || task.status === TaskStatus.later) {
       store.reopen(task.id);
     }
-    store.updateTask(task.id, {
-      waiting_on: null,
-      watching: 0,
-      ...(task.agent_state === AgentState.agentdone
-        ? { agent_state: AgentState.none, unread_result: 0 }
-        : {}),
-    });
+    store.updateTask(task.id, { waiting_on: null, watching: 0 });
+    finishSuperseded(task.id);
   });
   if (isLive(task)) {
     effects.push({
@@ -344,12 +340,7 @@ export async function triage(message: MessageRow): Promise<TriageOutcome> {
       messageId: message.id,
       startedAt: message.received_at,
     });
-    if (kind === Kind.coding) {
-      store.updateTask(created.id, {
-        agent_state: AgentState.queued,
-        queue_reason: "held for you: press Start",
-      });
-    }
+    if (kind === Kind.coding) holdForStart(created.id);
     return created;
   });
 
