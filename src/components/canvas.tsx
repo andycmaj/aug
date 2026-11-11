@@ -170,6 +170,7 @@ export function Canvas(props: {
               <PendingCard taskId={t().id} />
               <ChatInput
                 task={t()}
+                hidden={attached}
                 onSay={props.onSay}
                 onCompose={props.onCompose}
               />
@@ -432,9 +433,11 @@ const unsent = new Map<number, string>();
 
 // The box under the chat. Typing always continues the same conversation.
 // `@` offers tasks and projects to name; enter or tab takes the highlighted
-// one.
+// one. While a live terminal is attached, keys go to it, so the box hides
+// (but keeps its draft) until detach.
 function ChatInput(props: {
   task: TaskRow;
+  hidden: () => boolean;
   onSay: (text: string) => void;
   onCompose: Compose;
 }) {
@@ -528,7 +531,7 @@ function ChatInput(props: {
         : "Tell the agent what's wrong, or ask about anything here... (^g editor)";
 
   return (
-    <box flexDirection="column" flexShrink={0}>
+    <box flexDirection="column" flexShrink={0} visible={!props.hidden()}>
       <Show when={offering()}>
         <box
           flexDirection="column"
