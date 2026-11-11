@@ -109,6 +109,8 @@ export interface Mux {
   watch(onChange: () => void, signal: AbortSignal): Promise<void>;
   // A local or origin branch by that name.
   branchExists(repoPath: string, branch: string): Promise<boolean>;
+  // A mapped path can be a worktree that has since been removed.
+  isCheckout(path: string): Promise<boolean>;
   // Makes the worktree and answers its path.
   worktree(w: Worktree): Promise<MadeWorktree>;
   removeWorktree(repoPath: string, branch: string): Promise<void>;
@@ -484,6 +486,15 @@ export class TmuxMux implements Mux {
       if ((await proc.exited) === 0) return true;
     }
     return false;
+  }
+
+  async isCheckout(path: string): Promise<boolean> {
+    const proc = Bun.spawn(["git", "-C", path, "rev-parse", "--git-dir"], {
+      stdout: "ignore",
+      stderr: "ignore",
+      stdin: "ignore",
+    });
+    return (await proc.exited) === 0;
   }
 
   async worktree(w: Worktree): Promise<MadeWorktree> {

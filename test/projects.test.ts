@@ -221,6 +221,13 @@ describe("starting a task", () => {
     expect(store.getTask(t.id)!.branch).toBeNull();
   });
 
+  test("a mapped checkout that is gone asks for its path again", async () => {
+    fake.gone.add("/src/api");
+    const t = codingTask("acme/api");
+    expect(await startTask(t.id)).toEqual({ type: "needs-repo-path", repo: "acme/api" });
+    expect(fake.worktrees).toHaveLength(0);
+  });
+
   test("starting again keeps a running claude's window", async () => {
     const t = codingTask();
     await startTask(t.id);

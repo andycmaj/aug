@@ -6,6 +6,7 @@
 import type { Engine } from "./engine";
 import { logger } from "./log";
 import { findProject, projectLine } from "./lookup";
+import { mux } from "./mux";
 import * as projects from "./projects";
 import * as store from "./store";
 import {
@@ -96,7 +97,13 @@ async function startCoding(
       throw new MoveError(err instanceof Error ? err.message : String(err));
     }
   }
-  if (args.repo && args.path) projects.mapRepo(args.repo.trim(), args.path);
+  // --path answers "needs path". It never moves a repo whose checkout is
+  // still there: a path an agent passes may be its own worktree, which goes.
+  if (args.repo && args.path) {
+    const mapped = projects.repoPath(args.repo.trim());
+    if (!mapped || !(await mux().isCheckout(mapped)))
+      projects.mapRepo(args.repo.trim(), args.path);
+  }
   task = store.getTask(task.id) ?? task;
   const prior = store.latestSession(task.id);
   const resume =

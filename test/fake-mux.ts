@@ -23,6 +23,8 @@ export class FakeMux implements Mux {
   removeFails: string | null = null;
   tagFails: string | null = null;
   branches = new Set<string>();
+  // Checkouts deleted after they were mapped.
+  gone = new Set<string>();
   private next = 0;
 
   async state(): Promise<MuxState> {
@@ -137,6 +139,10 @@ export class FakeMux implements Mux {
 
   async branchExists(_repoPath: string, branch: string): Promise<boolean> {
     return this.branches.has(branch);
+  }
+
+  async isCheckout(path: string): Promise<boolean> {
+    return !this.gone.has(path);
   }
 
   async worktree(w: Worktree): Promise<MadeWorktree> {

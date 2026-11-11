@@ -119,6 +119,29 @@ describe("start", () => {
     expect(store.getTask(task.id)!.worktree).toBeTruthy();
   });
 
+  test("--path never moves a repo whose checkout is still there", async () => {
+    const task = engine.newTask("Add a flag", Kind.coding);
+    const out = await engine.runMove("start", {
+      task: store.taskRef(task.id),
+      repo: "acme/api",
+      path: "/src/api.some-worktree",
+    });
+    expect(out.ok).toBe(true);
+    expect(fake.worktrees[0].repoPath).toBe("/src/api");
+  });
+
+  test("a mapped checkout that is gone asks for a path, and --path replaces it", async () => {
+    fake.gone.add("/src/api");
+    const task = engine.newTask("Add a flag", Kind.coding);
+    const ref = store.taskRef(task.id);
+    const out = await engine.runMove("start", { task: ref, repo: "acme/api" });
+    expect(out.ok).toBe(false);
+    expect(out.result).toContain("needs path");
+    const again = await engine.runMove("start", { task: ref, repo: "acme/api", path: "/src/api2" });
+    expect(again.ok).toBe(true);
+    expect(fake.worktrees[0].repoPath).toBe("/src/api2");
+  });
+
   test("scratch starts with no repo at all", async () => {
     const task = engine.newTask("Try a thing", Kind.coding);
     const out = await engine.runMove("start", {

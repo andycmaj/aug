@@ -193,7 +193,12 @@ export async function startTask(
   let task = store.getTask(taskId);
   if (!task) return { type: "failed", error: `no task ${taskId}` };
   const path = repoPath(task.repo);
-  if (task.repo && !path && !opts.noWorktree && !task.worktree)
+  if (
+    task.repo &&
+    !opts.noWorktree &&
+    !task.worktree &&
+    !(path && (await mux().isCheckout(path)))
+  )
     return { type: "needs-repo-path", repo: task.repo };
 
   try {
