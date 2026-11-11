@@ -436,6 +436,30 @@ export function addTurn(t: NewTurn): TurnRow {
   return getTurn(id)!;
 }
 
+// What search reads of the rail tasks' chats: what you typed and what the
+// agents answered. Incoming turns repeat their messages; aug's own notes are
+// noise.
+export type SearchTurn = Pick<
+  TurnRow,
+  "task_id" | "role" | "body" | "about" | "did" | "next"
+>;
+
+export function turnsForTasks(taskIds: number[]): Map<number, SearchTurn[]> {
+  const out = new Map<number, SearchTurn[]>();
+  const rows = all<SearchTurn>(
+    "SELECT task_id, role, body, about, did, next FROM turns WHERE task_id IN (SELECT value FROM json_each(?)) AND role IN (?, ?) ORDER BY started_at, id",
+    JSON.stringify(taskIds),
+    TurnRole.you,
+    TurnRole.agent,
+  );
+  for (const t of rows) {
+    const list = out.get(t.task_id);
+    if (list) list.push(t);
+    else out.set(t.task_id, [t]);
+  }
+  return out;
+}
+
 export function getTurn(id: number): TurnRow | null {
   return one<TurnRow>("SELECT * FROM turns WHERE id = ?", id);
 }

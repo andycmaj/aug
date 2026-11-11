@@ -2,11 +2,13 @@
 // kinds of words get their own reading, because they are how work is named
 // out loud: a task number (AUG-0023, 23), a GitHub number (#123), and a
 // person (@jane: whoever wrote on the thread in Slack or GitHub, or whom it
-// waits on). Everything else matches the title first, then the content.
+// waits on). Everything else matches the title first, then the content,
+// then the task's chat (what you typed, what its agent answered) last: agents
+// say a lot, and a word only they used is the weakest reason to show a row.
 
 import { SECTION_TITLES, type RailItem, type RailSection } from "./rail";
-import { taskRef } from "./store";
-import { Channel, Kind, type MessageRow } from "./types";
+import { taskRef, type SearchTurn } from "./store";
+import { Channel, Kind, TurnRole, type MessageRow } from "./types";
 
 interface Person {
   // null: a name typed by hand (waiting on), with no account behind it.
@@ -18,7 +20,15 @@ interface Person {
 interface Content {
   text: string;
   why: string;
+  // The chat: weaker than any field, and shown as a quote of where it hit.
+  chat?: boolean;
 }
+
+// A long agent turn is mostly read near its start; the rest is not worth
+// holding for every row each time the box opens.
+const TURN_CHARS = 4000;
+const QUOTE_BEFORE = 10;
+const QUOTE_CHARS = 28;
 
 export interface SearchDoc {
   item: RailItem;
@@ -86,10 +96,46 @@ export function titleOf(item: RailItem): string {
   }
 }
 
-// messages: what is filed to each task on the rail, for its people and words.
+function chatOf(turns: SearchTurn[]): Content[] {
+  return turns
+    .map((t) => ({
+      text: (t.role === TurnRole.agent
+        ? [t.about, t.did ?? t.body, t.next].filter(Boolean).join(" ")
+        : t.body
+      )
+        .slice(0, TURN_CHARS)
+        // Agents answer in markdown; a quote reads better without its marks.
+        .replace(/\*\*|`/g, ""),
+      why: t.role === TurnRole.you ? "you" : "agent",
+      chat: true,
+    }))
+    .filter((c) => c.text);
+}
+
+// The words around a hit, on one line.
+function quote(text: string, word: string): string {
+  const at = text.toLowerCase().indexOf(word);
+  // Slid back from the end so a short line shows whole.
+  const start = Math.max(
+    0,
+    Math.min(at - QUOTE_BEFORE, text.length - QUOTE_CHARS),
+  );
+  const cut = text
+    .slice(start, start + QUOTE_CHARS)
+    .replace(/\s+/g, " ")
+    .trim();
+  return `"${start > 0 ? "…" : ""}${cut}${start + QUOTE_CHARS < text.length ? "…" : ""}"`;
+}
+
+export interface SearchSources {
+  // What is filed to each task on the rail, for its people and words.
+  messages: Map<number, MessageRow[]>;
+  turns?: Map<number, SearchTurn[]>;
+}
+
 export function searchIndex(
   sections: RailSection[],
-  messages: Map<number, MessageRow[]>,
+  sources: SearchSources,
 ): SearchDoc[] {
   const docs: SearchDoc[] = [];
   for (const s of sections) {
@@ -103,7 +149,7 @@ export function searchIndex(
       switch (item.type) {
         case "task": {
           const t = item.task;
-          const filed = messages.get(t.id) ?? [];
+          const filed = sources.messages.get(t.id) ?? [];
           const people = filed.map(personOf).filter((p): p is Person => !!p);
           if (t.waiting_on)
             people.push({
@@ -133,6 +179,7 @@ export function searchIndex(
                 text: `${m.title} ${m.body}`,
                 why: `${m.channel} message`,
               })),
+              ...chatOf(sources.turns?.get(t.id) ?? []),
             ].filter((c) => c.text),
           });
           break;
@@ -267,7 +314,13 @@ function wordMatch(doc: SearchDoc, raw: string): Match | null {
       match = better(match, { score: 3, why: n.where });
   for (const c of doc.content) {
     const s = textScore(c.text, word);
-    if (s !== null) match = better(match, { score: 4 + s, why: c.why });
+    if (s === null) continue;
+    match = better(
+      match,
+      c.chat
+        ? { score: 7 + s, why: `${c.why}: ${quote(c.text, word)}` }
+        : { score: 4 + s, why: c.why },
+    );
   }
   return match;
 }

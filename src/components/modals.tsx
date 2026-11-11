@@ -24,7 +24,7 @@ import type { InfoSection } from "../core/info";
 import { actionText, describeAction } from "../core/outbound";
 import type { RailItem } from "../core/rail";
 import { search, searchIndex } from "../core/search";
-import { messagesForTasks, taskRef } from "../core/store";
+import { messagesForTasks, taskRef, turnsForTasks } from "../core/store";
 import { Kind, type DraftAction } from "../core/types";
 import { stateColor, stateGlyph } from "./connector-line";
 import { CHANNEL_WORD, dayClock } from "./ui";
@@ -381,7 +381,7 @@ export function InfoModal(props: {
 }
 
 const SEARCH_ROWS = 14;
-const SEARCH_HINT_MAX = 30;
+const SEARCH_HINT_MAX = 48;
 
 function searchTag(item: RailItem): string {
   switch (item.type) {
@@ -411,7 +411,10 @@ export function SearchModal(props: {
     const ids = sections
       .flatMap((s) => s.items)
       .flatMap((i) => (i.type === "task" ? [i.task.id] : []));
-    return searchIndex(sections, messagesForTasks(ids));
+    return searchIndex(sections, {
+      messages: messagesForTasks(ids),
+      turns: turnsForTasks(ids),
+    });
   });
   const nav = useListNavigation({
     itemCount: () => hits().length,
