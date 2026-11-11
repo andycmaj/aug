@@ -1,11 +1,11 @@
-// Every move the owner makes, once: the rail row, the table, the Board and
-// the palette all call these. They talk to the engine, open dialogs, and keep
-// the table moving (a row that leaves the rail hands the table to the next).
+// Every action the owner takes on a row, once: the rail, the table, the
+// Board and the palette all call these. They ask the desk, open dialogs,
+// toast the outcome, and keep the table moving (a row that leaves the rail
+// hands the table to the next). Starting an agent, the editor and the
+// embedded viewer each have a hook of their own beside this one.
 
-import { createEffect, createSignal, type Accessor, type JSX } from "solid-js";
-import { writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { homedir } from "node:os";
+import { createSignal, type Accessor, type JSX } from "solid-js";
+import { existsSync } from "node:fs";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
@@ -18,24 +18,23 @@ import {
   parseFiles,
   type MadeFile,
 } from "../core/files";
-import type { StartOptions } from "../core/driver";
 import { infoTitle, itemInfo } from "../core/info";
-import { actionText } from "../core/outbound";
-import { paths } from "../core/paths";
-import * as projects from "../core/projects";
-import { mapRepo } from "../core/repos";
+import { errorMessage } from "../core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt";
 import { loadConfig } from "../core/config";
 import { neighborKey, type RailItem } from "../core/rail";
 import * as store from "../core/store";
-import { Kind, Priority, SessionKind, type TaskRow } from "../core/types";
+import { Kind, Priority, type TaskRow } from "../core/types";
 import {
   ChoiceModal,
   ConfirmSendModal,
   InfoModal,
   PromptModal,
 } from "./modals";
-import type { ItemMoves } from "./moves";
+import type { TaskActions } from "./task-actions";
+import { useAgentStart } from "./use-agent-start";
+import { useEditor } from "./use-editor";
+import { useViewer } from "./use-viewer";
 
 export interface Dialogs {
   dialog: Accessor<(() => JSX.Element) | null>;
@@ -59,23 +58,14 @@ export function useDialogs(): Dialogs {
   };
 }
 
-const EDITOR_ID = "editor";
-
-// Both modes mount the actions; one viewer attach per task at a time.
-const attaching = new Set<number>();
-// Tasks whose window aug runs in (no viewer for those), told once.
-const refused = new Set<number>();
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 export function useActions(dialogs: Dialogs) {
   const aug = useAug();
   const terminals = useTerminals();
-  const { setActivePane } = useFocus();
   const { showToast } = useToast();
   const desk = aug.desk;
+  const editor = useEditor();
+  const { attachViewer } = useViewer();
+  const { startAgent } = useAgentStart(dialogs, attachViewer);
 
   // A row is about to leave the rail. On the table: the table walks on.
   // Only under the cursor: the cursor steps to a neighbor, the table stays.
@@ -92,158 +82,6 @@ export function useActions(dialogs: Dialogs) {
           key,
         ),
       );
-    }
-  }
-
-  // ── starting an agent ─────────────────────────────────────────────────
-
-  function showTask(taskId: number) {
-    if (aug.mode() === ViewMode.chat) {
-      aug.selectTask(taskId);
-      setActivePane("task");
-    }
-  }
-
-  // Start (or continue) the task's agent. The engine says what a coding
-  // start still needs; each need is one dialog, and the answer starts again.
-  async function startAgent(taskId: number, opts: StartOptions = {}) {
-    const task = store.getTask(taskId);
-    if (!task) return;
-    const coding = task.kind === Kind.coding;
-    if (coding && terminals.forTask(taskId)?.running) return showTask(taskId);
-    if (coding) showToast(`Starting ${store.taskRef(taskId)}...`);
-    const result = await desk.startAgent(taskId, opts);
-    switch (result.type) {
-      case "needs":
-        switch (result.need.what) {
-          case "repo":
-            return askRepo(task, result.need.choices, opts);
-          case "path":
-            return askRepoPath(task, result.need.repo, opts);
-          case "branch":
-            return askBranch(task, result.need.suggested, opts);
-        }
-      // falls through: every need returned above
-      case "failed":
-        showToast(`Could not start: ${result.error}`, 4000, "error");
-        return;
-      case "started":
-        if (!coding) {
-          showToast(`${store.taskRef(taskId)}: agent started`);
-          return;
-        }
-        await attachViewer(taskId);
-        showTask(taskId);
-    }
-  }
-
-  // A coding task you made has no repo: pick one, then the usual questions
-  // (where it is checked out, which branch) follow.
-  function askRepo(task: TaskRow, choices: string[], opts: StartOptions) {
-    const use = (repo: string) => {
-      try {
-        desk.setTaskRepo(task.id, repo);
-      } catch (err) {
-        showToast(errText(err), 4000, "error");
-        return;
-      }
-      void startAgent(task.id, opts);
-    };
-    dialogs.show(() => (
-      <ChoiceModal
-        title={`Which repo is ${store.taskRef(task.id)} in?`}
-        hint="It gets a worktree and a branch there."
-        choices={[
-          ...choices.map((repo) => ({ label: repo, run: () => use(repo) })),
-          {
-            label: "Another repo (owner/repo)...",
-            run: () =>
-              dialogs.show(() => (
-                <PromptModal
-                  title="Which repo?"
-                  hint="As GitHub names it: owner/repo."
-                  placeholder="andycmaj/aug"
-                  onSubmit={use}
-                  onClose={dialogs.close}
-                />
-              )),
-          },
-          {
-            label: "No repo: a scratch folder",
-            run: () => void startAgent(task.id, { ...opts, noWorktree: true }),
-          },
-        ]}
-        onClose={dialogs.close}
-      />
-    ));
-  }
-
-  // An unmapped repo: ask once where it lives; Esc works in scratch instead.
-  function askRepoPath(task: TaskRow, repo: string, opts: StartOptions) {
-    let submitted = false;
-    dialogs.show(() => (
-      <PromptModal
-        title={`Where is ${repo} checked out?`}
-        hint="Saved to config. Esc starts it in a scratch folder with no worktree."
-        placeholder="/path/to/checkout"
-        onSubmit={(path) => {
-          submitted = true;
-          mapRepo(repo, path.trim().replace(/^~/, homedir()));
-          void startAgent(task.id, opts);
-        }}
-        onClose={() => {
-          dialogs.close();
-          // onSubmit runs right after onClose; only a bare Esc gets here.
-          queueMicrotask(() => {
-            if (!submitted)
-              void startAgent(task.id, { ...opts, noWorktree: true });
-          });
-        }}
-      />
-    ));
-  }
-
-  function askBranch(task: TaskRow, suggested: string, opts: StartOptions) {
-    dialogs.show(() => (
-      <PromptModal
-        title={`Branch for ${store.taskRef(task.id)}`}
-        hint="A new branch gets a worktree of its own. An existing branch or pr:N works too."
-        initial={suggested}
-        onSubmit={(branch) =>
-          void startAgent(task.id, { ...opts, branch: branch.trim() || suggested })
-        }
-        onClose={dialogs.close}
-      />
-    ));
-  }
-
-  // The embedded terminal is a tmux client on the task's window; closing it
-  // detaches, and the claude keeps running.
-  async function attachViewer(taskId: number): Promise<boolean> {
-    if (terminals.forTask(taskId)?.running) return true;
-    if (attaching.has(taskId)) return false;
-    attaching.add(taskId);
-    try {
-      const viewer = await projects.viewerArgv(taskId);
-      if (viewer && "refused" in viewer) {
-        if (!refused.has(taskId)) showToast(viewer.refused, 6000, "error");
-        refused.add(taskId);
-        return false;
-      }
-      if (!viewer || terminals.forTask(taskId)?.running) return Boolean(viewer);
-      const { argv } = viewer;
-      const id = `view-${taskId}`;
-      terminals.close(id);
-      terminals.open({
-        id,
-        title: store.taskRef(taskId),
-        kind: "agent",
-        taskId,
-        argv,
-      });
-      return true;
-    } finally {
-      attaching.delete(taskId);
     }
   }
 
@@ -266,7 +104,7 @@ export function useActions(dialogs: Dialogs) {
               try {
                 showToast(`Hooks added to ${installHooks()}`);
               } catch (err) {
-                showToast(`Could not install: ${errText(err)}`, 4000, "error");
+                showToast(`Could not install: ${errorMessage(err)}`, 4000, "error");
               }
             },
           },
@@ -286,7 +124,7 @@ export function useActions(dialogs: Dialogs) {
           then?.(p.id);
           offerHooks();
         },
-        (err) => showToast(`Could not create: ${errText(err)}`, 4000, "error"),
+        (err) => showToast(`Could not create: ${errorMessage(err)}`, 4000, "error"),
       );
     dialogs.show(() => (
       <PromptModal
@@ -320,7 +158,7 @@ export function useActions(dialogs: Dialogs) {
     try {
       sessions = await desk.adoptableSessions();
     } catch (err) {
-      showToast(`tmux: ${errText(err)}`, 4000, "error");
+      showToast(`tmux: ${errorMessage(err)}`, 4000, "error");
       return;
     }
     if (sessions.length === 0) {
@@ -339,7 +177,7 @@ export function useActions(dialogs: Dialogs) {
                 showToast(`Project ${p.name}`);
                 offerHooks();
               },
-              (err) => showToast(`Could not adopt: ${errText(err)}`, 4000, "error"),
+              (err) => showToast(`Could not adopt: ${errorMessage(err)}`, 4000, "error"),
             ),
         }))}
         onClose={dialogs.close}
@@ -351,7 +189,7 @@ export function useActions(dialogs: Dialogs) {
     const move = (projectId: number) =>
       void desk.moveTask(task.id, projectId).then(
         () => showToast(`${store.taskRef(task.id)} moved`),
-        (err) => showToast(`Could not move: ${errText(err)}`, 4000, "error"),
+        (err) => showToast(`Could not move: ${errorMessage(err)}`, 4000, "error"),
       );
     const others = store.listProjects().filter((p) => p.id !== task.project_id);
     dialogs.show(() => (
@@ -383,7 +221,7 @@ export function useActions(dialogs: Dialogs) {
             run: () =>
               void desk.archiveProject(projectId).then(
                 () => showToast(`${project.name} archived`),
-                (err) => showToast(`Could not archive: ${errText(err)}`, 4000, "error"),
+                (err) => showToast(`Could not archive: ${errorMessage(err)}`, 4000, "error"),
               ),
           },
           { label: "Keep it", run: () => {} },
@@ -397,7 +235,7 @@ export function useActions(dialogs: Dialogs) {
     try {
       await desk.jumpToProject(projectId);
     } catch (err) {
-      showToast(`Could not jump: ${errText(err)}`, 4000, "error");
+      showToast(`Could not jump: ${errorMessage(err)}`, 4000, "error");
     }
   }
 
@@ -409,42 +247,17 @@ export function useActions(dialogs: Dialogs) {
           : "Its window is gone; s starts it again",
       );
     } catch (err) {
-      showToast(`Could not nudge: ${errText(err)}`, 4000, "error");
+      showToast(`Could not nudge: ${errorMessage(err)}`, 4000, "error");
     }
   }
 
   async function jumpTo(taskId: number) {
     try {
-      if (!(await projects.jump(taskId)))
+      if (!(await desk.jumpToTask(taskId)))
         showToast("Its window is gone; s starts it again");
     } catch (err) {
-      showToast(`Could not jump: ${errText(err)}`, 4000, "error");
+      showToast(`Could not jump: ${errorMessage(err)}`, 4000, "error");
     }
-  }
-
-  // $EDITOR in an embedded terminal on the table; done runs when it exits.
-  function openEditor(
-    file: string,
-    title: string,
-    done?: (code: number | null) => void,
-  ) {
-    aug.setMode(ViewMode.chat);
-    terminals.close(EDITOR_ID);
-    const editor = process.env.VISUAL ?? process.env.EDITOR ?? "vi";
-    terminals.open({
-      id: EDITOR_ID,
-      title,
-      kind: "editor",
-      argv: ["sh", "-c", `${editor} "$1"`, "editor", file],
-      onExit: (code) => {
-        // Before close: closing gives the table back, and what comes back
-        // may read what done leaves.
-        done?.(code);
-        terminals.close(EDITOR_ID);
-        setActivePane("task");
-      },
-    });
-    setTimeout(() => setActivePane("task"), 0);
   }
 
   // ── on a task ─────────────────────────────────────────────────────────
@@ -459,7 +272,7 @@ export function useActions(dialogs: Dialogs) {
     if (live?.running) terminals.close(live.id);
     void desk.stopAgent(task.id).then(
       () => showToast(`${store.taskRef(task.id)}: stopped and saved`),
-      (err) => showToast(`Could not stop: ${errText(err)}`, 4000, "error"),
+      (err) => showToast(`Could not stop: ${errorMessage(err)}`, 4000, "error"),
     );
   }
 
@@ -476,26 +289,9 @@ export function useActions(dialogs: Dialogs) {
           r.warnings.length ? 5000 : 2000,
           r.warnings.length ? "error" : "info",
         ),
-      (err) => showToast(`Closing: ${errText(err)}`, 4000, "error"),
+      (err) => showToast(`Closing: ${errorMessage(err)}`, 4000, "error"),
     );
   }
-
-  // Keeps the table's terminal in step with tmux: a live claude on the
-  // selected task gets a viewer, and a viewer whose claude ended goes.
-  createEffect(() => {
-    aug.version();
-    const item = aug.selected();
-    const task = item?.type === "task" ? item.task : null;
-    for (const term of terminals.list()) {
-      if (!term.id.startsWith("view-") || term.taskId === undefined) continue;
-      const latest = store.latestSession(term.taskId);
-      if (latest?.ended_at) terminals.close(term.id);
-    }
-    if (!task || task.kind !== Kind.coding) return;
-    const latest = store.latestSession(task.id);
-    if (latest?.kind !== SessionKind.tmux || latest.ended_at) return;
-    void attachViewer(task.id);
-  });
 
   function remind(task: TaskRow) {
     const pick = (label: string, days: number) => ({
@@ -596,39 +392,11 @@ export function useActions(dialogs: Dialogs) {
             .send(task.id)
             .then((receipt) => showToast(`Sent: ${receipt}`, 3000))
             .catch((err: unknown) =>
-              showToast(`Not sent: ${errText(err)}`, 6000, "error"),
+              showToast(`Not sent: ${errorMessage(err)}`, 6000, "error"),
             );
         }}
       />
     ));
-  }
-
-  function editDraft(task: TaskRow): false | void {
-    const pending = store.pendingAction(task.id);
-    if (!pending) return false;
-    const file = join(paths.drafts(), `${store.taskRef(task.id)}.md`);
-    writeFileSync(file, actionText(pending.action));
-    openEditor(file, `draft for ${store.taskRef(task.id)}`, () => {
-      if (!existsSync(file)) return;
-      const text = readFileSync(file, "utf8").trimEnd();
-      if (text && desk.editDraft(task.id, text)) showToast("Draft updated");
-    });
-  }
-
-  // The brief in $EDITOR, while the agent has not started from it yet.
-  function editBrief(task: TaskRow): false | void {
-    if (!desk.briefEditable(task.id)) return false;
-    const ref = store.taskRef(task.id);
-    const file = join(paths.drafts(), `${ref}-brief.md`);
-    writeFileSync(file, task.summary ? `${task.summary}\n` : "");
-    openEditor(file, `brief for ${ref}`, () => {
-      if (!existsSync(file)) return;
-      const text = readFileSync(file, "utf8").trim();
-      rmSync(file, { force: true });
-      if (text === task.summary.trim()) return;
-      if (desk.editBrief(task.id, text)) showToast(`${ref}: brief updated`);
-      else if (!text) showToast("An empty brief was not saved", 3000, "error");
-    });
   }
 
   function redraft(task: TaskRow) {
@@ -670,30 +438,6 @@ export function useActions(dialogs: Dialogs) {
     advanceFrom(item.key);
     if (item.type === "fyi") desk.readFyi(item.message.id);
     if (item.type === "idea") desk.dismissIdea(item.idea.id);
-  }
-
-  // Next on an FYI, an idea or an agent's finished result reads it: off the rail.
-  // The chat box in $EDITOR. Save and quit sends; quitting empty or with an
-  // error (vim's :cq) sends nothing and hands the text back to the box.
-  function compose(
-    task: TaskRow,
-    initial: string,
-    keep: (text: string) => void,
-  ) {
-    const file = join(paths.drafts(), `${store.taskRef(task.id)}-message.md`);
-    writeFileSync(file, initial);
-    openEditor(file, `a message on ${store.taskRef(task.id)}`, (code) => {
-      const text = existsSync(file)
-        ? readFileSync(file, "utf8").trimEnd()
-        : initial;
-      rmSync(file, { force: true });
-      if (code === 0 && text.trim()) {
-        say(task, text);
-        return;
-      }
-      keep(text);
-      setTimeout(() => setActivePane("input"), 0);
-    });
   }
 
   function walk(direction: 1 | -1) {
@@ -755,7 +499,7 @@ export function useActions(dialogs: Dialogs) {
         choices={Object.values(DocName).map((name) => ({
           label: name,
           hint: DOC_PURPOSE[name],
-          run: () => openEditor(docPath(name), name),
+          run: () => editor.openEditor(docPath(name), name),
         }))}
         onClose={dialogs.close}
       />
@@ -781,7 +525,7 @@ export function useActions(dialogs: Dialogs) {
     try {
       openTarget(target);
     } catch (err) {
-      showToast(`Could not open: ${errText(err)}`, 5000, "error");
+      showToast(`Could not open: ${errorMessage(err)}`, 5000, "error");
     }
   }
 
@@ -836,7 +580,7 @@ export function useActions(dialogs: Dialogs) {
       showToast("The agent has not made any files here");
       return;
     }
-    const edit = (f: MadeFile) => openEditor(f.path, f.name);
+    const edit = (f: MadeFile) => editor.openEditor(f.path, f.name);
     if (files.length === 1) {
       edit(files[0]);
       return;
@@ -869,11 +613,11 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
-  // The key handlers for an item, given how to find it.
-  function itemMoves(
+  // The key handlers for a row, given how to find it.
+  function taskActions(
     get: () => RailItem | null,
     typeInto: () => void,
-  ): ItemMoves {
+  ): TaskActions {
     // Home is a conversation, not work: only typing, start/stop and info
     // reach it.
     const onTask =
@@ -888,8 +632,8 @@ export function useActions(dialogs: Dialogs) {
     return {
       [Commands.SEND]: onTask(send),
       // Share e; each declines when the other applies.
-      [Commands.EDIT_DRAFT]: onTask(editDraft),
-      [Commands.EDIT_BRIEF]: onTask(editBrief),
+      [Commands.EDIT_DRAFT]: onTask(editor.editDraft),
+      [Commands.EDIT_BRIEF]: onTask(editor.editBrief),
       [Commands.REDRAFT]: onTask(redraft),
       [Commands.START]: onTask(start, true),
       [Commands.STOP]: onTask(stop, true),
@@ -950,18 +694,18 @@ export function useActions(dialogs: Dialogs) {
     moveToProject,
     archiveProject,
     jumpToProject,
-    openEditor,
+    openEditor: editor.openEditor,
     start,
     stop,
     done,
     send,
     say,
-    compose,
+    compose: editor.compose,
     walk,
     newTask,
     docs,
-    itemMoves,
-    editorId: EDITOR_ID,
+    taskActions,
+    editorId: editor.editorId,
   };
 }
 

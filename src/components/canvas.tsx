@@ -46,7 +46,7 @@ import * as store from "../core/store";
 import { AgentState, Kind, type TaskRow } from "../core/types";
 import { TerminalHost } from "./agent-terminal";
 import { ActionCard, ChatTurn } from "./chat-turn";
-import { unlessTyping, type ItemMoves } from "./moves";
+import { unlessTyping, type TaskActions } from "./task-actions";
 import { RAIL_WIDTH } from "./rail";
 import {
   Badge,
@@ -60,7 +60,7 @@ import {
 type Compose = (initial: string, keep: (text: string) => void) => void;
 
 export function Canvas(props: {
-  moves: ItemMoves;
+  actions: TaskActions;
   onSay: (text: string) => void;
   onCompose: Compose;
 }) {
@@ -101,7 +101,7 @@ export function Canvas(props: {
         [Commands.SCROLL_PAGEDOWN]: () => scrollRef?.scrollBy(0.8, "viewport"),
         [Commands.SCROLL_PAGEUP]: () => scrollRef?.scrollBy(-0.8, "viewport"),
         [Commands.BACK_TO_RAIL]: () => setActivePane("rail"),
-        ...props.moves,
+        ...props.actions,
       },
       () => isPaneFocused("input"),
     ),

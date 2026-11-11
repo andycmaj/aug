@@ -1,6 +1,6 @@
 // The work rail (sidebar): what still wants something from you, under its
 // headings, oldest first. Moving the cursor puts the row on the table; the
-// moves on a row work from here as from the table.
+// actions on a row work from here as from the table.
 
 import {
   createEffect,
@@ -40,7 +40,7 @@ function projectChip(projectId: number | null): string | null {
 import { AgentState, Kind } from "../core/types";
 import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
 import { ConnectorLine } from "./connector-line";
-import type { ItemMoves } from "./moves";
+import type { TaskActions } from "./task-actions";
 
 export const RAIL_WIDTH = 46;
 // A task under its project's row sits this much further in.
@@ -53,7 +53,7 @@ type Node =
   | { type: "section"; title: string; count: number }
   | { type: "item"; item: RailItem };
 
-export function Rail(props: { moves: ItemMoves }) {
+export function Rail(props: { actions: TaskActions }) {
   const aug = useAug();
   const theme = useTheme();
   const { isPaneFocused, setActivePane } = useFocus();
@@ -143,7 +143,7 @@ export function Rail(props: { moves: ItemMoves }) {
         const item = aug.cursorItem();
         if (item?.type === "project") aug.toggleFold(item.project.id);
       },
-      ...props.moves,
+      ...props.actions,
     },
     { target: () => pane },
   );

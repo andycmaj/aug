@@ -45,8 +45,8 @@ const isTask = (c: HelpCtx) => c.item === "task";
 // Home is a task row but not work: no done, later, kind or priority.
 const isWork = (c: HelpCtx) => isTask(c) && c.kind !== "home";
 
-// The moves on an item, the same from the rail row and from the table.
-const itemMoves: BindingSpec<HelpCtx>[] = [
+// The actions on a row, the same from the rail and from the table.
+const taskActions: BindingSpec<HelpCtx>[] = [
   {
     key: "y",
     cmd: Commands.SEND,
@@ -251,12 +251,12 @@ export const keymap: KeymapTable<HelpCtx> = {
       help: "fold",
       relevant: (c) => c.item === "project",
     },
-    ...itemMoves,
+    ...taskActions,
   ],
   task: [
     ...(navBindings() as BindingSpec<HelpCtx>[]),
     { key: "escape", cmd: Commands.BACK_TO_RAIL, desc: "back to the rail" },
-    ...quietWhileTyping(itemMoves),
+    ...quietWhileTyping(taskActions),
   ],
   input: [
     { key: "return", cmd: Commands.INPUT_SUBMIT, desc: "send (or take the @ suggestion)" },

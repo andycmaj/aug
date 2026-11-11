@@ -1,5 +1,5 @@
 // What both modes share: the app-wide keys, and the modals they open
-// (palette, help, connections, and whatever dialog a move asked for). Each mode has its own FocusProvider, so this runs once per mode.
+// (palette, help, connections, and whatever dialog an action asked for). Each mode has its own FocusProvider, so this runs once per mode.
 
 import { Show, type Accessor, type JSX } from "solid-js";
 import type { Renderable } from "@opentui/core";

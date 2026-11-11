@@ -37,18 +37,35 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   one-shot send call), or `mcp` (a stub). claude.ai connectors load only with
   `--setting-sources user`.
 - **The rail has a cursor and a table** (`cursorKey` and `selectedKey` in
-  `context/aug.tsx`). Rail keys act on the cursor row, table keys on the table
-  row, and `select()` moves both.
-- **The engine owns every owner move.** Components call
-  `components/actions.tsx`, which talks to the engine. Triage returns effects
-  and does not start agents itself.
+  `context/aug.tsx`). Task actions (`components/task-actions.ts`, the key
+  handlers on a row) act on the cursor row from the rail and on the table row
+  from the table, and `select()` moves both.
+- **The desk owns every owner move** (`core/desk.ts`): one method per thing
+  the owner can do, over the store, the lifecycle and the task's driver.
+  Components call `components/actions.tsx`, which asks the desk, opens
+  dialogs and toasts the outcome; `use-agent-start`, `use-editor` and
+  `use-viewer` beside it hold the start dialogs, $EDITOR and the embedded
+  viewer. Nothing in `components/` imports `core/projects`. The engine
+  (`core/engine.ts`) is what runs: pollers, timers, the moves drain and the
+  tmux watch; it owns a desk. Triage returns effects and does not start
+  agents itself.
+- **The agent lifecycle is `core/lifecycle.ts`.** Every change to a task's
+  `agent_state` or a session's state is one of its named transitions
+  (`sessionStarted`, `sessionActivity`, `sessionEnded`, `turnFinished`,
+  `workFinished`, `taskClosed`, ...). Nothing else writes those columns.
+- **A task's agent is behind `core/driver.ts`.** `ChatDriver` (the pool's
+  `claude -p` turns) and `TmuxDriver` (`projects.ts`) implement `start`,
+  `stop`, `close`, `deliver`, `wake` and `isLive`; the desk picks one by the
+  task's kind and nothing above the driver branches on it. What a coding
+  start still needs comes back as `needs: repo | path | branch`.
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `aug-tools move <verb>`, the Assistant's
-  prompt and the engine's dispatch. aug-tools inserts a `moves` row and waits;
-  the engine claims it on `data_version`, runs it, and writes one line back. A
-  new verb goes in the registry, nowhere else. A move that would open a dialog
-  answers `needs ...` in words instead. `AGENT_MOVES` is what a task's agent
-  may ask for.
+  prompt and the engine's dispatch, which runs each on the desk. aug-tools
+  inserts a `moves` row and waits; the engine claims it on `data_version`,
+  runs it, and writes one line back. A new verb goes in the registry, nowhere
+  else. A move that would open a dialog answers `needs ...` in words instead.
+  `AGENT_MOVES` is what a task's agent may ask for. "Move" means this bus; the
+  owner's keys are task actions.
 - **Home is a `kind: home` task** (`store.homeTask()`), and its agent is the
   Assistant (`core/assistant.ts`): a resumed `claude -p` allowed only
   `aug-tools`. `listTasks()` never returns it, so nothing that lists work

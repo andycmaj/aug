@@ -172,6 +172,16 @@ export class Desk {
     return projects.jumpToProject(projectId);
   }
 
+  // Your own tmux client, moved to the task's window.
+  jumpToTask(taskId: number) {
+    return projects.jump(taskId);
+  }
+
+  // argv for the embedded terminal on the task's window.
+  viewer(taskId: number) {
+    return projects.viewerArgv(taskId);
+  }
+
   // ── drafts ────────────────────────────────────────────────────────────
 
   async send(taskId: number): Promise<string> {

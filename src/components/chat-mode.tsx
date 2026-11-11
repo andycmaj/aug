@@ -31,10 +31,10 @@ export function ChatMode() {
 
   // A key on the rail acts on the row under the cursor; on the table, on the
   // row on the table.
-  const tableMoves = shell.actions.itemMoves(aug.selected, () =>
+  const tableActions = shell.actions.taskActions(aug.selected, () =>
     setActivePane("input"),
   );
-  const railMoves = shell.actions.itemMoves(aug.cursorItem, () => {
+  const railActions = shell.actions.taskActions(aug.cursorItem, () => {
     aug.select(aug.cursorKey());
     setActivePane("input");
   });
@@ -105,10 +105,10 @@ export function ChatMode() {
     >
       <box ref={shell.layoutRef} flexDirection="row" flexGrow={1}>
         <Show when={sidebarVisible()}>
-          <Rail moves={railMoves} />
+          <Rail actions={railActions} />
         </Show>
         <box flexDirection="column" flexGrow={1}>
-          <Canvas moves={tableMoves} onSay={onSay} onCompose={onCompose} />
+          <Canvas actions={tableActions} onSay={onSay} onCompose={onCompose} />
           <AugFooter ctx={ctx} left={sidebarVisible() ? RAIL_WIDTH + 2 : 0} />
           <box height={1} flexShrink={0} />
         </box>
