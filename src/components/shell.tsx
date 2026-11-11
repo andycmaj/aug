@@ -16,6 +16,7 @@ import {
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
+import { focusNext } from "../core/focus";
 import { useActions, useDialogs, type Actions, type Dialogs } from "./actions";
 import { SearchModal, StatusModal } from "./modals";
 import { RailLegend } from "./rail";
@@ -34,8 +35,8 @@ export function useShell(opts: {
 }): ShellApi {
   const renderer = useRenderer();
   const aug = useAug();
-  const { activeModal, openModal, closeModal, toggleSidebar, cyclePane } =
-    useFocus();
+  const focus = useFocus();
+  const { activeModal, openModal, closeModal, toggleSidebar } = focus;
   const { showToast } = useToast();
   const theme = useTheme();
   const dialogs = useDialogs();
@@ -75,7 +76,7 @@ export function useShell(opts: {
       [Commands.PALETTE_OPEN]: unlessTyping(() => openModal("palette")),
       [Commands.HELP_OPEN]: unlessTyping(() => openModal("help")),
       [Commands.SIDEBAR_TOGGLE]: toggleSidebar,
-      [Commands.FOCUS_NEXT]: cyclePane,
+      [Commands.FOCUS_NEXT]: () => focusNext(focus),
       [Commands.VIEW_TOGGLE]: unlessTyping(toggleView),
       [Commands.ASK_OPEN]: unlessTyping(aug.goHome),
       [Commands.NEW_TASK]: unlessTyping(actions.newTask),
