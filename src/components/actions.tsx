@@ -18,21 +18,17 @@ import {
   parseFiles,
   type MadeFile,
 } from "../core/files";
+import type { StartOptions } from "../core/driver";
 import { infoTitle, itemInfo } from "../core/info";
 import { actionText } from "../core/outbound";
 import { paths } from "../core/paths";
 import * as projects from "../core/projects";
+import { mapRepo } from "../core/repos";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt";
 import { loadConfig } from "../core/config";
 import { neighborKey, type RailItem } from "../core/rail";
 import * as store from "../core/store";
-import {
-  AgentState,
-  Kind,
-  Priority,
-  SessionKind,
-  type TaskRow,
-} from "../core/types";
+import { Kind, Priority, SessionKind, type TaskRow } from "../core/types";
 import {
   ChoiceModal,
   ConfirmSendModal,
@@ -99,43 +95,51 @@ export function useActions(dialogs: Dialogs) {
     }
   }
 
-  // ── coding terminals ──────────────────────────────────────────────────
+  // ── starting an agent ─────────────────────────────────────────────────
 
-  function startCoding(taskId: number, note?: string) {
+  function showTask(taskId: number) {
+    if (aug.mode() === ViewMode.chat) {
+      aug.selectTask(taskId);
+      setActivePane("task");
+    }
+  }
+
+  // Start (or continue) the task's agent. The engine says what a coding
+  // start still needs; each need is one dialog, and the answer starts again.
+  async function startAgent(taskId: number, opts: StartOptions = {}) {
     const task = store.getTask(taskId);
     if (!task) return;
-    const show = () => {
-      if (aug.mode() === ViewMode.chat) {
-        aug.selectTask(taskId);
-        setActivePane("task");
-      }
-    };
-    if (terminals.forTask(taskId)?.running) return show();
-    // Resuming never asks again: the first start settled repo and branch.
-    const resuming = store.latestSession(taskId)?.kind === SessionKind.tmux;
-    if (!engine.makesWorktrees || resuming)
-      return void launchCoding(taskId, { note });
-    if (!task.repo && !task.worktree) return askRepo(task, note);
-    const repoPath = projects.repoPath(task.repo);
-    if (task.repo && !repoPath && !task.worktree) return askRepoPath(task, note);
-    if (task.repo && repoPath && !task.worktree) {
-      dialogs.show(() => (
-        <PromptModal
-          title={`Branch for ${store.taskRef(taskId)}`}
-          hint="A new branch gets a worktree of its own. An existing branch or pr:N works too."
-          initial={task.branch ?? projects.defaultBranch(task)}
-          onSubmit={(branch) => void launchCoding(taskId, { note, branch })}
-          onClose={dialogs.close}
-        />
-      ));
-      return;
+    const coding = task.kind === Kind.coding;
+    if (coding && terminals.forTask(taskId)?.running) return showTask(taskId);
+    if (coding) showToast(`Starting ${store.taskRef(taskId)}...`);
+    const result = await engine.startAgent(taskId, opts);
+    switch (result.type) {
+      case "needs":
+        switch (result.need.what) {
+          case "repo":
+            return askRepo(task, result.need.choices, opts);
+          case "path":
+            return askRepoPath(task, result.need.repo, opts);
+          case "branch":
+            return askBranch(task, result.need.suggested, opts);
+        }
+      // falls through: every need returned above
+      case "failed":
+        showToast(`Could not start: ${result.error}`, 4000, "error");
+        return;
+      case "started":
+        if (!coding) {
+          showToast(`${store.taskRef(taskId)}: agent started`);
+          return;
+        }
+        await attachViewer(taskId);
+        showTask(taskId);
     }
-    void launchCoding(taskId, { note });
   }
 
   // A coding task you made has no repo: pick one, then the usual questions
   // (where it is checked out, which branch) follow.
-  function askRepo(task: TaskRow, note?: string) {
+  function askRepo(task: TaskRow, choices: string[], opts: StartOptions) {
     const use = (repo: string) => {
       try {
         engine.setTaskRepo(task.id, repo);
@@ -143,17 +147,14 @@ export function useActions(dialogs: Dialogs) {
         showToast(errText(err), 4000, "error");
         return;
       }
-      startCoding(task.id, note);
+      void startAgent(task.id, opts);
     };
     dialogs.show(() => (
       <ChoiceModal
         title={`Which repo is ${store.taskRef(task.id)} in?`}
         hint="It gets a worktree and a branch there."
         choices={[
-          ...projects.repoChoices(task).map((repo) => ({
-            label: repo,
-            run: () => use(repo),
-          })),
+          ...choices.map((repo) => ({ label: repo, run: () => use(repo) })),
           {
             label: "Another repo (owner/repo)...",
             run: () =>
@@ -169,7 +170,7 @@ export function useActions(dialogs: Dialogs) {
           },
           {
             label: "No repo: a scratch folder",
-            run: () => void launchCoding(task.id, { note, noWorktree: true }),
+            run: () => void startAgent(task.id, { ...opts, noWorktree: true }),
           },
         ]}
         onClose={dialogs.close}
@@ -178,58 +179,42 @@ export function useActions(dialogs: Dialogs) {
   }
 
   // An unmapped repo: ask once where it lives; Esc works in scratch instead.
-  function askRepoPath(task: TaskRow, note?: string) {
+  function askRepoPath(task: TaskRow, repo: string, opts: StartOptions) {
     let submitted = false;
     dialogs.show(() => (
       <PromptModal
-        title={`Where is ${task.repo} checked out?`}
+        title={`Where is ${repo} checked out?`}
         hint="Saved to config. Esc starts it in a scratch folder with no worktree."
         placeholder="/path/to/checkout"
         onSubmit={(path) => {
           submitted = true;
-          projects.mapRepo(task.repo!, path.trim().replace(/^~/, homedir()));
-          startCoding(task.id, note);
+          mapRepo(repo, path.trim().replace(/^~/, homedir()));
+          void startAgent(task.id, opts);
         }}
         onClose={() => {
           dialogs.close();
           // onSubmit runs right after onClose; only a bare Esc gets here.
           queueMicrotask(() => {
-            if (!submitted) void launchCoding(task.id, { note, noWorktree: true });
+            if (!submitted)
+              void startAgent(task.id, { ...opts, noWorktree: true });
           });
         }}
       />
     ));
   }
 
-  async function launchCoding(
-    taskId: number,
-    opts: { note?: string; branch?: string; noWorktree?: boolean },
-  ) {
-    const prior = store.latestSession(taskId);
-    const resume =
-      prior?.kind === SessionKind.pty || prior?.kind === SessionKind.tmux
-        ? prior.id
-        : undefined;
-    showToast(`Starting ${store.taskRef(taskId)}...`);
-    const result = await engine.startCoding(taskId, {
-      ...opts,
-      branch: opts.branch?.trim() || undefined,
-      resume,
-    });
-    if (result.type === "needs-repo-path") {
-      const task = store.getTask(taskId);
-      if (task) askRepoPath(task, opts.note);
-      return;
-    }
-    if (result.type === "failed") {
-      showToast(`Could not start: ${result.error}`, 4000, "error");
-      return;
-    }
-    await attachViewer(taskId);
-    if (aug.mode() === ViewMode.chat) {
-      aug.selectTask(taskId);
-      setActivePane("task");
-    }
+  function askBranch(task: TaskRow, suggested: string, opts: StartOptions) {
+    dialogs.show(() => (
+      <PromptModal
+        title={`Branch for ${store.taskRef(task.id)}`}
+        hint="A new branch gets a worktree of its own. An existing branch or pr:N works too."
+        initial={suggested}
+        onSubmit={(branch) =>
+          void startAgent(task.id, { ...opts, branch: branch.trim() || suggested })
+        }
+        onClose={dialogs.close}
+      />
+    ));
   }
 
   // The embedded terminal is a tmux client on the task's window; closing it
@@ -466,34 +451,23 @@ export function useActions(dialogs: Dialogs) {
 
   function start(task: TaskRow) {
     if (task.kind === Kind.home) return;
-    if (task.kind === Kind.coding) startCoding(task.id);
-    else {
-      engine.startGeneral(task.id);
-      showToast(`${store.taskRef(task.id)}: agent started`);
-    }
+    void startAgent(task.id);
   }
 
   function stop(task: TaskRow) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
-    if (task.kind === Kind.coding) {
-      void engine
-        .stopCoding(task.id)
-        .catch((err) => showToast(`Could not stop: ${errText(err)}`, 4000, "error"));
-    } else engine.stopAgent(task.id);
-    showToast(`${store.taskRef(task.id)}: stopped and saved`);
+    void engine.stopAgent(task.id).then(
+      () => showToast(`${store.taskRef(task.id)}: stopped and saved`),
+      (err) => showToast(`Could not stop: ${errText(err)}`, 4000, "error"),
+    );
   }
 
   function done(task: TaskRow) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
     advanceFrom(`t${task.id}`);
-    if (task.kind !== Kind.coding) {
-      engine.markDone(task.id);
-      showToast(`${store.taskRef(task.id)} done`);
-      return;
-    }
-    void engine.closeCoding(task.id).then(
+    void engine.close(task.id).then(
       (r) =>
         showToast(
           r.warnings.length
@@ -668,20 +642,9 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
+  // The engine records the line and hands it on; a coding claude gets it
+  // typed into its tmux window, which the embedded viewer shows.
   function say(task: TaskRow, text: string) {
-    const live = terminals.forTask(task.id);
-    if (live?.running) {
-      // Tell the agent: the line goes to its prompt as if typed.
-      terminals.write(live.id, text.replace(/\n/g, " "));
-      setTimeout(() => terminals.write(live.id, "\r"), 30);
-      store.addTurn({
-        taskId: task.id,
-        role: "you",
-        author: "you",
-        body: text,
-      });
-      return;
-    }
     void engine.say(task.id, text);
   }
 
@@ -764,7 +727,8 @@ export function useActions(dialogs: Dialogs) {
               const task = engine.newTask(title, kind);
               aug.setMode(ViewMode.chat);
               aug.selectTask(task.id);
-              if (kind === Kind.general) engine.startGeneral(task.id, title);
+              if (kind === Kind.general)
+                void engine.startAgent(task.id, { note: title });
             }}
             onClose={dialogs.close}
           />
@@ -978,7 +942,7 @@ export function useActions(dialogs: Dialogs) {
   }
 
   return {
-    startCoding,
+    startAgent,
     jumpTo,
     nudge,
     newProject,

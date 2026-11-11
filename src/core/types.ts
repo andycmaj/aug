@@ -208,8 +208,6 @@ export interface TurnRow {
 export const SessionKind = {
   // claude -p turns resumed by id: a general task's chat.
   chat: "chat",
-  // Interactive claude in an embedded terminal: a coding task.
-  pty: "pty",
   // Interactive claude in a window of the project's tmux session.
   tmux: "tmux",
 } as const;

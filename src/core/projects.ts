@@ -4,11 +4,11 @@
 
 import { homedir } from "node:os";
 import { codingCwd, codingLaunch, type CodingLaunch } from "./agents";
-import { loadConfig, saveConfig } from "./config";
 import { sessionEnded, sessionStarted, type SessionEnd } from "./lifecycle";
 import { logger } from "./log";
 import { mux, VIEWER_PREFIX, type MuxSession, type MuxState } from "./mux";
 import { paths } from "./paths";
+import { repoPath } from "./repos";
 import * as store from "./store";
 import {
   AgentState,
@@ -36,35 +36,6 @@ export function slug(text: string, max = 40): string {
 export function freeSessionName(base: string, taken: Set<string>): string {
   if (!taken.has(base)) return base;
   for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
-}
-
-export function repoPath(repo: string | null): string | null {
-  if (!repo) return null;
-  return loadConfig().github.repos[repo] ?? null;
-}
-
-export function mapRepo(repo: string, path: string): void {
-  const config = loadConfig();
-  saveConfig({
-    ...config,
-    github: { ...config.github, repos: { ...config.github.repos, [repo]: path } },
-  });
-}
-
-// A coding task you made yourself has no repo yet: offer its project's repos
-// first, then every mapped one.
-export function repoChoices(task: TaskRow): string[] {
-  const project = task.project_id ? store.getProject(task.project_id) : null;
-  const ours = project ? store.projectRepos(project) : [];
-  const mapped = Object.keys(loadConfig().github.repos);
-  return [...new Set([...ours, ...mapped])];
-}
-
-export function setTaskRepo(taskId: number, repo: string): void {
-  const clean = repo.trim();
-  if (!/^[\w.-]+\/[\w.-]+$/.test(clean))
-    throw new Error(`${clean || "that"} is not owner/repo`);
-  store.updateTask(taskId, { repo: clean });
 }
 
 // The env contract: every command aug spawns for a task carries these, so

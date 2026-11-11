@@ -192,7 +192,7 @@ describe("coding agent", () => {
     store.createSession({
       id: "s1",
       taskId: t.id,
-      kind: SessionKind.pty,
+      kind: SessionKind.tmux,
       cwd: "/tmp",
       startedBy: "aug",
     });

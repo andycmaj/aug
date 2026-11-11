@@ -18,13 +18,12 @@ import {
   moveTask,
   nudge,
   reconcile,
-  repoChoices,
-  setTaskRepo,
   slug,
   startTask,
   viewerArgv,
   watchTmux,
 } from "../src/core/projects";
+import { repoChoices, setTaskRepo } from "../src/core/repos";
 import * as store from "../src/core/store";
 import { AgentState, Kind, SessionKind } from "../src/core/types";
 import { FakeMux } from "./fake-mux";

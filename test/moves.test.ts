@@ -332,9 +332,9 @@ describe("making and placing tasks", () => {
     await engine.runMove("done", { task: store.taskRef(made.id) });
     expect(last().role).toBe("trigger");
     expect(last().body).toBe(`${store.taskRef(made.id)} marked done by you: Fill in JOB.md`);
-    // done again (closeCoding after the agent closed it) says nothing new
+    // done again (close after the agent closed it) says nothing new
     const count = store.turnsForTask(parent.id).length;
-    await engine.closeCoding(made.id);
+    await engine.close(made.id);
     expect(store.turnsForTask(parent.id)).toHaveLength(count);
   });
 
@@ -347,7 +347,7 @@ describe("making and placing tasks", () => {
       `${store.taskRef(made.id)} finished: Fill in JOB.md\nResult: JOB.md written; 3 sections`,
     );
     const count = store.turnsForTask(parent.id).length;
-    engine.markDone(made.id);
+    await engine.close(made.id);
     expect(store.turnsForTask(parent.id)).toHaveLength(count);
   });
 
@@ -358,7 +358,7 @@ describe("making and placing tasks", () => {
     expect(last().body).toBe(
       `${store.taskRef(made.id)} finished; it waits for the owner: Fill in JOB.md\nResult: PR opened`,
     );
-    engine.markDone(made.id);
+    await engine.close(made.id);
     expect(last().body).toBe(
       `${store.taskRef(made.id)} marked done by you: Fill in JOB.md\nResult: PR opened`,
     );
@@ -367,7 +367,7 @@ describe("making and placing tasks", () => {
   test("a task made from nothing tells no one", async () => {
     const made = engine.newTask("Alone", Kind.general);
     const before = store.listTasks().flatMap((t) => store.turnsForTask(t.id)).length;
-    engine.markDone(made.id);
+    await engine.close(made.id);
     expect(store.listTasks().flatMap((t) => store.turnsForTask(t.id)).length).toBe(before);
   });
 });

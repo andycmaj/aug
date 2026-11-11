@@ -8,21 +8,23 @@ import { AgentPool, type CodingLaunch } from "./agents";
 import { loadConfig } from "./config";
 import { dataVersion, now } from "./db";
 import { DocName, ensureDocs, readDoc, writeDoc } from "./docs";
+import {
+  Drivers,
+  type CloseResult,
+  type StartOptions,
+  type StartResult,
+} from "./driver";
 import { pollGithub } from "./ingest/github";
 import { errorMessage, logger } from "./log";
 import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
 import { slackTransport, type SlackTransport } from "./slack/transport";
 import { correct } from "./learn";
 import { nudgeText } from "./feedback";
-import {
-  holdForStart,
-  recoverAtBoot,
-  startCancelled,
-  taskClosed,
-} from "./lifecycle";
+import { holdForStart, recoverAtBoot, taskClosed } from "./lifecycle";
 import { drainMoves, runMove, type MoveOutcome } from "./moves";
 import * as projects from "./projects";
 import { editPending, sendPending, setSlackSender } from "./outbound";
+import { setTaskRepo } from "./repos";
 import * as store from "./store";
 import { triage, type TriageEffect } from "./triage";
 import {
@@ -86,6 +88,7 @@ const off = (detail: string): ConnectorStatus => ({
 
 export class Engine {
   readonly pool = new AgentPool();
+  readonly drivers: Drivers;
   private slack: SlackTransport | null = null;
   private timers: ReturnType<typeof setInterval>[] = [];
   private polling = new Set<string>();
@@ -96,7 +99,13 @@ export class Engine {
     advisor: off("not started"),
   };
 
-  constructor(private options: EngineOptions = {}) {}
+  constructor(private options: EngineOptions = {}) {
+    this.drivers = new Drivers({
+      pool: this.pool,
+      noWorktrees: options.noWorktrees,
+      launchOverride: options.launchOverride,
+    });
+  }
 
   onStatus(listener: (s: EngineStatus) => void): () => void {
     this.statusListeners.add(listener);
@@ -252,18 +261,16 @@ export class Engine {
 
   runEffects(effects: TriageEffect[]): void {
     for (const effect of effects) {
-      const session = store.latestSession(effect.taskId);
-      if (
-        effect.type === "agent-message" &&
-        (session?.kind === SessionKind.pty ||
-          session?.kind === SessionKind.tmux)
-      )
-        continue;
-      const reason =
-        effect.type === "agent-turn"
-          ? effect.reason
-          : "a new message joined the thread";
-      void this.pool.request(effect.taskId, reason, "aug");
+      const task = store.getTask(effect.taskId);
+      if (!task) continue;
+      this.drivers
+        .for(task)
+        .wake(
+          task,
+          effect.type === "agent-turn"
+            ? effect.reason
+            : "a new message joined the thread",
+        );
     }
   }
 
@@ -414,14 +421,12 @@ export class Engine {
   }
 
   // Typing always continues: same agent, same conversation, whether it is
-  // working, finished or stopped. A closed task's chat reopens it. A coding
-  // agent hears only what is typed into its window, so a line for a claude
-  // that is not running waits for the next start. True when the agent has
-  // it now.
+  // working, finished or stopped. A closed task's chat reopens it. The line
+  // is recorded as pending until the agent has it; a coding claude that is
+  // not running hears it at its next start. True when the agent has it now.
   async say(taskId: number, text: string): Promise<boolean> {
     const task = store.getTask(taskId);
     if (!task || !text.trim()) return false;
-    const coding = task.kind === Kind.coding;
     store.batch(() => {
       if (task.status !== TaskStatus.open) store.reopen(taskId);
       store.addTurn({
@@ -429,83 +434,42 @@ export class Engine {
         role: TurnRole.you,
         author: "you",
         body: text.trim(),
-        pending: coding,
+        pending: true,
       });
       store.updateTask(taskId, { unread_result: 0 });
     });
-    if (!coding) {
-      void this.pool.request(taskId, "the owner typed in the chat", "owner");
-      return true;
-    }
-    return this.deliverPending(taskId);
+    return this.drivers.for(task).deliver(task);
   }
 
-  // Claimed before sending, so two lines typed at once are sent once.
-  private async deliverPending(taskId: number): Promise<boolean> {
-    if (!(await projects.claudeWindow(taskId))) return false;
-    const turns = store.pendingTurns(taskId);
-    if (turns.length === 0) return true;
-    const ids = turns.map((t) => t.id);
-    store.setPending(ids, false);
-    try {
-      if (await projects.tell(taskId, turns.map((t) => t.body).join("\n\n")))
-        return true;
-    } catch (err) {
-      log.warn("tell failed", { task: taskId, err: errorMessage(err) });
-    }
-    store.setPending(ids, true);
-    return false;
+  // Start, or continue, the task's agent. What a coding start still needs
+  // comes back as `needs`; the caller asks the owner and calls again.
+  async startAgent(taskId: number, opts: StartOptions = {}): Promise<StartResult> {
+    const task = store.getTask(taskId);
+    if (!task) return { type: "failed", error: `no task ${taskId}` };
+    return this.drivers.for(task).start(task, opts);
   }
 
-  startGeneral(taskId: number, note?: string): void {
-    // Home's agent is the Assistant, which answers what the owner says. Start
-    // would run it with nothing new to answer.
-    if (store.getTask(taskId)?.kind === Kind.home) return;
-    if (note?.trim())
-      store.addTurn({
-        taskId,
-        role: TurnRole.you,
-        author: "you",
-        body: note.trim(),
-      });
-    void this.pool.request(
-      taskId,
-      note ? "the owner sent it with a note" : "the owner pressed Start",
-      "owner",
-    );
+  // The owner's Stop: saved, so Start resumes it.
+  async stopAgent(taskId: number): Promise<void> {
+    const task = store.getTask(taskId);
+    if (task) await this.drivers.for(task).stop(task);
   }
 
-  // A coding agent: a claude in a window of the task's project session.
-  // tmux owns it; the TUI only embeds a viewer on it. What the owner typed
-  // while claude was not running goes in with the note.
-  async startCoding(
-    taskId: number,
-    opts: Omit<projects.StartOptions, "launchOverride"> = {},
-  ): Promise<projects.StartResult> {
-    const pending = store.pendingTurns(taskId);
-    const note = [...pending.map((t) => t.body), opts.note?.trim()]
-      .filter(Boolean)
-      .join("\n\n");
-    const result = await projects.startTask(taskId, {
-      ...opts,
-      note: note || undefined,
-      noWorktree: opts.noWorktree || this.options.noWorktrees,
-      launchOverride: this.options.launchOverride,
-    });
-    if (result.type === "started")
-      store.setPending(
-        pending.map((t) => t.id),
-        false,
-      );
-    return result;
+  // Mark done: the task closes first, then its agent's leavings go (a
+  // coding task's window and worktree).
+  async close(taskId: number): Promise<CloseResult> {
+    const task = store.getTask(taskId);
+    if (!task) return { warnings: [], archived: false };
+    taskClosed(taskId);
+    return this.drivers.for(task).close(task);
+  }
+
+  // Whether an agent is at work on it now.
+  isLive(task: TaskRow): boolean {
+    return this.drivers.for(task).isLive(task);
   }
 
   // ── projects ──────────────────────────────────────────────────────────
-
-  // Fixture mode has no checkouts: no branch or repo questions.
-  get makesWorktrees(): boolean {
-    return !this.options.noWorktrees;
-  }
 
   // Fixture mode never touches your real settings (the hooks offer).
   get offline(): boolean {
@@ -529,7 +493,7 @@ export class Engine {
   }
 
   setTaskRepo(taskId: number, repo: string) {
-    projects.setTaskRepo(taskId, repo);
+    setTaskRepo(taskId, repo);
   }
 
   moveTask(taskId: number, projectId: number) {
@@ -543,16 +507,6 @@ export class Engine {
   // One line into the agent's window pointing it at its feedback.
   nudge(taskId: number): Promise<boolean> {
     return projects.nudge(taskId, nudgeText(taskId));
-  }
-
-  stopCoding(taskId: number): Promise<void> {
-    return projects.stopTask(taskId);
-  }
-
-  // Done with a coding task: its window and worktree go too.
-  async closeCoding(taskId: number): Promise<projects.CloseResult> {
-    this.markDone(taskId);
-    return projects.closeTask(taskId);
   }
 
   private watching: AbortController | null = null;
@@ -577,11 +531,6 @@ export class Engine {
     } catch (err) {
       log.warn("reconcile failed", { err: errorMessage(err) });
     }
-  }
-
-  stopAgent(taskId: number): void {
-    this.pool.stop(taskId);
-    startCancelled(taskId);
   }
 
   async send(taskId: number): Promise<string> {
@@ -611,11 +560,6 @@ export class Engine {
     );
     store.retirePendingActions(taskId);
     void this.say(taskId, `Redraft the reply: ${instruction}`);
-  }
-
-  markDone(taskId: number): void {
-    this.pool.stop(taskId);
-    taskClosed(taskId);
   }
 
   remind(taskId: number, days: number): string {
@@ -656,9 +600,9 @@ export class Engine {
       },
       this.learnedNotice,
     );
-    if (worked) taskClosed(taskId);
+    if (worked) void this.close(taskId);
     else {
-      this.pool.stop(taskId);
+      void this.drivers.for(task).stop(task);
       store.updateTask(taskId, {
         status: TaskStatus.dropped,
         closed_at: now(),

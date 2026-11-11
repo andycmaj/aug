@@ -7,7 +7,7 @@ import type { Engine } from "./engine";
 import { logger } from "./log";
 import { findProject, projectLine } from "./lookup";
 import { mux } from "./mux";
-import * as projects from "./projects";
+import * as repos from "./repos";
 import * as store from "./store";
 import {
   Kind,
@@ -78,10 +78,11 @@ function projectNamed(name: string): ProjectRow {
 }
 
 function checkRepo(repo: string): string {
-  const clean = repo.trim();
-  if (!/^[\w.-]+\/[\w.-]+$/.test(clean))
-    throw new MoveError(`${clean || "repo"} is not owner/repo`);
-  return clean;
+  try {
+    return repos.checkRepo(repo);
+  } catch (err) {
+    throw new MoveError(err instanceof Error ? err.message : String(err));
+  }
 }
 
 // The owner opens a link with the system opener, so only web addresses: a
@@ -94,59 +95,49 @@ function checkUrl(url: string): string {
   return clean;
 }
 
-// A coding start that would open a dialog in the TUI answers in words: the
-// caller asks the owner and calls again with what they said.
-async function startCoding(
+// A start that would open a dialog in the TUI answers in words: the caller
+// asks the owner and calls again with what they said. The branch question
+// is the TUI's; a move takes the suggested one.
+async function start(
   engine: Engine,
   task: TaskRow,
   args: Record<string, string>,
 ): Promise<string> {
-  if (args.repo) {
-    try {
-      engine.setTaskRepo(task.id, args.repo);
-    } catch (err) {
-      throw new MoveError(err instanceof Error ? err.message : String(err));
-    }
-  }
+  if (args.repo) engine.setTaskRepo(task.id, checkRepo(args.repo));
   // --path answers "needs path". It never moves a repo whose checkout is
   // still there: a path an agent passes may be its own worktree, which goes.
   if (args.repo && args.path) {
-    const mapped = projects.repoPath(args.repo.trim());
+    const mapped = repos.repoPath(args.repo.trim());
     if (!mapped || !(await mux().isCheckout(mapped)))
-      projects.mapRepo(args.repo.trim(), args.path);
+      repos.mapRepo(args.repo.trim(), args.path);
   }
-  task = store.getTask(task.id) ?? task;
-  const prior = store.latestSession(task.id);
-  const resume =
-    prior?.kind === SessionKind.pty || prior?.kind === SessionKind.tmux
-      ? prior.id
-      : undefined;
-  const scratch = args.scratch === "yes";
-  if (engine.makesWorktrees && !resume && !scratch && !task.worktree) {
-    if (!task.repo) {
-      const choices = projects.repoChoices(task);
-      throw new MoveError(
-        `needs repo: which repo is ${ref(task)} in? ${choices.length ? `Known: ${choices.join(", ")}. ` : ""}Pass --repo owner/repo, or --scratch yes for a scratch folder.`,
-      );
-    }
-    if (!projects.repoPath(task.repo))
-      throw new MoveError(
-        `needs path: where is ${task.repo} checked out? Pass --repo ${task.repo} --path /path/to/checkout, or --scratch yes.`,
-      );
-  }
-  const result = await engine.startCoding(task.id, {
+  const opts = {
     note: args.note || undefined,
     branch: args.branch?.trim() || undefined,
-    noWorktree: scratch,
-    resume,
-  });
+    noWorktree: args.scratch === "yes",
+  };
+  let result = await engine.startAgent(task.id, opts);
+  if (result.type === "needs" && result.need.what === "branch")
+    result = await engine.startAgent(task.id, { ...opts, branch: result.need.suggested });
   switch (result.type) {
     case "started":
-      return `started ${ref(task)}'s coding agent in project ${result.project.name}`;
-    case "needs-repo-path":
-      throw new MoveError(
-        `needs path: where is ${result.repo} checked out? Pass --repo ${result.repo} --path /path/to/checkout, or --scratch yes.`,
-      );
+      return result.project
+        ? `started ${ref(task)}'s coding agent in project ${result.project.name}`
+        : `started ${ref(task)}'s agent`;
+    case "needs":
+      switch (result.need.what) {
+        case "repo":
+          throw new MoveError(
+            `needs repo: which repo is ${ref(task)} in? ${result.need.choices.length ? `Known: ${result.need.choices.join(", ")}. ` : ""}Pass --repo owner/repo, or --scratch yes for a scratch folder.`,
+          );
+        case "path":
+          throw new MoveError(
+            `needs path: where is ${result.need.repo} checked out? Pass --repo ${result.need.repo} --path /path/to/checkout, or --scratch yes.`,
+          );
+        case "branch":
+          throw new MoveError(`needs branch: pass --branch`);
+      }
+    // falls through: the switch above always throws
     case "failed":
       throw new MoveError(`could not start ${ref(task)}: ${result.error}`);
   }
@@ -157,9 +148,11 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Mark the task done",
     task: true,
     args: {},
-    run(engine, task) {
-      engine.markDone(task!.id);
-      return `${ref(task)} marked done`;
+    async run(engine, task) {
+      const r = await engine.close(task!.id);
+      return r.warnings.length
+        ? `${ref(task)} marked done; ${r.warnings.join("; ")}`
+        : `${ref(task)} marked done`;
     },
   },
   remind: {
@@ -203,17 +196,15 @@ export const MOVES: Record<string, MoveSpec> = {
       scratch: { help: "coding: yes = a scratch folder, no worktree" },
     },
     run(engine, task, args) {
-      if (task!.kind === Kind.coding) return startCoding(engine, task!, args);
-      engine.startGeneral(task!.id, args.note || undefined);
-      return `started ${ref(task)}'s agent`;
+      return start(engine, task!, args);
     },
   },
   stop: {
     help: "Stop the task's agent and save",
     task: true,
     args: {},
-    run(engine, task) {
-      engine.stopAgent(task!.id);
+    async run(engine, task) {
+      await engine.stopAgent(task!.id);
       return `stopped ${ref(task)}'s agent`;
     },
   },

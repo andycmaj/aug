@@ -44,9 +44,9 @@ describe("task info", () => {
       url: "https://github.com/acme/api/issues/12",
       threadKey: "github:acme/api#12",
     });
-    store.createSession({ id: "old", taskId: t.id, kind: SessionKind.pty, cwd: "/a", startedBy: "owner" });
+    store.createSession({ id: "old", taskId: t.id, kind: SessionKind.tmux, cwd: "/a", startedBy: "owner" });
     store.updateSession("old", { started_at: "2020-01-01T00:00:00.000Z" });
-    store.createSession({ id: "s-new", taskId: t.id, kind: SessionKind.pty, cwd: "/repo", startedBy: "owner" });
+    store.createSession({ id: "s-new", taskId: t.id, kind: SessionKind.tmux, cwd: "/repo", startedBy: "owner" });
     const item = taskItem(store.getTask(t.id)!);
     expect(value(item, "repo")).toBe("acme/api");
     expect(value(item, "thread")).toBe("github:acme/api#12");

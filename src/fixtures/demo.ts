@@ -350,7 +350,7 @@ export function seedDemo(): void {
     store.createSession({
       id: `demo-pty-${csv}`,
       taskId: csv,
-      kind: SessionKind.pty,
+      kind: SessionKind.tmux,
       cwd: "/tmp",
       startedBy: "aug",
     });
