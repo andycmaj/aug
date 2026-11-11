@@ -411,13 +411,28 @@ describe("what an agent may ask for", () => {
     expect(theirs).toEqual({ ok: false, result: `an agent changes only its own task (${store.taskRef(mine.id)})` });
   });
 
-  test("starting, closing and projects stay the owner's", async () => {
+  test("it makes a project and a task in it", async () => {
     const mine = engine.newTask("mine", Kind.general);
     const by = `agent ${store.taskRef(mine.id)}`;
+    const project = await engine.runMove("project_new", { name: "2027-scaling-plan" }, by);
+    expect(project.ok).toBe(true);
+    const task = await engine.runMove(
+      "new",
+      { title: "create initial scaling challenges doc", project: "2027-scaling-plan", from: store.taskRef(mine.id) },
+      by,
+    );
+    expect(task.ok).toBe(true);
+    expect(task.result).toContain("in project 2027-scaling-plan");
+  });
+
+  test("starting, closing and archiving stay the owner's", async () => {
+    const mine = engine.newTask("mine", Kind.general);
+    const by = `agent ${store.taskRef(mine.id)}`;
+    await engine.runMove("project_new", { name: "x" });
     for (const [verb, args] of [
       ["done", { task: store.taskRef(mine.id) }],
       ["start", { task: store.taskRef(mine.id) }],
-      ["project_new", { name: "x" }],
+      ["project_archive", { project: "x" }],
     ] as const) {
       const out = await engine.runMove(verb, args, by);
       expect(out.ok).toBe(false);

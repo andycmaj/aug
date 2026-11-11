@@ -116,5 +116,8 @@ test("a general agent may run aug's lookups and the agent moves, nothing else", 
   const bash = generalAllow().filter((r) => r.includes("aug-tools.ts"));
   expect(bash.some((r) => r.endsWith("aug-tools.ts move new:*)"))).toBe(true);
   expect(bash.some((r) => r.endsWith("aug-tools.ts projects:*)"))).toBe(true);
-  expect(bash.some((r) => r.includes("move done") || r.includes("move start"))).toBe(false);
+  expect(bash.some((r) => r.endsWith("aug-tools.ts move project_new:*)"))).toBe(true);
+  expect(
+    bash.some((r) => ["move done", "move start", "move project_archive"].some((m) => r.includes(m))),
+  ).toBe(false);
 });

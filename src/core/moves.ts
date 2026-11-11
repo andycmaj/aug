@@ -419,11 +419,12 @@ export const MOVES: Record<string, MoveSpec> = {
   },
 };
 
-// What a task's own agent may ask for: new tasks anywhere, and small edits to
-// its own task. Starting, stopping and closing work stay the owner's and the
-// Assistant's.
+// What a task's own agent may ask for: new tasks and projects, and small edits
+// to its own task. Starting, stopping and closing work (and archiving a
+// project) stay the owner's and the Assistant's.
 export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "new",
+  "project_new",
   "retitle",
   "project",
   "wait_on",
