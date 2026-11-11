@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { linkByBranch } from "../src/core/engine";
+import { linkByBranch } from "../src/core/triage";
 import {
   formatFeedback,
   linkPr,

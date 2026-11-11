@@ -257,6 +257,19 @@ function ownAnswer(message: MessageRow, task: TaskRow | null): TriageOutcome {
   return { verdict: "own", taskId: task.id, reason: "you answered", effects };
 }
 
+// Gate: a PR whose head branch is a task's worktree branch is that task's
+// thread, so its reviews and CI land on the task instead of making a new one.
+export function linkByBranch(message: MessageRow): number | null {
+  if (message.channel !== "github") return null;
+  const meta = JSON.parse(message.meta) as { repo?: string; head?: string };
+  if (!meta.repo || !meta.head) return null;
+  const task = store.taskForBranch(meta.repo, meta.head);
+  if (!task || task.thread_key === message.thread_key) return null;
+  store.linkThread(task.id, message.thread_key);
+  if (!task.url && message.url) store.updateTask(task.id, { url: message.url });
+  return task.id;
+}
+
 const DM_THREAD = /:dm$/;
 
 export async function triage(message: MessageRow): Promise<TriageOutcome> {

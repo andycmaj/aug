@@ -1,43 +1,26 @@
 // The loop, in one place: something arrives, it gets a verdict, the verdict
 // decides who does the work, and whatever comes out waits for you. The engine
-// owns the pollers, the agent pool and the Advisor's clock, and every move
-// the owner makes (the buttons) goes through it so the TUI stays a view.
+// is what runs: the pollers, the agent pool, the Advisor's clock, the moves
+// drain and the tmux watch. The owner's moves themselves live on its desk.
 
 import { advisorDue, runAdvisor } from "./advisor";
 import { AgentPool, type CodingLaunch } from "./agents";
 import { loadConfig } from "./config";
 import { dataVersion, now } from "./db";
-import { DocName, ensureDocs, readDoc, writeDoc } from "./docs";
-import {
-  Drivers,
-  type CloseResult,
-  type StartOptions,
-  type StartResult,
-} from "./driver";
+import { Desk } from "./desk";
+import { ensureDocs } from "./docs";
+import { Drivers } from "./driver";
 import { pollGithub } from "./ingest/github";
 import { errorMessage, logger } from "./log";
 import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
 import { slackTransport, type SlackTransport } from "./slack/transport";
-import { correct } from "./learn";
-import { nudgeText } from "./feedback";
-import { holdForStart, recoverAtBoot, taskClosed } from "./lifecycle";
+import { recoverAtBoot } from "./lifecycle";
 import { drainMoves, runMove, type MoveOutcome } from "./moves";
 import * as projects from "./projects";
-import { editPending, sendPending, setSlackSender } from "./outbound";
-import { setTaskRepo } from "./repos";
+import { setSlackSender } from "./outbound";
 import * as store from "./store";
-import { triage, type TriageEffect } from "./triage";
-import {
-  AgentState,
-  Kind,
-  Priority,
-  SessionKind,
-  TaskStatus,
-  TurnRole,
-  Verdict,
-  type MessageRow,
-  type TaskRow,
-} from "./types";
+import { linkByBranch, triage, type TriageEffect } from "./triage";
+import { SessionKind, TaskStatus, type TaskRow } from "./types";
 
 export type ConnectorState = "off" | "polling" | "ok" | "error";
 
@@ -67,19 +50,6 @@ export interface EngineOptions {
 
 const log = logger("engine");
 
-// A PR whose head branch is a task's worktree branch is that task's thread,
-// so its reviews and CI land on the task instead of making a new one.
-export function linkByBranch(message: MessageRow): number | null {
-  if (message.channel !== "github") return null;
-  const meta = JSON.parse(message.meta) as { repo?: string; head?: string };
-  if (!meta.repo || !meta.head) return null;
-  const task = store.taskForBranch(meta.repo, meta.head);
-  if (!task || task.thread_key === message.thread_key) return null;
-  store.linkThread(task.id, message.thread_key);
-  if (!task.url && message.url) store.updateTask(task.id, { url: message.url });
-  return task.id;
-}
-
 const off = (detail: string): ConnectorStatus => ({
   state: "off",
   detail,
@@ -89,6 +59,7 @@ const off = (detail: string): ConnectorStatus => ({
 export class Engine {
   readonly pool = new AgentPool();
   readonly drivers: Drivers;
+  readonly desk: Desk;
   private slack: SlackTransport | null = null;
   private timers: ReturnType<typeof setInterval>[] = [];
   private polling = new Set<string>();
@@ -104,6 +75,11 @@ export class Engine {
       pool: this.pool,
       noWorktrees: options.noWorktrees,
       launchOverride: options.launchOverride,
+    });
+    this.desk = new Desk({
+      drivers: this.drivers,
+      offline: options.offline,
+      onLearned: options.onLearned,
     });
   }
 
@@ -223,7 +199,7 @@ export class Engine {
   async drainMoves(): Promise<number> {
     this.draining = true;
     try {
-      return await drainMoves(this);
+      return await drainMoves(this.desk);
     } finally {
       this.draining = false;
     }
@@ -234,7 +210,7 @@ export class Engine {
     args: Record<string, string>,
     by = "you",
   ): Promise<MoveOutcome> {
-    return runMove(this, verb, args, by);
+    return runMove(this.desk, verb, args, by);
   }
 
   // ── ingest ──────────────────────────────────────────────────────────────
@@ -384,131 +360,6 @@ export class Engine {
     return this.advisorTick(true);
   }
 
-  // ── the owner's moves ───────────────────────────────────────────────────
-
-  private learnedNotice = (line: string) => this.options.onLearned?.(line);
-
-  newTask(
-    title: string,
-    kind: Kind,
-    summary = "",
-    place: Pick<store.NewTask, "projectId" | "repo" | "fromTaskId"> = {},
-  ): TaskRow {
-    const task = store.createTask({
-      title,
-      kind,
-      summary,
-      channel: "owner",
-      ...place,
-    });
-    if (kind === Kind.coding) holdForStart(task.id);
-    return store.getTask(task.id) ?? task;
-  }
-
-  // The brief is what the agent starts from. Once it has started, a new
-  // brief would say something the agent never read: tell it instead.
-  briefEditable(taskId: number): boolean {
-    const task = store.getTask(taskId);
-    return (
-      Boolean(task) && task?.kind !== Kind.home && !store.latestSession(taskId)
-    );
-  }
-
-  editBrief(taskId: number, text: string): boolean {
-    if (!text.trim() || !this.briefEditable(taskId)) return false;
-    store.updateTask(taskId, { summary: text.trim() });
-    return true;
-  }
-
-  // Typing always continues: same agent, same conversation, whether it is
-  // working, finished or stopped. A closed task's chat reopens it. The line
-  // is recorded as pending until the agent has it; a coding claude that is
-  // not running hears it at its next start. True when the agent has it now.
-  async say(taskId: number, text: string): Promise<boolean> {
-    const task = store.getTask(taskId);
-    if (!task || !text.trim()) return false;
-    store.batch(() => {
-      if (task.status !== TaskStatus.open) store.reopen(taskId);
-      store.addTurn({
-        taskId,
-        role: TurnRole.you,
-        author: "you",
-        body: text.trim(),
-        pending: true,
-      });
-      store.updateTask(taskId, { unread_result: 0 });
-    });
-    return this.drivers.for(task).deliver(task);
-  }
-
-  // Start, or continue, the task's agent. What a coding start still needs
-  // comes back as `needs`; the caller asks the owner and calls again.
-  async startAgent(taskId: number, opts: StartOptions = {}): Promise<StartResult> {
-    const task = store.getTask(taskId);
-    if (!task) return { type: "failed", error: `no task ${taskId}` };
-    return this.drivers.for(task).start(task, opts);
-  }
-
-  // The owner's Stop: saved, so Start resumes it.
-  async stopAgent(taskId: number): Promise<void> {
-    const task = store.getTask(taskId);
-    if (task) await this.drivers.for(task).stop(task);
-  }
-
-  // Mark done: the task closes first, then its agent's leavings go (a
-  // coding task's window and worktree).
-  async close(taskId: number): Promise<CloseResult> {
-    const task = store.getTask(taskId);
-    if (!task) return { warnings: [], archived: false };
-    taskClosed(taskId);
-    return this.drivers.for(task).close(task);
-  }
-
-  // Whether an agent is at work on it now.
-  isLive(task: TaskRow): boolean {
-    return this.drivers.for(task).isLive(task);
-  }
-
-  // ── projects ──────────────────────────────────────────────────────────
-
-  // Fixture mode never touches your real settings (the hooks offer).
-  get offline(): boolean {
-    return Boolean(this.options.offline);
-  }
-
-  createProject(name: string, repo?: string | null) {
-    return projects.createProject({ name, repo });
-  }
-
-  adoptableSessions() {
-    return projects.adoptableSessions();
-  }
-
-  adoptSession(sessionId: string) {
-    return projects.adoptSession(sessionId);
-  }
-
-  archiveProject(projectId: number) {
-    return projects.archiveProject(projectId);
-  }
-
-  setTaskRepo(taskId: number, repo: string) {
-    setTaskRepo(taskId, repo);
-  }
-
-  moveTask(taskId: number, projectId: number) {
-    return projects.moveTask(taskId, projectId);
-  }
-
-  jumpToProject(projectId: number) {
-    return projects.jumpToProject(projectId);
-  }
-
-  // One line into the agent's window pointing it at its feedback.
-  nudge(taskId: number): Promise<boolean> {
-    return projects.nudge(taskId, nudgeText(taskId));
-  }
-
   private watching: AbortController | null = null;
 
   // One watch at a time; when it ends (no server yet, or it went away) the
@@ -533,204 +384,4 @@ export class Engine {
     }
   }
 
-  async send(taskId: number): Promise<string> {
-    return sendPending(taskId);
-  }
-
-  editDraft(taskId: number, text: string): boolean {
-    const before = editPending(taskId, text);
-    if (before === null) return false;
-    correct(
-      { taskId, what: "edited the draft before sending", before, after: text },
-      this.learnedNotice,
-    );
-    return true;
-  }
-
-  redraft(taskId: number, instruction: string): void {
-    const pending = store.pendingAction(taskId);
-    correct(
-      {
-        taskId,
-        what: "asked for a redraft",
-        before: pending?.turn.action ?? null,
-        note: instruction,
-      },
-      this.learnedNotice,
-    );
-    store.retirePendingActions(taskId);
-    void this.say(taskId, `Redraft the reply: ${instruction}`);
-  }
-
-  remind(taskId: number, days: number): string {
-    const at = new Date();
-    at.setDate(at.getDate() + Math.max(1, Math.round(days)));
-    at.setHours(7, 0, 0, 0);
-    store.remindAt(taskId, at.toISOString());
-    return at.toISOString();
-  }
-
-  watch(taskId: number, on: boolean): void {
-    store.setWatching(taskId, on);
-    correct(
-      {
-        taskId,
-        what: on
-          ? "Watch it: not mine, someone else handles it"
-          : "Stop watching: this is mine",
-      },
-      this.learnedNotice,
-    );
-  }
-
-  // Not a task: deleted if nothing was done on it, otherwise Mark done.
-  notATask(taskId: number, why = ""): void {
-    const task = store.getTask(taskId);
-    if (!task) return;
-    const worked = store
-      .turnsForTask(taskId)
-      .some((t) => t.role === TurnRole.agent || t.role === TurnRole.you);
-    correct(
-      {
-        taskId,
-        what: "Not a task: should have been FYI",
-        before: task.kind,
-        after: "fyi",
-        note: why || null,
-      },
-      this.learnedNotice,
-    );
-    if (worked) void this.close(taskId);
-    else {
-      void this.drivers.for(task).stop(task);
-      store.updateTask(taskId, {
-        status: TaskStatus.dropped,
-        closed_at: now(),
-        closed_by: "you",
-      });
-      for (const m of store.messagesForTask(taskId))
-        store.fileMessage(m.id, Verdict.fyi, "you said: not a task", null);
-    }
-  }
-
-  setPriority(taskId: number, priority: Priority): void {
-    const task = store.getTask(taskId);
-    if (!task || task.priority === priority) return;
-    store.updateTask(taskId, { priority, priority_pinned: 1 });
-    correct(
-      {
-        taskId,
-        what: "changed priority",
-        before: task.priority,
-        after: priority,
-      },
-      this.learnedNotice,
-    );
-  }
-
-  setKind(taskId: number, kind: Kind): void {
-    const task = store.getTask(taskId);
-    if (!task || task.kind === kind) return;
-    store.batch(() => {
-      store.updateTask(taskId, { kind });
-      if (kind === Kind.coding && task.agent_state === AgentState.none)
-        holdForStart(taskId);
-    });
-    correct(
-      {
-        taskId,
-        what: "changed what kind of work it is",
-        before: task.kind,
-        after: kind,
-      },
-      this.learnedNotice,
-    );
-  }
-
-  waitOn(taskId: number, who: string): void {
-    store.updateTask(taskId, { waiting_on: who.trim() || null });
-    store.addTurn({
-      taskId,
-      role: TurnRole.trigger,
-      body: who.trim()
-        ? `Waiting on ${who.trim()}`
-        : "No longer waiting on anyone",
-    });
-  }
-
-  readResult(taskId: number): void {
-    const task = store.getTask(taskId);
-    if (task?.unread_result) store.updateTask(taskId, { unread_result: 0 });
-  }
-
-  readFyi(messageId: number): void {
-    store.markMessageRead(messageId);
-  }
-
-  // An FYI that was work after all: it becomes a task and teaches triage.
-  fyiToTask(messageId: number): TaskRow | null {
-    const m = store.getMessage(messageId);
-    if (!m) return null;
-    const task = store.batch(() => {
-      const created = store.createTask({
-        title: m.title.slice(0, 120) || m.body.slice(0, 80),
-        summary: m.body.slice(0, 300),
-        kind: Kind.general,
-        threadKey: m.thread_key,
-        channel: m.channel,
-        url: m.url,
-        triageReason: "you made it a task",
-        createdAt: m.received_at,
-      });
-      store.fileMessage(
-        m.id,
-        Verdict.general,
-        "you made it a task",
-        created.id,
-      );
-      store.markMessageRead(m.id);
-      store.addTurn({
-        taskId: created.id,
-        role: TurnRole.incoming,
-        author: m.author_name,
-        body: m.body,
-        messageId: m.id,
-        startedAt: m.received_at,
-      });
-      return created;
-    });
-    correct(
-      {
-        messageId,
-        taskId: task.id,
-        what: "FYI was work: made it a task",
-        before: "fyi",
-        after: "general",
-      },
-      this.learnedNotice,
-    );
-    return task;
-  }
-
-  dismissIdea(ideaId: number): void {
-    store.setIdeaStatus(ideaId, "dismissed");
-  }
-
-  ideaToTask(ideaId: number): TaskRow | null {
-    const idea = store.openIdeas().find((i) => i.id === ideaId);
-    if (!idea) return null;
-    store.setIdeaStatus(ideaId, "tasked");
-    return this.newTask(idea.title, Kind.task, idea.body);
-  }
-
-  remember(line: string): void {
-    const text = readDoc(DocName.learned);
-    const marker = "## What you care about";
-    const at = text.indexOf(marker);
-    const next =
-      at === -1
-        ? `${text.trimEnd()}\n\n${marker}\n- ${line}\n`
-        : text.replace(marker, `${marker}\n- ${line}`);
-    writeDoc(DocName.learned, next);
-  }
 }

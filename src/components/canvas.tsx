@@ -341,7 +341,7 @@ function TaskChat(props: {
   // Shown until the agent starts from it; after that the chat carries on.
   const brief = createMemo((): string | null => {
     aug.version();
-    return aug.engine.briefEditable(props.task.id) ? props.task.summary : null;
+    return aug.desk.briefEditable(props.task.id) ? props.task.summary : null;
   });
   const hint = createMemo((): [string, string][] => {
     const t = props.task;

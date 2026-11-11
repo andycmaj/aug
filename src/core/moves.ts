@@ -1,9 +1,10 @@
 // Every move the Assistant or an agent can make, in one registry. aug-tools
-// reads it for its commands and help, the engine for its dispatch. A move from
+// reads it for its commands and help, the desk for its dispatch, which
+// runs each on its desk. A move from
 // another process goes through the `moves` table: aug-tools inserts it and
-// waits, the engine claims it, runs it, and writes back one line of result.
+// waits, the desk claims it, runs it, and writes back one line of result.
 
-import type { Engine } from "./engine";
+import type { Desk } from "./desk";
 import { logger } from "./log";
 import { findProject, projectLine } from "./lookup";
 import { mux } from "./mux";
@@ -39,7 +40,7 @@ export interface MoveSpec {
   positional?: string;
   args: Record<string, MoveArg>;
   run(
-    engine: Engine,
+    desk: Desk,
     task: TaskRow | null,
     args: Record<string, string>,
     // "you", "assistant", or "agent AUG-0012".
@@ -99,11 +100,11 @@ function checkUrl(url: string): string {
 // asks the owner and calls again with what they said. The branch question
 // is the TUI's; a move takes the suggested one.
 async function start(
-  engine: Engine,
+  desk: Desk,
   task: TaskRow,
   args: Record<string, string>,
 ): Promise<string> {
-  if (args.repo) engine.setTaskRepo(task.id, checkRepo(args.repo));
+  if (args.repo) desk.setTaskRepo(task.id, checkRepo(args.repo));
   // --path answers "needs path". It never moves a repo whose checkout is
   // still there: a path an agent passes may be its own worktree, which goes.
   if (args.repo && args.path) {
@@ -116,9 +117,9 @@ async function start(
     branch: args.branch?.trim() || undefined,
     noWorktree: args.scratch === "yes",
   };
-  let result = await engine.startAgent(task.id, opts);
+  let result = await desk.startAgent(task.id, opts);
   if (result.type === "needs" && result.need.what === "branch")
-    result = await engine.startAgent(task.id, { ...opts, branch: result.need.suggested });
+    result = await desk.startAgent(task.id, { ...opts, branch: result.need.suggested });
   switch (result.type) {
     case "started":
       return result.project
@@ -148,8 +149,8 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Mark the task done",
     task: true,
     args: {},
-    async run(engine, task) {
-      const r = await engine.close(task!.id);
+    async run(desk, task) {
+      const r = await desk.close(task!.id);
       return r.warnings.length
         ? `${ref(task)} marked done; ${r.warnings.join("; ")}`
         : `${ref(task)} marked done`;
@@ -159,11 +160,11 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Put the task away until a day: days from now (1 = tomorrow)",
     task: true,
     args: { days: { help: "days from now", required: true } },
-    run(engine, task, args) {
+    run(desk, task, args) {
       const days = Number(args.days);
       if (!Number.isFinite(days) || days < 1)
         throw new MoveError(`days must be a number from 1: got ${args.days}`);
-      const at = engine.remind(task!.id, days);
+      const at = desk.remind(task!.id, days);
       return `${ref(task)} back on ${at.slice(0, 10)}`;
     },
   },
@@ -171,8 +172,8 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Watch the task: not the owner's, kept open",
     task: true,
     args: {},
-    run(engine, task) {
-      engine.watch(task!.id, true);
+    run(desk, task) {
+      desk.watch(task!.id, true);
       return `watching ${ref(task)}`;
     },
   },
@@ -180,8 +181,8 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Stop watching: the task is the owner's again",
     task: true,
     args: {},
-    run(engine, task) {
-      engine.watch(task!.id, false);
+    run(desk, task) {
+      desk.watch(task!.id, false);
       return `${ref(task)} back in Tasks`;
     },
   },
@@ -195,16 +196,16 @@ export const MOVES: Record<string, MoveSpec> = {
       branch: { help: "coding: the branch (new, existing, or pr:N)" },
       scratch: { help: "coding: yes = a scratch folder, no worktree" },
     },
-    run(engine, task, args) {
-      return start(engine, task!, args);
+    run(desk, task, args) {
+      return start(desk, task!, args);
     },
   },
   stop: {
     help: "Stop the task's agent and save",
     task: true,
     args: {},
-    async run(engine, task) {
-      await engine.stopAgent(task!.id);
+    async run(desk, task) {
+      await desk.stopAgent(task!.id);
       return `stopped ${ref(task)}'s agent`;
     },
   },
@@ -212,8 +213,8 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Ask the task's agent for a different draft",
     task: true,
     args: { instruction: { help: "what to change", required: true } },
-    run(engine, task, args) {
-      engine.redraft(task!.id, args.instruction);
+    run(desk, task, args) {
+      desk.redraft(task!.id, args.instruction);
       return `asked for a redraft on ${ref(task)}`;
     },
   },
@@ -221,8 +222,8 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Not a task: drop it and teach triage",
     task: true,
     args: { why: { help: "why it is not a task" } },
-    run(engine, task, args) {
-      engine.notATask(task!.id, args.why ?? "");
+    run(desk, task, args) {
+      desk.notATask(task!.id, args.why ?? "");
       return `${ref(task)}: not a task`;
     },
   },
@@ -230,13 +231,13 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Set the task's priority",
     task: true,
     args: { level: { help: PRIORITIES.join(" | "), required: true } },
-    run(engine, task, args) {
+    run(desk, task, args) {
       const level = PRIORITIES.find((p) => p === args.level);
       if (!level)
         throw new MoveError(
           `level must be ${PRIORITIES.join(" | ")}: got ${args.level}`,
         );
-      engine.setPriority(task!.id, level);
+      desk.setPriority(task!.id, level);
       return `${ref(task)} is ${level}`;
     },
   },
@@ -244,8 +245,8 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Type a line into the task's chat for its agent",
     task: true,
     args: { text: { help: "the line", required: true } },
-    async run(engine, task, args) {
-      return (await engine.say(task!.id, args.text))
+    async run(desk, task, args) {
+      return (await desk.say(task!.id, args.text))
         ? `told ${ref(task)}'s agent`
         : `${ref(task)}'s agent is not running: it hears this when it starts`;
     },
@@ -262,7 +263,7 @@ export const MOVES: Record<string, MoveSpec> = {
       repo: { help: "coding: owner/repo (default: the project's first repo)" },
       from: { help: "the task this comes out of (AUG-0012); it hears back" },
     },
-    run(engine, _task, args, by) {
+    run(desk, _task, args, by) {
       const kind = args.kind ? kindNamed(args.kind) : Kind.general;
       const project = args.project ? projectNamed(args.project) : null;
       const repo = args.repo
@@ -274,7 +275,7 @@ export const MOVES: Record<string, MoveSpec> = {
       const from = fromId ? store.getTask(fromId) : null;
       if (args.from && !from) throw new MoveError(`no task ${args.from}`);
       const task = store.batch(() => {
-        const made = engine.newTask(args.title.trim(), kind, args.brief?.trim() ?? "", {
+        const made = desk.newTask(args.title.trim(), kind, args.brief?.trim() ?? "", {
           projectId: project?.id ?? null,
           repo,
           fromTaskId: from?.id ?? null,
@@ -315,12 +316,12 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Rewrite the task's brief, before its agent starts (after, tell it)",
     task: true,
     args: { text: { help: "the whole new brief", required: true } },
-    run(engine, task, args) {
-      if (!engine.briefEditable(task!.id))
+    run(desk, task, args) {
+      if (!desk.briefEditable(task!.id))
         throw new MoveError(
           `${ref(task)}'s agent already started from its brief: tell it what changed instead`,
         );
-      engine.editBrief(task!.id, args.text);
+      desk.editBrief(task!.id, args.text);
       return `${ref(task)}'s brief rewritten`;
     },
   },
@@ -328,9 +329,9 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Change what kind of work the task is",
     task: true,
     args: { kind: { help: KINDS.join(" | "), required: true } },
-    run(engine, task, args) {
+    run(desk, task, args) {
       const kind = kindNamed(args.kind);
-      engine.setKind(task!.id, kind);
+      desk.setKind(task!.id, kind);
       return `${ref(task)} is ${kind} work`;
     },
   },
@@ -338,11 +339,11 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Move the task into a project (a running agent's window moves too)",
     task: true,
     args: { project: { help: "the project's name", required: true } },
-    async run(engine, task, args) {
+    async run(desk, task, args) {
       const project = projectNamed(args.project);
       // A task that never started has no window to move or session to wake.
       if (store.latestSession(task!.id)?.kind === SessionKind.tmux)
-        await engine.moveTask(task!.id, project.id);
+        await desk.moveTask(task!.id, project.id);
       else store.updateTask(task!.id, { project_id: project.id });
       return `${ref(task)} is in project ${project.name}`;
     },
@@ -351,8 +352,8 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Mark the task waiting on someone (empty: no longer waiting)",
     task: true,
     args: { who: { help: "who it waits on" } },
-    run(engine, task, args) {
-      engine.waitOn(task!.id, args.who ?? "");
+    run(desk, task, args) {
+      desk.waitOn(task!.id, args.who ?? "");
       return args.who?.trim()
         ? `${ref(task)} waits on ${args.who.trim()}`
         : `${ref(task)} waits on nobody`;
@@ -400,12 +401,12 @@ export const MOVES: Record<string, MoveSpec> = {
       name: { help: "the project's name", required: true },
       repo: { help: "owner/repo its coding tasks work in" },
     },
-    async run(engine, _task, args) {
+    async run(desk, _task, args) {
       const taken = findProject(args.name);
       if (taken?.status === ProjectStatus.active)
         throw new MoveError(`there is already a project ${taken.name}`);
       const repo = args.repo ? checkRepo(args.repo) : null;
-      const project = await engine.createProject(args.name.trim(), repo);
+      const project = await desk.createProject(args.name.trim(), repo);
       return `made ${projectLine(project)}`;
     },
   },
@@ -431,7 +432,7 @@ export const MOVES: Record<string, MoveSpec> = {
       project: { help: "the project's name", required: true },
       force: { help: "yes = even with open tasks (ask the owner first)" },
     },
-    async run(engine, _task, args) {
+    async run(desk, _task, args) {
       const project = projectNamed(args.project);
       const open = store
         .tasksForProject(project.id)
@@ -440,7 +441,7 @@ export const MOVES: Record<string, MoveSpec> = {
         throw new MoveError(
           `${project.name} has ${open.length} open task${open.length === 1 ? "" : "s"} (${open.map((t) => ref(t)).join(", ")}); archiving ends their agents. Ask the owner, then pass --force yes.`,
         );
-      await engine.archiveProject(project.id);
+      await desk.archiveProject(project.id);
       return `archived ${project.name}`;
     },
   },
@@ -448,8 +449,8 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Write a line the owner said into LEARNED.md",
     task: false,
     args: { line: { help: "the line", required: true } },
-    run(engine, _task, args) {
-      engine.remember(args.line);
+    run(desk, _task, args) {
+      desk.remember(args.line);
       return "written to LEARNED.md";
     },
   },
@@ -480,7 +481,7 @@ export interface MoveOutcome {
 }
 
 export async function runMove(
-  engine: Engine,
+  desk: Desk,
   verb: string,
   args: Record<string, string>,
   by = "you",
@@ -516,7 +517,7 @@ export async function runMove(
   if (missing.length)
     return { ok: false, result: `${verb} needs ${missing.join(", ")}` };
   try {
-    return { ok: true, result: await spec.run(engine, task, args, by) };
+    return { ok: true, result: await spec.run(desk, task, args, by) };
   } catch (err) {
     if (err instanceof MoveError) return { ok: false, result: err.message };
     log.error("move failed", { verb, err });
@@ -531,7 +532,7 @@ export async function runMove(
 // rather than surprising the owner when aug next starts.
 export const MOVE_STALE_MS = 60_000;
 
-export async function drainMoves(engine: Engine, at = Date.now()): Promise<number> {
+export async function drainMoves(desk: Desk, at = Date.now()): Promise<number> {
   let ran = 0;
   for (const move of store.pendingMoves()) {
     if (at - Date.parse(move.created_at) > MOVE_STALE_MS) {
@@ -540,7 +541,7 @@ export async function drainMoves(engine: Engine, at = Date.now()): Promise<numbe
     }
     if (!store.claimMove(move.id)) continue;
     const args = JSON.parse(move.args) as Record<string, string>;
-    const outcome = await runMove(engine, move.verb, args, move.asked_by);
+    const outcome = await runMove(desk, move.verb, args, move.asked_by);
     log.info("move", {
       id: move.id,
       verb: move.verb,

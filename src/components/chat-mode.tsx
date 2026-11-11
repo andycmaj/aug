@@ -80,7 +80,7 @@ export function ChatMode() {
     const live =
       t.agent_state === AgentState.working ||
       Boolean(terminals.forTask(t.id)?.running) ||
-      aug.engine.pool.isRunning(t.id);
+      aug.desk.isLive(t);
     return {
       item: "task",
       kind: t.kind,
@@ -88,7 +88,7 @@ export function ChatMode() {
       live,
       coding: t.kind === Kind.coding,
       watching: Boolean(t.watching),
-      started: !aug.engine.briefEditable(t.id),
+      started: !aug.desk.briefEditable(t.id),
     };
   });
 

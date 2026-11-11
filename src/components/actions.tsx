@@ -75,7 +75,7 @@ export function useActions(dialogs: Dialogs) {
   const terminals = useTerminals();
   const { setActivePane } = useFocus();
   const { showToast } = useToast();
-  const engine = aug.engine;
+  const desk = aug.desk;
 
   // A row is about to leave the rail. On the table: the table walks on.
   // Only under the cursor: the cursor steps to a neighbor, the table stays.
@@ -112,7 +112,7 @@ export function useActions(dialogs: Dialogs) {
     const coding = task.kind === Kind.coding;
     if (coding && terminals.forTask(taskId)?.running) return showTask(taskId);
     if (coding) showToast(`Starting ${store.taskRef(taskId)}...`);
-    const result = await engine.startAgent(taskId, opts);
+    const result = await desk.startAgent(taskId, opts);
     switch (result.type) {
       case "needs":
         switch (result.need.what) {
@@ -142,7 +142,7 @@ export function useActions(dialogs: Dialogs) {
   function askRepo(task: TaskRow, choices: string[], opts: StartOptions) {
     const use = (repo: string) => {
       try {
-        engine.setTaskRepo(task.id, repo);
+        desk.setTaskRepo(task.id, repo);
       } catch (err) {
         showToast(errText(err), 4000, "error");
         return;
@@ -252,7 +252,7 @@ export function useActions(dialogs: Dialogs) {
   // The first project you make or adopt offers the hooks that pick up
   // claudes you start by hand. Asked once; `aug hooks` is there after.
   function offerHooks() {
-    if (engine.offline || hooksInstalled() || store.kvGet("hooks.offered"))
+    if (desk.offline || hooksInstalled() || store.kvGet("hooks.offered"))
       return;
     store.kvSet("hooks.offered", "1");
     dialogs.show(() => (
@@ -280,7 +280,7 @@ export function useActions(dialogs: Dialogs) {
   function newProject(then?: (projectId: number) => void) {
     const repos = Object.keys(loadConfig().github.repos);
     const create = (name: string, repo: string | null) =>
-      void engine.createProject(name, repo).then(
+      void desk.createProject(name, repo).then(
         (p) => {
           showToast(`Project ${p.name}: tmux session ${p.tmux_session}`);
           then?.(p.id);
@@ -316,9 +316,9 @@ export function useActions(dialogs: Dialogs) {
   }
 
   async function adoptProject() {
-    let sessions: Awaited<ReturnType<typeof engine.adoptableSessions>>;
+    let sessions: Awaited<ReturnType<typeof desk.adoptableSessions>>;
     try {
-      sessions = await engine.adoptableSessions();
+      sessions = await desk.adoptableSessions();
     } catch (err) {
       showToast(`tmux: ${errText(err)}`, 4000, "error");
       return;
@@ -334,7 +334,7 @@ export function useActions(dialogs: Dialogs) {
         choices={sessions.map((s) => ({
           label: s.name,
           run: () =>
-            void engine.adoptSession(s.id).then(
+            void desk.adoptSession(s.id).then(
               (p) => {
                 showToast(`Project ${p.name}`);
                 offerHooks();
@@ -349,7 +349,7 @@ export function useActions(dialogs: Dialogs) {
 
   function moveToProject(task: TaskRow) {
     const move = (projectId: number) =>
-      void engine.moveTask(task.id, projectId).then(
+      void desk.moveTask(task.id, projectId).then(
         () => showToast(`${store.taskRef(task.id)} moved`),
         (err) => showToast(`Could not move: ${errText(err)}`, 4000, "error"),
       );
@@ -381,7 +381,7 @@ export function useActions(dialogs: Dialogs) {
           {
             label: "Archive it",
             run: () =>
-              void engine.archiveProject(projectId).then(
+              void desk.archiveProject(projectId).then(
                 () => showToast(`${project.name} archived`),
                 (err) => showToast(`Could not archive: ${errText(err)}`, 4000, "error"),
               ),
@@ -395,7 +395,7 @@ export function useActions(dialogs: Dialogs) {
 
   async function jumpToProject(projectId: number) {
     try {
-      await engine.jumpToProject(projectId);
+      await desk.jumpToProject(projectId);
     } catch (err) {
       showToast(`Could not jump: ${errText(err)}`, 4000, "error");
     }
@@ -404,7 +404,7 @@ export function useActions(dialogs: Dialogs) {
   async function nudge(taskId: number) {
     try {
       showToast(
-        (await engine.nudge(taskId))
+        (await desk.nudge(taskId))
           ? `${store.taskRef(taskId)}: nudged`
           : "Its window is gone; s starts it again",
       );
@@ -457,7 +457,7 @@ export function useActions(dialogs: Dialogs) {
   function stop(task: TaskRow) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
-    void engine.stopAgent(task.id).then(
+    void desk.stopAgent(task.id).then(
       () => showToast(`${store.taskRef(task.id)}: stopped and saved`),
       (err) => showToast(`Could not stop: ${errText(err)}`, 4000, "error"),
     );
@@ -467,7 +467,7 @@ export function useActions(dialogs: Dialogs) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
     advanceFrom(`t${task.id}`);
-    void engine.close(task.id).then(
+    void desk.close(task.id).then(
       (r) =>
         showToast(
           r.warnings.length
@@ -502,7 +502,7 @@ export function useActions(dialogs: Dialogs) {
       label,
       run: () => {
         advanceFrom(`t${task.id}`);
-        const at = engine.remind(task.id, days);
+        const at = desk.remind(task.id, days);
         showToast(`Back ${new Date(at).toDateString()}`);
       },
     });
@@ -524,7 +524,7 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function watch(task: TaskRow) {
-    engine.watch(task.id, !task.watching);
+    desk.watch(task.id, !task.watching);
     showToast(
       task.watching ? "Back in Tasks" : "Watching: not yours, kept open",
     );
@@ -532,7 +532,7 @@ export function useActions(dialogs: Dialogs) {
 
   function notATask(task: TaskRow) {
     advanceFrom(`t${task.id}`);
-    engine.notATask(task.id);
+    desk.notATask(task.id);
     showToast("Not a task: triage will learn from it");
   }
 
@@ -543,7 +543,7 @@ export function useActions(dialogs: Dialogs) {
       Priority.urgent,
     ];
     const next = order[(order.indexOf(task.priority) + 1) % order.length];
-    engine.setPriority(task.id, next);
+    desk.setPriority(task.id, next);
     showToast(`${store.taskRef(task.id)} is ${next}`);
   }
 
@@ -551,7 +551,7 @@ export function useActions(dialogs: Dialogs) {
     const pick = (kind: Kind, hint: string) => ({
       label: kind,
       hint,
-      run: () => engine.setKind(task.id, kind),
+      run: () => desk.setKind(task.id, kind),
     });
     dialogs.show(() => (
       <ChoiceModal
@@ -575,7 +575,7 @@ export function useActions(dialogs: Dialogs) {
         hint="The task waits on them, and comes back when they answer. Empty clears it."
         placeholder="Who is it waiting on?"
         initial={task.waiting_on ?? ""}
-        onSubmit={(who) => engine.waitOn(task.id, who)}
+        onSubmit={(who) => desk.waitOn(task.id, who)}
         onClose={dialogs.close}
       />
     ));
@@ -592,7 +592,7 @@ export function useActions(dialogs: Dialogs) {
         action={pending.action}
         onClose={dialogs.close}
         onSend={() => {
-          engine
+          desk
             .send(task.id)
             .then((receipt) => showToast(`Sent: ${receipt}`, 3000))
             .catch((err: unknown) =>
@@ -611,13 +611,13 @@ export function useActions(dialogs: Dialogs) {
     openEditor(file, `draft for ${store.taskRef(task.id)}`, () => {
       if (!existsSync(file)) return;
       const text = readFileSync(file, "utf8").trimEnd();
-      if (text && engine.editDraft(task.id, text)) showToast("Draft updated");
+      if (text && desk.editDraft(task.id, text)) showToast("Draft updated");
     });
   }
 
   // The brief in $EDITOR, while the agent has not started from it yet.
   function editBrief(task: TaskRow): false | void {
-    if (!engine.briefEditable(task.id)) return false;
+    if (!desk.briefEditable(task.id)) return false;
     const ref = store.taskRef(task.id);
     const file = join(paths.drafts(), `${ref}-brief.md`);
     writeFileSync(file, task.summary ? `${task.summary}\n` : "");
@@ -626,7 +626,7 @@ export function useActions(dialogs: Dialogs) {
       const text = readFileSync(file, "utf8").trim();
       rmSync(file, { force: true });
       if (text === task.summary.trim()) return;
-      if (engine.editBrief(task.id, text)) showToast(`${ref}: brief updated`);
+      if (desk.editBrief(task.id, text)) showToast(`${ref}: brief updated`);
       else if (!text) showToast("An empty brief was not saved", 3000, "error");
     });
   }
@@ -636,7 +636,7 @@ export function useActions(dialogs: Dialogs) {
       <PromptModal
         title="Ask for a different draft"
         placeholder="What should change? (shorter, mention the deadline...)"
-        onSubmit={(text) => engine.redraft(task.id, text)}
+        onSubmit={(text) => desk.redraft(task.id, text)}
         onClose={dialogs.close}
       />
     ));
@@ -645,20 +645,20 @@ export function useActions(dialogs: Dialogs) {
   // The engine records the line and hands it on; a coding claude gets it
   // typed into its tmux window, which the embedded viewer shows.
   function say(task: TaskRow, text: string) {
-    void engine.say(task.id, text);
+    void desk.say(task.id, text);
   }
 
   // ── on an FYI / an idea ───────────────────────────────────────────────
 
   function makeTask(item: RailItem) {
     if (item.type === "fyi") {
-      const task = engine.fyiToTask(item.message.id);
+      const task = desk.fyiToTask(item.message.id);
       if (task) {
         aug.selectTask(task.id);
         showToast(`${store.taskRef(task.id)}: it was work; triage will learn`);
       }
     } else if (item.type === "idea") {
-      const task = engine.ideaToTask(item.idea.id);
+      const task = desk.ideaToTask(item.idea.id);
       if (task) {
         aug.selectTask(task.id);
         showToast(`${store.taskRef(task.id)} on your list`);
@@ -668,8 +668,8 @@ export function useActions(dialogs: Dialogs) {
 
   function dismiss(item: RailItem) {
     advanceFrom(item.key);
-    if (item.type === "fyi") engine.readFyi(item.message.id);
-    if (item.type === "idea") engine.dismissIdea(item.idea.id);
+    if (item.type === "fyi") desk.readFyi(item.message.id);
+    if (item.type === "idea") desk.dismissIdea(item.idea.id);
   }
 
   // Next on an FYI, an idea or an agent's finished result reads it: off the rail.
@@ -699,10 +699,10 @@ export function useActions(dialogs: Dialogs) {
   function walk(direction: 1 | -1) {
     const current = aug.selected();
     if (direction === 1 && current) {
-      if (current.type === "fyi") engine.readFyi(current.message.id);
-      if (current.type === "idea") engine.dismissIdea(current.idea.id);
+      if (current.type === "fyi") desk.readFyi(current.message.id);
+      if (current.type === "idea") desk.dismissIdea(current.idea.id);
       if (current.type === "task" && current.task.unread_result)
-        engine.readResult(current.task.id);
+        desk.readResult(current.task.id);
     }
     const key = aug.walk(direction);
     if (!key)
@@ -724,11 +724,11 @@ export function useActions(dialogs: Dialogs) {
               kind === Kind.task ? "What do you need to do?" : "What's the job?"
             }
             onSubmit={(title) => {
-              const task = engine.newTask(title, kind);
+              const task = desk.newTask(title, kind);
               aug.setMode(ViewMode.chat);
               aug.selectTask(task.id);
               if (kind === Kind.general)
-                void engine.startAgent(task.id, { note: title });
+                void desk.startAgent(task.id, { note: title });
             }}
             onClose={dialogs.close}
           />

@@ -13,6 +13,7 @@ import {
 import { createRequiredContext } from "@andycmaj/opentui-app";
 import { coalesce } from "../core/coalesce";
 import { dataVersion } from "../core/db";
+import type { Desk } from "../core/desk";
 import { Engine, type EngineStatus } from "../core/engine";
 import { boardColumnOf, BoardColumn, type LaneFacts } from "../core/lanes";
 import {
@@ -33,6 +34,8 @@ export type ViewMode = (typeof ViewMode)[keyof typeof ViewMode];
 
 interface AugContextValue {
   engine: Engine;
+  // The owner's moves: what the keys and the palette call.
+  desk: Desk;
   version: Accessor<number>;
   status: Accessor<EngineStatus>;
   now: Accessor<Date>;
@@ -275,6 +278,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     <AugContext.Provider
       value={{
         engine,
+        desk: engine.desk,
         version,
         status,
         now,

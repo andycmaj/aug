@@ -99,7 +99,7 @@ describe("Home", () => {
   test("Start on Home does nothing: the Assistant answers only what you say", async () => {
     const { Engine } = await import("../src/core/engine");
     const home = store.homeTask();
-    void new Engine().startAgent(home.id);
+    void new Engine().desk.startAgent(home.id);
     await Bun.sleep(10);
     expect(calls).toHaveLength(0);
     expect(store.turnsForTask(home.id)).toHaveLength(0);
