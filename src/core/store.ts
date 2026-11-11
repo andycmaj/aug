@@ -88,7 +88,7 @@ export function taskRef(id: number): string {
 }
 
 export function parseTaskRef(ref: string): number | null {
-  const m = ref.trim().match(/^(?:aug-)?0*(\d+)$/i);
+  const m = ref.trim().match(/^@?(?:aug-)?0*(\d+)$/i);
   return m ? Number(m[1]) : null;
 }
 

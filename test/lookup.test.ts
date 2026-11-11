@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { mentionedTasks } from "../src/core/assistant";
-import { findProject, mentionAt, suggestTasks } from "../src/core/lookup";
+import { mentionedProjects, mentionedTasks } from "../src/core/assistant";
+import {
+  findProject,
+  type Mention,
+  mentionAt,
+  mentionRef,
+  suggestMentions,
+} from "../src/core/lookup";
 import * as store from "../src/core/store";
-import { Kind, TaskStatus } from "../src/core/types";
+import { Kind, ProjectStatus, TaskStatus } from "../src/core/types";
 import { freshHome } from "./helpers";
 
 beforeEach(() => freshHome());
@@ -10,6 +16,14 @@ beforeEach(() => freshHome());
 function task(title: string) {
   return store.createTask({ title, kind: Kind.general, channel: "owner" });
 }
+
+function project(name: string) {
+  return store.createProject({ name, tmuxSession: name.replace(/ /g, "-") });
+}
+
+const suggestTasks = (query: string) =>
+  suggestMentions(query).flatMap((m) => (m.type === "task" ? [m.task] : []));
+const refs = (query: string) => suggestMentions(query).map(mentionRef);
 
 describe("@ mentions", () => {
   test("the query is the @word left of the cursor", () => {
@@ -44,6 +58,47 @@ describe("@ mentions", () => {
     store.homeTask();
     task("Home page copy");
     expect(suggestTasks("").map((t) => t.title)).toEqual(["Home page copy"]);
+  });
+
+  test("projects are offered by name, tasks first when they match as well", () => {
+    const fix = task("Fix the build");
+    project("fixtures");
+    project("aug bootstrap");
+    const old = project("augury");
+    store.updateProject(old.id, { status: ProjectStatus.archived });
+    expect(refs("fix")).toEqual([store.taskRef(fix.id), "fixtures"]);
+    expect(refs("boot")).toEqual(["aug-bootstrap"]);
+    // A whole name beats a name it begins.
+    expect(refs("fixtures")).toEqual(["fixtures"]);
+    // A number is a task ref, never a project.
+    expect(refs(String(fix.id))).toEqual([store.taskRef(fix.id)]);
+    // "aug" may be a ref on its way; a project it begins comes first.
+    expect(refs("aug")).toEqual(["aug-bootstrap", store.taskRef(fix.id)]);
+  });
+
+  test("a project's ref finds it again, whatever its name holds", () => {
+    const p = project("Q4: ledger & export");
+    const m: Mention = { type: "project", project: p };
+    expect(mentionRef(m)).toBe("Q4-ledger-export");
+    expect(mentionAt(`about @${mentionRef(m)}`)?.query).toBe(mentionRef(m));
+    expect(findProject(mentionRef(m))?.id).toBe(p.id);
+  });
+
+  test("a ref copied with its @ still names what it named", () => {
+    const t = task("Fix the build");
+    const p = project("aug bootstrap");
+    expect(store.parseTaskRef(`@${store.taskRef(t.id)}`)).toBe(t.id);
+    expect(findProject("@aug-bootstrap")?.id).toBe(p.id);
+  });
+
+  test("the Assistant reads back the projects a message names", () => {
+    const a = project("aug bootstrap");
+    project("ledger");
+    expect(
+      mentionedProjects("move it to @aug-bootstrap, not @nothing or ledger").map(
+        (p) => p.id,
+      ),
+    ).toEqual([a.id]);
   });
 
   test("the Assistant reads back the tasks a message names", () => {

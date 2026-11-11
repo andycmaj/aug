@@ -172,8 +172,8 @@ does the work, and whatever comes out waits for you.
   ideas on the rail. It also marks a thread _slipped_ when it has waited on
   someone for too long.
 - **Home is the Assistant**, first on the rail; `a` jumps there from anywhere.
-  It is one long chat about all your work: `@` names a task (it offers matches
-  as you type), and the Assistant reads it before answering. It runs aug for
+  It is one long chat about all your work: `@` names a task or a project (it
+  offers matches as you type), and the Assistant reads it before answering. It runs aug for
   you through `aug-tools`: it looks up tasks and projects, makes tasks
   (`move new`, a coding task in a named project with a brief), moves them,
   starts and stops agents, and archives projects after you confirm. It never

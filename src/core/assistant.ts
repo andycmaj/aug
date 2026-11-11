@@ -7,7 +7,13 @@
 import { capabilityAllow, GH_READS } from "./capabilities";
 import { loadConfig } from "./config";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
-import { findTasks, projectLine, taskDetail, taskLine } from "./lookup";
+import {
+  findProject,
+  findTasks,
+  projectLine,
+  taskDetail,
+  taskLine,
+} from "./lookup";
 import { MOVES } from "./moves";
 import { toolsCommand } from "./self";
 import * as store from "./store";
@@ -16,6 +22,7 @@ import {
   AgentState,
   ProjectStatus,
   TurnRole,
+  type ProjectRow,
   type TaskRow,
   type TurnRow,
 } from "./types";
@@ -73,6 +80,7 @@ export function assistantSystem(): string {
     "",
     "## How you work",
     "- Look before you move: check a task or project exists rather than guess its ref or name.",
+    "- @AUG-0012 names a task and @aug-bootstrap a project: pass either as it is to tasks, task or a move.",
     "- Do what the owner asked, then say in a line or two what you did, naming each task by its ref (AUG-0012).",
     "- A move that answers 'needs ...' wants something only the owner knows (a repo, a path). Ask them in plain words, then call again with the answer.",
     "- Ask before anything that ends work or cannot be undone: archiving a project, not_a_task, done on more than one task. Wait for a yes.",
@@ -99,6 +107,21 @@ export function mentionedTasks(text: string): TaskRow[] {
   return [...ids]
     .map((id) => store.getTask(id))
     .filter((t): t is TaskRow => Boolean(t));
+}
+
+// @aug-bootstrap in what the owner typed: an @word that names a project.
+export function mentionedProjects(text: string): ProjectRow[] {
+  const found = new Map<number, ProjectRow>();
+  for (const m of text.matchAll(/(?:^|\s)@([\w-]+)/g)) {
+    const project = findProject(m[1]);
+    if (project) found.set(project.id, project);
+  }
+  return [...found.values()];
+}
+
+function projectDetail(p: ProjectRow): string {
+  const open = findTasks({ project: p.name });
+  return [projectLine(p), ...open.map(taskLine)].join("\n");
 }
 
 function snapshot(): string {
@@ -133,6 +156,7 @@ export function assistantPrompt(
   const fresh = unanswered(turns);
   const said = fresh.map((t) => t.body).join("\n");
   const mentioned = mentionedTasks(said);
+  const projects = mentionedProjects(said);
   return [
     "## Where things stand",
     snapshot(),
@@ -142,6 +166,9 @@ export function assistantPrompt(
       : "",
     mentioned.length
       ? `\n## Tasks the owner named\n${mentioned.map((t) => taskDetail(t, 8)).join("\n\n---\n\n")}`
+      : "",
+    projects.length
+      ? `\n## Projects the owner named\n${projects.map(projectDetail).join("\n\n")}`
       : "",
     "",
     fresh.length ? transcript(fresh) : `(${reason})`,

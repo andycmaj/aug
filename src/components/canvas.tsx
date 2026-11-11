@@ -34,7 +34,13 @@ import { Commands } from "../commands";
 import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
 import { LANE_META } from "../core/lanes";
-import { mentionAt, suggestTasks } from "../core/lookup";
+import {
+  type Mention,
+  mentionAt,
+  mentionRef,
+  projectSummary,
+  suggestMentions,
+} from "../core/lookup";
 import type { RailItem } from "../core/rail";
 import * as store from "../core/store";
 import { AgentState, Kind, type TaskRow } from "../core/types";
@@ -244,8 +250,8 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
             Home · the Assistant
           </text>
           <text fg={theme.textMuted} wrapMode="word">
-            Ask about any work (@ names a task), or tell it to make, move, start
-            or close things.
+            Ask about any work (@ names a task or project), or tell it to make,
+            move, start or close things.
           </text>
         </box>
       }
@@ -328,7 +334,7 @@ function TaskChat(props: {
     if (t.kind === Kind.home)
       return [
         ["i", "talk"],
-        ["@", "name a task"],
+        ["@", "name a task or project"],
         ["a", "back here from anywhere"],
       ];
     const edit: [string, string][] =
@@ -411,12 +417,22 @@ function PendingCard(props: { taskId: number }) {
   );
 }
 
+function mentionLine(m: Mention): string {
+  if (m.type === "project") {
+    const open = projectSummary(m.project).open;
+    return `@${mentionRef(m)}  project ${m.project.name}, ${open} open`;
+  }
+  const t = m.task;
+  return `${store.taskRef(t.id)}  ${t.title}${t.status === "open" ? "" : ` (${t.status})`}`;
+}
+
 // Text the editor handed back unsent. The box unmounts while the editor has
 // the table, so it waits here for the box to come back.
 const unsent = new Map<number, string>();
 
 // The box under the chat. Typing always continues the same conversation.
-// `@` offers tasks to name; enter or tab takes the highlighted one.
+// `@` offers tasks and projects to name; enter or tab takes the highlighted
+// one.
 function ChatInput(props: {
   task: TaskRow;
   onSay: (text: string) => void;
@@ -436,7 +452,7 @@ function ChatInput(props: {
   });
   const suggestions = createMemo(() => {
     const at = mention();
-    return at ? suggestTasks(at.query) : [];
+    return at ? suggestMentions(at.query) : [];
   });
   const offering = () => suggestions().length > 0;
 
@@ -452,7 +468,7 @@ function ChatInput(props: {
     if (!input || !at || !chosen) return false;
     const value = input.value;
     const cut = before().length;
-    const ref = `@${store.taskRef(chosen.id)} `;
+    const ref = `@${mentionRef(chosen)} `;
     input.value =
       value.slice(0, at.start) + ref + value.slice(cut).replace(/^ /, "");
     input.cursorOffset = at.start + ref.length;
@@ -506,7 +522,7 @@ function ChatInput(props: {
 
   const placeholder = () =>
     props.task.kind === Kind.home
-      ? "Ask about anything, or tell aug what to do... (@ names a task, ^g editor)"
+      ? "Ask about anything, or tell aug what to do... (@ names a task or project, ^g editor)"
       : props.task.kind === Kind.coding
         ? "Tell the coding agent... (enter sends, ^g editor, esc leaves)"
         : "Tell the agent what's wrong, or ask about anything here... (^g editor)";
@@ -525,7 +541,7 @@ function ChatInput(props: {
           borderColor={theme.border}
         >
           <For each={suggestions()}>
-            {(t, i) => (
+            {(m: Mention, i) => (
               <text
                 fg={
                   i() === pick()
@@ -534,10 +550,7 @@ function ChatInput(props: {
                 }
                 bg={i() === pick() ? theme.secondary : undefined}
               >
-                {truncate(
-                  `${store.taskRef(t.id)}  ${t.title}${t.status === "open" ? "" : ` (${t.status})`}`,
-                  70,
-                )}
+                {truncate(mentionLine(m), 70)}
               </text>
             )}
           </For>
