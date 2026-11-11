@@ -9,7 +9,7 @@ import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { assistantCall } from "./assistant";
 import { think, BrainError } from "./brain";
-import { capabilityAllow } from "./capabilities";
+import { capabilityAllow, GH_READS } from "./capabilities";
 import { loadConfig } from "./config";
 import { now } from "./db";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
@@ -108,12 +108,7 @@ export const GENERAL_ALLOW = [
   "Write(./**)",
   "Edit(./**)",
   "Bash(gh api:*)",
-  "Bash(gh pr view:*)",
-  "Bash(gh pr diff:*)",
-  "Bash(gh pr checks:*)",
-  "Bash(gh issue view:*)",
-  "Bash(gh search:*)",
-  "Bash(gh run view:*)",
+  ...GH_READS,
   "Bash(ls:*)",
   "Bash(cat:*)",
 ];

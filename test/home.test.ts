@@ -51,7 +51,7 @@ describe("Home", () => {
     expect(rail.map((s) => s.section)).toEqual(["home", "tasks"]);
   });
 
-  test("a turn is the Assistant: aug-tools only, who is asking, the named task read in", async () => {
+  test("a turn is the Assistant: aug-tools and gh reads, who is asking, the named task read in", async () => {
     const home = store.homeTask();
     const job = store.createTask({
       title: "JOB.md is empty",
@@ -64,7 +64,9 @@ describe("Home", () => {
 
     const call = calls[0];
     expect(call.tools).toContain("Bash");
-    expect(call.allow!.filter((a) => a.startsWith("Bash("))).toHaveLength(1);
+    expect(
+      call.allow!.filter((a) => a.startsWith("Bash(") && !a.startsWith("Bash(gh ")),
+    ).toHaveLength(1);
     expect(call.allow![0]).toContain("aug-tools.ts");
     expect(call.env).toEqual({ AUG_ASKED_BY: "assistant" });
     expect(call.schema).toBeUndefined();

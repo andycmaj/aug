@@ -4,7 +4,7 @@
 // the running engine makes. It never sends: a Send is only ever the owner's
 // press.
 
-import { capabilityAllow } from "./capabilities";
+import { capabilityAllow, GH_READS } from "./capabilities";
 import { loadConfig } from "./config";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
 import { findTasks, projectLine, taskDetail, taskLine } from "./lookup";
@@ -25,9 +25,15 @@ const READS = ["Read", "Grep", "Glob", "WebSearch", "WebFetch"];
 
 export const ASSISTANT_TOOLS = ["Bash", ...READS];
 
-// aug-tools and nothing else on the shell; anything else is denied unasked.
+// aug-tools and gh's reads on the shell; a headless call cannot ask, so
+// anything else is denied unasked.
 export function assistantAllow(): string[] {
-  return [`Bash(${toolsCommand()}:*)`, ...READS, ...capabilityAllow("assistant")];
+  return [
+    `Bash(${toolsCommand()}:*)`,
+    ...GH_READS,
+    ...READS,
+    ...capabilityAllow("assistant"),
+  ];
 }
 
 // The moves as the model calls them, from the one registry.
@@ -61,6 +67,9 @@ export function assistantSystem(): string {
     "- hub search <words>: what agents learned",
     "Change things (the running aug makes the move and prints one line back; a failure says why):",
     movesHelp(),
+    "",
+    "## GitHub",
+    "Look up issues, PRs and runs with gh's read commands: gh pr view|list|diff|checks|status, gh issue view|list|status, gh search, gh run view|list, gh repo view. Nothing that writes (no comments, no gh api).",
     "",
     "## How you work",
     "- Look before you move: check a task or project exists rather than guess its ref or name.",

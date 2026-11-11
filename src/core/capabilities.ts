@@ -51,6 +51,23 @@ export const CAPABILITIES: Record<string, CapabilitySpec> = {
   },
 };
 
+// gh commands that only read, for looking up issues, PRs and runs. Not
+// `gh api`: a method flag or a field turns it into a write.
+export const GH_READS = [
+  "gh pr view",
+  "gh pr list",
+  "gh pr diff",
+  "gh pr checks",
+  "gh pr status",
+  "gh issue view",
+  "gh issue list",
+  "gh issue status",
+  "gh search",
+  "gh run view",
+  "gh run list",
+  "gh repo view",
+].map((c) => `Bash(${c}:*)`);
+
 export type Role = "general" | "assistant";
 
 export function resolveCapability(

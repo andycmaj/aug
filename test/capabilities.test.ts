@@ -192,4 +192,17 @@ describe("capabilities", () => {
     );
     setConfigForTest(DEFAULT_CONFIG);
   });
+
+  test("the assistant may read GitHub with gh, but never write", () => {
+    const allow = assistantAllow();
+    expect(allow).toContain("Bash(gh issue view:*)");
+    expect(allow).toContain("Bash(gh pr list:*)");
+    expect(allow.filter((r) => r.startsWith("Bash(gh "))).not.toContain(
+      "Bash(gh api:*)",
+    );
+    for (const rule of allow.filter((r) => r.startsWith("Bash(gh "))) {
+      expect(rule).not.toMatch(/comment|create|edit|merge|close|review/);
+    }
+    expect(generalAllow()).toContain("Bash(gh issue view:*)");
+  });
 });
