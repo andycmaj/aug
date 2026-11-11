@@ -5,7 +5,7 @@
 
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setBrain, type BrainCall, type BrainResult } from "../core/brain";
 import { DEFAULT_CONFIG, setConfigForTest } from "../core/config";
@@ -14,7 +14,7 @@ import { DocName, ensureDocs, readDoc, writeDoc } from "../core/docs";
 import { Engine } from "../core/engine";
 import type { MadeFile } from "../core/files";
 import { setSender } from "../core/outbound";
-import { paths } from "../core/paths";
+import { defaultHome, paths } from "../core/paths";
 import * as store from "../core/store";
 import {
   AgentState,
@@ -636,9 +636,19 @@ async function demoBrain(call: BrainCall): Promise<BrainResult> {
   return done(null);
 }
 
+// A scratch home unless you named one. An agent's window carries aug's own
+// AUG_HOME (for aug-tools); a demo run there would reconcile aug's live
+// sessions against the empty demo tmux server and mark every claude gone.
+// Your real home is never the demo's either.
+export function demoHome(env: Record<string, string | undefined> = process.env): string {
+  const named = env.AUG_HOME;
+  if (named && !env.AUG && resolve(named) !== resolve(defaultHome())) return named;
+  return mkdtempSync(join(tmpdir(), "aug-demo-"));
+}
+
 export function installFixture(name: string): Engine {
   if (name !== "demo") throw new Error(`unknown fixture "${name}" (try: demo)`);
-  process.env.AUG_HOME ??= mkdtempSync(join(tmpdir(), "aug-demo-"));
+  process.env.AUG_HOME = demoHome();
   useDb(openDb());
   // Coding agents run on a private tmux server, never your own.
   setConfigForTest({

@@ -13,6 +13,7 @@ import {
   archiveProject,
   closeTask,
   createProject,
+  endedElsewhere,
   freeSessionName,
   moveTask,
   nudge,
@@ -248,6 +249,22 @@ describe("starting a task", () => {
     expect(fake.windows[0].argv).toContain("--resume");
     expect(fake.worktrees).toHaveLength(1);
   });
+
+  test("a claude killed for its own resume ends nothing; one that exits in place does", async () => {
+    const t = codingTask();
+    const first = await startTask(t.id);
+    if (first.type !== "started") throw new Error("not started");
+    // Marked ended while its claude still ran (a stray reconcile).
+    store.updateSession(first.session.id, { ended_at: new Date().toISOString() });
+    const again = await startTask(t.id, { resume: first.session.id });
+    if (again.type !== "started") throw new Error("not resumed");
+    // In the fake a window's pane has the window's id.
+    expect(await endedElsewhere(first.session.id, first.windowId)).toBe(true);
+    expect(await endedElsewhere(first.session.id, again.windowId)).toBe(false);
+    expect(await endedElsewhere(first.session.id, undefined)).toBe(false);
+    fake.windows = [];
+    expect(await endedElsewhere(first.session.id, first.windowId)).toBe(false);
+  });
 });
 
 describe("closing, moving, reconciling", () => {
@@ -295,6 +312,14 @@ describe("closing, moving, reconciling", () => {
     await reconcile();
     expect(store.latestSession(t.id)!.ended_at).not.toBeNull();
     expect(store.getTask(t.id)!.agent_state).toBe(AgentState.stopped);
+  });
+
+  test("reconcile leaves sessions alone when tmux does not answer", async () => {
+    const t = codingTask();
+    await startTask(t.id);
+    fake.stateFails = "command timed out";
+    await expect(reconcile()).rejects.toThrow("timed out");
+    expect(store.latestSession(t.id)!.ended_at).toBeNull();
   });
 
   test("reconcile follows a renamed session; a killed one is made again", async () => {

@@ -27,7 +27,14 @@ export class FakeMux implements Mux {
   gone = new Set<string>();
   private next = 0;
 
-  async state(): Promise<MuxState> {
+  // tmux timing out: empty to most callers, an error to a strict one.
+  stateFails: string | null = null;
+
+  async state(opts: { strict?: boolean } = {}): Promise<MuxState> {
+    if (this.stateFails) {
+      if (opts.strict) throw new Error(this.stateFails);
+      return { sessions: [], windows: [] };
+    }
     return {
       sessions: this.sessions.map((s) => ({ ...s })),
       windows: this.windows.map(({ id, sessionId, name, taskId }) => ({
@@ -99,6 +106,11 @@ export class FakeMux implements Mux {
 
   async paneAlive(paneId: string): Promise<boolean> {
     return this.livePanes.has(paneId);
+  }
+
+  // In the fake a window's one pane has the window's id.
+  async windowPanes(windowId: string): Promise<string[] | null> {
+    return this.windows.some((w) => w.id === windowId) ? [windowId] : null;
   }
 
   async switchClient(sessionId: string, windowId?: string): Promise<void> {

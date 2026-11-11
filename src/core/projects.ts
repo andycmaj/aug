@@ -319,6 +319,21 @@ export async function claudeWindow(taskId: number): Promise<string | null> {
   return liveWindow(taskId);
 }
 
+// s on a session marked ended while its claude still ran kills that claude
+// and resumes the same session id in a new window. The killed one's
+// SessionEnd lands after the new one started, from a pane the session has
+// left: it ends nothing. When the session's window is gone too, or tmux
+// cannot say, the end stands.
+export async function endedElsewhere(
+  sessionId: string,
+  paneId: string | undefined,
+): Promise<boolean> {
+  const window = store.getSession(sessionId)?.tmux_window;
+  if (!paneId || !window) return false;
+  const panes = await mux().windowPanes(window);
+  return panes !== null && !panes.includes(paneId);
+}
+
 // A newline would submit claude's prompt halfway through.
 function typeLine(windowId: string, text: string): Promise<void> {
   return mux().sendLine(windowId, text.replace(/\s*\n\s*/g, " ").trim());
@@ -525,8 +540,10 @@ export function watchTmux(
 // tmux is the truth for whether a window lives: a session whose window is
 // gone has stopped, and a project whose session was renamed gets the new
 // name. Runs at boot, on watch events, and on a slow poll.
+// A tmux that does not answer (a timeout) is not one with no windows: that
+// would mark every live claude gone.
 export async function reconcile(): Promise<void> {
-  const state = await mux().state();
+  const state = await mux().state({ strict: true });
   const windows = new Set(state.windows.map((w) => w.id));
   for (const s of store.liveSessions()) {
     if (s.kind !== SessionKind.tmux) continue;

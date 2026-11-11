@@ -76,8 +76,10 @@ export interface Worktree {
 }
 
 export interface Mux {
-  // No tmux server running is an empty state, not an error.
-  state(): Promise<MuxState>;
+  // No tmux server running is an empty state, not an error. Strict throws
+  // on any other failure (a timeout) rather than answering empty, for a
+  // caller that would read empty as every window gone.
+  state(opts?: { strict?: boolean }): Promise<MuxState>;
   newSession(name: string, cwd: string): Promise<MuxSession>;
   tagSession(sessionId: string, projectId: number): Promise<void>;
   newWindow(w: NewWindow): Promise<MuxWindow>;
@@ -93,6 +95,8 @@ export interface Mux {
   // Answers the new pane's id.
   splitPane(s: SplitPane): Promise<string>;
   paneAlive(paneId: string): Promise<boolean>;
+  // The panes of a window, or null when tmux has no such window.
+  windowPanes(windowId: string): Promise<string[] | null>;
   // Moves your own tmux client (the one aug runs in) to the session, or to
   // one of its windows. The session is named because a viewer links the
   // same window, and tmux would otherwise land you in the viewer.
@@ -213,6 +217,12 @@ function pidAlive(pid: number): boolean {
   }
 }
 
+// tmux's own words when nothing listens on the socket.
+function noServer(err: unknown): boolean {
+  const text = err instanceof Error ? err.message : String(err);
+  return /no server running|error connecting to/i.test(text);
+}
+
 function idOf(raw: string | undefined): number | null {
   const n = Number(raw);
   return raw && Number.isInteger(n) && n > 0 ? n : null;
@@ -307,13 +317,14 @@ export class TmuxMux implements Mux {
     }
   }
 
-  async state(): Promise<MuxState> {
+  async state(opts: { strict?: boolean } = {}): Promise<MuxState> {
     let sessionLines: readonly string[];
     let windowLines: readonly string[];
     try {
       sessionLines = await this.cmd("list-sessions", ["-F", SESSION_FORMAT]);
       windowLines = await this.cmd("list-windows", ["-a", "-F", WINDOW_FORMAT]);
     } catch (err) {
+      if (opts.strict && !noServer(err)) throw err;
       // No server on the socket yet.
       log.debug("tmux state empty", { err: String(err) });
       return { sessions: [], windows: [] };
@@ -405,6 +416,15 @@ export class TmuxMux implements Mux {
       return panes.some((p) => p.trim() === paneId);
     } catch {
       return false;
+    }
+  }
+
+  async windowPanes(windowId: string): Promise<string[] | null> {
+    try {
+      const panes = await this.cmd("list-panes", ["-t", windowId, "-F", "#{pane_id}"]);
+      return panes.map((p) => p.trim()).filter(Boolean);
+    } catch {
+      return null;
     }
   }
 

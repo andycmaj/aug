@@ -5,8 +5,12 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+export function defaultHome(): string {
+  return join(homedir(), ".aug");
+}
+
 export function augHome(): string {
-  return process.env.AUG_HOME ?? join(homedir(), ".aug");
+  return process.env.AUG_HOME ?? defaultHome();
 }
 
 export const paths = {

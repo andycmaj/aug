@@ -17,6 +17,7 @@ import { findTasks, projectLine, taskDetail, taskLine } from "../core/lookup";
 import { MOVES, waitForMove } from "../core/moves";
 import { setMux, socketFromEnv, TmuxMux } from "../core/mux";
 import { runInPane } from "../core/pane";
+import * as projects from "../core/projects";
 import * as store from "../core/store";
 import { MoveStatus, NoteLabel } from "../core/types";
 
@@ -42,6 +43,19 @@ async function env(): Promise<HookEnv> {
     "aug-tools: run this from an aug agent session (AUG_TASK_ID is not set)",
   );
   process.exit(2);
+}
+
+// A hook must never break the agent's session: when tmux cannot say, the
+// end stands.
+async function endedElsewhere(sessionId: string): Promise<boolean> {
+  const pane = process.env.TMUX_PANE;
+  if (!pane) return false;
+  usePaneServer();
+  try {
+    return await projects.endedElsewhere(sessionId, pane);
+  } catch {
+    return false;
+  }
 }
 
 async function readPayload(): Promise<HookPayload> {
@@ -72,6 +86,13 @@ const hook = defineCommand({
       task: taskId,
       session: sessionId,
     });
+    if (args.event === "end" && (await endedElsewhere(sessionId))) {
+      logger("hook").debug("end from a window the session left", {
+        task: taskId,
+        session: sessionId,
+      });
+      return;
+    }
     handleHook(String(args.event), payload, { taskId, sessionId });
   },
 });

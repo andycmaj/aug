@@ -169,6 +169,27 @@ describe.skipIf(!hasTmux)("split pane", () => {
   });
 });
 
+describe.skipIf(!hasTmux)("window panes", () => {
+  test("lists a window's panes, and nothing for a window that is gone", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const pane = tmux(s, "display", "-p", "-t", "proj:", "#{pane_id}");
+    const mux = new TmuxMux(s);
+    expect(await mux.windowPanes(windowId)).toEqual([pane]);
+    tmux(s, "new-window", "-t", "proj:");
+    tmux(s, "kill-window", "-t", windowId);
+    expect(await mux.windowPanes(windowId)).toBeNull();
+  });
+});
+
+describe.skipIf(!hasTmux)("strict state", () => {
+  test("no server is empty, strict or not", async () => {
+    const mux = new TmuxMux(server("none"));
+    expect(await mux.state({ strict: true })).toEqual({ sessions: [], windows: [] });
+  });
+});
+
 describe.skipIf(!hasTmux)("host window", () => {
   function inPane(s: string, pane: string): Record<string, string> {
     const pid = tmux(s, "display", "-p", "-t", pane, "#{pid}");
