@@ -153,6 +153,18 @@ CREATE TABLE IF NOT EXISTS task_threads (
   PRIMARY KEY (thread_key, task_id)
 );
 
+-- URLs attached to a task by hand: a doc, a Slack thread, a ticket
+-- elsewhere. Unlike task_threads, aug never reads what is behind them.
+CREATE TABLE IF NOT EXISTS task_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  url TEXT NOT NULL,
+  title TEXT,
+  added_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (task_id, url)
+);
+
 -- Moves asked for from another process (aug-tools, run by the Assistant or
 -- an agent). The engine claims each one, runs it, and writes the result back.
 CREATE TABLE IF NOT EXISTS moves (

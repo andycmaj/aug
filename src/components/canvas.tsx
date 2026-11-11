@@ -225,6 +225,16 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
       : "typed by you";
     return `${from} · ${dayClock(props.task.created_at, aug.now())}`;
   });
+  // One line of what is attached: titles, else the bare address. o opens.
+  const links = createMemo(() => {
+    aug.version();
+    const names = store
+      .linksForTask(props.task.id)
+      .map((l) => l.title ?? l.url.replace(/^https?:\/\//, ""));
+    return names.length
+      ? truncate(`links · ${names.join(" · ")}  (o opens)`, Math.max(20, props.width - 4))
+      : null;
+  });
   const says = () => {
     const t = props.task;
     if (t.agent_state === AgentState.blocked && t.agent_says)
@@ -295,6 +305,9 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
         <text fg={theme.textMuted} wrapMode="word">
           {`${props.task.kind} · ${came()}`}
         </text>
+        <Show when={links()}>
+          <text fg={theme.info}>{links() ?? ""}</text>
+        </Show>
         <Show when={props.task.triage_reason}>
           <text
             fg={theme.textMuted}

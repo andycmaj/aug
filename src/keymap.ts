@@ -172,7 +172,7 @@ const itemMoves: BindingSpec<HelpCtx>[] = [
   {
     key: "o",
     cmd: Commands.OPEN_URL,
-    desc: "open the link or a file the agent made",
+    desc: "open the link, a URL on the task, or a file the agent made",
   },
   {
     key: "shift+o",

@@ -821,7 +821,8 @@ export function useActions(dialogs: Dialogs) {
     }
   }
 
-  // o: the link, or a pick of the link and what the agent made.
+  // o: the link, or a pick of the thread, the links attached to the task,
+  // and what the agent made.
   function openLink(item: RailItem) {
     const url =
       item.type === "task"
@@ -829,32 +830,36 @@ export function useActions(dialogs: Dialogs) {
         : item.type === "fyi"
           ? item.message.url
           : null;
-    const files = madeFiles(item);
-    if (files.length === 0) {
-      if (url) open(url);
-      else showToast("No link on this one");
+    const links = item.type === "task" ? store.linksForTask(item.task.id) : [];
+    const short = (u: string) => u.replace(/^https?:\/\//, "").slice(0, 30);
+    const choices = [
+      ...(url
+        ? [{ label: "The thread", hint: short(url), run: () => open(url) }]
+        : []),
+      ...links.map((l) => ({
+        label: l.title ?? short(l.url),
+        hint: l.title ? short(l.url) : undefined,
+        run: () => open(l.url),
+      })),
+      ...madeFiles(item).map((f) => ({
+        label: f.name,
+        hint: formatBytes(f.bytes),
+        run: () => open(f.path),
+      })),
+    ];
+    if (choices.length === 0) {
+      showToast("No link on this one");
+      return;
+    }
+    if (choices.length === 1) {
+      choices[0].run();
       return;
     }
     dialogs.show(() => (
       <ChoiceModal
         title="Open"
         hint={`With ${openerArgv("…").slice(0, -1).join(" ")} (set "opener" in config).`}
-        choices={[
-          ...(url
-            ? [
-                {
-                  label: "The thread",
-                  hint: url.replace(/^https?:\/\//, "").slice(0, 30),
-                  run: () => open(url),
-                },
-              ]
-            : []),
-          ...files.map((f) => ({
-            label: f.name,
-            hint: formatBytes(f.bytes),
-            run: () => open(f.path),
-          })),
-        ]}
+        choices={choices}
         onClose={dialogs.close}
       />
     ));

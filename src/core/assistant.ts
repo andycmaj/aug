@@ -47,7 +47,7 @@ export function assistantAllow(): string[] {
 export function movesHelp(): string {
   return Object.entries(MOVES)
     .map(([verb, spec]) => {
-      const positional = spec.task ? " AUG-0000" : spec.positional ? ` <${spec.positional}>` : "";
+      const positional = `${spec.task ? " AUG-0000" : ""}${spec.positional ? ` <${spec.positional}>` : ""}`;
       const flags = Object.entries(spec.args)
         .filter(([name]) => name !== spec.positional)
         .map(([name, arg]) =>

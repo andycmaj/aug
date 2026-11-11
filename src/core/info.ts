@@ -97,6 +97,12 @@ function taskSections(
       ["messages", messages.length || null],
       ["last heard", last ? `${last.author_name}, ${when(last.received_at, now)}` : null],
     ]),
+    {
+      title: "Links",
+      rows: store
+        .linksForTask(task.id)
+        .map((l) => ({ label: l.title ?? "link", value: l.url })),
+    },
     section("Agent", [
       ["state", task.agent_state === "none" ? null : task.agent_state],
       ["says", task.agent_says],

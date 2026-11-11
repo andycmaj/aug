@@ -251,6 +251,16 @@ export interface NoteRow {
   created_at: string;
 }
 
+export interface TaskLinkRow {
+  id: number;
+  task_id: number;
+  url: string;
+  title: string | null;
+  // "you", "assistant", or "agent AUG-0012".
+  added_by: string;
+  created_at: string;
+}
+
 export interface HubRow {
   id: number;
   topic: string;

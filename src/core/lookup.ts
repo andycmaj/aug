@@ -10,6 +10,7 @@ import {
   ProjectStatus,
   TaskStatus,
   type ProjectRow,
+  type TaskLinkRow,
   type TaskRow,
 } from "./types";
 
@@ -55,6 +56,10 @@ export function findTasks(filter: TaskFilter = {}): TaskRow[] {
   });
 }
 
+export function linkLine(l: TaskLinkRow): string {
+  return l.title ? `${l.title} ${l.url}` : l.url;
+}
+
 export function taskDetail(t: TaskRow, turns = 12): string {
   const facts = [
     taskLine(t),
@@ -62,6 +67,7 @@ export function taskDetail(t: TaskRow, turns = 12): string {
     t.repo ? `Repo: ${t.repo}${t.branch ? ` on ${t.branch}` : ""}` : "",
     t.worktree ? `Worktree: ${t.worktree}` : "",
     t.url ? `Link: ${t.url}` : "",
+    ...store.linksForTask(t.id).map((l) => `Link: ${linkLine(l)}`),
     t.waiting_on ? `Waiting on: ${t.waiting_on}` : "",
     t.agent_says ? `Agent says: ${t.agent_says}` : "",
   ].filter(Boolean);

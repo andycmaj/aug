@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { DEFAULT_CONFIG } from "../src/core/config";
 import { Engine } from "../src/core/engine";
+import { movesHelp } from "../src/core/assistant";
+import { codingBrief } from "../src/core/agents";
+import { taskDetail } from "../src/core/lookup";
 import { drainMoves, MOVE_STALE_MS, waitForMove } from "../src/core/moves";
 import { setMux } from "../src/core/mux";
 import * as store from "../src/core/store";
@@ -439,5 +442,62 @@ describe("what an agent may ask for", () => {
       expect(out.result).toStartWith(`${verb} is the owner's move`);
     }
     expect(store.getTask(mine.id)!.status).toBe(TaskStatus.open);
+  });
+});
+
+describe("links", () => {
+  const doc = "https://docs.example.com/plan";
+
+  test("link attaches a URL, and again only retitles it", async () => {
+    const task = engine.newTask("Plan the launch", Kind.general);
+    const ref = store.taskRef(task.id);
+    const first = await engine.runMove("link", { task: ref, url: ` ${doc} ` });
+    expect(first).toEqual({ ok: true, result: `linked ${doc} to ${ref}` });
+    const again = await engine.runMove("link", { task: ref, url: doc, title: "the plan" });
+    expect(again.result).toBe(`linked the plan (${doc}) to ${ref}`);
+    await engine.runMove("link", { task: ref, url: doc });
+    const links = store.linksForTask(task.id);
+    expect(links.map((l) => [l.url, l.title, l.added_by])).toEqual([
+      [doc, "the plan", "you"],
+    ]);
+  });
+
+  test("only http(s) URLs attach", async () => {
+    const task = engine.newTask("Plan the launch", Kind.general);
+    for (const url of ["docs/plan.md", "file:///etc/passwd", "javascript:alert(1)"]) {
+      const out = await engine.runMove("link", { task: store.taskRef(task.id), url });
+      expect(out).toEqual({ ok: false, result: `${url} is not an http(s) URL` });
+    }
+    expect(store.linksForTask(task.id)).toEqual([]);
+  });
+
+  test("unlink takes it off, and names the links when the URL is not one", async () => {
+    const task = engine.newTask("Plan the launch", Kind.general);
+    const ref = store.taskRef(task.id);
+    await engine.runMove("link", { task: ref, url: doc });
+    const miss = await engine.runMove("unlink", { task: ref, url: "https://x.test" });
+    expect(miss).toEqual({ ok: false, result: `${ref} has no link https://x.test. Links: ${doc}` });
+    const out = await engine.runMove("unlink", { task: ref, url: doc });
+    expect(out).toEqual({ ok: true, result: `unlinked ${doc} from ${ref}` });
+    expect(store.linksForTask(task.id)).toEqual([]);
+  });
+
+  test("an agent links its own task only", async () => {
+    const mine = engine.newTask("mine", Kind.general);
+    const other = engine.newTask("other", Kind.general);
+    const by = `agent ${store.taskRef(mine.id)}`;
+    const own = await engine.runMove("link", { task: store.taskRef(mine.id), url: doc }, by);
+    expect(own.ok).toBe(true);
+    expect(store.linksForTask(mine.id)[0].added_by).toBe(by);
+    const theirs = await engine.runMove("link", { task: store.taskRef(other.id), url: doc }, by);
+    expect(theirs.ok).toBe(false);
+  });
+
+  test("lookups and the coding brief carry the links", async () => {
+    const task = engine.newTask("Plan the launch", Kind.coding);
+    store.addTaskLink(task.id, doc, "the plan", "you");
+    expect(taskDetail(task)).toContain(`Link: the plan ${doc}`);
+    expect(codingBrief(task)).toContain(`Link: the plan ${doc}`);
+    expect(movesHelp()).toContain("- move link AUG-0000 <url> [--title <what it is, in a few words>]");
   });
 });

@@ -34,7 +34,8 @@ export interface MoveSpec {
   help: string;
   // Acts on one task, named by the `task` arg (AUG-0012).
   task: boolean;
-  // The arg aug-tools takes without a flag: `task` when the move has one.
+  // The arg aug-tools takes without a flag (after the task, when the move
+  // has one).
   positional?: string;
   args: Record<string, MoveArg>;
   run(
@@ -80,6 +81,16 @@ function checkRepo(repo: string): string {
   const clean = repo.trim();
   if (!/^[\w.-]+\/[\w.-]+$/.test(clean))
     throw new MoveError(`${clean || "repo"} is not owner/repo`);
+  return clean;
+}
+
+// The owner opens a link with the system opener, so only web addresses: a
+// file: or app URL an agent attached would run something on a keypress.
+function checkUrl(url: string): string {
+  const clean = url.trim();
+  const parsed = URL.canParse(clean) ? new URL(clean) : null;
+  if (parsed?.protocol !== "http:" && parsed?.protocol !== "https:")
+    throw new MoveError(`${clean || "url"} is not an http(s) URL`);
   return clean;
 }
 
@@ -356,6 +367,40 @@ export const MOVES: Record<string, MoveSpec> = {
         : `${ref(task)} waits on nobody`;
     },
   },
+  link: {
+    help: "Attach a URL to the task (a doc, a Slack thread, a ticket elsewhere)",
+    task: true,
+    positional: "url",
+    args: {
+      url: { help: "the http(s) URL", required: true },
+      title: { help: "what it is, in a few words" },
+    },
+    run(_engine, task, args, by) {
+      const link = store.addTaskLink(
+        task!.id,
+        checkUrl(args.url),
+        args.title?.trim() || null,
+        by,
+      );
+      return `linked ${link.title ? `${link.title} (${link.url})` : link.url} to ${ref(task)}`;
+    },
+  },
+  unlink: {
+    help: "Take a URL off the task",
+    task: true,
+    positional: "url",
+    args: { url: { help: "the URL, as it was attached", required: true } },
+    run(_engine, task, args) {
+      const url = args.url.trim();
+      if (!store.removeTaskLink(task!.id, url)) {
+        const links = store.linksForTask(task!.id).map((l) => l.url);
+        throw new MoveError(
+          `${ref(task)} has no link ${url}${links.length ? `. Links: ${links.join(", ")}` : ""}`,
+        );
+      }
+      return `unlinked ${url} from ${ref(task)}`;
+    },
+  },
   project_new: {
     help: "Make a project: a tmux session its coding tasks run in",
     task: false,
@@ -420,7 +465,7 @@ export const MOVES: Record<string, MoveSpec> = {
 };
 
 // What a task's own agent may ask for: new tasks and projects, and small edits
-// to its own task. Starting, stopping and closing work (and archiving a
+// (and links) to its own task. Starting, stopping and closing work (and archiving a
 // project) stay the owner's and the Assistant's.
 export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "new",
@@ -430,6 +475,8 @@ export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "wait_on",
   "priority",
   "remind",
+  "link",
+  "unlink",
 ]);
 
 function agentTask(by: string): number | null {

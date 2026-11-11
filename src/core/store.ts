@@ -25,6 +25,7 @@ import {
   type ProjectRow,
   type SessionKind,
   type SessionRow,
+  type TaskLinkRow,
   type TaskRow,
   type TurnRow,
   type Verdict,
@@ -191,6 +192,47 @@ export function threadsForTask(taskId: number): string[] {
     taskId,
   ).map((r) => r.thread_key);
   return task?.thread_key ? [task.thread_key, ...linked] : linked;
+}
+
+// Adding a URL the task already has keeps its place and takes the new title.
+export function addTaskLink(
+  taskId: number,
+  url: string,
+  title: string | null,
+  addedBy: string,
+): TaskLinkRow {
+  run(
+    `INSERT INTO task_links (task_id, url, title, added_by, created_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (task_id, url) DO UPDATE SET title = COALESCE(excluded.title, title)`,
+    taskId,
+    url,
+    title,
+    addedBy,
+    now(),
+  );
+  return one<TaskLinkRow>(
+    "SELECT * FROM task_links WHERE task_id = ? AND url = ?",
+    taskId,
+    url,
+  )!;
+}
+
+export function linksForTask(taskId: number): TaskLinkRow[] {
+  return all<TaskLinkRow>(
+    "SELECT * FROM task_links WHERE task_id = ? ORDER BY id",
+    taskId,
+  );
+}
+
+export function removeTaskLink(taskId: number, url: string): boolean {
+  const had = one<{ id: number }>(
+    "SELECT id FROM task_links WHERE task_id = ? AND url = ?",
+    taskId,
+    url,
+  );
+  if (!had) return false;
+  run("DELETE FROM task_links WHERE id = ?", had.id);
+  return true;
 }
 
 export function hasBranchTasks(repo: string): boolean {
