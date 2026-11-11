@@ -4,7 +4,7 @@
 // the running engine makes. It never sends: a Send is only ever the owner's
 // press.
 
-import { capabilityAllow, GH_READS } from "./capabilities";
+import { capabilityAllow, GH_READS, SHELL_HOWTO } from "./capabilities";
 import { loadConfig } from "./config";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
 import {
@@ -15,7 +15,7 @@ import {
   taskLine,
 } from "./lookup";
 import { MOVES } from "./moves";
-import { toolsCommand } from "./self";
+import { toolsCommand, toolsRules } from "./self";
 import * as store from "./store";
 import { transcript } from "./transcript";
 import {
@@ -36,7 +36,7 @@ export const ASSISTANT_TOOLS = ["Bash", ...READS];
 // anything else is denied unasked.
 export function assistantAllow(): string[] {
   return [
-    `Bash(${toolsCommand()}:*)`,
+    ...toolsRules(),
     ...GH_READS,
     ...READS,
     ...capabilityAllow("assistant"),
@@ -77,6 +77,7 @@ export function assistantSystem(): string {
     "",
     "## GitHub",
     "Look up issues, PRs and runs with gh's read commands: gh pr view|list|diff|checks|status, gh issue view|list|status, gh search, gh run view|list, gh repo view. Nothing that writes (no comments, no gh api).",
+    SHELL_HOWTO,
     "",
     "## How you work",
     "- Look before you move: check a task or project exists rather than guess its ref or name.",

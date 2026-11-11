@@ -21,6 +21,14 @@ export function toolsCommand(...args: string[]): string {
   return [...toolsArgv(), ...args].map(shellQuote).join(" ");
 }
 
+// Bash allow rules for an aug-tools command. Models often shorten the bun path
+// to plain `bun`, a different prefix that a headless call denies unasked, so
+// both spellings are allowed.
+export function toolsRules(...args: string[]): string[] {
+  const tail = [toolsEntry(), ...args].map(shellQuote).join(" ");
+  return [...new Set([toolsCommand(...args), `bun ${tail}`])].map((c) => `Bash(${c}:*)`);
+}
+
 // The environment for a claude aug runs itself. TMUX_PANE goes: aug may run
 // in a pane of a task's window, and a claude that loads user settings would
 // have its hooks adopt it into that task (and aug-tools would take the pane's

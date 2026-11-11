@@ -68,6 +68,11 @@ export const GH_READS = [
   "gh repo view",
 ].map((c) => `Bash(${c}:*)`);
 
+// Rules match a command's prefix, and each part of `a && b` must match on its
+// own; `cd` into another folder never does. Said to every headless shell.
+export const SHELL_HOWTO =
+  "Run each shell command on its own, starting with the command itself: a `cd <dir> &&` in front is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout.";
+
 export type Role = "general" | "assistant";
 
 export function resolveCapability(

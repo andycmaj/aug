@@ -64,10 +64,10 @@ describe("Home", () => {
 
     const call = calls[0];
     expect(call.tools).toContain("Bash");
-    expect(
-      call.allow!.filter((a) => a.startsWith("Bash(") && !a.startsWith("Bash(gh ")),
-    ).toHaveLength(1);
-    expect(call.allow![0]).toContain("aug-tools.ts");
+    const shell = call.allow!.filter((a) => a.startsWith("Bash(") && !a.startsWith("Bash(gh "));
+    expect(shell).toHaveLength(2);
+    expect(shell.every((a) => a.endsWith("aug-tools.ts:*)"))).toBe(true);
+    expect(shell.some((a) => a.startsWith("Bash(bun /"))).toBe(true);
     expect(call.env).toEqual({ AUG_ASKED_BY: "assistant" });
     expect(call.schema).toBeUndefined();
     expect(call.system).toContain("move new");
@@ -120,4 +120,20 @@ test("a general agent may run aug's lookups and the agent moves, nothing else", 
   expect(
     bash.some((r) => ["move done", "move start", "move project_archive"].some((m) => r.includes(m))),
   ).toBe(false);
+});
+
+test("a general agent's aug-tools rules match the bun path written either way", async () => {
+  const { generalAllow } = await import("../src/core/agents");
+  const { toolsCommand, toolsEntry } = await import("../src/core/self");
+  const allow = generalAllow();
+  expect(allow).toContain(`Bash(${toolsCommand("move", "project")}:*)`);
+  expect(allow).toContain(`Bash(bun ${toolsEntry()} move project:*)`);
+});
+
+test("a general agent is told it has gh and how to write shell commands that are allowed", async () => {
+  const { turnSystem } = await import("../src/core/agents");
+  const { SHELL_HOWTO } = await import("../src/core/capabilities");
+  const system = turnSystem();
+  expect(system).toContain("gh pr view");
+  expect(system).toContain(SHELL_HOWTO);
 });
