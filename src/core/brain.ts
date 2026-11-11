@@ -80,6 +80,16 @@ export async function think(call: BrainCall): Promise<BrainResult> {
 
 export class BrainError extends Error {}
 
+// Under -p, claude.ai connectors connect in the background and the first
+// request goes out before they're up, so a granted connector tool simply isn't
+// there. When the call is allowed any MCP tool, make claude wait for them.
+export function brainEnv(call: BrainCall): Record<string, string> {
+  const wantsMcp = call.allow?.some((rule) => rule.startsWith("mcp__"));
+  return wantsMcp
+    ? { MCP_CONNECTION_NONBLOCKING: "false", ...call.env }
+    : { ...call.env };
+}
+
 export function claudeArgs(call: BrainCall): string[] {
   const args = [
     "-p",
@@ -181,7 +191,7 @@ async function claudeBrain(call: BrainCall): Promise<BrainResult> {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    env: claudeEnv(call.env),
+    env: claudeEnv(brainEnv(call)),
   });
   const abort = () => proc.kill();
   call.signal?.addEventListener("abort", abort);

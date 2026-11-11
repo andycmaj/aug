@@ -7,7 +7,7 @@ import {
 } from "../src/core/agents";
 import { handleDone, handleHook } from "../src/core/hooks";
 import { applyLesson } from "../src/core/learn";
-import { claudeArgs, parseStreamLine } from "../src/core/brain";
+import { brainEnv, claudeArgs, parseStreamLine } from "../src/core/brain";
 import { toMessage } from "../src/core/ingest/github";
 import { plainText, threadKeyFor } from "../src/core/slack/shared";
 import * as store from "../src/core/store";
@@ -338,5 +338,24 @@ describe("ingest", () => {
     expect(threadKeyFor("C1", { ts: "2.2", thread_ts: "1.1" }, false)).toBe(
       "slack:C1:1.1",
     );
+  });
+});
+
+describe("brainEnv", () => {
+  test("waits for connectors only when an MCP tool is allowed", () => {
+    expect(brainEnv({ prompt: "x", allow: ["Read"] })).toEqual({});
+    expect(
+      brainEnv({
+        prompt: "x",
+        allow: ["Read", "mcp__claude_ai_Slack__slack_read_thread"],
+      }),
+    ).toEqual({ MCP_CONNECTION_NONBLOCKING: "false" });
+    expect(
+      brainEnv({
+        prompt: "x",
+        allow: ["mcp__a__b"],
+        env: { MCP_CONNECTION_NONBLOCKING: "true" },
+      }),
+    ).toEqual({ MCP_CONNECTION_NONBLOCKING: "true" });
   });
 });
