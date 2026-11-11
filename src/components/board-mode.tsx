@@ -3,7 +3,7 @@
 // notes agents leave each other; the Hub is what they learned, by topic.
 
 import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
-import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
+import type { ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import {
   contrastingForeground,
