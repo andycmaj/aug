@@ -2,14 +2,16 @@
 // and the session runs, every key goes to the agent except the detach chord;
 // detaching moves focus back to the rail and the session keeps running.
 
-import { createMemo, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, onCleanup, Show } from "solid-js";
 import type { BoxRenderable, Renderable } from "@opentui/core";
 import { useKeyPassthrough, useScope, useTheme } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useTerminals } from "../context/terminals";
 import { encodeKey } from "../terminal/key-encode";
 
-// Just the screen: adopts the session's renderable while mounted.
+// Just the screen: adopts the session's renderable while mounted. The table
+// keeps one mounted as you move between live tasks, so it follows the id;
+// adopting once showed the first task's claude while keys went to the next.
 export function TermView(props: {
   id: string;
   marginLeft?: number;
@@ -17,9 +19,10 @@ export function TermView(props: {
 }) {
   const terminals = useTerminals();
   let host: BoxRenderable | undefined;
-  onMount(() => {
+  createEffect(() => {
+    const id = props.id;
     if (!host) return;
-    const release = terminals.adopt(props.id, host);
+    const release = terminals.adopt(id, host);
     onCleanup(release);
   });
   return (
