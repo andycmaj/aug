@@ -2,13 +2,69 @@
 // Send; then it returns through the channel the conversation started on.
 // Sending never closes the task: Mark done does.
 
+import type { TurnAnswer } from "./agents";
 import { loadConfig } from "./config";
 import { draftSent } from "./lifecycle";
 import { logger } from "./log";
+import { messageMeta } from "./meta";
 import * as store from "./store";
-import { ActionState, TurnRole, type DraftAction } from "./types";
+import {
+  ActionState,
+  TurnRole,
+  type DraftAction,
+  type MessageRow,
+  type TaskRow,
+} from "./types";
 
 export type Sender = (action: DraftAction) => Promise<string>;
+
+export function lastIncoming(taskId: number): MessageRow | null {
+  const messages = store.messagesForTask(taskId).filter((m) => !m.from_me);
+  return messages[messages.length - 1] ?? null;
+}
+
+// The model says what to send; where it goes comes from the thread itself,
+// never from the model.
+export function actionFor(
+  task: TaskRow,
+  answer: TurnAnswer["action"],
+): DraftAction | null {
+  if (!answer?.text.trim()) return null;
+  const message = lastIncoming(task.id);
+  if (!message) return null;
+  const meta = messageMeta(message);
+  if (meta.channel === "slack") {
+    if (!meta.slackChannel) return null;
+    const threadTs = meta.thread_ts ?? (meta.dm ? null : meta.ts);
+    return {
+      type: "slack_reply",
+      channel: meta.slackChannel,
+      thread_ts: threadTs ?? undefined,
+      to: message.author_name,
+      text: answer.text.trim(),
+    };
+  }
+  if (meta.channel === "github") {
+    if (!meta.repo || !meta.number) return null;
+    const isPr = meta.type === "PullRequest";
+    const close =
+      answer.kind === "close_issue" && !isPr
+        ? ("issue" as const)
+        : answer.kind === "merge_pr" && isPr
+          ? ("merge" as const)
+          : answer.kind === "approve_pr" && isPr
+            ? ("approve" as const)
+            : undefined;
+    return {
+      type: "github_comment",
+      repo: meta.repo,
+      number: meta.number,
+      body: answer.text.trim(),
+      close,
+    };
+  }
+  return null;
+}
 
 let impl: Sender = realSend;
 

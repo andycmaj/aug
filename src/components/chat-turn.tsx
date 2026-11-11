@@ -16,7 +16,7 @@ import {
   tableLines,
   type MadeFile,
 } from "../core/files";
-import { getMessage } from "../core/store";
+import { getMessage, turnSteps } from "../core/store";
 import { TurnRole, type DraftAction, type TurnRow } from "../core/types";
 import { CHANNEL_WORD, clock, dayClock, duration } from "./ui";
 
@@ -100,7 +100,7 @@ function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
   const theme = useTheme();
   const aug = useAug();
   const steps = createMemo(
-    () => JSON.parse(props.turn.steps || "[]") as string[],
+    () => turnSteps(props.turn),
   );
   const running = () => props.turn.status === "running";
   const files = createMemo(() => parseFiles(props.turn.files));

@@ -4,9 +4,9 @@ import {
   fillTemplate,
   parseWorktree,
   setMux,
-  shellQuote,
   windowCommand,
 } from "../src/core/mux";
+import { shellQuote } from "../src/core/self";
 import {
   adoptSession,
   adoptableSessions,
@@ -68,6 +68,9 @@ describe("helpers", () => {
 
   test("window command quotes every argument and keeps a shell", () => {
     expect(shellQuote("it's")).toBe(`'it'\\''s'`);
+    // What a hook command and a tmux window both pass bare.
+    expect(shellQuote("AUG-12@host%x+y=z:a,b./c-d_e")).toBe("AUG-12@host%x+y=z:a,b./c-d_e");
+    expect(shellQuote("a b")).toBe("'a b'");
     expect(windowCommand(["claude", "--append-system-prompt", "a b"])).toBe(
       `claude --append-system-prompt 'a b'; exec "\${SHELL:-/bin/sh}" -l`,
     );

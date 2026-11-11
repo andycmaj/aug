@@ -21,6 +21,7 @@ import { setTaskRepo } from "./repos";
 import * as store from "./store";
 import {
   AgentState,
+  IdeaStatus,
   Kind,
   Priority,
   TaskStatus,
@@ -368,13 +369,13 @@ export class Desk {
   }
 
   dismissIdea(ideaId: number): void {
-    store.setIdeaStatus(ideaId, "dismissed");
+    store.setIdeaStatus(ideaId, IdeaStatus.dismissed);
   }
 
   ideaToTask(ideaId: number): TaskRow | null {
     const idea = store.openIdeas().find((i) => i.id === ideaId);
     if (!idea) return null;
-    store.setIdeaStatus(ideaId, "tasked");
+    store.setIdeaStatus(ideaId, IdeaStatus.tasked);
     return this.newTask(idea.title, Kind.task, idea.body);
   }
 

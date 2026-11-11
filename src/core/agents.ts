@@ -12,8 +12,10 @@ import { think, BrainError } from "./brain";
 import { capabilityAllow, DENIED_STEP, deniedNote, GH_READS, lastDenials, SHELL_HOWTO } from "./capabilities";
 import { loadConfig } from "./config";
 import { now } from "./db";
-import { DocName, head, learnedInUse, readDoc } from "./docs";
+import { DocName, readDoc } from "./docs";
+import { docsBlock } from "./prompts";
 import { changedFiles, snapshotDir } from "./files";
+import { actionFor, lastIncoming } from "./outbound";
 import {
   queued,
   sessionEnded,
@@ -33,8 +35,7 @@ import {
   SessionKind,
   TaskStatus,
   TurnRole,
-  type DraftAction,
-  type MessageRow,
+  TurnStatus,
   type TaskRow,
   type TurnRow,
 } from "./types";
@@ -135,68 +136,10 @@ export function generalAllow(): string[] {
   return [...GENERAL_ALLOW, ...agentToolRules(), ...capabilityAllow("general")];
 }
 
-export function lastIncoming(taskId: number): MessageRow | null {
-  const messages = store.messagesForTask(taskId).filter((m) => !m.from_me);
-  return messages[messages.length - 1] ?? null;
-}
-
-// The model says what to send; where it goes comes from the thread itself,
-// never from the model.
-export function actionFor(
-  task: TaskRow,
-  answer: TurnAnswer["action"],
-): DraftAction | null {
-  if (!answer?.text.trim()) return null;
-  const message = lastIncoming(task.id);
-  if (!message) return null;
-  const meta = JSON.parse(message.meta) as Record<string, unknown>;
-  if (message.channel === "slack") {
-    const channel = String(meta.channel ?? "");
-    if (!channel) return null;
-    const threadTs = meta.thread_ts ?? (meta.dm ? undefined : meta.ts);
-    return {
-      type: "slack_reply",
-      channel,
-      thread_ts: threadTs ? String(threadTs) : undefined,
-      to: message.author_name,
-      text: answer.text.trim(),
-    };
-  }
-  if (message.channel === "github") {
-    const repo = String(meta.repo ?? "");
-    const number = Number(meta.number ?? 0);
-    if (!repo || !number) return null;
-    const isPr = meta.type === "PullRequest";
-    const close =
-      answer.kind === "close_issue" && !isPr
-        ? ("issue" as const)
-        : answer.kind === "merge_pr" && isPr
-          ? ("merge" as const)
-          : answer.kind === "approve_pr" && isPr
-            ? ("approve" as const)
-            : undefined;
-    return {
-      type: "github_comment",
-      repo,
-      number,
-      body: answer.text.trim(),
-      close,
-    };
-  }
-  return null;
-}
-
 export function turnSystem(): string {
   return [
     readDoc(DocName.assistant),
-    "## SOUL.md",
-    head(readDoc(DocName.soul), 4000),
-    "## JOB.md",
-    head(readDoc(DocName.job), 2500),
-    "## STYLE.md (for any reply you draft)",
-    head(readDoc(DocName.style), 2500),
-    "## LEARNED.md (lines in use)",
-    learnedInUse(),
+    docsBlock({ soul: 4000, job: 2500, style: 2500, learned: true }),
     "",
     "Answer as three short sections (about, did, next). Lead 'did' with the result itself. Keep it tight: the owner reads this in a terminal.",
     "When the result is a document or a table (a report, a plan, figures), write it as a .md or .csv file in the current folder: the owner sees it under What it made, rendered. Name it plainly (overtime-september.csv).",
@@ -348,7 +291,7 @@ export class AgentPool {
         taskId,
         role: TurnRole.agent,
         author: home ? "aug" : "agent",
-        status: "running",
+        status: TurnStatus.running,
         sessionId,
       });
     });
@@ -377,7 +320,7 @@ export class AgentPool {
           : {
               prompt: turnPrompt(task, history, reason),
               system: turnSystem(),
-              schema: TURN_SCHEMA as unknown as Record<string, unknown>,
+              schema: TURN_SCHEMA,
               model: loadConfig().brain.agentModel,
               tools: GENERAL_TOOLS,
               allow: generalAllow(),
@@ -510,8 +453,7 @@ export function codingBrief(task: TaskRow): string {
     `Search it: ${toolsCommand("hub", "search", "<words>")}`,
     `To show the owner a terminal program (a diff viewer), run it in a split of your own pane, not a new tmux window: ${toolsCommand("pane", "--zoom", "--wait", "--", "<command...>")}`,
     "",
-    "## LEARNED.md (lines in use)",
-    learnedInUse(),
+    docsBlock({ learned: true }),
     "",
     "## The task",
     `${ref}: ${task.title}`,

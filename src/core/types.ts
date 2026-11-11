@@ -177,6 +177,13 @@ export const ActionState = {
 } as const;
 export type ActionState = (typeof ActionState)[keyof typeof ActionState];
 
+export const TurnStatus = {
+  running: "running",
+  done: "done",
+  failed: "failed",
+} as const;
+export type TurnStatus = (typeof TurnStatus)[keyof typeof TurnStatus];
+
 export interface TurnRow {
   id: number;
   task_id: number;
@@ -199,7 +206,7 @@ export interface TurnRow {
   // An owner line a coding agent has not heard yet: its claude was not
   // running. The next start hands it over.
   pending: number;
-  status: "running" | "done" | "failed";
+  status: TurnStatus;
   session_id: string | null;
   started_at: string;
   finished_at: string | null;
@@ -269,12 +276,19 @@ export interface HubRow {
   created_at: string;
 }
 
+export const IdeaStatus = {
+  open: "open",
+  dismissed: "dismissed",
+  tasked: "tasked",
+} as const;
+export type IdeaStatus = (typeof IdeaStatus)[keyof typeof IdeaStatus];
+
 export interface IdeaRow {
   id: number;
   title: string;
   body: string;
   task_id: number | null;
-  status: "open" | "dismissed" | "tasked";
+  status: IdeaStatus;
   created_at: string;
 }
 

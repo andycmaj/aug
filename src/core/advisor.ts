@@ -5,7 +5,8 @@
 
 import { think } from "./brain";
 import { loadConfig } from "./config";
-import { DocName, head, learnedInUse, readDoc } from "./docs";
+import { DocName, readDoc } from "./docs";
+import { docsBlock } from "./prompts";
 import { isSlipped } from "./rail";
 import * as store from "./store";
 import { TaskStatus } from "./types";
@@ -86,12 +87,9 @@ export async function runAdvisor(at = new Date()): Promise<number> {
     system: [
       "You are the Advisor in aug, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas, none repeating one already on the rail. Fewer is better; zero is fine.",
       readDoc(DocName.counsel),
-      "## JOB.md",
-      head(readDoc(DocName.job), 2500),
-      "## LEARNED.md",
-      learnedInUse(),
+      docsBlock({ job: 2500, learned: true }),
     ].join("\n\n"),
-    schema: IDEAS_SCHEMA as unknown as Record<string, unknown>,
+    schema: IDEAS_SCHEMA,
     model: loadConfig().brain.assistantModel,
   });
   const answer = result.structured as IdeasAnswer | null;

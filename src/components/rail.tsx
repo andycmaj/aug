@@ -30,6 +30,10 @@ import { useAug } from "../context/aug";
 import { Lane, LANE_META } from "../core/lanes";
 import { ageLabel, SECTION_TITLES, type RailItem } from "../core/rail";
 import { getProject, taskRef } from "../core/store";
+import { AgentState, Kind } from "../core/types";
+import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
+import { ConnectorLine } from "./connector-line";
+import type { TaskActions } from "./task-actions";
 
 // A task in a project shows the project's name where its channel would be.
 function projectChip(projectId: number | null): string | null {
@@ -37,10 +41,6 @@ function projectChip(projectId: number | null): string | null {
   const name = getProject(projectId)?.tmux_session;
   return name ? `◫ ${name.length > 14 ? `${name.slice(0, 13)}…` : name}` : null;
 }
-import { AgentState, Kind } from "../core/types";
-import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
-import { ConnectorLine } from "./connector-line";
-import type { TaskActions } from "./task-actions";
 
 export const RAIL_WIDTH = 46;
 // A task under its project's row sits this much further in.

@@ -5,7 +5,8 @@
 // waiting on you.
 
 import { describeStep } from "./brain";
-import { actionFor, type TurnAnswer } from "./agents";
+import type { TurnAnswer } from "./agents";
+import { actionFor } from "./outbound";
 import {
   sessionActivity,
   sessionEnded,

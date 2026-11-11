@@ -401,7 +401,7 @@ export function BoardMode() {
                   }
                 >
                   {(n) => {
-                    const readBy = JSON.parse(n.read_by) as string[];
+                    const readBy = store.noteReadBy(n);
                     const tone =
                       n.label === "blocked"
                         ? theme.error

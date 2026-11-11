@@ -34,13 +34,13 @@ import { Commands } from "../commands";
 import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
 import { LANE_META } from "../core/lanes";
+import { projectSummary } from "../core/lookup";
 import {
   type Mention,
   mentionAt,
   mentionRef,
-  projectSummary,
   suggestMentions,
-} from "../core/lookup";
+} from "../core/mentions";
 import type { RailItem } from "../core/rail";
 import * as store from "../core/store";
 import { AgentState, Kind, type TaskRow } from "../core/types";

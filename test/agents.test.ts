@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import {
-  AgentPool,
-  actionFor,
-  codingLaunch,
-  hookSettings,
-} from "../src/core/agents";
+import { AgentPool, codingLaunch, hookSettings } from "../src/core/agents";
+import { actionFor } from "../src/core/outbound";
 import { handleDone, handleHook } from "../src/core/hooks";
 import { applyLesson } from "../src/core/learn";
 import { brainEnv, claudeArgs, deniedCalls, parseStreamLine } from "../src/core/brain";

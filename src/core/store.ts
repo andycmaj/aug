@@ -11,7 +11,9 @@ import {
   ProjectStatus,
   TaskStatus,
   TurnRole,
+  TurnStatus,
   type Channel,
+  type IdeaStatus,
   type CorrectionRow,
   type DraftAction,
   type HubRow,
@@ -82,6 +84,23 @@ function run(sql: string, ...params: SQLQueryBindings[]): number {
     .run(...params);
   changed();
   return Number(result.lastInsertRowid);
+}
+
+// UPDATE the columns in `patch` on one row; `touch` is a timestamp column
+// set alongside. An empty patch writes nothing.
+function patchRow<Row extends object>(
+  table: string,
+  id: number | string,
+  patch: Partial<Row>,
+  touch?: string,
+): void {
+  const keys = Object.keys(patch) as (keyof Row & string)[];
+  if (keys.length === 0) return;
+  const sets = keys.map((k) => `${k} = ?`).join(", ");
+  const values = keys.map((k) => patch[k] ?? null) as SQLQueryBindings[];
+  if (touch)
+    run(`UPDATE ${table} SET ${sets}, ${touch} = ? WHERE id = ?`, ...values, now(), id);
+  else run(`UPDATE ${table} SET ${sets} WHERE id = ?`, ...values, id);
 }
 
 export function taskRef(id: number): string {
@@ -245,16 +264,7 @@ export function hasBranchTasks(repo: string): boolean {
 type TaskPatch = Partial<Omit<TaskRow, "id" | "created_at">>;
 
 export function updateTask(id: number, patch: TaskPatch): void {
-  const keys = Object.keys(patch) as (keyof TaskPatch)[];
-  if (keys.length === 0) return;
-  const sets = keys.map((k) => `${k} = ?`).join(", ");
-  const values = keys.map((k) => patch[k] ?? null) as SQLQueryBindings[];
-  run(
-    `UPDATE tasks SET ${sets}, updated_at = ? WHERE id = ?`,
-    ...values,
-    now(),
-    id,
-  );
+  patchRow<TaskRow>("tasks", id, patch, "updated_at");
 }
 
 export function tasksForProject(projectId: number): TaskRow[] {
@@ -314,16 +324,7 @@ export function projectRepos(project: ProjectRow): string[] {
 type ProjectPatch = Partial<Omit<ProjectRow, "id" | "created_at">>;
 
 export function updateProject(id: number, patch: ProjectPatch): void {
-  const keys = Object.keys(patch) as (keyof ProjectPatch)[];
-  if (keys.length === 0) return;
-  const sets = keys.map((k) => `${k} = ?`).join(", ");
-  const values = keys.map((k) => patch[k] ?? null) as SQLQueryBindings[];
-  run(
-    `UPDATE projects SET ${sets}, updated_at = ? WHERE id = ?`,
-    ...values,
-    now(),
-    id,
-  );
+  patchRow<ProjectRow>("projects", id, patch, "updated_at");
 }
 
 export function addProjectRepo(id: number, repo: string): void {
@@ -470,7 +471,7 @@ export function addTurn(t: NewTurn): TurnRow {
     t.status ?? "done",
     t.sessionId ?? null,
     t.startedAt ?? now(),
-    t.status === "running" ? null : (t.startedAt ?? now()),
+    t.status === TurnStatus.running ? null : (t.startedAt ?? now()),
     t.pending ? 1 : 0,
   );
   return getTurn(id)!;
@@ -530,11 +531,12 @@ export function turnsForTask(taskId: number): TurnRow[] {
 type TurnPatch = Partial<Omit<TurnRow, "id" | "task_id">>;
 
 export function updateTurn(id: number, patch: TurnPatch): void {
-  const keys = Object.keys(patch) as (keyof TurnPatch)[];
-  if (keys.length === 0) return;
-  const sets = keys.map((k) => `${k} = ?`).join(", ");
-  const values = keys.map((k) => patch[k] ?? null) as SQLQueryBindings[];
-  run(`UPDATE turns SET ${sets} WHERE id = ?`, ...values, id);
+  patchRow<TurnRow>("turns", id, patch);
+}
+
+// JSON array of one-line tool steps, live while the turn runs.
+export function turnSteps(turn: TurnRow): string[] {
+  return JSON.parse(turn.steps || "[]") as string[];
 }
 
 // A turn keeps its own draft; only the newest one can be sent, so a new draft
@@ -648,16 +650,7 @@ export function sessionForWindow(windowId: string): SessionRow | null {
 type SessionPatch = Partial<Omit<SessionRow, "id" | "task_id">>;
 
 export function updateSession(id: string, patch: SessionPatch): void {
-  const keys = Object.keys(patch) as (keyof SessionPatch)[];
-  if (keys.length === 0) return;
-  const sets = keys.map((k) => `${k} = ?`).join(", ");
-  const values = keys.map((k) => patch[k] ?? null) as SQLQueryBindings[];
-  run(
-    `UPDATE sessions SET ${sets}, last_event_at = ? WHERE id = ?`,
-    ...values,
-    now(),
-    id,
-  );
+  patchRow<SessionRow>("sessions", id, patch, "last_event_at");
 }
 
 // ── notes, hub, ideas ────────────────────────────────────────────────────
@@ -686,11 +679,16 @@ export function listNotes(limit = 100): NoteRow[] {
   );
 }
 
+// Who has read a note, as the JSON column holds it.
+export function noteReadBy(note: NoteRow): string[] {
+  return JSON.parse(note.read_by) as string[];
+}
+
 export function markNotesRead(reader: string): void {
   const notes = listNotes(200);
   batch(() => {
     for (const note of notes) {
-      const readBy = JSON.parse(note.read_by) as string[];
+      const readBy = noteReadBy(note);
       if (note.author === reader || readBy.includes(reader)) continue;
       run(
         "UPDATE notes SET read_by = ? WHERE id = ?",
@@ -745,7 +743,7 @@ export function openIdeas(): IdeaRow[] {
   );
 }
 
-export function setIdeaStatus(id: number, status: IdeaRow["status"]): void {
+export function setIdeaStatus(id: number, status: IdeaStatus): void {
   run("UPDATE ideas SET status = ? WHERE id = ?", status, id);
 }
 
@@ -784,6 +782,9 @@ export function setCorrectionLearned(id: number, line: string): void {
 }
 
 // ── kv (ingest cursors, daily markers) ───────────────────────────────────
+
+// Cursors and markers are bookkeeping, not a change the TUI redraws for, so
+// kvSet skips `changed()` on purpose.
 
 export function kvGet(key: string): string | null {
   return (

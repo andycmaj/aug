@@ -11,11 +11,19 @@ import { claudeEnv } from "./self";
 
 const log = logger("brain");
 
+// Enough of a JSON schema to type the ones aug writes; claude checks the rest.
+export interface JsonSchema {
+  readonly type?: string;
+  readonly properties?: Readonly<Record<string, unknown>>;
+  readonly required?: readonly string[];
+}
+
 export interface BrainCall {
   prompt: string;
   // Appended to Claude Code's own system prompt.
   system?: string;
-  schema?: Record<string, unknown>;
+  // A JSON schema for the answer (an `as const` object literal is fine).
+  schema?: JsonSchema;
   model?: string;
   cwd?: string;
   // Start a persisted session under this id, or resume one.

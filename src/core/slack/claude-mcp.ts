@@ -548,7 +548,7 @@ export class ClaudeMcpTransport implements SlackTransport {
         "You post one message the owner already approved, then report the result. You do nothing else.",
       settingSources: "user",
       model: this.options.model,
-      schema: SEND_SCHEMA as unknown as Record<string, unknown>,
+      schema: SEND_SCHEMA,
       allow,
       disallow,
     });

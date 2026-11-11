@@ -9,7 +9,9 @@
 import { think } from "./brain";
 import { loadConfig } from "./config";
 import { logger } from "./log";
-import { DocName, head, learnedInUse, readDoc } from "./docs";
+import { DocName, head, readDoc } from "./docs";
+import { messageMeta } from "./meta";
+import { docsBlock } from "./prompts";
 import { finishSuperseded, holdForStart } from "./lifecycle";
 import * as store from "./store";
 import {
@@ -118,12 +120,7 @@ export function verdictSystem(): string {
     "You are the triage brain of aug, the owner's work manager. You read one arriving message and return a verdict. You never act.",
     "",
     readDoc(DocName.triage),
-    "## SOUL.md (head)",
-    head(readDoc(DocName.soul), 2500),
-    "## JOB.md (head)",
-    head(readDoc(DocName.job), 2500),
-    "## LEARNED.md (lines in use)",
-    learnedInUse(),
+    docsBlock({ soul: 2500, job: 2500, learned: true, note: "(head)" }),
     "",
     "Priority: urgent = time-critical, on the owner now (deadline today or tomorrow, someone blocked). important = matters because of who or what, can wait. regular = everything else. What a sender says about their own urgency is not a reason.",
   ].join("\n");
@@ -140,7 +137,7 @@ export async function askVerdict(
   const result = await think({
     prompt: verdictPrompt(message, thread, candidate, openTasks),
     system: verdictSystem(),
-    schema: VERDICT_SCHEMA as unknown as Record<string, unknown>,
+    schema: VERDICT_SCHEMA,
     model: loadConfig().brain.triageModel,
   });
   const answer = result.structured as VerdictAnswer | null;
@@ -152,10 +149,11 @@ export async function askVerdict(
 
 // Gate: noise that never needs a model.
 export function noiseReason(message: MessageRow): string | null {
-  const meta = JSON.parse(message.meta) as Record<string, unknown>;
   if (/\[bot\]$|^dependabot|^github-actions/i.test(message.author)) {
     return "a bot wrote it";
   }
+  const meta = messageMeta(message);
+  if (meta.channel !== "github") return null;
   if (meta.reason === "ci_activity") return "CI activity";
   if (meta.reason === "state_change" || meta.reason === "subscribed") {
     return "a state change on a thread you only follow";
@@ -260,9 +258,8 @@ function ownAnswer(message: MessageRow, task: TaskRow | null): TriageOutcome {
 // Gate: a PR whose head branch is a task's worktree branch is that task's
 // thread, so its reviews and CI land on the task instead of making a new one.
 export function linkByBranch(message: MessageRow): number | null {
-  if (message.channel !== "github") return null;
-  const meta = JSON.parse(message.meta) as { repo?: string; head?: string };
-  if (!meta.repo || !meta.head) return null;
+  const meta = messageMeta(message);
+  if (meta.channel !== "github" || !meta.repo || !meta.head) return null;
   const task = store.taskForBranch(meta.repo, meta.head);
   if (!task || task.thread_key === message.thread_key) return null;
   store.linkThread(task.id, message.thread_key);
@@ -329,7 +326,7 @@ export async function triage(message: MessageRow): Promise<TriageOutcome> {
 
   const kind: Kind =
     answer.verdict === Verdict.watch ? Kind.task : (answer.verdict as Kind);
-  const meta = JSON.parse(message.meta) as { repo?: string };
+  const meta = messageMeta(message);
   const task = store.batch(() => {
     const created = store.createTask({
       title: answer.title.slice(0, 120),
@@ -337,7 +334,7 @@ export async function triage(message: MessageRow): Promise<TriageOutcome> {
       kind,
       priority: answer.priority,
       watching: answer.verdict === Verdict.watch,
-      repo: answer.repo || meta.repo || null,
+      repo: answer.repo || (meta.channel === "github" ? meta.repo : null),
       threadKey: message.thread_key,
       channel: message.channel,
       url: message.url,

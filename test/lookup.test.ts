@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { mentionedProjects, mentionedTasks } from "../src/core/assistant";
+import { mentionedProjects, mentionedTasks } from "../src/core/mentions";
+import { findProject } from "../src/core/lookup";
 import {
-  findProject,
   type Mention,
   mentionAt,
   mentionRef,
   suggestMentions,
-} from "../src/core/lookup";
+} from "../src/core/mentions";
 import { taskClosed } from "../src/core/lifecycle";
 import * as store from "../src/core/store";
 import { Kind, ProjectStatus, TaskStatus } from "../src/core/types";

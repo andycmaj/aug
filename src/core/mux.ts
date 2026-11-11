@@ -8,7 +8,7 @@
 import { Server, TmuxServerRestartedError } from "libtmux";
 import { loadConfig } from "./config";
 import { logger } from "./log";
-import { toolsCommand } from "./self";
+import { shellQuote, toolsCommand } from "./self";
 
 const log = logger("mux");
 
@@ -123,11 +123,6 @@ export interface Mux {
 export class MuxError extends Error {}
 
 // ── shell helpers ────────────────────────────────────────────────────────
-
-export function shellQuote(arg: string): string {
-  if (/^[A-Za-z0-9_\-./=:@%+,]+$/.test(arg)) return arg;
-  return `'${arg.replaceAll("'", `'\\''`)}'`;
-}
 
 // The window runs claude, then a login shell, so it stays open when claude
 // exits and you can resume or look around.

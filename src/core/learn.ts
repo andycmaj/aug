@@ -135,7 +135,7 @@ export async function learnFrom(c: CorrectionRow): Promise<string | null> {
     prompt: `${describeCorrection(c)}\n\nCurrent LEARNED.md:\n${learned}`,
     system:
       "You maintain LEARNED.md, what aug has learned about how its owner works. Turn one correction into at most one lesson in plain words. Never record a secret. If an existing line already says it, either skip or return a stronger version that replaces it (strength + 1). Lines without an [s:...] tag were written by the owner: never replace them.",
-    schema: LESSON_SCHEMA as unknown as Record<string, unknown>,
+    schema: LESSON_SCHEMA,
     model: loadConfig().brain.triageModel,
   });
   const lesson = result.structured as Lesson | null;
