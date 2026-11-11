@@ -417,12 +417,13 @@ export interface NewTurn {
   status?: TurnRow["status"];
   sessionId?: string | null;
   startedAt?: string;
+  pending?: boolean;
 }
 
 export function addTurn(t: NewTurn): TurnRow {
   const id = run(
-    `INSERT INTO turns (task_id, role, message_id, author, body, status, session_id, started_at, finished_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO turns (task_id, role, message_id, author, body, status, session_id, started_at, finished_at, pending)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     t.taskId,
     t.role,
     t.messageId ?? null,
@@ -432,8 +433,25 @@ export function addTurn(t: NewTurn): TurnRow {
     t.sessionId ?? null,
     t.startedAt ?? now(),
     t.status === "running" ? null : (t.startedAt ?? now()),
+    t.pending ? 1 : 0,
   );
   return getTurn(id)!;
+}
+
+export function pendingTurns(taskId: number): TurnRow[] {
+  return all<TurnRow>(
+    "SELECT * FROM turns WHERE task_id = ? AND pending = 1 ORDER BY id",
+    taskId,
+  );
+}
+
+export function setPending(turnIds: number[], pending: boolean): void {
+  if (turnIds.length === 0) return;
+  run(
+    `UPDATE turns SET pending = ? WHERE id IN (${turnIds.map(() => "?").join(", ")})`,
+    pending ? 1 : 0,
+    ...turnIds,
+  );
 }
 
 // What search reads of the rail tasks' chats: what you typed and what the

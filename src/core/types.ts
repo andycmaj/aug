@@ -196,6 +196,9 @@ export interface TurnRow {
   steps: string;
   // JSON array of MadeFile: what the turn left in the task's scratch folder.
   files: string;
+  // An owner line a coding agent has not heard yet: its claude was not
+  // running. The next start hands it over.
+  pending: number;
   status: "running" | "done" | "failed";
   session_id: string | null;
   started_at: string;

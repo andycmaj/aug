@@ -194,6 +194,7 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "tasks", column: "worktree", ddl: "TEXT" },
   { table: "sessions", column: "tmux_window", ddl: "TEXT" },
   { table: "tasks", column: "from_task_id", ddl: "INTEGER REFERENCES tasks(id)" },
+  { table: "turns", column: "pending", ddl: "INTEGER NOT NULL DEFAULT 0" },
 ];
 
 function columns(db: Database, table: string): string[] {

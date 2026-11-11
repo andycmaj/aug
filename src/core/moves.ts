@@ -235,9 +235,10 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Type a line into the task's chat for its agent",
     task: true,
     args: { text: { help: "the line", required: true } },
-    run(engine, task, args) {
-      engine.say(task!.id, args.text);
-      return `told ${ref(task)}'s agent`;
+    async run(engine, task, args) {
+      return (await engine.say(task!.id, args.text))
+        ? `told ${ref(task)}'s agent`
+        : `${ref(task)}'s agent is not running: it hears this when it starts`;
     },
   },
   new: {

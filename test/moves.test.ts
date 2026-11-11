@@ -130,6 +130,59 @@ describe("start", () => {
   });
 });
 
+describe("telling a coding agent", () => {
+  async function started(title = "Add a flag") {
+    const task = engine.newTask(title, Kind.coding);
+    await engine.runMove("start", { task: store.taskRef(task.id), repo: "acme/api" });
+    return task;
+  }
+
+  function stopClaude(taskId: number) {
+    const session = store.latestSession(taskId)!;
+    store.updateSession(session.id, { ended_at: new Date().toISOString() });
+  }
+
+  test("a line for a running claude is typed into its window", async () => {
+    const task = await started();
+    const out = await engine.runMove("tell", { task: store.taskRef(task.id), text: "also check s" });
+    expect(out.result).toBe(`told ${store.taskRef(task.id)}'s agent`);
+    expect(fake.sent).toEqual([{ windowId: fake.windows[0].id, text: "also check s" }]);
+  });
+
+  test("a line for a stopped claude waits for start, which resumes with it once", async () => {
+    const task = await started();
+    stopClaude(task.id);
+    const out = await engine.runMove("tell", { task: store.taskRef(task.id), text: "can't re-attach with s" });
+    expect(out.result).toContain("when it starts");
+    expect(fake.sent).toEqual([]);
+
+    await engine.runMove("start", { task: store.taskRef(task.id) });
+    expect(fake.windows[0].argv).toContain("--resume");
+    expect(fake.windows[0].argv.at(-1)).toBe("can't re-attach with s");
+
+    stopClaude(task.id);
+    await engine.runMove("start", { task: store.taskRef(task.id) });
+    expect(fake.windows[0].argv).not.toContain("can't re-attach with s");
+  });
+
+  test("lines typed before the first start go in with the brief", async () => {
+    const task = engine.newTask("Add a flag", Kind.coding);
+    await engine.say(task.id, "use the new parser");
+    await engine.say(task.id, "and keep the old flag");
+    await engine.runMove("start", { task: store.taskRef(task.id), repo: "acme/api" });
+    const first = fake.windows[0].argv.at(-1)!;
+    expect(first).toContain("use the new parser");
+    expect(first).toContain("and keep the old flag");
+  });
+
+  test("start's note reaches a claude that is already running", async () => {
+    const task = await started();
+    await engine.runMove("start", { task: store.taskRef(task.id), note: "look at #12 too" });
+    expect(fake.windows).toHaveLength(1);
+    expect(fake.sent).toEqual([{ windowId: fake.windows[0].id, text: "look at #12 too" }]);
+  });
+});
+
 describe("making and placing tasks", () => {
   test("a coding task made from another, in a named project, takes its repo", async () => {
     const project = await engine.createProject("aug-bootstrap", "acme/api");

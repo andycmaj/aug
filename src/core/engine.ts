@@ -434,10 +434,14 @@ export class Engine {
   }
 
   // Typing always continues: same agent, same conversation, whether it is
-  // working, finished or stopped. A closed task's chat reopens it.
-  say(taskId: number, text: string): void {
+  // working, finished or stopped. A closed task's chat reopens it. A coding
+  // agent hears only what is typed into its window, so a line for a claude
+  // that is not running waits for the next start. True when the agent has
+  // it now.
+  async say(taskId: number, text: string): Promise<boolean> {
     const task = store.getTask(taskId);
-    if (!task || !text.trim()) return;
+    if (!task || !text.trim()) return false;
+    const coding = task.kind === Kind.coding;
     store.batch(() => {
       if (task.status !== TaskStatus.open) store.reopen(taskId);
       store.addTurn({
@@ -445,11 +449,31 @@ export class Engine {
         role: TurnRole.you,
         author: "you",
         body: text.trim(),
+        pending: coding,
       });
       store.updateTask(taskId, { unread_result: 0 });
     });
-    if (task.kind !== Kind.coding)
+    if (!coding) {
       void this.pool.request(taskId, "the owner typed in the chat", "owner");
+      return true;
+    }
+    return this.deliverPending(taskId);
+  }
+
+  // Claimed before sending, so two lines typed at once are sent once.
+  private async deliverPending(taskId: number): Promise<boolean> {
+    if (!(await projects.claudeWindow(taskId))) return false;
+    const turns = store.pendingTurns(taskId);
+    if (turns.length === 0) return true;
+    const ids = turns.map((t) => t.id);
+    store.setPending(ids, false);
+    try {
+      if (await projects.tell(taskId, turns.map((t) => t.body).join("\n\n"))) return true;
+    } catch (err) {
+      log.warn("tell failed", { task: taskId, err: errorMessage(err) });
+    }
+    store.setPending(ids, true);
+    return false;
   }
 
   startGeneral(taskId: number, note?: string): void {
@@ -471,16 +495,24 @@ export class Engine {
   }
 
   // A coding agent: a claude in a window of the task's project session.
-  // tmux owns it; the TUI only embeds a viewer on it.
-  startCoding(
+  // tmux owns it; the TUI only embeds a viewer on it. What the owner typed
+  // while claude was not running goes in with the note.
+  async startCoding(
     taskId: number,
     opts: Omit<projects.StartOptions, "launchOverride"> = {},
   ): Promise<projects.StartResult> {
-    return projects.startTask(taskId, {
+    const pending = store.pendingTurns(taskId);
+    const note = [...pending.map((t) => t.body), opts.note?.trim()]
+      .filter(Boolean)
+      .join("\n\n");
+    const result = await projects.startTask(taskId, {
       ...opts,
+      note: note || undefined,
       noWorktree: opts.noWorktree || this.options.noWorktrees,
       launchOverride: this.options.launchOverride,
     });
+    if (result.type === "started") store.setPending(pending.map((t) => t.id), false);
+    return result;
   }
 
   // ── projects ──────────────────────────────────────────────────────────
@@ -598,7 +630,7 @@ export class Engine {
       this.learnedNotice,
     );
     store.retirePendingActions(taskId);
-    this.say(taskId, `Redraft the reply: ${instruction}`);
+    void this.say(taskId, `Redraft the reply: ${instruction}`);
   }
 
   markDone(taskId: number): void {

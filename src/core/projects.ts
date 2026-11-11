@@ -212,8 +212,10 @@ export async function startTask(
     // shell behind, which a fresh window replaces.
     const latest = store.latestSession(task.id);
     const existing = await liveWindow(task.id);
-    if (existing && latest?.kind === SessionKind.tmux && !latest.ended_at)
+    if (existing && latest?.kind === SessionKind.tmux && !latest.ended_at) {
+      if (opts.note) await typeLine(existing, opts.note);
       return { type: "started", session: latest, windowId: existing, project };
+    }
     if (existing) await mux().killWindow(existing);
 
     let cwd = task.worktree;
@@ -302,6 +304,26 @@ function recordStart(
 export async function liveWindow(taskId: number): Promise<string | null> {
   const state = await mux().state();
   return state.windows.find((w) => w.taskId === taskId)?.id ?? null;
+}
+
+// The window only while claude still runs in it: once claude exits, a shell
+// is left behind, and a line typed there would run as a command.
+export async function claudeWindow(taskId: number): Promise<string | null> {
+  const latest = store.latestSession(taskId);
+  if (latest?.kind !== SessionKind.tmux || latest.ended_at) return null;
+  return liveWindow(taskId);
+}
+
+// A newline would submit claude's prompt halfway through.
+function typeLine(windowId: string, text: string): Promise<void> {
+  return mux().sendLine(windowId, text.replace(/\s*\n\s*/g, " ").trim());
+}
+
+export async function tell(taskId: number, text: string): Promise<boolean> {
+  const window = await claudeWindow(taskId);
+  if (!window) return false;
+  await typeLine(window, text);
+  return true;
 }
 
 // Stopping keeps the worktree and the claude session id: s resumes it in a

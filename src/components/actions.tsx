@@ -682,7 +682,7 @@ export function useActions(dialogs: Dialogs) {
       });
       return;
     }
-    engine.say(task.id, text);
+    void engine.say(task.id, text);
   }
 
   // ── on an FYI / an idea ───────────────────────────────────────────────
