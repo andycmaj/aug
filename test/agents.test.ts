@@ -3,7 +3,12 @@ import { AgentPool, codingLaunch, hookSettings } from "../src/core/agents";
 import { actionFor } from "../src/core/outbound";
 import { handleDone, handleHook } from "../src/core/hooks";
 import { applyLesson } from "../src/core/learn";
-import { brainEnv, claudeArgs, deniedCalls, parseStreamLine } from "../src/core/brain";
+import {
+  brainEnv,
+  claudeArgs,
+  deniedCalls,
+  parseStreamLine,
+} from "../src/core/brain";
 import { toMessage } from "../src/core/ingest/github";
 import { plainText, threadKeyFor } from "../src/core/slack/shared";
 import * as store from "../src/core/store";
@@ -257,7 +262,10 @@ describe("brain stream", () => {
       deniedCalls({
         type: "result",
         permission_denials: [
-          { tool_name: "Bash", tool_input: { command: "cd /r && gh pr view 1", description: "d" } },
+          {
+            tool_name: "Bash",
+            tool_input: { command: "cd /r && gh pr view 1", description: "d" },
+          },
           { tool_name: "mcp__x__read", tool_input: { id: "1" } },
         ],
       }),
@@ -269,6 +277,18 @@ describe("brain stream", () => {
     const args = claudeArgs({ prompt: "x", allow: ["Read"] });
     expect(args).toContain("--permission-mode");
     expect(args[args.indexOf("--tools") + 1]).toBe("");
+    expect(args).not.toContain("--plugin-dir");
+  });
+
+  test("plugins load by folder, with their hooks off", () => {
+    const args = claudeArgs({ prompt: "x", pluginDirs: ["/p/a", "/p/b"] });
+    expect(args.filter((a, i) => args[i - 1] === "--plugin-dir")).toEqual([
+      "/p/a",
+      "/p/b",
+    ]);
+    expect(JSON.parse(args[args.indexOf("--settings") + 1]!)).toEqual({
+      disableAllHooks: true,
+    });
   });
 });
 

@@ -71,6 +71,11 @@ export interface AugConfig {
     servers: Record<string, string>;
     // capability -> bare tool names, overriding the built-in list.
     tools: Record<string, string[]>;
+    // capability -> a Claude Code plugin ("name@marketplace", a bare name, or
+    // an absolute folder), loaded into headless calls with --plugin-dir.
+    plugins: Record<string, string>;
+    // capability -> commands allowed on Bash ("plannotator annotate").
+    commands: Record<string, string[]>;
     grants: { general?: string[]; assistant?: string[] };
   };
 }
@@ -91,7 +96,13 @@ export const DEFAULT_CONFIG: AugConfig = {
   learning: true,
   theme: "default",
   log: { enabled: false, level: "info" },
-  capabilities: { servers: {}, tools: {}, grants: {} },
+  capabilities: {
+    servers: {},
+    tools: {},
+    plugins: {},
+    commands: {},
+    grants: {},
+  },
 };
 
 let cached: AugConfig | undefined;
@@ -130,6 +141,8 @@ export function mergeConfig(
     capabilities: {
       servers: { ...raw.capabilities?.servers },
       tools: { ...raw.capabilities?.tools },
+      plugins: { ...raw.capabilities?.plugins },
+      commands: { ...raw.capabilities?.commands },
       grants: { ...raw.capabilities?.grants },
     },
   } as AugConfig;

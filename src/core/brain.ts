@@ -35,6 +35,8 @@ export interface BrainCall {
   allow?: string[];
   // Tools denied outright, even if a rule elsewhere would allow them.
   disallow?: string[];
+  // Claude Code plugins to load for this call (core/capabilities.ts).
+  pluginDirs?: string[];
   // "user" loads the user's settings, which is the only way claude.ai
   // connectors (MCP servers) load. Default skips them.
   settingSources?: "" | "user";
@@ -115,6 +117,12 @@ export function claudeArgs(call: BrainCall): string[] {
   if (call.resume) args.push("--resume", call.resume);
   else if (call.sessionId) args.push("--session-id", call.sessionId);
   else args.push("--no-session-persistence");
+  // A plugin brings its hooks along; they'd reopen what skipping user
+  // settings closed, so they're off.
+  if (call.pluginDirs?.length) {
+    for (const dir of call.pluginDirs) args.push("--plugin-dir", dir);
+    args.push("--settings", JSON.stringify({ disableAllHooks: true }));
+  }
   args.push("--tools", (call.tools ?? []).join(","));
   if (call.allow?.length) {
     args.push("--permission-mode", "dontAsk");

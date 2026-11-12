@@ -1,10 +1,18 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { generalAllow } from "../src/core/agents";
 import { assistantAllow } from "../src/core/assistant";
 import {
   CAPABILITIES,
   WRITE_VERB,
   capabilityAllow,
+  capabilityGrant,
+  declaredRules,
+  grantedNote,
+  pluginDir,
+  pluginWidens,
   resolveCapability,
 } from "../src/core/capabilities";
 import {
@@ -17,7 +25,14 @@ import {
 function withCaps(caps: Partial<AugConfig["capabilities"]>): AugConfig {
   return {
     ...DEFAULT_CONFIG,
-    capabilities: { servers: {}, tools: {}, grants: {}, ...caps },
+    capabilities: {
+      servers: {},
+      tools: {},
+      plugins: {},
+      commands: {},
+      grants: {},
+      ...caps,
+    },
   };
 }
 
@@ -168,6 +183,8 @@ describe("capabilities", () => {
     expect(mergeConfig({}).capabilities).toEqual({
       servers: {},
       tools: {},
+      plugins: {},
+      commands: {},
       grants: {},
     });
     const merged = mergeConfig({
@@ -204,5 +221,184 @@ describe("capabilities", () => {
       expect(rule).not.toMatch(/comment|create|edit|merge|close|review/);
     }
     expect(generalAllow()).toContain("Bash(gh issue view:*)");
+  });
+});
+
+function skill(dir: string, path: string, frontmatter: string): void {
+  mkdirSync(join(dir, path, ".."), { recursive: true });
+  writeFileSync(join(dir, path), `---\n${frontmatter}\n---\nDo the thing.\n`);
+}
+
+// A fake ~/.claude with one installed plugin.
+function fakeClaudeDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), "aug-claude-"));
+  const install = join(dir, "plugins", "cache", "revdiff", "0.8.24");
+  mkdirSync(install, { recursive: true });
+  writeFileSync(
+    join(dir, "plugins", "installed_plugins.json"),
+    JSON.stringify({
+      version: 2,
+      plugins: {
+        "revdiff@revdiff": [{ scope: "user", installPath: install }],
+        "gone@market": [{ scope: "user", installPath: join(dir, "nowhere") }],
+      },
+    }),
+  );
+  process.env.CLAUDE_CONFIG_DIR = dir;
+  return install;
+}
+
+describe("plugin and command capabilities", () => {
+  const saved = process.env.CLAUDE_CONFIG_DIR;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = saved;
+    setConfigForTest(DEFAULT_CONFIG);
+  });
+
+  test("an installed plugin resolves by full or bare name", () => {
+    const install = fakeClaudeDir();
+    expect(pluginDir("revdiff@revdiff")).toBe(install);
+    expect(pluginDir("revdiff")).toBe(install);
+    expect(pluginDir("gone@market")).toBeUndefined();
+    expect(pluginDir("nope")).toBeUndefined();
+    expect(pluginDir("../revdiff")).toBeUndefined();
+    expect(pluginDir(install)).toBe(install);
+  });
+
+  test("a granted plugin loads its folder and the Skill tool", () => {
+    const install = fakeClaudeDir();
+    const grant = capabilityGrant(
+      "general",
+      withCaps({
+        plugins: { revdiff: "revdiff@revdiff" },
+        commands: { revdiff: ["revdiff"] },
+        grants: { general: ["revdiff"] },
+      }),
+    );
+    expect(grant.pluginDirs).toEqual([install]);
+    expect(grant.tools).toEqual(["Skill"]);
+    expect(grant.allow).toEqual(["Bash(revdiff:*)", "Skill"]);
+  });
+
+  test("a plugin that is not installed loads nothing", () => {
+    fakeClaudeDir();
+    const grant = capabilityGrant(
+      "general",
+      withCaps({
+        plugins: { gone: "gone@market" },
+        grants: { general: ["gone"] },
+      }),
+    );
+    expect(grant).toEqual({
+      allow: [],
+      tools: [],
+      pluginDirs: [],
+      commands: [],
+    });
+  });
+
+  test("commands are plain prefixes; shells, wrappers and globs are dropped", () => {
+    const grant = capabilityGrant(
+      "assistant",
+      withCaps({
+        commands: {
+          tools: [
+            "plannotator annotate",
+            "jq",
+            "bash",
+            "env FOO=1 rm",
+            "sudo rm",
+            "rm *",
+            "jq; rm -rf /",
+            "",
+          ],
+        },
+        grants: { assistant: ["tools"] },
+      }),
+    );
+    expect(grant.commands).toEqual(["plannotator annotate", "jq"]);
+    expect(grant.allow).toEqual(["Bash(plannotator annotate:*)", "Bash(jq:*)"]);
+    expect(grant.pluginDirs).toEqual([]);
+  });
+
+  test("allowed-tools is read in every form a skill writes it", () => {
+    expect(declaredRules("---\nname: a\n---\nbody")).toEqual([]);
+    expect(declaredRules("no frontmatter")).toEqual([]);
+    expect(
+      declaredRules("---\nallowed-tools: [Bash, Read, Edit]\n---\n"),
+    ).toEqual(["Bash", "Read", "Edit"]);
+    expect(
+      declaredRules(
+        "---\nallowed-tools: Bash(git add:*), Bash(git status:*) Read\n---\n",
+      ),
+    ).toEqual(["Bash(git add:*)", "Bash(git status:*)", "Read"]);
+    expect(
+      declaredRules(
+        "---\nallowed-tools:\n  - Bash(jq:*)\n  - 'Grep'\nname: x\n---\n",
+      ),
+    ).toEqual(["Bash(jq:*)", "Grep"]);
+    expect(
+      declaredRules(
+        "---\nallowed-tools: Bash\ndisable-model-invocation: true\n---\n",
+      ),
+    ).toBeNull();
+  });
+
+  test("a plugin loads only when its skills take nothing ungranted", () => {
+    const dir = mkdtempSync(join(tmpdir(), "aug-plugin-"));
+    mkdirSync(join(dir, ".claude-plugin"));
+    writeFileSync(
+      join(dir, ".claude-plugin", "plugin.json"),
+      JSON.stringify({ name: "p", skills: "./.claude-plugin/skills/" }),
+    );
+    skill(
+      dir,
+      "skills/read/SKILL.md",
+      "name: read\nallowed-tools: [Read, Grep]",
+    );
+    skill(dir, "commands/run.md", "allowed-tools: Bash(jq:*)");
+    skill(
+      dir,
+      "commands/user.md",
+      "allowed-tools: Bash\ndisable-model-invocation: true",
+    );
+    expect(pluginWidens(dir, ["jq"])).toEqual([]);
+    expect(pluginWidens(dir, [])).toEqual(["Bash(jq:*)"]);
+    // A manifest's own skill folder counts too.
+    skill(
+      dir,
+      ".claude-plugin/skills/wide/SKILL.md",
+      "allowed-tools: [Bash, Write]",
+    );
+    expect(pluginWidens(dir, ["jq"])).toEqual(["Bash", "Write"]);
+  });
+
+  test("a plugin whose skills widen the grant is not loaded", () => {
+    const install = fakeClaudeDir();
+    skill(install, "skills/wide/SKILL.md", "allowed-tools: [Bash, Edit]");
+    const grant = capabilityGrant(
+      "general",
+      withCaps({
+        plugins: { revdiff: "revdiff" },
+        commands: { revdiff: ["revdiff"] },
+        grants: { general: ["revdiff"] },
+      }),
+    );
+    expect(grant.pluginDirs).toEqual([]);
+    expect(grant.tools).toEqual([]);
+    expect(grant.allow).toEqual(["Bash(revdiff:*)"]);
+  });
+
+  test("grants stay per role, and the prompt names granted commands", () => {
+    const config = withCaps({
+      commands: { jq: ["jq"] },
+      grants: { assistant: ["jq"] },
+    });
+    expect(grantedNote("assistant", config)).toContain("jq");
+    expect(grantedNote("general", config)).toBe("");
+    setConfigForTest(config);
+    expect(assistantAllow()).toContain("Bash(jq:*)");
+    expect(generalAllow()).not.toContain("Bash(jq:*)");
   });
 });

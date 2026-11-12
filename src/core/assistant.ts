@@ -4,7 +4,7 @@
 // the running engine makes. It never sends: a Send is only ever the owner's
 // press.
 
-import { capabilityAllow, deniedNote, GH_READS, SHELL_HOWTO } from "./capabilities";
+import { capabilityAllow, capabilityGrant, deniedNote, GH_READS, grantedNote, SHELL_HOWTO } from "./capabilities";
 import { loadConfig } from "./config";
 import { DocName, readDoc } from "./docs";
 import { mentionedProjects, mentionedTasks } from "./mentions";
@@ -72,6 +72,7 @@ export function assistantSystem(): string {
     "",
     "## GitHub",
     "Look up issues, PRs and runs with gh's read commands: gh pr view|list|diff|checks|status, gh issue view|list|status, gh search, gh run view|list, gh repo view. Nothing that writes (no comments, no gh api).",
+    grantedNote("assistant"),
     SHELL_HOWTO,
     "",
     "## How you work",
@@ -154,13 +155,18 @@ export function assistantCall(
   turns: TurnRow[],
   reason: string,
   resumed: boolean,
-): Pick<BrainCall, "prompt" | "system" | "model" | "tools" | "allow" | "env"> {
+): Pick<
+  BrainCall,
+  "prompt" | "system" | "model" | "tools" | "allow" | "pluginDirs" | "env"
+> {
+  const grant = capabilityGrant("assistant");
   return {
     prompt: assistantPrompt(turns, reason, resumed),
     system: assistantSystem(),
     model: loadConfig().brain.assistantModel,
-    tools: ASSISTANT_TOOLS,
+    tools: [...ASSISTANT_TOOLS, ...grant.tools],
     allow: assistantAllow(),
+    pluginDirs: grant.pluginDirs,
     env: { AUG_ASKED_BY: "assistant", ...toolsEnv() },
   };
 }

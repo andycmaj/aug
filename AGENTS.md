@@ -70,6 +70,13 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   Assistant (`core/assistant.ts`): a resumed `claude -p` allowed only
   `aug-tools`. `listTasks()` never returns it, so nothing that lists work
   sees it.
+- **What a headless agent may call is `core/capabilities.ts`.** Config
+  grants each role (`general`, `assistant`) capabilities: connector tools
+  (`slack.read`), commands (`Bash(<cmd>:*)`) or a Claude Code plugin, loaded
+  with `--plugin-dir` and its hooks off. A skill's `allowed-tools` join the
+  allow list once it runs, so a plugin whose skills ask for more than its
+  capability grants is not loaded. Coding agents load the user's settings and
+  have every enabled plugin already.
 - **Logging is `core/log.ts`**: `logger(scope)` writes lines to `aug.log`
   under `AUG_HOME`, never to the terminal (the TUI owns it). It is off unless
   `AUG_LOG`, `log.enabled` in config, or `AUG_DEV` (set by `bun run dev`)
