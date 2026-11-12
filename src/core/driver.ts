@@ -122,8 +122,7 @@ export class ChatDriver implements AgentDriver {
   }
 
   resumes(task: TaskRow): string | undefined {
-    const prior = store.latestSession(task.id);
-    return prior?.kind === SessionKind.chat ? prior.id : undefined;
+    return this.pool.resumes(task.id);
   }
 
   private heard(task: TaskRow): void {

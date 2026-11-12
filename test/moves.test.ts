@@ -449,7 +449,7 @@ describe("links", () => {
   const doc = "https://docs.example.com/plan";
 
   test("link attaches a URL, and again only retitles it", async () => {
-    const task = engine.newTask("Plan the launch", Kind.general);
+    const task = engine.desk.newTask("Plan the launch", Kind.general);
     const ref = store.taskRef(task.id);
     const first = await engine.runMove("link", { task: ref, url: ` ${doc} ` });
     expect(first).toEqual({ ok: true, result: `linked ${doc} to ${ref}` });
@@ -463,7 +463,7 @@ describe("links", () => {
   });
 
   test("only http(s) URLs attach", async () => {
-    const task = engine.newTask("Plan the launch", Kind.general);
+    const task = engine.desk.newTask("Plan the launch", Kind.general);
     for (const url of ["docs/plan.md", "file:///etc/passwd", "javascript:alert(1)"]) {
       const out = await engine.runMove("link", { task: store.taskRef(task.id), url });
       expect(out).toEqual({ ok: false, result: `${url} is not an http(s) URL` });
@@ -472,7 +472,7 @@ describe("links", () => {
   });
 
   test("unlink takes it off, and names the links when the URL is not one", async () => {
-    const task = engine.newTask("Plan the launch", Kind.general);
+    const task = engine.desk.newTask("Plan the launch", Kind.general);
     const ref = store.taskRef(task.id);
     await engine.runMove("link", { task: ref, url: doc });
     const miss = await engine.runMove("unlink", { task: ref, url: "https://x.test" });
@@ -483,8 +483,8 @@ describe("links", () => {
   });
 
   test("an agent links its own task only", async () => {
-    const mine = engine.newTask("mine", Kind.general);
-    const other = engine.newTask("other", Kind.general);
+    const mine = engine.desk.newTask("mine", Kind.general);
+    const other = engine.desk.newTask("other", Kind.general);
     const by = `agent ${store.taskRef(mine.id)}`;
     const own = await engine.runMove("link", { task: store.taskRef(mine.id), url: doc }, by);
     expect(own.ok).toBe(true);
@@ -494,7 +494,7 @@ describe("links", () => {
   });
 
   test("lookups and the coding brief carry the links", async () => {
-    const task = engine.newTask("Plan the launch", Kind.coding);
+    const task = engine.desk.newTask("Plan the launch", Kind.coding);
     store.addTaskLink(task.id, doc, "the plan", "you");
     expect(taskDetail(task)).toContain(`Link: the plan ${doc}`);
     expect(codingBrief(task)).toContain(`Link: the plan ${doc}`);

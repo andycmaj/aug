@@ -202,6 +202,16 @@ interface Running {
 // their turn. Turns the owner asks for are never held back.
 const log = logger("agents");
 
+// The chat session the next turn continues. A session that was denied calls
+// remembers them and replays them word for word, so it is left behind: a new
+// one reads the conversation back.
+function chatResume(taskId: number, history: TurnRow[]): string | undefined {
+  const prior = store.latestSession(taskId);
+  return prior?.kind === SessionKind.chat && !lastDenials(history).length
+    ? prior.id
+    : undefined;
+}
+
 export class AgentPool {
   private running = new Map<number, Running>();
   private waiting: { taskId: number; reason: string }[] = [];
@@ -263,6 +273,10 @@ export class AgentPool {
     }
   }
 
+  resumes(taskId: number): string | undefined {
+    return chatResume(taskId, store.turnsForTask(taskId));
+  }
+
   private async run(taskId: number, reason: string): Promise<void> {
     const task = store.getTask(taskId);
     if (!task) return;
@@ -270,11 +284,7 @@ export class AgentPool {
     mkdirSync(cwd, { recursive: true });
 
     const history = store.turnsForTask(taskId);
-    const prior = store.latestSession(taskId);
-    // A session that was denied calls remembers them and replays them word for
-    // word, so it is left behind: a new one reads the conversation back.
-    const resume =
-      prior?.kind === SessionKind.chat && !lastDenials(history).length ? prior.id : undefined;
+    const resume = chatResume(taskId, history);
     const sessionId = resume ?? randomUUID();
     const ref = { taskId, sessionId };
     // Home's agent is the Assistant: it talks, and runs aug with aug-tools.
