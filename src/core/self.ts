@@ -2,7 +2,10 @@
 // entry is plain TypeScript, so it runs under bare `bun` without the Solid
 // preload the TUI needs.
 
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { augHome } from "./paths";
 
 export function toolsEntry(): string {
   return fileURLToPath(new URL("../bin/aug-tools.ts", import.meta.url));
@@ -21,12 +24,35 @@ export function toolsCommand(...args: string[]): string {
   return [...toolsArgv(), ...args].map(shellQuote).join(" ");
 }
 
-// Bash allow rules for an aug-tools command. Models often shorten the bun path
-// to plain `bun`, a different prefix that a headless call denies unasked, so
-// both spellings are allowed.
+// What a headless agent is told to type. Handed the long bun and script paths,
+// models abbreviate them (`B=...; T=...; $B $T move ...`), which no allow rule
+// can match; a short name on PATH leaves nothing to abbreviate.
+export const TOOLS_NAME = "aug-tools";
+
+export function toolsBin(): string {
+  const dir = join(augHome(), "bin");
+  const file = join(dir, TOOLS_NAME);
+  const script = `#!/bin/sh\nexec ${toolsArgv().map(shellQuote).join(" ")} "$@"\n`;
+  if (!existsSync(file) || readFileSync(file, "utf8") !== script) {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(file, script);
+    chmodSync(file, 0o755);
+  }
+  return dir;
+}
+
+export function toolsEnv(): Record<string, string> {
+  return { PATH: `${toolsBin()}:${process.env.PATH ?? ""}` };
+}
+
+// Bash allow rules for an aug-tools command: the short name, and the full
+// paths spelled either way in case a model writes them out anyway.
 export function toolsRules(...args: string[]): string[] {
-  const tail = [toolsEntry(), ...args].map(shellQuote).join(" ");
-  return [...new Set([toolsCommand(...args), `bun ${tail}`])].map((c) => `Bash(${c}:*)`);
+  const tail = args.map(shellQuote).join(" ");
+  const entry = [toolsEntry(), ...args].map(shellQuote).join(" ");
+  return [
+    ...new Set([`${TOOLS_NAME}${tail ? ` ${tail}` : ""}`, toolsCommand(...args), `bun ${entry}`]),
+  ].map((c) => `Bash(${c}:*)`);
 }
 
 // The environment for a claude aug runs itself. TMUX_PANE goes: aug may run

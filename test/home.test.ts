@@ -65,10 +65,11 @@ describe("Home", () => {
     const call = calls[0];
     expect(call.tools).toContain("Bash");
     const shell = call.allow!.filter((a) => a.startsWith("Bash(") && !a.startsWith("Bash(gh "));
-    expect(shell).toHaveLength(2);
-    expect(shell.every((a) => a.endsWith("aug-tools.ts:*)"))).toBe(true);
-    expect(shell.some((a) => a.startsWith("Bash(bun /"))).toBe(true);
-    expect(call.env).toEqual({ AUG_ASKED_BY: "assistant" });
+    expect(shell).toHaveLength(3);
+    expect(shell).toContain("Bash(aug-tools:*)");
+    expect(shell.some((a) => a.startsWith("Bash(bun /") && a.endsWith("aug-tools.ts:*)"))).toBe(true);
+    expect(call.env).toMatchObject({ AUG_ASKED_BY: "assistant" });
+    expect(call.env!.PATH).toStartWith(`${process.env.AUG_HOME}/bin:`);
     expect(call.schema).toBeUndefined();
     expect(call.system).toContain("move new");
     expect(call.prompt).toContain("## Tasks the owner named");
@@ -107,7 +108,8 @@ describe("Home", () => {
   test("a general agent's tools know which task is asking", async () => {
     const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
     await new AgentPool({ limit: () => 4 }).request(task.id, "go", "owner");
-    expect(calls[0].env).toEqual({ AUG_TASK_ID: String(task.id) });
+    expect(calls[0].env).toMatchObject({ AUG_TASK_ID: String(task.id) });
+    expect(calls[0].env!.PATH).toStartWith(`${process.env.AUG_HOME}/bin:`);
   });
 });
 
@@ -126,8 +128,16 @@ test("a general agent's aug-tools rules match the bun path written either way", 
   const { generalAllow } = await import("../src/core/agents");
   const { toolsCommand, toolsEntry } = await import("../src/core/self");
   const allow = generalAllow();
+  expect(allow).toContain("Bash(aug-tools move project:*)");
   expect(allow).toContain(`Bash(${toolsCommand("move", "project")}:*)`);
   expect(allow).toContain(`Bash(bun ${toolsEntry()} move project:*)`);
+});
+
+test("aug-tools on a headless agent's PATH runs aug-tools", async () => {
+  const { toolsEnv } = await import("../src/core/self");
+  const run = Bun.spawnSync(["aug-tools", "projects"], { env: { ...process.env, ...toolsEnv() } });
+  expect(run.exitCode).toBe(0);
+  expect(run.stdout.toString()).toContain("no projects");
 });
 
 test("a general agent is told it has gh and how to write shell commands that are allowed", async () => {

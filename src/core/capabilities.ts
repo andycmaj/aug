@@ -71,7 +71,7 @@ export const GH_READS = [
 // Rules match a command's prefix, and each part of `a && b` must match on its
 // own; `cd` into another folder never does. Said to every headless shell.
 export const SHELL_HOWTO =
-  "Run each shell command on its own, starting with the command itself: a `cd <dir> &&` in front is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout.";
+  "Run one command per Bash call, written out in full and starting with the command itself: no `cd <dir> &&` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout.";
 
 export type Role = "general" | "assistant";
 

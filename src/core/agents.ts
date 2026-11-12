@@ -18,7 +18,7 @@ import { AGENT_MOVES } from "./moves";
 import { logger } from "./log";
 import { linkLine } from "./lookup";
 import { paths } from "./paths";
-import { toolsCommand, toolsRules } from "./self";
+import { TOOLS_NAME, toolsCommand, toolsEnv, toolsRules } from "./self";
 import { transcript } from "./transcript";
 import * as store from "./store";
 import {
@@ -197,7 +197,7 @@ export function turnSystem(): string {
     "When a reply to the person who asked is owed, put the exact words in action.text; the owner presses Send. Never claim you sent anything.",
     "If the owner already answered the thread themselves, say so, leave no action, and recommend closing.",
     "",
-    `aug's own tools, on Bash as ${toolsCommand()} <command>:`,
+    `aug's own tools, on Bash as ${TOOLS_NAME} <command>:`,
     "- tasks [words] | task AUG-0000 | projects: look up the owner's work and projects (a project is a tmux session coding tasks run in, with its repos).",
     `- move new "<title>" --kind coding|general|task --brief "<what to do, with what the agent needs>" [--project <name>] [--repo owner/repo] --from <this task's ref>: make a task. When the owner asks for work done elsewhere (a coding task in a project, a follow-up), make it, then say its ref. The owner starts it.`,
     `- move project_new "<name>" [--repo owner/repo]: make a project, when the owner asks for one. Make it before a task that goes in it.`,
@@ -379,7 +379,7 @@ export class AgentPool {
               model: loadConfig().brain.agentModel,
               tools: GENERAL_TOOLS,
               allow: generalAllow(),
-              env: { AUG_TASK_ID: String(taskId) },
+              env: { AUG_TASK_ID: String(taskId), ...toolsEnv() },
             }),
         cwd,
         ...(resume ? { resume } : { sessionId }),

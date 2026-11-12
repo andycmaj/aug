@@ -15,7 +15,7 @@ import {
   taskLine,
 } from "./lookup";
 import { MOVES } from "./moves";
-import { toolsCommand, toolsRules } from "./self";
+import { TOOLS_NAME, toolsEnv, toolsRules } from "./self";
 import * as store from "./store";
 import { transcript } from "./transcript";
 import {
@@ -60,7 +60,7 @@ export function movesHelp(): string {
 }
 
 export function assistantSystem(): string {
-  const tools = toolsCommand();
+  const tools = TOOLS_NAME;
   return [
     "You are the Assistant in aug, the owner's work manager in a terminal. This is Home: one long conversation where the owner asks about any of their work and tells you to change it. You run aug for them: you look things up, make tasks and projects, start and stop agents, and move work around.",
     "",
@@ -189,6 +189,6 @@ export function assistantCall(
     model: loadConfig().brain.assistantModel,
     tools: ASSISTANT_TOOLS,
     allow: assistantAllow(),
-    env: { AUG_ASKED_BY: "assistant" },
+    env: { AUG_ASKED_BY: "assistant", ...toolsEnv() },
   };
 }
