@@ -508,13 +508,13 @@ export function seedDemo(): void {
       "note",
       "the census sync is behind a VPN and will not run from a laptop",
     );
-    store.addHub(
+    store.addKnowledge(
       "ledger",
       "Bank CSVs carry a UTF-8 BOM",
       "The bank's CSV export starts with a byte-order mark. Strip it before reading the header (`encoding='utf-8-sig'`), or the first column is named `\\ufeffdate`.",
       "agent AUG-0006",
     );
-    store.addHub(
+    store.addKnowledge(
       "ledger",
       "Inter-company transfers",
       "Transfers between Northwind entities post on both sides. The GL export must keep them; the consolidation step removes the pair.",

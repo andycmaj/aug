@@ -37,7 +37,7 @@ able to do anything I can do from the keyboard.
 `claude -p` tool calls run in a child process; the engine lives in the TUI.
 The engine still makes every owner move, so tools ask it to:
 
-- **Reads** (`aug-tools tasks`, `task show`, `projects`, `hub search`, `notes`)
+- **Reads** (`aug-tools tasks`, `task show`, `projects`, `knowledge search`, `notes`)
   query the store directly.
 - **Writes** insert a row in `moves` (verb, args JSON, who asked) and wait for
   it. The engine notices through `PRAGMA data_version`, runs the verb, and

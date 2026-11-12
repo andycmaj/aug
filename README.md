@@ -159,7 +159,7 @@ does the work, and whatever comes out waits for you.
   in a window of its project's session (see [Projects](#projects)). The table
   embeds a view of that window. Hooks passed with `--settings`
   (`aug-tools hook ...`) move it through the agent states. Its brief tells it
-  to finish with `aug-tools done`, leave handoff notes, use the Hub, link the
+  to finish with `aug-tools done`, leave handoff notes, use Knowledge, link the
   PR it opens (`aug-tools pr`) and read what came back (`aug-tools feedback`).
 - **Nothing sends itself.** A draft (a Slack reply, or a GitHub comment with
   merge, close or approve riding along) goes out only on `y` plus a confirm.
@@ -247,7 +247,7 @@ If one of your hooks opens a tmux window for every new worktree, guard it with
 | Rail and table | `y` send (asks first) · `e` edit draft in `$EDITOR` (before an agent starts: edit the brief) · `E` redraft · `s` start/continue agent · `S` stop and save · `d` done · `r` remind me · `w` watch · `x` not a task / read · `m` make it a task · `p` priority · `t` kind · `W` waiting on someone · `o` open the link or a file the agent made · `O` edit a made file in `$EDITOR` · `i` type · `I` info (everything aug knows about the row; `c` copies a value) · coding: `T` jump to its tmux window · `u` nudge about feedback · `M` move to a project |
 | Chat box       | `enter` send to the agent · `@` name a task (`tab`/`enter` takes it, `↑`/`↓` pick) · `esc` leave                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Agent terminal | everything goes to the agent · `^]` detach                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Board          | `1`–`4` Columns / Live handoffs / Hub / Projects · `h j k l` move · `enter` open · `c` write a note or Hub entry (new project on tab 4) · `A` adopt a tmux session · `x` archive a project · `M` move a task                                                                                                                                                                                                                                                                                                      |
+| Board          | `1`–`4` Columns / Live handoffs / Knowledge / Projects · `h j k l` move · `enter` open · `c` write a note or Knowledge entry (new project on tab 4) · `A` adopt a tmux session · `x` archive a project · `M` move a task                                                                                                                                                                                                                                                                                          |
 
 ## What changed for a terminal
 

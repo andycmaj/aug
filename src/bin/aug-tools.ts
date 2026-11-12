@@ -216,31 +216,31 @@ const notes = defineCommand({
   },
 });
 
-const hubAdd = defineCommand({
-  meta: { name: "add", description: "Add a durable discovery to the Hub" },
+const knowledgeAdd = defineCommand({
+  meta: { name: "add", description: "Add a durable discovery to Knowledge" },
   args: {
     body: { type: "positional", required: true },
     topic: { type: "string", required: true },
     title: { type: "string", required: true },
   },
   run({ args }) {
-    const row = store.addHub(
+    const row = store.addKnowledge(
       args.topic,
       args.title,
       String(args.body),
       author(),
     );
-    console.log(`hub #${row.id} under ${row.topic}`);
+    console.log(`knowledge #${row.id} under ${row.topic}`);
   },
 });
 
-const hubSearch = defineCommand({
-  meta: { name: "search", description: "Search the Hub" },
+const knowledgeSearch = defineCommand({
+  meta: { name: "search", description: "Search Knowledge" },
   args: { query: { type: "positional", required: true } },
   run({ args }) {
     const words = String(args.query).toLowerCase().split(/\s+/).filter(Boolean);
     const hits = store
-      .listHub()
+      .listKnowledge()
       .filter((h) =>
         words.every((w) =>
           `${h.topic} ${h.title} ${h.body}`.toLowerCase().includes(w),
@@ -250,15 +250,24 @@ const hubSearch = defineCommand({
       console.log(
         `#${h.id} [${h.topic}] ${h.title}\n  ${h.body.replace(/\n/g, "\n  ")}`,
       );
-    if (hits.length === 0) console.log("nothing in the Hub matches");
+    if (hits.length === 0) console.log("nothing in Knowledge matches");
   },
 });
 
-const hubList = defineCommand({
-  meta: { name: "list", description: "List Hub topics and entries" },
+const knowledgeList = defineCommand({
+  meta: { name: "list", description: "List Knowledge topics and entries" },
   run() {
-    for (const h of store.listHub())
+    for (const h of store.listKnowledge())
       console.log(`#${h.id} [${h.topic}] ${h.title} (${h.author})`);
+  },
+});
+
+const knowledge = defineCommand({
+  meta: { name: "knowledge", description: "What agents learned, by topic" },
+  subCommands: {
+    add: knowledgeAdd,
+    search: knowledgeSearch,
+    list: knowledgeList,
   },
 });
 
@@ -401,13 +410,9 @@ const main = defineCommand({
     projects: projectsList,
     pane,
     move,
-    hub: defineCommand({
-      meta: {
-        name: "hub",
-        description: "The Hub: what agents learned, by topic",
-      },
-      subCommands: { add: hubAdd, search: hubSearch, list: hubList },
-    }),
+    knowledge,
+    // The old name: briefs and sessions from before the rename still call it.
+    hub: knowledge,
   },
 });
 

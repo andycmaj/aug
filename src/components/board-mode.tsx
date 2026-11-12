@@ -1,6 +1,6 @@
 // The Board: every agent and its session. Columns are the agent's states;
-// Live handoffs are the notes agents leave each other; the Hub is what they
-// learned, by topic.
+// Live handoffs are the notes agents leave each other; Knowledge is what
+// they learned, by topic.
 
 import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
@@ -25,7 +25,7 @@ import {
   AgentState,
   NoteLabel,
   TaskStatus,
-  type HubRow,
+  type KnowledgeRow,
   type ProjectRow,
   type TaskRow,
 } from "../core/types";
@@ -38,14 +38,14 @@ import { duration, toneColor } from "./ui";
 const Tab = {
   columns: "columns",
   notes: "notes",
-  hub: "hub",
+  knowledge: "knowledge",
   projects: "projects",
 } as const;
 type Tab = (typeof Tab)[keyof typeof Tab];
 const TABS: { key: Tab; label: string }[] = [
   { key: "columns", label: "1 Columns" },
   { key: "notes", label: "2 Live handoffs" },
-  { key: "hub", label: "3 Hub" },
+  { key: "knowledge", label: "3 Knowledge" },
   { key: "projects", label: "4 Projects" },
 ];
 
@@ -66,7 +66,7 @@ export function BoardMode() {
 
   const [col, setCol] = createSignal(0);
   const [row, setRow] = createSignal(0);
-  const [hubAt, setHubAt] = createSignal(0);
+  const [knowledgeAt, setKnowledgeAt] = createSignal(0);
   const [projAt, setProjAt] = createSignal(0);
   let notesScroll: ScrollBoxRenderable | undefined;
 
@@ -77,9 +77,9 @@ export function BoardMode() {
     columns()[col()]?.tasks[
       Math.min(row(), (columns()[col()]?.tasks.length ?? 1) - 1)
     ] ?? null;
-  const hub = createMemo(() => {
+  const knowledge = createMemo(() => {
     aug.version();
-    return store.listHub();
+    return store.listKnowledge();
   });
   const notes = createMemo(() => {
     aug.version();
@@ -127,10 +127,10 @@ export function BoardMode() {
       shell.actions.newProject();
       return;
     }
-    if (tab() === Tab.hub) {
+    if (tab() === Tab.knowledge) {
       shell.dialogs.show(() => (
         <PromptModal
-          title="Hub: a durable discovery"
+          title="Knowledge: a durable discovery"
           hint="topic: title - what was learned. Short-lived coordination belongs in Live handoffs."
           placeholder="export: inter-company transfers - the bank feed keeps them, the export drops them"
           onSubmit={(line) => {
@@ -143,7 +143,7 @@ export function BoardMode() {
               );
               return;
             }
-            store.addHub(m[1], m[2], m[3], "you");
+            store.addKnowledge(m[1], m[2], m[3], "you");
           }}
           onClose={shell.dialogs.close}
         />
@@ -184,8 +184,10 @@ export function BoardMode() {
       case Tab.notes:
         notesScroll?.scrollBy(d * 2);
         break;
-      case Tab.hub:
-        setHubAt((h) => Math.max(0, Math.min(hub().length - 1, h + d)));
+      case Tab.knowledge:
+        setKnowledgeAt((k) =>
+          Math.max(0, Math.min(knowledge().length - 1, k + d)),
+        );
         break;
       case Tab.projects:
         setProjAt((i) =>
@@ -208,8 +210,8 @@ export function BoardMode() {
       [Commands.NAV_TOP]: () =>
         tab() === Tab.columns
           ? setRow(0)
-          : tab() === Tab.hub
-            ? setHubAt(0)
+          : tab() === Tab.knowledge
+            ? setKnowledgeAt(0)
             : tab() === Tab.projects
               ? setProjAt(0)
               : notesScroll?.scrollTo(0),
@@ -221,7 +223,7 @@ export function BoardMode() {
         setTab(Tab.notes);
         store.markNotesRead("you");
       },
-      [Commands.BOARD_TAB_3]: () => setTab(Tab.hub),
+      [Commands.BOARD_TAB_3]: () => setTab(Tab.knowledge),
       [Commands.BOARD_TAB_4]: () => setTab(Tab.projects),
       [Commands.PROJECT_ADOPT]: () => void shell.actions.adoptProject(),
       [Commands.PROJECT_ARCHIVE]: () => {
@@ -377,8 +379,12 @@ export function BoardMode() {
                 </For>
               </scrollbox>
             </Match>
-            <Match when={tab() === Tab.hub}>
-              <Hub entries={hub()} selected={hubAt()} width={dims().width} />
+            <Match when={tab() === Tab.knowledge}>
+              <Knowledge
+                entries={knowledge()}
+                selected={knowledgeAt()}
+                width={dims().width}
+              />
             </Match>
             <Match when={tab() === Tab.projects}>
               <Projects
@@ -598,7 +604,7 @@ function Card(props: {
   );
 }
 
-function Hub(props: { entries: HubRow[]; selected: number; width: number }) {
+function Knowledge(props: { entries: KnowledgeRow[]; selected: number; width: number }) {
   const theme = useTheme();
   const current = () => props.entries[props.selected];
   return (
@@ -607,8 +613,8 @@ function Hub(props: { entries: HubRow[]; selected: number; width: number }) {
       fallback={
         <box paddingLeft={1}>
           <text fg={theme.textMuted}>
-            The Hub is empty. Agents add discoveries with aug-tools hub add; c
-            writes one.
+            Nothing learned yet. Agents add discoveries with aug-tools
+            knowledge add; c writes one.
           </text>
         </box>
       }
@@ -645,7 +651,7 @@ function Hub(props: { entries: HubRow[]; selected: number; width: number }) {
           </For>
         </scrollbox>
         <Show when={current()}>
-          {(entry: () => HubRow) => (
+          {(entry: () => KnowledgeRow) => (
             <box flexDirection="column" flexGrow={1}>
               <text fg={theme.primary} attributes={1}>
                 {entry().title}

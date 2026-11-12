@@ -125,7 +125,7 @@ export const GENERAL_ALLOW = [
 // which; see AGENT_MOVES).
 function agentToolRules(): string[] {
   return [
-    ...["tasks", "task", "projects", "notes", "hub search"].flatMap((c) =>
+    ...["tasks", "task", "projects", "notes", "knowledge search", "hub search"].flatMap((c) =>
       toolsRules(...c.split(" ")),
     ),
     ...[...AGENT_MOVES].flatMap((verb) => toolsRules("move", verb)),
@@ -479,9 +479,9 @@ export function codingBrief(task: TaskRow): string {
     `When you open a pull request, link it so its reviews come back to this task: ${toolsCommand("pr", "<url>")}`,
     `Attach a doc, Slack thread or ticket the task leans on, so the owner sees it in the task: ${toolsCommand("move", "link", ref, "<url>", "--title", "<what it is>")}`,
     `Reviews, comments and CI that came back since you last looked: ${toolsCommand("feedback")}`,
-    `Durable discoveries go in the Hub: ${toolsCommand("hub", "add", "--topic", "<topic>", "--title", "<title>", "<body>")}`,
+    `Durable discoveries go in Knowledge: ${toolsCommand("knowledge", "add", "--topic", "<topic>", "--title", "<title>", "<body>")}`,
     `Work that belongs in a task of its own: ${toolsCommand("move", "new", "<title>", "--kind", "coding", "--brief", "<what to do>", "--from", ref)} (look up projects with ${toolsCommand("projects")}).`,
-    `Search it: ${toolsCommand("hub", "search", "<words>")}`,
+    `Search it: ${toolsCommand("knowledge", "search", "<words>")}`,
     `To show the owner a terminal program (a diff viewer), run it in a split of your own pane, not a new tmux window: ${toolsCommand("pane", "--zoom", "--wait", "--", "<command...>")}`,
     "",
     docsBlock({ learned: true }),

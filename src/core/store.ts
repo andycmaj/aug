@@ -16,7 +16,7 @@ import {
   type IdeaStatus,
   type CorrectionRow,
   type DraftAction,
-  type HubRow,
+  type KnowledgeRow,
   type IdeaRow,
   type Kind,
   type MessageRow,
@@ -653,7 +653,7 @@ export function updateSession(id: string, patch: SessionPatch): void {
   patchRow<SessionRow>("sessions", id, patch, "last_event_at");
 }
 
-// ── notes, hub, ideas ────────────────────────────────────────────────────
+// ── notes, knowledge, ideas ──────────────────────────────────────────────
 
 export function addNote(
   author: string,
@@ -699,13 +699,13 @@ export function markNotesRead(reader: string): void {
   });
 }
 
-export function addHub(
+export function addKnowledge(
   topic: string,
   title: string,
   body: string,
   author: string,
   parentId: number | null = null,
-): HubRow {
+): KnowledgeRow {
   const id = run(
     "INSERT INTO hub (topic, title, body, author, parent_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     topic.trim().toLowerCase(),
@@ -715,11 +715,11 @@ export function addHub(
     parentId,
     now(),
   );
-  return one<HubRow>("SELECT * FROM hub WHERE id = ?", id)!;
+  return one<KnowledgeRow>("SELECT * FROM hub WHERE id = ?", id)!;
 }
 
-export function listHub(): HubRow[] {
-  return all<HubRow>("SELECT * FROM hub ORDER BY topic, created_at, id");
+export function listKnowledge(): KnowledgeRow[] {
+  return all<KnowledgeRow>("SELECT * FROM hub ORDER BY topic, created_at, id");
 }
 
 export function addIdea(

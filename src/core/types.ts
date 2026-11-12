@@ -266,7 +266,7 @@ export interface TaskLinkRow {
   created_at: string;
 }
 
-export interface HubRow {
+export interface KnowledgeRow {
   id: number;
   topic: string;
   title: string;

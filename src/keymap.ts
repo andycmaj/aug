@@ -298,7 +298,12 @@ export const keymap: KeymapTable<HelpCtx> = {
       desc: "live handoffs",
       help: "handoffs",
     },
-    { key: "3", cmd: Commands.BOARD_TAB_3, desc: "hub", help: "hub" },
+    {
+      key: "3",
+      cmd: Commands.BOARD_TAB_3,
+      desc: "knowledge",
+      help: "knowledge",
+    },
     { key: "4", cmd: Commands.BOARD_TAB_4, desc: "projects", help: "projects" },
     { key: "shift+a", cmd: Commands.PROJECT_ADOPT, desc: "projects: adopt a tmux session" },
     { key: "x", cmd: Commands.PROJECT_ARCHIVE, desc: "projects: archive the project" },
@@ -307,7 +312,7 @@ export const keymap: KeymapTable<HelpCtx> = {
     {
       key: "c",
       cmd: Commands.BOARD_COMPOSE,
-      desc: "write a note / hub entry",
+      desc: "write a note / knowledge entry",
       help: "write",
     },
     { key: "s", cmd: Commands.START, desc: "start / continue the agent" },

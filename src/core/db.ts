@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS notes (
   created_at TEXT NOT NULL
 );
 
+-- Knowledge (the Board tab); the table kept its old name.
 CREATE TABLE IF NOT EXISTS hub (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   topic TEXT NOT NULL,

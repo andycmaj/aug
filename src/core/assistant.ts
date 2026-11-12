@@ -66,7 +66,7 @@ export function assistantSystem(): string {
     "- task AUG-0000: one task in full, with its recent chat",
     "- projects [--all]: projects and their repos",
     "- notes: the agents' live handoff board",
-    "- hub search <words>: what agents learned",
+    "- knowledge search <words>: what agents learned",
     "Change things (the running aug makes the move and prints one line back; a failure says why):",
     movesHelp(),
     "",
