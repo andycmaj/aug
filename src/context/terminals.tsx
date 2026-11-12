@@ -1,7 +1,7 @@
-// Every embedded terminal: coding agents (one per session, several at once
-// for the Wall) and one-off editors ($EDITOR on a draft or a doc). Sessions
-// and their renderables live here, not in a pane, so they survive a pane
-// remounting or the view switching; a host box adopts the renderable when it
+// Every embedded terminal: coding agents (one per session) and one-off
+// editors ($EDITOR on a draft or a doc). Sessions and their renderables live
+// here, not in a pane, so they survive a pane remounting or the view
+// switching; a host box adopts the renderable when it
 // mounts and gives it back when it goes.
 
 import {

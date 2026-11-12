@@ -1,6 +1,6 @@
 // The Board: every agent and its session. Columns are the agent's states;
-// the Wall is every live coding terminal side by side; Live handoffs are the
-// notes agents leave each other; the Hub is what they learned, by topic.
+// Live handoffs are the notes agents leave each other; the Hub is what they
+// learned, by topic.
 
 import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
@@ -10,7 +10,6 @@ import {
   Markdown,
   truncate,
   useFocus,
-  useKeyPassthrough,
   usePane,
   useScope,
   useTheme,
@@ -19,7 +18,6 @@ import {
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
-import { useTerminals, type TermState } from "../context/terminals";
 import { BOARD_COLUMNS, LANE_META } from "../core/lanes";
 import { ageLabel } from "../core/rail";
 import * as store from "../core/store";
@@ -31,9 +29,7 @@ import {
   type ProjectRow,
   type TaskRow,
 } from "../core/types";
-import { encodeKey } from "../terminal/key-encode";
 import type { HelpCtx } from "../keymap";
-import { TermView } from "./agent-terminal";
 import { AugFooter } from "./footer";
 import { ChoiceModal, PromptModal } from "./modals";
 import { useShell } from "./shell";
@@ -41,7 +37,6 @@ import { duration, toneColor } from "./ui";
 
 const Tab = {
   columns: "columns",
-  wall: "wall",
   notes: "notes",
   hub: "hub",
   projects: "projects",
@@ -49,10 +44,9 @@ const Tab = {
 type Tab = (typeof Tab)[keyof typeof Tab];
 const TABS: { key: Tab; label: string }[] = [
   { key: "columns", label: "1 Columns" },
-  { key: "wall", label: "2 Wall" },
-  { key: "notes", label: "3 Live handoffs" },
-  { key: "hub", label: "4 Hub" },
-  { key: "projects", label: "5 Projects" },
+  { key: "notes", label: "2 Live handoffs" },
+  { key: "hub", label: "3 Hub" },
+  { key: "projects", label: "4 Projects" },
 ];
 
 type ProjectLine =
@@ -64,7 +58,6 @@ const [tab, setTab] = createSignal<Tab>(Tab.columns);
 export function BoardMode() {
   const aug = useAug();
   const theme = useTheme();
-  const terminals = useTerminals();
   const { showToast } = useToast();
   const { isPaneFocused } = useFocus();
   const shell = useShell({ typing: () => false });
@@ -73,9 +66,6 @@ export function BoardMode() {
 
   const [col, setCol] = createSignal(0);
   const [row, setRow] = createSignal(0);
-  const [tile, setTile] = createSignal(0);
-  const [wallCols, setWallCols] = createSignal(2);
-  const [attached, setAttached] = createSignal(false);
   const [hubAt, setHubAt] = createSignal(0);
   const [projAt, setProjAt] = createSignal(0);
   let notesScroll: ScrollBoxRenderable | undefined;
@@ -87,11 +77,6 @@ export function BoardMode() {
     columns()[col()]?.tasks[
       Math.min(row(), (columns()[col()]?.tasks.length ?? 1) - 1)
     ] ?? null;
-  const tiles = createMemo(() =>
-    terminals.list().filter((t) => t.kind === "agent"),
-  );
-  const tileTerm = (): TermState | undefined =>
-    tiles()[Math.min(tile(), tiles().length - 1)];
   const hub = createMemo(() => {
     aug.version();
     return store.listHub();
@@ -119,10 +104,6 @@ export function BoardMode() {
 
   const target = (): TaskRow | null => {
     if (tab() === Tab.columns) return cardTask();
-    if (tab() === Tab.wall) {
-      const id = tileTerm()?.taskId;
-      return id ? store.getTask(id) : null;
-    }
     if (tab() === Tab.projects) {
       const line = projectLine();
       return line?.type === "task" ? line.task : null;
@@ -134,26 +115,6 @@ export function BoardMode() {
     aug.setMode(ViewMode.chat);
     aug.selectTask(task.id);
   };
-
-  // The Wall hands every key to the selected tile while attached.
-  useKeyPassthrough(
-    "terminal",
-    (event) => {
-      const id = tileTerm()?.id;
-      const bytes = encodeKey(event);
-      if (id && bytes) terminals.write(id, bytes);
-    },
-    {
-      target: p.target,
-      enabled: () =>
-        tab() === Tab.wall && attached() && Boolean(tileTerm()?.running),
-    },
-  );
-  useScope(
-    "terminal",
-    { [Commands.TERMINAL_DETACH]: () => setAttached(false) },
-    { target: p.target },
-  );
 
   const onTask = (fn: (t: TaskRow) => void) => () => {
     const t = target();
@@ -220,11 +181,6 @@ export function BoardMode() {
           ),
         );
         break;
-      case Tab.wall:
-        setTile((t) =>
-          Math.max(0, Math.min(tiles().length - 1, t + d * wallCols())),
-        );
-        break;
       case Tab.notes:
         notesScroll?.scrollBy(d * 2);
         break;
@@ -239,11 +195,9 @@ export function BoardMode() {
     }
   };
   const horizontal = (d: number) => {
-    if (tab() === Tab.columns) {
-      setCol((c) => Math.max(0, Math.min(BOARD_COLUMNS.length - 1, c + d)));
-      setRow(0);
-    } else if (tab() === Tab.wall)
-      setTile((t) => Math.max(0, Math.min(tiles().length - 1, t + d)));
+    if (tab() !== Tab.columns) return;
+    setCol((c) => Math.max(0, Math.min(BOARD_COLUMNS.length - 1, c + d)));
+    setRow(0);
   };
 
   useScope(
@@ -263,13 +217,12 @@ export function BoardMode() {
       [Commands.BOARD_LEFT]: () => horizontal(-1),
       [Commands.BOARD_RIGHT]: () => horizontal(1),
       [Commands.BOARD_TAB_1]: () => setTab(Tab.columns),
-      [Commands.BOARD_TAB_2]: () => setTab(Tab.wall),
-      [Commands.BOARD_TAB_3]: () => {
+      [Commands.BOARD_TAB_2]: () => {
         setTab(Tab.notes);
         store.markNotesRead("you");
       },
-      [Commands.BOARD_TAB_4]: () => setTab(Tab.hub),
-      [Commands.BOARD_TAB_5]: () => setTab(Tab.projects),
+      [Commands.BOARD_TAB_3]: () => setTab(Tab.hub),
+      [Commands.BOARD_TAB_4]: () => setTab(Tab.projects),
       [Commands.PROJECT_ADOPT]: () => void shell.actions.adoptProject(),
       [Commands.PROJECT_ARCHIVE]: () => {
         const line = projectLine();
@@ -278,10 +231,6 @@ export function BoardMode() {
       },
       [Commands.MOVE_TO_PROJECT]: onTask(shell.actions.moveToProject),
       [Commands.OPEN]: () => {
-        if (tab() === Tab.wall) {
-          if (tileTerm()?.running) setAttached(true);
-          return;
-        }
         const line = tab() === Tab.projects ? projectLine() : null;
         if (line?.type === "project") {
           void shell.actions.jumpToProject(line.project.id);
@@ -291,7 +240,6 @@ export function BoardMode() {
         if (t) openInChat(t);
       },
       [Commands.BOARD_COMPOSE]: compose,
-      [Commands.WALL_COLS]: () => setWallCols((c) => (c % 3) + 1),
       [Commands.START]: onTask(shell.actions.start),
       [Commands.STOP]: onTask(shell.actions.stop),
       [Commands.JUMP]: () => {
@@ -373,14 +321,6 @@ export function BoardMode() {
                 col={col()}
                 row={row()}
                 width={dims().width}
-              />
-            </Match>
-            <Match when={tab() === Tab.wall}>
-              <Wall
-                tiles={tiles()}
-                selected={tile()}
-                cols={wallCols()}
-                attached={attached()}
               />
             </Match>
             <Match when={tab() === Tab.notes}>
@@ -655,73 +595,6 @@ function Card(props: {
         {truncate(line(), props.width - 2)}
       </text>
     </box>
-  );
-}
-
-function Wall(props: {
-  tiles: TermState[];
-  selected: number;
-  cols: number;
-  attached: boolean;
-}) {
-  const theme = useTheme();
-  const rows = createMemo(() => {
-    const out: TermState[][] = [];
-    for (let i = 0; i < props.tiles.length; i += props.cols)
-      out.push(props.tiles.slice(i, i + props.cols));
-    return out;
-  });
-  return (
-    <Show
-      when={props.tiles.length > 0}
-      fallback={
-        <box paddingLeft={1}>
-          <text fg={theme.textMuted}>
-            No coding sessions are open. Start one on a coding task with s.
-          </text>
-        </box>
-      }
-    >
-      <box flexDirection="column" flexGrow={1} flexBasis={0} gap={1}>
-        <For each={rows()}>
-          {(r, ri) => (
-            <box flexDirection="row" flexGrow={1} flexBasis={0} gap={1}>
-              <For each={r}>
-                {(t, ti) => {
-                  const on = () => ri() * props.cols + ti() === props.selected;
-                  const task = () =>
-                    t.taskId ? store.getTask(t.taskId) : null;
-                  return (
-                    <box
-                      flexDirection="column"
-                      flexGrow={1}
-                      flexBasis={0}
-                      border
-                      borderStyle={on() && props.attached ? "heavy" : "rounded"}
-                      borderColor={
-                        on()
-                          ? props.attached
-                            ? theme.success
-                            : theme.primary
-                          : theme.border
-                      }
-                      title={` ${t.title} ${truncate(task()?.title ?? "", 30)} ${t.running ? "" : `[exited ${t.exitCode ?? "?"}]`}`}
-                    >
-                      <TermView id={t.id} />
-                    </box>
-                  );
-                }}
-              </For>
-            </box>
-          )}
-        </For>
-        <text fg={theme.textMuted}>
-          {props.attached
-            ? "attached · ^] detach"
-            : "enter attach · h/l/j/k move · L tiles across"}
-        </text>
-      </box>
-    </Show>
   );
 }
 

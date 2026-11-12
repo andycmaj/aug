@@ -416,7 +416,7 @@ export async function nudge(taskId: number, text: string): Promise<boolean> {
 }
 
 // One viewer per task: each is a session holding just that task's window,
-// so the Wall can show several agents of one project at once.
+// so several agents of one project can be viewed at once.
 export async function jumpToProject(projectId: number): Promise<boolean> {
   const project = store.getProject(projectId);
   if (!project) return false;

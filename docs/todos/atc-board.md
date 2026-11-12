@@ -2,7 +2,7 @@
 
 Status: idea, not started.
 
-The Board today has Columns, Wall, Live handoffs and Hub. An approach
+The Board today has Columns, Live handoffs, Hub and Projects. An approach
 controller has the same problem the owner has: many things in motion, each
 owned by someone, each heading toward the one place it needs attention, and
 one person whose attention is the bottleneck. This note proposes a **Radar**

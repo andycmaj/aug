@@ -64,7 +64,5 @@ export const Commands = {
   BOARD_TAB_2: "board.tab.2",
   BOARD_TAB_3: "board.tab.3",
   BOARD_TAB_4: "board.tab.4",
-  BOARD_TAB_5: "board.tab.5",
   BOARD_COMPOSE: "board.compose",
-  WALL_COLS: "wall.cols",
 } as const;
