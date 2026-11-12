@@ -751,9 +751,9 @@ function IdeaView(props: {
       </box>
       <KeyHints
         hints={[
-          ["m", "put it on my list"],
+          ["m", "make it a task"],
           ["x", "dismiss"],
-          ["n", "next"],
+          ["n", "dismiss, next"],
         ]}
       />
     </box>

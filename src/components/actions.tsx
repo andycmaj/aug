@@ -695,15 +695,22 @@ export function useActions(dialogs: Dialogs) {
       [Commands.KIND]: onTask(changeKind),
       [Commands.WAIT_ON]: onTask(waitOn),
       [Commands.TYPE]: onTask(() => typeInto(), true),
+      // x means one thing per row type; each declines the others' rows.
       [Commands.NOT_TASK]: () => {
         const item = get();
-        if (!item) return false;
-        if (item.type === "task" && item.task.kind === Kind.home) return false;
-        if (item.type === "project") return false;
-        if (item.type === "task") notATask(item.task);
-        else dismiss(item);
+        if (item?.type !== "task" || item.task.kind === Kind.home) return false;
+        notATask(item.task);
       },
-      // Shares x with not-a-task; each declines the other's rows.
+      [Commands.READ_FYI]: () => {
+        const item = get();
+        if (item?.type !== "fyi") return false;
+        dismiss(item);
+      },
+      [Commands.DISMISS_IDEA]: () => {
+        const item = get();
+        if (item?.type !== "idea") return false;
+        dismiss(item);
+      },
       [Commands.PROJECT_ARCHIVE]: () => {
         const item = get();
         if (item?.type !== "project") return false;

@@ -100,7 +100,10 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `log.time()` for timings.
 - `src/keymap.ts` is the single binding table. Each mode (Chat, Board) has its
   own `FocusProvider`. `TerminalsProvider` sits above both, so PTYs survive the
-  switch.
+  switch. A key that means different things by row (`x`, `e`) gets one
+  command per meaning, each `relevant` to its rows and declining the others,
+  so the footer names the one that applies; `test/keymap.test.ts` checks a key
+  means one thing for any row. A view's own `KeyHints` use the footer's words.
 - Keymap layers run before a focused `<input>`. Any handler reachable while the
   chat box has focus must decline (`unlessTyping`).
 - A `Pane` is `flexShrink=0`, so a growing child (scrollbox, terminal host)

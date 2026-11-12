@@ -130,12 +130,28 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     desc: "watch it / stop watching",
     relevant: isWork,
   },
+  // x clears the row off the rail, and what that means depends on the row:
+  // one command per meaning, so the footer and help name the one that applies.
   {
     key: "x",
     cmd: Commands.NOT_TASK,
-    desc: "not a task / read / dismiss",
+    desc: "not a task (triage learns from it)",
     help: "not a task",
-    relevant: (c) => c.item !== null && c.item !== "project" && c.kind !== "home",
+    relevant: isWork,
+  },
+  {
+    key: "x",
+    cmd: Commands.READ_FYI,
+    desc: "FYI: mark it read",
+    help: "read",
+    relevant: (c) => c.item === "fyi",
+  },
+  {
+    key: "x",
+    cmd: Commands.DISMISS_IDEA,
+    desc: "Advisor idea: dismiss it",
+    help: "dismiss",
+    relevant: (c) => c.item === "idea",
   },
   {
     key: "x",
@@ -155,7 +171,7 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   {
     key: "m",
     cmd: Commands.MAKE_TASK,
-    desc: "make it a task",
+    desc: "FYI or Advisor idea: make it a task",
     help: "make task",
     relevant: (c) => c.item === "fyi" || c.item === "idea",
   },

@@ -22,6 +22,8 @@ export const Commands = {
   REMIND: "task.remind",
   WATCH: "task.watch",
   NOT_TASK: "task.not",
+  READ_FYI: "fyi.read",
+  DISMISS_IDEA: "idea.dismiss",
   START: "agent.start",
   STOP: "agent.stop",
   JUMP: "agent.jump",
