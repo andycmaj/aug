@@ -13,9 +13,15 @@ import {
 } from "../core/feedback";
 import { handleDone, handleHook, type HookEnv, type HookPayload } from "../core/hooks";
 import { logger } from "../core/log";
-import { findTasks, projectLine, taskDetail, taskLine } from "../core/lookup";
+import {
+  findTasks,
+  projectLine,
+  statusLine,
+  taskDetail,
+  taskLine,
+} from "../core/lookup";
 import { MOVES, waitForMove } from "../core/moves";
-import { setMux, socketFromEnv, TmuxMux } from "../core/mux";
+import { mux, setMux, socketFromEnv, TmuxMux } from "../core/mux";
 import { runInPane } from "../core/pane";
 import * as projects from "../core/projects";
 import * as store from "../core/store";
@@ -317,6 +323,26 @@ const projectsList = defineCommand({
   },
 });
 
+// Claude Code runs the status line command inside the agent's process, so
+// it has the agent's env; a claude started by hand is found by its window's
+// tag. Outside aug it prints nothing, which hides a prompt module.
+const statusline = defineCommand({
+  meta: {
+    name: "statusline",
+    description: "Print this session's task (ref, title, priority) for a status line",
+  },
+  async run() {
+    let taskId = Number(process.env.AUG_TASK_ID);
+    const pane = process.env.TMUX_PANE;
+    if (!taskId && pane) {
+      usePaneServer();
+      taskId = (await mux().paneInfo(pane).catch(() => null))?.taskId ?? 0;
+    }
+    const row = taskId ? store.getTask(taskId) : null;
+    if (row) console.log(statusLine(row));
+  },
+});
+
 // A diff viewer (revdiff) an agent opens goes here, so it shows in the task's
 // own window instead of a window of its own.
 const pane = defineCommand({
@@ -408,6 +434,7 @@ const main = defineCommand({
     tasks,
     task,
     projects: projectsList,
+    statusline,
     pane,
     move,
     knowledge,

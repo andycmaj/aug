@@ -33,6 +33,19 @@ export function taskLine(t: TaskRow): string {
   return `${store.taskRef(t.id)} [${facts.join(", ")}] ${t.title}${project ? ` (project ${project})` : ""}`;
 }
 
+// What a coding agent's Claude Code status line shows: the task header's
+// ref, title and priority, as plain text the prompt tool colors itself.
+export const STATUS_TITLE_MAX = 60;
+
+export function statusLine(t: TaskRow): string {
+  const title =
+    t.title.length > STATUS_TITLE_MAX
+      ? `${t.title.slice(0, STATUS_TITLE_MAX - 1)}…`
+      : t.title;
+  const priority = t.priority !== "regular" ? ` · ${t.priority}` : "";
+  return `${store.taskRef(t.id)} ${title}${priority}`;
+}
+
 export interface TaskFilter {
   all?: boolean;
   project?: string;

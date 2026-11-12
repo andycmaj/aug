@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { mentionedProjects, mentionedTasks } from "../src/core/mentions";
-import { findProject } from "../src/core/lookup";
+import { findProject, STATUS_TITLE_MAX, statusLine } from "../src/core/lookup";
 import {
   type Mention,
   mentionAt,
@@ -115,4 +115,22 @@ test("projects match by name or session, ignoring case and punctuation", () => {
   expect(findProject("AUG-Bootstrap")?.name).toBe("aug bootstrap");
   expect(findProject("augbootstrap")?.name).toBe("aug bootstrap");
   expect(findProject("aug")).toBeNull();
+});
+
+describe("status line", () => {
+  test("shows the ref and title, and priority only when not regular", () => {
+    const t = task("Starship statusline");
+    expect(statusLine(t)).toBe(`${store.taskRef(t.id)} Starship statusline`);
+    store.updateTask(t.id, { priority: "urgent" });
+    expect(statusLine(store.getTask(t.id)!)).toBe(
+      `${store.taskRef(t.id)} Starship statusline · urgent`,
+    );
+  });
+
+  test("cuts a long title", () => {
+    const t = task("x".repeat(STATUS_TITLE_MAX + 10));
+    const title = statusLine(t).split(" ")[1];
+    expect(title.length).toBe(STATUS_TITLE_MAX);
+    expect(title.endsWith("…")).toBe(true);
+  });
 });
