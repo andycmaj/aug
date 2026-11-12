@@ -9,7 +9,7 @@ import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { assistantCall } from "./assistant";
 import { think, BrainError } from "./brain";
-import { capabilityAllow, DENIED_STEP, deniedNote, GH_READS, SHELL_HOWTO } from "./capabilities";
+import { capabilityAllow, DENIED_STEP, deniedNote, GH_READS, lastDenials, SHELL_HOWTO } from "./capabilities";
 import { loadConfig } from "./config";
 import { now } from "./db";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
@@ -318,8 +318,12 @@ export class AgentPool {
     const cwd = paths.work(taskId);
     mkdirSync(cwd, { recursive: true });
 
+    const history = store.turnsForTask(taskId);
     const prior = store.latestSession(taskId);
-    const resume = prior?.kind === SessionKind.chat ? prior.id : undefined;
+    // A session that was denied calls remembers them and replays them word for
+    // word, so it is left behind: a new one reads the conversation back.
+    const resume =
+      prior?.kind === SessionKind.chat && !lastDenials(history).length ? prior.id : undefined;
     const sessionId = resume ?? randomUUID();
     if (!resume) {
       store.createSession({
@@ -336,7 +340,6 @@ export class AgentPool {
       });
     }
 
-    const history = store.turnsForTask(taskId);
     // Home's agent is the Assistant: it talks, and runs aug with aug-tools.
     const home = task.kind === Kind.home;
     const turn = store.addTurn({

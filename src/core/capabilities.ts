@@ -77,14 +77,18 @@ export const SHELL_HOWTO =
 
 export const DENIED_STEP = "denied: ";
 
-// A resumed session remembers its own denied commands and tends to replay
-// them word for word, so the next turn names them and how to write them.
-export function deniedNote(turns: TurnRow[]): string {
+// The calls the last agent turn was denied.
+export function lastDenials(turns: TurnRow[]): string[] {
   const last = turns.findLast((t) => t.role === TurnRole.agent);
   const steps: unknown = last?.steps ? JSON.parse(last.steps) : [];
-  const denied = Array.isArray(steps)
+  return Array.isArray(steps)
     ? steps.filter((s): s is string => typeof s === "string" && s.startsWith(DENIED_STEP))
     : [];
+}
+
+// The next turn names the denied calls and how to write them instead.
+export function deniedNote(turns: TurnRow[]): string {
+  const denied = lastDenials(turns);
   if (!denied.length) return "";
   return [
     "Your last turn was denied these calls, because they did not match an allowed command:",

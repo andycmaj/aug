@@ -172,4 +172,10 @@ test("a denied call is kept on the turn, and the next turn is told not to repeat
   await Bun.sleep(10);
   expect(calls[1].prompt).toContain(`- ${denied}`);
   expect(calls[1].prompt).toContain("aug-tools <command>");
+  // The denied session is left behind for a new one, which is then resumed.
+  expect(calls[1].resume).toBeUndefined();
+  expect(calls[1].sessionId).not.toBe(calls[0].sessionId);
+  await pool.request(task.id, "once more", "owner");
+  await Bun.sleep(10);
+  expect(calls[2].resume).toBe(calls[1].sessionId);
 });
