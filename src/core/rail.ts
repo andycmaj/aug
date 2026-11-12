@@ -19,6 +19,9 @@ export interface RailProject {
   open: number;
   working: number;
   repos: string[];
+  // Goals met of the ones not dropped; both 0 for a project without goals.
+  goalsMet: number;
+  goals: number;
 }
 
 export const Section = {

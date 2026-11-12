@@ -145,6 +145,32 @@ CREATE TABLE IF NOT EXISTS projects (
   archived_at TEXT
 );
 
+-- What a project is for, as outcomes its tasks add up to. A task names the
+-- goal it serves (tasks.goal_id); a goal is met by the owner's say, not by
+-- its tasks closing.
+CREATE TABLE IF NOT EXISTS project_goals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  title TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  met_at TEXT
+);
+CREATE INDEX IF NOT EXISTS project_goals_project ON project_goals(project_id);
+
+-- Docs a project leans on (a Notion page, a spec), as task_links are a
+-- task's. Every task in the project sees them in its brief.
+CREATE TABLE IF NOT EXISTS project_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL REFERENCES projects(id),
+  url TEXT NOT NULL,
+  title TEXT,
+  added_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (project_id, url)
+);
+
 -- More threads that belong to a task: the PR its worktree opened, beside
 -- the issue it came from.
 CREATE TABLE IF NOT EXISTS task_threads (
@@ -208,6 +234,8 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "sessions", column: "tmux_window", ddl: "TEXT" },
   { table: "tasks", column: "from_task_id", ddl: "INTEGER REFERENCES tasks(id)" },
   { table: "turns", column: "pending", ddl: "INTEGER NOT NULL DEFAULT 0" },
+  { table: "projects", column: "brief", ddl: "TEXT NOT NULL DEFAULT ''" },
+  { table: "tasks", column: "goal_id", ddl: "INTEGER REFERENCES project_goals(id)" },
 ];
 
 function columns(db: Database, table: string): string[] {

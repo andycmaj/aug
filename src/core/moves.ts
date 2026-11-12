@@ -11,12 +11,14 @@ import { mux } from "./mux";
 import * as repos from "./repos";
 import * as store from "./store";
 import {
+  GoalStatus,
   Kind,
   MoveStatus,
   ProjectStatus,
   SessionKind,
   TaskStatus,
   TurnRole,
+  type GoalRow,
   type MoveRow,
   type ProjectRow,
   type TaskRow,
@@ -77,6 +79,20 @@ function projectNamed(name: string): ProjectRow {
     `no project ${name}${project ? " (it is archived)" : ""}. ${active.length ? `Projects: ${active.join(", ")}.` : "There are no projects."} Make one with project_new.`,
   );
 }
+
+// A goal by its ref (G3), in the project when one is named.
+function goalNamed(ref: string, project?: ProjectRow | null): GoalRow {
+  const id = store.parseGoalRef(ref);
+  const goal = id ? store.getGoal(id) : null;
+  if (goal && (!project || goal.project_id === project.id)) return goal;
+  const where = project ?? (goal ? store.getProject(goal.project_id) : null);
+  const goals = where ? store.goalsForProject(where.id) : [];
+  throw new MoveError(
+    `no goal ${ref}${project ? ` in ${project.name}` : ""}.${goals.length ? ` Goals: ${goals.map((g) => `${store.goalRef(g.id)} ${g.title}`).join("; ")}.` : ""}`,
+  );
+}
+
+const GOAL_STATUSES = [GoalStatus.open, GoalStatus.met, GoalStatus.dropped] as const;
 
 function checkRepo(repo: string): string {
   try {
@@ -261,11 +277,14 @@ export const MOVES: Record<string, MoveSpec> = {
       brief: { help: "what is to be done, with what the agent needs to know" },
       project: { help: "the project it belongs to" },
       repo: { help: "coding: owner/repo (default: the project's first repo)" },
+      goal: { help: "the project goal it works toward (G3); puts it in that project" },
       from: { help: "the task this comes out of (AUG-0012); it hears back" },
     },
     run(desk, _task, args, by) {
       const kind = args.kind ? kindNamed(args.kind) : Kind.general;
-      const project = args.project ? projectNamed(args.project) : null;
+      const named = args.project ? projectNamed(args.project) : null;
+      const goal = args.goal?.trim() ? goalNamed(args.goal, named) : null;
+      const project = named ?? (goal ? store.getProject(goal.project_id) : null);
       const repo = args.repo
         ? checkRepo(args.repo)
         : kind === Kind.coding && project
@@ -279,6 +298,7 @@ export const MOVES: Record<string, MoveSpec> = {
           projectId: project?.id ?? null,
           repo,
           fromTaskId: from?.id ?? null,
+          goalId: goal?.id ?? null,
         });
         store.addTurn({
           taskId: made.id,
@@ -295,8 +315,16 @@ export const MOVES: Record<string, MoveSpec> = {
           });
         return made;
       });
+      // A task in a project with goals but naming none is said back, so the
+      // caller can place it.
+      const open = project && !goal
+        ? store.goalsForProject(project.id).filter((g) => g.status === GoalStatus.open)
+        : [];
       return [
-        `${ref(task)} made (${kind}${project ? ` in project ${project.name}` : ""}${repo ? `, repo ${repo}` : ""})`,
+        `${ref(task)} made (${kind}${project ? ` in project ${project.name}` : ""}${goal ? ` for ${store.goalRef(goal.id)}` : ""}${repo ? `, repo ${repo}` : ""})`,
+        open.length
+          ? `It serves no goal; ${project!.name}'s are ${open.map((g) => `${store.goalRef(g.id)} ${g.title}`).join("; ")}. Set one with: goal ${ref(task)} <G>`
+          : "",
         kind === Kind.coding ? `Start its agent with: start ${ref(task)}` : "",
       ]
         .filter(Boolean)
@@ -345,6 +373,10 @@ export const MOVES: Record<string, MoveSpec> = {
       if (store.latestSession(task!.id)?.kind === SessionKind.tmux)
         await desk.moveTask(task!.id, project.id);
       else store.updateTask(task!.id, { project_id: project.id });
+      // A goal belongs to one project; the task leaves it behind.
+      const goal = task!.goal_id ? store.getGoal(task!.goal_id) : null;
+      if (goal && goal.project_id !== project.id)
+        store.updateTask(task!.id, { goal_id: null });
       return `${ref(task)} is in project ${project.name}`;
     },
   },
@@ -445,6 +477,117 @@ export const MOVES: Record<string, MoveSpec> = {
       return `archived ${project.name}`;
     },
   },
+  goal: {
+    help: "Say which project goal the task works toward (empty: none)",
+    task: true,
+    positional: "goal",
+    args: { goal: { help: "the goal's ref (G3), in the task's project" } },
+    run(_engine, task, args) {
+      if (!args.goal?.trim()) {
+        store.updateTask(task!.id, { goal_id: null });
+        return `${ref(task)} works toward no goal`;
+      }
+      const project = task!.project_id ? store.getProject(task!.project_id) : null;
+      if (!project)
+        throw new MoveError(`${ref(task)} is in no project: move it into one first`);
+      const goal = goalNamed(args.goal, project);
+      store.updateTask(task!.id, { goal_id: goal.id });
+      return `${ref(task)} works toward ${store.goalRef(goal.id)}: ${goal.title}`;
+    },
+  },
+  project_brief: {
+    help: "Write a project's brief: what it is for. Every task in it reads it",
+    task: false,
+    positional: "project",
+    args: {
+      project: { help: "the project's name", required: true },
+      text: { help: "the whole new brief", required: true },
+    },
+    run(_engine, _task, args) {
+      const project = projectNamed(args.project);
+      store.updateProject(project.id, { brief: args.text.trim() });
+      return `${project.name}'s brief rewritten`;
+    },
+  },
+  project_link: {
+    help: "Attach a doc to a project (a Notion page, a spec); its tasks see it",
+    task: false,
+    positional: "project",
+    args: {
+      project: { help: "the project's name", required: true },
+      url: { help: "the http(s) URL", required: true },
+      title: { help: "what it is, in a few words" },
+    },
+    run(_engine, _task, args, by) {
+      const project = projectNamed(args.project);
+      const link = store.addProjectLink(
+        project.id,
+        checkUrl(args.url),
+        args.title?.trim() || null,
+        by,
+      );
+      return `linked ${link.title ? `${link.title} (${link.url})` : link.url} to ${project.name}`;
+    },
+  },
+  project_unlink: {
+    help: "Take a doc off a project",
+    task: false,
+    positional: "project",
+    args: {
+      project: { help: "the project's name", required: true },
+      url: { help: "the URL, as it was attached", required: true },
+    },
+    run(_engine, _task, args) {
+      const project = projectNamed(args.project);
+      const url = args.url.trim();
+      if (!store.removeProjectLink(project.id, url)) {
+        const links = store.linksForProject(project.id).map((l) => l.url);
+        throw new MoveError(
+          `${project.name} has no link ${url}${links.length ? `. Links: ${links.join(", ")}` : ""}`,
+        );
+      }
+      return `unlinked ${url} from ${project.name}`;
+    },
+  },
+  goal_new: {
+    help: "Add a goal to a project: an outcome its tasks work toward",
+    task: false,
+    positional: "project",
+    args: {
+      project: { help: "the project's name", required: true },
+      title: { help: "the outcome, in a line", required: true },
+    },
+    run(_engine, _task, args) {
+      const project = projectNamed(args.project);
+      const goal = store.addGoal(project.id, args.title.trim());
+      return `${store.goalRef(goal.id)} added to ${project.name}: ${goal.title}`;
+    },
+  },
+  goal_set: {
+    help: "Mark a project goal met, dropped or open again, or retitle it",
+    task: false,
+    positional: "goal",
+    args: {
+      goal: { help: "the goal's ref (G3)", required: true },
+      status: { help: GOAL_STATUSES.join(" | ") },
+      title: { help: "a new title" },
+    },
+    run(_engine, _task, args) {
+      const goal = goalNamed(args.goal);
+      const status = args.status?.trim()
+        ? GOAL_STATUSES.find((s) => s === args.status.trim())
+        : undefined;
+      if (args.status?.trim() && !status)
+        throw new MoveError(
+          `status must be ${GOAL_STATUSES.join(" | ")}: got ${args.status}`,
+        );
+      const title = args.title?.trim() || undefined;
+      if (!status && !title) throw new MoveError("goal_set needs --status or --title");
+      store.updateGoal(goal.id, { status, title });
+      const now = store.getGoal(goal.id)!;
+      return `${store.goalRef(now.id)} [${now.status}] ${now.title}`;
+    },
+  },
   remember: {
     help: "Write a line the owner said into LEARNED.md",
     task: false,
@@ -456,9 +599,10 @@ export const MOVES: Record<string, MoveSpec> = {
   },
 };
 
-// What a task's own agent may ask for: new tasks and projects, and small edits
-// (and links) to its own task. Starting, stopping and closing work (and archiving a
-// project) stay the owner's and the Assistant's.
+// What a task's own agent may ask for: new tasks and projects, small edits
+// (and links) to its own task, and docs on a project. Starting, stopping and
+// closing work, archiving a project and setting its brief and goals stay the
+// owner's and the Assistant's.
 export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "new",
   "project_new",
@@ -469,6 +613,8 @@ export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "remind",
   "link",
   "unlink",
+  "goal",
+  "project_link",
 ]);
 
 function agentTask(by: string): number | null {

@@ -30,6 +30,7 @@ export const Commands = {
   FOLD: "rail.fold",
   PROJECT_ADOPT: "project.adopt",
   PROJECT_ARCHIVE: "project.archive",
+  PROJECT_EDIT: "project.edit",
   SEND: "action.send",
   EDIT_DRAFT: "action.edit",
   EDIT_BRIEF: "task.brief",

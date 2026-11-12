@@ -144,6 +144,14 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     help: "archive",
     relevant: (c) => c.item === "project",
   },
+  // Shares e with the task's brief and draft; each declines the other's rows.
+  {
+    key: "e",
+    cmd: Commands.PROJECT_EDIT,
+    desc: "edit the project's brief, goals and docs in $EDITOR",
+    help: "brief",
+    relevant: (c) => c.item === "project",
+  },
   {
     key: "m",
     cmd: Commands.MAKE_TASK,
@@ -307,6 +315,7 @@ export const keymap: KeymapTable<HelpCtx> = {
     { key: "4", cmd: Commands.BOARD_TAB_4, desc: "projects", help: "projects" },
     { key: "shift+a", cmd: Commands.PROJECT_ADOPT, desc: "projects: adopt a tmux session" },
     { key: "x", cmd: Commands.PROJECT_ARCHIVE, desc: "projects: archive the project" },
+    { key: "e", cmd: Commands.PROJECT_EDIT, desc: "projects: edit the brief, goals and docs" },
     { key: "shift+m", cmd: Commands.MOVE_TO_PROJECT, desc: "move the task to a project" },
     { key: "return", cmd: Commands.OPEN, desc: "open", help: "open" },
     {

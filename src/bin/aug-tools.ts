@@ -14,7 +14,9 @@ import {
 import { handleDone, handleHook, type HookEnv, type HookPayload } from "../core/hooks";
 import { logger } from "../core/log";
 import {
+  findProject,
   findTasks,
+  projectDetail,
   projectLine,
   statusLine,
   taskDetail,
@@ -343,6 +345,22 @@ const statusline = defineCommand({
   },
 });
 
+const projectShow = defineCommand({
+  meta: {
+    name: "project",
+    description: "Show one project: its brief, goals and progress, docs, open work",
+  },
+  args: { name: { type: "positional", required: true, description: "the project's name" } },
+  run({ args }) {
+    const row = findProject(String(args.name));
+    if (!row) {
+      console.error(`no project ${args.name}`);
+      process.exit(1);
+    }
+    console.log(projectDetail(row));
+  },
+});
+
 // A diff viewer (revdiff) an agent opens goes here, so it shows in the task's
 // own window instead of a window of its own.
 const pane = defineCommand({
@@ -434,6 +452,7 @@ const main = defineCommand({
     tasks,
     task,
     projects: projectsList,
+    project: projectShow,
     statusline,
     pane,
     move,

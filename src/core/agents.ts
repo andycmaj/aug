@@ -25,7 +25,7 @@ import {
 import { ARTIFACT_TOOLS } from "./hooks";
 import { AGENT_MOVES } from "./moves";
 import { logger } from "./log";
-import { linkLine } from "./lookup";
+import { linkLine, projectContext } from "./lookup";
 import { paths } from "./paths";
 import { TOOLS_NAME, toolsCommand, toolsEnv, toolsRules } from "./self";
 import { transcript } from "./transcript";
@@ -126,7 +126,7 @@ export const GENERAL_ALLOW = [
 // which; see AGENT_MOVES).
 function agentToolRules(): string[] {
   return [
-    ...["tasks", "task", "projects", "notes", "knowledge search", "hub search"].flatMap((c) =>
+    ...["tasks", "task", "projects", "project", "notes", "knowledge search", "hub search"].flatMap((c) =>
       toolsRules(...c.split(" ")),
     ),
     ...[...AGENT_MOVES].flatMap((verb) => toolsRules("move", verb)),
@@ -148,10 +148,11 @@ export function turnSystem(): string {
     "If the owner already answered the thread themselves, say so, leave no action, and recommend closing.",
     "",
     `aug's own tools, on Bash as ${TOOLS_NAME} <command>:`,
-    "- tasks [words] | task AUG-0000 | projects: look up the owner's work and projects (a project is a tmux session coding tasks run in, with its repos).",
+    "- tasks [words] | task AUG-0000 | projects | project <name>: look up the owner's work and projects (a project is a tmux session coding tasks run in, with its repos, brief, goals and docs).",
     `- move new "<title>" --kind coding|general|task --brief "<what to do, with what the agent needs>" [--project <name>] [--repo owner/repo] --from <this task's ref>: make a task. When the owner asks for work done elsewhere (a coding task in a project, a follow-up), make it, then say its ref. The owner starts it.`,
     `- move project_new "<name>" [--repo owner/repo]: make a project, when the owner asks for one. Make it before a task that goes in it.`,
-    "- move retitle|project|wait_on|priority|remind AUG-0000 ...: small edits to this task only.",
+    "- move retitle|project|wait_on|priority|remind|goal AUG-0000 ...: small edits to this task only (goal: the project goal it works toward, G3).",
+    `- move project_link "<project>" --url <url> [--title "<what it is>"]: attach a doc to the project, for every task in it.`,
     `- move link AUG-0000 <url> [--title "<what it is>"]: attach a doc, Slack thread or ticket to this task (unlink takes it off).`,
     "A move that fails says why (no such project: it lists the ones there are). Report that to the owner rather than guessing.",
     "",
@@ -205,6 +206,7 @@ export function turnPrompt(
     task.triage_reason ? `Triage said: ${task.triage_reason}` : "",
     `Came from: ${where}`,
     ...store.linksForTask(task.id).map((l) => `Link: ${linkLine(l)}`),
+    projectContext(task),
     task.kind === Kind.reply
       ? "Triage expects a short reply to settle this."
       : "",
@@ -470,6 +472,7 @@ export function codingBrief(task: TaskRow): string {
     .turnsForTask(task.id)
     .filter((t) => t.role !== TurnRole.agent);
   const ref = store.taskRef(task.id);
+  const project = projectContext(task);
   return [
     readDoc(DocName.coding),
     "",
@@ -482,7 +485,7 @@ export function codingBrief(task: TaskRow): string {
     `Attach a doc, Slack thread or ticket the task leans on, so the owner sees it in the task: ${toolsCommand("move", "link", ref, "<url>", "--title", "<what it is>")}`,
     `Reviews, comments and CI that came back since you last looked: ${toolsCommand("feedback")}`,
     `Durable discoveries go in Knowledge: ${toolsCommand("knowledge", "add", "--topic", "<topic>", "--title", "<title>", "<body>")}`,
-    `Work that belongs in a task of its own: ${toolsCommand("move", "new", "<title>", "--kind", "coding", "--brief", "<what to do>", "--from", ref)} (look up projects with ${toolsCommand("projects")}).`,
+    `Work that belongs in a task of its own: ${toolsCommand("move", "new", "<title>", "--kind", "coding", "--brief", "<what to do>", "--from", ref)} (look up projects with ${toolsCommand("projects")}, one in full with ${toolsCommand("project", "<name>")}).`,
     `Search it: ${toolsCommand("knowledge", "search", "<words>")}`,
     `To show the owner a terminal program (a diff viewer), run it in a split of your own pane, not a new tmux window: ${toolsCommand("pane", "--zoom", "--wait", "--", "<command...>")}`,
     "Do not edit the owner's dotfiles or Claude settings. Setup aug needs there is `aug install <name>` (`aug install --check` lists it); anything else, say in your done reply.",
@@ -496,6 +499,7 @@ export function codingBrief(task: TaskRow): string {
     ...store.linksForTask(task.id).map((l) => `Link: ${linkLine(l)}`),
     "",
     transcript(turns),
+    ...(project ? ["", project] : []),
   ].join("\n");
 }
 

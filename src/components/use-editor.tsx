@@ -71,6 +71,21 @@ export function useEditor() {
     });
   }
 
+  // A project's brief, goals and docs in one file.
+  function editProject(projectId: number): false | void {
+    const text = desk.projectDoc(projectId);
+    if (text === null) return false;
+    const file = draftFile(`project-${projectId}`);
+    writeDraft(file, text);
+    openEditor(file, "project brief", () => {
+      const next = readDraft(file);
+      removeDraft(file);
+      if (next === null) return;
+      const said = desk.editProject(projectId, next);
+      if (said) showToast(said);
+    });
+  }
+
   // The chat box in $EDITOR. Save and quit sends; quitting empty or with an
   // error (vim's :cq) sends nothing and hands the text back to the box.
   function compose(
@@ -93,5 +108,12 @@ export function useEditor() {
     });
   }
 
-  return { openEditor, editDraft, editBrief, compose, editorId: EDITOR_ID };
+  return {
+    openEditor,
+    editDraft,
+    editBrief,
+    editProject,
+    compose,
+    editorId: EDITOR_ID,
+  };
 }

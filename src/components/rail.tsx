@@ -344,6 +344,7 @@ function RailRow(props: {
           sub: [
             `${item.open} open`,
             item.working ? `${item.working} working` : "",
+            item.goals ? `goals ${item.goalsMet}/${item.goals}` : "",
             asks ? `${LANE_META.blocked.mark} ${asks}` : "",
             ready ? `${LANE_META.approve.mark} ${ready}` : "",
             item.repos.join(", ") || "no repo",

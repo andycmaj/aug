@@ -527,8 +527,21 @@ export function seedDemo(): void {
       tmuxSession: "ledger-fixes",
       repos: ["northwind/ledger"],
     });
-    store.updateTask(exp, { project_id: ledger.id });
-    store.updateTask(csv, { project_id: ledger.id });
+    store.updateProject(ledger.id, {
+      brief:
+        "Month-end close runs from the ledger export without hand fixes.\nThe export must match the GL to the cent, and bank imports must load as they come.",
+    });
+    const exportGoal = store.addGoal(ledger.id, "Export matches the GL to the cent");
+    const importGoal = store.addGoal(ledger.id, "Bank CSVs import as they come");
+    store.addGoal(ledger.id, "Close checklist runs without hand steps");
+    store.addProjectLink(
+      ledger.id,
+      "https://www.notion.so/northwind/Month-end-close",
+      "month-end close runbook",
+      "you",
+    );
+    store.updateTask(exp, { project_id: ledger.id, goal_id: exportGoal.id });
+    store.updateTask(csv, { project_id: ledger.id, goal_id: importGoal.id });
   });
 
   const learned = readDoc(DocName.learned)

@@ -72,6 +72,11 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   else. A move that would open a dialog answers `needs ...` in words instead.
   `AGENT_MOVES` is what a task's agent may ask for. "Move" means this bus; the
   owner's keys are task actions.
+- **A project carries a brief, goals and docs** (`projects.brief`,
+  `project_goals`, `project_links`; a task's `goal_id`). `lookup.projectContext`
+  puts them in every brief of a task in the project, so a task's own brief
+  need not repeat them; `core/project-doc.ts` is the one file the owner edits
+  them in. A goal is met only by the owner's say, never by its tasks closing.
 - **Home is a `kind: home` task** (`store.homeTask()`), and its agent is the
   Assistant (`core/assistant.ts`): a resumed `claude -p` allowed only
   `aug-tools`. `listTasks()` never returns it, so nothing that lists work

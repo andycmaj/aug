@@ -666,6 +666,11 @@ export function useActions(dialogs: Dialogs) {
         if (item?.type !== "project") return false;
         archiveProject(item.project.id);
       },
+      [Commands.PROJECT_EDIT]: () => {
+        const item = get();
+        if (item?.type !== "project") return false;
+        return editor.editProject(item.project.id);
+      },
       [Commands.MAKE_TASK]: () => {
         const item = get();
         if (item && item.type !== "task") makeTask(item);
@@ -696,6 +701,7 @@ export function useActions(dialogs: Dialogs) {
     archiveProject,
     jumpToProject,
     openEditor: editor.openEditor,
+    editProject: editor.editProject,
     start,
     stop,
     done,

@@ -7,6 +7,7 @@ import { db, now } from "./db";
 import {
   ActionState,
   AgentState,
+  GoalStatus,
   MoveStatus,
   ProjectStatus,
   TaskStatus,
@@ -16,6 +17,7 @@ import {
   type IdeaStatus,
   type CorrectionRow,
   type DraftAction,
+  type GoalRow,
   type KnowledgeRow,
   type IdeaRow,
   type Kind,
@@ -24,6 +26,7 @@ import {
   type NoteLabel,
   type NoteRow,
   type Priority,
+  type ProjectLinkRow,
   type ProjectRow,
   type SessionKind,
   type SessionRow,
@@ -129,13 +132,14 @@ export interface NewTask {
   projectId?: number | null;
   branch?: string | null;
   fromTaskId?: number | null;
+  goalId?: number | null;
 }
 
 export function createTask(t: NewTask): TaskRow {
   const at = t.createdAt ?? now();
   const id = run(
-    `INSERT INTO tasks (title, summary, kind, priority, watching, repo, thread_key, channel, url, triage_reason, created_at, updated_at, project_id, branch, from_task_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (title, summary, kind, priority, watching, repo, thread_key, channel, url, triage_reason, created_at, updated_at, project_id, branch, from_task_id, goal_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     t.title,
     t.summary ?? "",
     t.kind,
@@ -151,6 +155,7 @@ export function createTask(t: NewTask): TaskRow {
     t.projectId ?? null,
     t.branch ?? null,
     t.fromTaskId ?? null,
+    t.goalId ?? null,
   );
   return getTask(id)!;
 }
@@ -342,6 +347,94 @@ export function deleteProject(id: number): void {
 
 export function archiveProject(id: number): void {
   updateProject(id, { status: ProjectStatus.archived, archived_at: now() });
+}
+
+// Adding a URL the project already has keeps its place and takes the new title.
+export function addProjectLink(
+  projectId: number,
+  url: string,
+  title: string | null,
+  addedBy: string,
+): ProjectLinkRow {
+  run(
+    `INSERT INTO project_links (project_id, url, title, added_by, created_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (project_id, url) DO UPDATE SET title = COALESCE(excluded.title, title)`,
+    projectId,
+    url,
+    title,
+    addedBy,
+    now(),
+  );
+  return one<ProjectLinkRow>(
+    "SELECT * FROM project_links WHERE project_id = ? AND url = ?",
+    projectId,
+    url,
+  )!;
+}
+
+export function linksForProject(projectId: number): ProjectLinkRow[] {
+  return all<ProjectLinkRow>(
+    "SELECT * FROM project_links WHERE project_id = ? ORDER BY id",
+    projectId,
+  );
+}
+
+export function removeProjectLink(projectId: number, url: string): boolean {
+  const had = one<{ id: number }>(
+    "SELECT id FROM project_links WHERE project_id = ? AND url = ?",
+    projectId,
+    url,
+  );
+  if (!had) return false;
+  run("DELETE FROM project_links WHERE id = ?", had.id);
+  return true;
+}
+
+// ── project goals ────────────────────────────────────────────────────────
+
+export function goalRef(id: number): string {
+  return `G${id}`;
+}
+
+export function parseGoalRef(ref: string): number | null {
+  const m = ref.trim().match(/^g?0*(\d+)$/i);
+  return m ? Number(m[1]) : null;
+}
+
+export function addGoal(projectId: number, title: string): GoalRow {
+  const at = now();
+  const id = run(
+    "INSERT INTO project_goals (project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+    projectId,
+    title,
+    at,
+    at,
+  );
+  return getGoal(id)!;
+}
+
+export function getGoal(id: number): GoalRow | null {
+  return one<GoalRow>("SELECT * FROM project_goals WHERE id = ?", id);
+}
+
+export function goalsForProject(projectId: number): GoalRow[] {
+  return all<GoalRow>(
+    "SELECT * FROM project_goals WHERE project_id = ? ORDER BY id",
+    projectId,
+  );
+}
+
+export function updateGoal(
+  id: number,
+  patch: Partial<Pick<GoalRow, "title" | "status">>,
+): void {
+  const next: Partial<GoalRow> = {};
+  if (patch.title !== undefined) next.title = patch.title;
+  if (patch.status !== undefined) {
+    next.status = patch.status;
+    next.met_at = patch.status === GoalStatus.met ? now() : null;
+  }
+  patchRow<GoalRow>("project_goals", id, next, "updated_at");
 }
 
 // ── messages ─────────────────────────────────────────────────────────────

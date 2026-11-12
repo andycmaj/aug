@@ -16,6 +16,7 @@ import { correct } from "./learn";
 import { holdForStart, taskClosed } from "./lifecycle";
 import { now } from "./db";
 import * as projects from "./projects";
+import { applyProjectDoc, renderProjectDoc } from "./project-doc";
 import { editPending, sendPending } from "./outbound";
 import { setTaskRepo } from "./repos";
 import * as store from "./store";
@@ -56,7 +57,7 @@ export class Desk {
     title: string,
     kind: Kind,
     summary = "",
-    place: Pick<store.NewTask, "projectId" | "repo" | "fromTaskId"> = {},
+    place: Pick<store.NewTask, "projectId" | "repo" | "fromTaskId" | "goalId"> = {},
   ): TaskRow {
     const task = store.createTask({
       title,
@@ -159,6 +160,16 @@ export class Desk {
 
   archiveProject(projectId: number) {
     return projects.archiveProject(projectId);
+  }
+
+  // The project's file as the owner edits it, and what writing it back did.
+  projectDoc(projectId: number): string | null {
+    const project = store.getProject(projectId);
+    return project ? renderProjectDoc(project) : null;
+  }
+
+  editProject(projectId: number, text: string): string {
+    return applyProjectDoc(projectId, text, "you");
   }
 
   setTaskRepo(taskId: number, repo: string) {

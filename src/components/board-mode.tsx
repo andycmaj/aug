@@ -19,10 +19,12 @@ import {
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { BOARD_COLUMNS, LANE_META } from "../core/lanes";
+import { projectProgress, projectSummary, type GoalProgress } from "../core/lookup";
 import { ageLabel } from "../core/rail";
 import * as store from "../core/store";
 import {
   AgentState,
+  GoalStatus,
   NoteLabel,
   TaskStatus,
   type KnowledgeRow,
@@ -49,9 +51,12 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "projects", label: "4 Projects" },
 ];
 
+// A project, then its goals each with their open tasks, then the open tasks
+// that serve no goal.
 type ProjectLine =
-  | { type: "project"; project: ProjectRow; tasks: number }
-  | { type: "task"; task: TaskRow; project: ProjectRow };
+  | { type: "project"; project: ProjectRow; tasks: number; goalsMet: number; goals: number; docs: number }
+  | { type: "goal"; project: ProjectRow; progress: GoalProgress }
+  | { type: "task"; task: TaskRow; project: ProjectRow; underGoal: boolean };
 
 const [tab, setTab] = createSignal<Tab>(Tab.columns);
 
@@ -88,14 +93,27 @@ export function BoardMode() {
   const projectLines = createMemo((): ProjectLine[] => {
     aug.version();
     const out: ProjectLine[] = [];
+    const isOpen = (t: TaskRow) =>
+      t.status === TaskStatus.open || t.status === TaskStatus.later;
     for (const project of store.listProjects()) {
-      const tasks = store
-        .tasksForProject(project.id)
-        .filter(
-          (t) => t.status === TaskStatus.open || t.status === TaskStatus.later,
-        );
-      out.push({ type: "project", project, tasks: tasks.length });
-      for (const task of tasks) out.push({ type: "task", task, project });
+      const summary = projectSummary(project);
+      const progress = projectProgress(project);
+      out.push({
+        type: "project",
+        project,
+        tasks: summary.open,
+        goalsMet: summary.goalsMet,
+        goals: summary.goals,
+        docs: store.linksForProject(project.id).length,
+      });
+      for (const g of progress.goals) {
+        if (g.goal.status === GoalStatus.dropped) continue;
+        out.push({ type: "goal", project, progress: g });
+        for (const task of g.tasks.filter(isOpen))
+          out.push({ type: "task", task, project, underGoal: true });
+      }
+      for (const task of progress.loose)
+        out.push({ type: "task", task, project, underGoal: false });
     }
     return out;
   });
@@ -231,10 +249,15 @@ export function BoardMode() {
         if (tab() !== Tab.projects || !line) return false;
         shell.actions.archiveProject(line.project.id);
       },
+      [Commands.PROJECT_EDIT]: () => {
+        const line = projectLine();
+        if (tab() !== Tab.projects || !line) return false;
+        return shell.actions.editProject(line.project.id);
+      },
       [Commands.MOVE_TO_PROJECT]: onTask(shell.actions.moveToProject),
       [Commands.OPEN]: () => {
         const line = tab() === Tab.projects ? projectLine() : null;
-        if (line?.type === "project") {
+        if (line?.type === "project" || line?.type === "goal") {
           void shell.actions.jumpToProject(line.project.id);
           return;
         }
@@ -246,7 +269,7 @@ export function BoardMode() {
       [Commands.STOP]: onTask(shell.actions.stop),
       [Commands.JUMP]: () => {
         const line = tab() === Tab.projects ? projectLine() : null;
-        if (line?.type === "project")
+        if (line?.type === "project" || line?.type === "goal")
           return void shell.actions.jumpToProject(line.project.id);
         const t = target();
         if (!t) return false;
@@ -403,6 +426,12 @@ export function BoardMode() {
   );
 }
 
+// Ten cells of done out of all.
+function meter(done: number, all: number): string {
+  const full = all ? Math.round((done / all) * 10) : 0;
+  return `${"▰".repeat(full)}${"▱".repeat(10 - full)}`;
+}
+
 function Projects(props: {
   lines: ProjectLine[];
   selected: number;
@@ -438,28 +467,67 @@ function Projects(props: {
               on() ? contrastingForeground(theme.primary) : color;
             if (line.type === "project") {
               const repos = store.projectRepos(line.project);
+              const brief = line.project.brief.split("\n").find((l) => l.trim()) ?? "";
+              return (
+                <box flexDirection="column" marginTop={i() === 0 ? 0 : 1}>
+                  <box
+                    flexDirection="row"
+                    gap={2}
+                    backgroundColor={on() ? theme.primary : undefined}
+                  >
+                    <text fg={fg(theme.primary)} attributes={1}>
+                      {`◫ ${line.project.name}`}
+                    </text>
+                    <text fg={fg(theme.textMuted)}>
+                      {truncate(
+                        [
+                          `tmux ${line.project.tmux_session}`,
+                          repos.length ? repos.join(", ") : null,
+                          `${line.tasks} open`,
+                          line.goals ? `goals ${line.goalsMet}/${line.goals} met` : null,
+                          line.docs ? `${line.docs} doc${line.docs === 1 ? "" : "s"}` : null,
+                          line.project.solo ? "one task" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · "),
+                        props.width - line.project.name.length - 12,
+                      )}
+                    </text>
+                  </box>
+                  <box paddingLeft={2}>
+                    <text fg={theme.textMuted}>
+                      {brief
+                        ? truncate(brief, props.width - 8)
+                        : "no brief yet: e writes one, with goals and docs"}
+                    </text>
+                  </box>
+                </box>
+              );
+            }
+            if (line.type === "goal") {
+              const g = line.progress;
+              const met = g.goal.status === GoalStatus.met;
               return (
                 <box
                   flexDirection="row"
                   gap={2}
-                  marginTop={i() === 0 ? 0 : 1}
+                  paddingLeft={2}
                   backgroundColor={on() ? theme.primary : undefined}
                 >
-                  <text fg={fg(theme.primary)} attributes={1}>
-                    {`◫ ${line.project.name}`}
+                  <text fg={fg(met ? theme.success : theme.secondary)}>
+                    {`${met ? "◉" : "◎"} ${store.goalRef(g.goal.id)}`}
+                  </text>
+                  <text fg={fg(met ? theme.textMuted : theme.text)}>
+                    {truncate(g.goal.title, 44)}
                   </text>
                   <text fg={fg(theme.textMuted)}>
-                    {truncate(
-                      [
-                        `tmux ${line.project.tmux_session}`,
-                        repos.length ? repos.join(", ") : null,
-                        `${line.tasks} open`,
-                        line.project.solo ? "one task" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · "),
-                      props.width - line.project.name.length - 12,
-                    )}
+                    {[
+                      g.tasks.length ? `${meter(g.done, g.tasks.length)} ${g.done}/${g.tasks.length} done` : "no tasks yet",
+                      g.working ? `${g.working} working` : null,
+                      met ? "met" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </text>
                 </box>
               );
@@ -469,7 +537,7 @@ function Projects(props: {
               <box
                 flexDirection="row"
                 gap={2}
-                paddingLeft={2}
+                paddingLeft={line.underGoal ? 4 : 2}
                 backgroundColor={on() ? theme.primary : undefined}
               >
                 <text fg={fg(theme.textMuted)}>{store.taskRef(t.id)}</text>

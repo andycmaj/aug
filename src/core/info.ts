@@ -6,8 +6,9 @@ import { parseFiles } from "./files";
 import { LANE_META, type Lane } from "./lanes";
 import { paths } from "./paths";
 import { ageLabel, type RailItem } from "./rail";
+import { projectProgress } from "./lookup";
 import * as store from "./store";
-import type { MessageRow, TaskRow } from "./types";
+import { GoalStatus, type MessageRow, type TaskRow } from "./types";
 
 export interface InfoRow {
   label: string;
@@ -78,6 +79,7 @@ function taskSections(
   const work = paths.work(task.id);
   const last = messages.at(-1);
   const latest = sessions[0];
+  const goal = task.goal_id ? store.getGoal(task.goal_id) : null;
 
   return [
     section("Task", [
@@ -86,6 +88,8 @@ function taskSections(
       ["kind", task.kind],
       ["status", task.status],
       ["lane", LANE_META[lane].word],
+      ["project", task.project_id ? store.getProject(task.project_id)?.name : null],
+      ["goal", goal ? `${store.goalRef(goal.id)} ${goal.title} (${goal.status})` : null],
       ["priority", task.priority_pinned ? `${task.priority} (set by you)` : task.priority],
       ["watching", task.watching ? "yes" : null],
       ["waiting on", task.waiting_on],
@@ -145,7 +149,9 @@ export function itemInfo(item: RailItem, now = new Date()): InfoSection[] {
           ["body", item.idea.body],
         ]),
       ];
-    case "project":
+    case "project": {
+      const fresh = store.getProject(item.project.id) ?? item.project;
+      const progress = projectProgress(fresh);
       return [
         section("Project", [
           ["name", item.project.name],
@@ -155,9 +161,27 @@ export function itemInfo(item: RailItem, now = new Date()): InfoSection[] {
           ["open tasks", String(item.open)],
           ["working", item.working ? String(item.working) : null],
           ["solo", item.project.solo ? "yes: archived when its task is done" : null],
+          ["goals", item.goals ? `${item.goalsMet}/${item.goals} met` : null],
           ["created", when(item.project.created_at, now)],
         ]),
-      ];
+        section("Brief", [["brief", fresh.brief || "none yet: e writes one"]]),
+        {
+          title: "Goals",
+          rows: progress.goals
+            .filter((g) => g.goal.status !== GoalStatus.dropped)
+            .map((g) => ({
+              label: `${store.goalRef(g.goal.id)} ${g.goal.status}`,
+              value: `${g.goal.title} (${g.tasks.length ? `${g.done}/${g.tasks.length} tasks done` : "no tasks yet"})`,
+            })),
+        },
+        {
+          title: "Docs",
+          rows: store
+            .linksForProject(fresh.id)
+            .map((l) => ({ label: l.title ?? "link", value: l.url, open: l.url })),
+        },
+      ].filter((s) => s.rows.length > 0);
+    }
   }
 }
 

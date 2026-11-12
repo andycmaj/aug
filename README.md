@@ -205,6 +205,16 @@ work with them from any tmux client.
   kept and aug says so. A project made for one task is archived when that task
   is done. `x` on the Board archives a project; `M` moves a task (its window
   moves with it).
+- **Brief, goals and docs.** `e` on a project (rail or Board tab `4`) opens
+  one Markdown file in `$EDITOR`: the brief (what the project is for), its
+  goals as a checklist (`[x]` met, `[-]` dropped; a line without a `G3` ref is
+  a new goal) and its docs (a Notion page, a spec: one URL a line). Every
+  task in the project reads all three in its agent's brief. A task names the
+  goal it works toward (`move new --goal G3`, `move goal AUG-0012 G3`), and
+  the Board shows each goal with its tasks and how many are done; a goal is
+  met when you say so. The Assistant writes them too (`move project_brief`,
+  `goal_new`, `goal_set`, `project_link`), and `aug-tools project <name>`
+  prints the whole project.
 - **On the rail.** Each active project is a row in Tasks with its tasks under
   it (open and working counts, repos); tasks in no project come after. `space`
   folds a project's tasks away (a folded row still shows what they ask of

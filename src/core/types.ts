@@ -92,6 +92,8 @@ export interface TaskRow {
   worktree: string | null;
   // The task this one was made from (a handoff), which hears when it ends.
   from_task_id: number | null;
+  // The project goal this task works toward.
+  goal_id: number | null;
 }
 
 export const ProjectStatus = {
@@ -99,6 +101,13 @@ export const ProjectStatus = {
   archived: "archived",
 } as const;
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
+
+export const GoalStatus = {
+  open: "open",
+  met: "met",
+  dropped: "dropped",
+} as const;
+export type GoalStatus = (typeof GoalStatus)[keyof typeof GoalStatus];
 
 export const MoveStatus = {
   pending: "pending",
@@ -131,9 +140,30 @@ export interface ProjectRow {
   status: ProjectStatus;
   // Made for one inbound task; archived when it empties.
   solo: number;
+  // What the project is for, in the owner's words; every task in it reads it.
+  brief: string;
   created_at: string;
   updated_at: string;
   archived_at: string | null;
+}
+
+export interface GoalRow {
+  id: number;
+  project_id: number;
+  title: string;
+  status: GoalStatus;
+  created_at: string;
+  updated_at: string;
+  met_at: string | null;
+}
+
+export interface ProjectLinkRow {
+  id: number;
+  project_id: number;
+  url: string;
+  title: string | null;
+  added_by: string;
+  created_at: string;
 }
 
 export interface MessageRow {
