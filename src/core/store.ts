@@ -663,6 +663,15 @@ export function pendingAction(
   return { turn, action: JSON.parse(turn.action) as DraftAction };
 }
 
+// Tasks a GitHub review request filed: the rail keeps them under Code Reviews.
+export function tasksFromReviewRequests(): Set<number> {
+  return new Set(
+    all<{ task_id: number }>(
+      "SELECT DISTINCT task_id FROM messages WHERE task_id IS NOT NULL AND channel = 'github' AND json_extract(meta, '$.reason') = 'review_requested'",
+    ).map((r) => r.task_id),
+  );
+}
+
 export function tasksWithPendingAction(): Set<number> {
   return new Set(
     all<{ task_id: number }>(

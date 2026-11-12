@@ -157,6 +157,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
       projects: railProjects(),
       tasks,
       pendingActions: pending(),
+      reviews: store.tasksFromReviewRequests(),
       ideas: store.openIdeas(),
       fyi: SHOW_FYI ? store.fyiMessages(since) : [],
       lastHeard,

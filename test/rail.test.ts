@@ -146,6 +146,61 @@ describe("rail", () => {
     void late;
   });
 
+  test("a task a review request filed sits under Code Reviews, after Tasks, and is walked", () => {
+    const mine = store.createTask({
+      title: "mine",
+      kind: Kind.task,
+      channel: "owner",
+      createdAt: at(8),
+    });
+    const review = store.createTask({
+      title: "review web#88",
+      kind: Kind.reply,
+      channel: "github",
+      createdAt: at(7),
+    });
+    const mention = store.createTask({
+      title: "mentioned on web#90",
+      kind: Kind.reply,
+      channel: "github",
+      createdAt: at(6),
+    });
+    const file = (id: string, taskId: number, reason: string) => {
+      const m = store.insertMessage({
+        channel: "github",
+        externalId: id,
+        threadKey: `github:northwind/web#${id}`,
+        author: "priya",
+        authorName: "priya",
+        title: "t",
+        body: "b",
+        receivedAt: at(6),
+        meta: { repo: "northwind/web", type: "PullRequest", reason },
+      })!;
+      store.fileMessage(m.id, "reply", null, taskId);
+    };
+    file("88", review.id, "review_requested");
+    file("90", mention.id, "mention");
+    expect([...store.tasksFromReviewRequests()]).toEqual([review.id]);
+
+    const rail = buildRail({
+      tasks: store.listTasks(),
+      pendingActions: new Set(),
+      reviews: store.tasksFromReviewRequests(),
+      ideas: [],
+      fyi: [],
+      lastHeard: new Map(),
+      now: new Date(at(12)),
+    });
+    expect(rail.map((s) => s.section)).toEqual(["tasks", "reviews"]);
+    const titles = (i: number) =>
+      rail[i].items.map((x) => (x.type === "task" ? x.task.title : ""));
+    expect(titles(0)).toEqual(["mentioned on web#90", "mine"]);
+    expect(titles(1)).toEqual(["review web#88"]);
+    expect(WALKED).toContain("reviews");
+    void mine;
+  });
+
   test("Next walks in order and skips sections the walk does not offer", () => {
     const order = ["t1", "t2", "l1", "m1"];
     const walkable = new Set(["t1", "t2", "m1"]);

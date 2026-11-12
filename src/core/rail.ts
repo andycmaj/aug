@@ -31,6 +31,7 @@ export const SHOW_FYI = false;
 export const Section = {
   home: "home",
   tasks: "tasks",
+  reviews: "reviews",
   watching: "watching",
   later: "later",
   advisor: "advisor",
@@ -41,6 +42,7 @@ export type Section = (typeof Section)[keyof typeof Section];
 export const SECTION_TITLES: Record<Section, string> = {
   home: "Home",
   tasks: "Tasks",
+  reviews: "Code Reviews",
   watching: "Watching",
   later: "For later",
   advisor: "Advisor",
@@ -49,7 +51,13 @@ export const SECTION_TITLES: Record<Section, string> = {
 
 // The walk visits these in order; For later is never offered by Next, nor is
 // a project row.
-export const WALKED: Section[] = ["tasks", "watching", "advisor", "fyi"];
+export const WALKED: Section[] = [
+  "tasks",
+  "reviews",
+  "watching",
+  "advisor",
+  "fyi",
+];
 
 export type RailItem =
   | {
@@ -81,6 +89,8 @@ export interface RailInput {
   projects?: RailProject[];
   tasks: TaskRow[];
   pendingActions: Set<number>;
+  // Tasks a review request filed; they sit under Code Reviews, not Tasks.
+  reviews?: Set<number>;
   ideas: IdeaRow[];
   fyi: MessageRow[];
   // Task id -> when the last message from somebody else arrived, for slipped.
@@ -105,6 +115,7 @@ export function buildRail(input: RailInput): RailSection[] {
   const sections: Record<Section, RailItem[]> = {
     home: [],
     tasks: [],
+    reviews: [],
     watching: [],
     later: [],
     advisor: [],
@@ -125,7 +136,9 @@ export function buildRail(input: RailInput): RailSection[] {
 
   const projectIds = new Set((input.projects ?? []).map((p) => p.project.id));
 
+  const reviews = input.reviews ?? new Set<number>();
   for (const task of input.tasks) {
+    const onYou = reviews.has(task.id) ? sections.reviews : sections.tasks;
     const lane = laneOf(task, {
       hasPendingAction: input.pendingActions.has(task.id),
     });
@@ -141,18 +154,18 @@ export function buildRail(input: RailInput): RailSection[] {
     };
     if (task.status === TaskStatus.done) {
       // An agent-closed task stays until you have read its result.
-      if (lane === Lane.agentdone) sections.tasks.push(item);
+      if (lane === Lane.agentdone) onYou.push(item);
       continue;
     }
     if (task.status === TaskStatus.dropped) continue;
     if (task.status === TaskStatus.later) {
       // Unless its agent asks you something: then it is back on you.
-      if (task.agent_state === AgentState.blocked) sections.tasks.push(item);
+      if (task.agent_state === AgentState.blocked) onYou.push(item);
       else sections.later.push({ ...item, at: task.remind_at ?? item.at });
       continue;
     }
     if (task.watching) sections.watching.push(item);
-    else sections.tasks.push(item);
+    else onYou.push(item);
   }
 
   for (const idea of input.ideas) {
