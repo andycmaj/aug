@@ -4,7 +4,7 @@
 // the running engine makes. It never sends: a Send is only ever the owner's
 // press.
 
-import { capabilityAllow, GH_READS, SHELL_HOWTO } from "./capabilities";
+import { capabilityAllow, deniedNote, GH_READS, SHELL_HOWTO } from "./capabilities";
 import { loadConfig } from "./config";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
 import {
@@ -172,6 +172,7 @@ export function assistantPrompt(
       ? `\n## Projects the owner named\n${projects.map(projectDetail).join("\n\n")}`
       : "",
     "",
+    deniedNote(turns),
     fresh.length ? transcript(fresh) : `(${reason})`,
   ]
     .filter((line) => line !== "")

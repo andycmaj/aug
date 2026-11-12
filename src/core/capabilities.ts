@@ -10,6 +10,8 @@
 
 import { loadConfig, type AugConfig } from "./config";
 import { logger } from "./log";
+import { TOOLS_NAME } from "./self";
+import { TurnRole, type TurnRow } from "./types";
 
 const log = logger("capabilities");
 
@@ -71,7 +73,25 @@ export const GH_READS = [
 // Rules match a command's prefix, and each part of `a && b` must match on its
 // own; `cd` into another folder never does. Said to every headless shell.
 export const SHELL_HOWTO =
-  "Run one command per Bash call, written out in full and starting with the command itself: no `cd <dir> &&` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout.";
+  `Run one command per Bash call, written out in full and starting with the command itself: no \`cd <dir> &&\` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout. A denied call means the command did not match, not that Bash is off: write it again that way (aug's tools as ${TOOLS_NAME} <command>) and try once more before giving up.`;
+
+export const DENIED_STEP = "denied: ";
+
+// A resumed session remembers its own denied commands and tends to replay
+// them word for word, so the next turn names them and how to write them.
+export function deniedNote(turns: TurnRow[]): string {
+  const last = turns.findLast((t) => t.role === TurnRole.agent);
+  const steps: unknown = last?.steps ? JSON.parse(last.steps) : [];
+  const denied = Array.isArray(steps)
+    ? steps.filter((s): s is string => typeof s === "string" && s.startsWith(DENIED_STEP))
+    : [];
+  if (!denied.length) return "";
+  return [
+    "Your last turn was denied these calls, because they did not match an allowed command:",
+    ...denied.map((s) => `- ${s.slice(DENIED_STEP.length)}`),
+    `Do not repeat them. ${SHELL_HOWTO}`,
+  ].join("\n");
+}
 
 export type Role = "general" | "assistant";
 

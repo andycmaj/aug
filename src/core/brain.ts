@@ -42,6 +42,8 @@ export interface BrainResult {
   sessionId: string | null;
   durationMs: number;
   isError: boolean;
+  // Calls dontAsk turned away (deniedCalls).
+  denied?: string[];
 }
 
 export type Brain = (call: BrainCall) => Promise<BrainResult>;
@@ -246,5 +248,6 @@ async function claudeBrain(call: BrainCall): Promise<BrainResult> {
     sessionId: acc.sessionId,
     durationMs: acc.result.duration_ms ?? Date.now() - started,
     isError: acc.result.is_error === true,
+    denied,
   };
 }

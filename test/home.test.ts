@@ -147,3 +147,29 @@ test("a general agent is told it has gh and how to write shell commands that are
   expect(system).toContain("gh pr view");
   expect(system).toContain(SHELL_HOWTO);
 });
+
+test("a denied call is kept on the turn, and the next turn is told not to repeat it", async () => {
+  const denied = 'Bash B=/bin/bun; $B aug-tools.ts move link AUG-0001 "u"';
+  setBrain(async (call) => {
+    calls.push(call);
+    return {
+      text: "",
+      structured: { about: "a", did: "d", next: "n", state: "done" },
+      sessionId: call.sessionId ?? call.resume ?? null,
+      durationMs: 1,
+      isError: false,
+      denied: calls.length === 1 ? [denied] : [],
+    };
+  });
+  const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
+  const pool = new AgentPool({ limit: () => 4 });
+  await pool.request(task.id, "go", "owner");
+  await Bun.sleep(10);
+  const first = store.turnsForTask(task.id).findLast((t) => t.role === TurnRole.agent)!;
+  expect(JSON.parse(first.steps)).toContain(`denied: ${denied}`);
+
+  await pool.request(task.id, "again", "owner");
+  await Bun.sleep(10);
+  expect(calls[1].prompt).toContain(`- ${denied}`);
+  expect(calls[1].prompt).toContain("aug-tools <command>");
+});

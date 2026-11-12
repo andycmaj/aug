@@ -9,7 +9,7 @@ import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { assistantCall } from "./assistant";
 import { think, BrainError } from "./brain";
-import { capabilityAllow, GH_READS, SHELL_HOWTO } from "./capabilities";
+import { capabilityAllow, DENIED_STEP, deniedNote, GH_READS, SHELL_HOWTO } from "./capabilities";
 import { loadConfig } from "./config";
 import { now } from "./db";
 import { DocName, head, learnedInUse, readDoc } from "./docs";
@@ -233,6 +233,7 @@ export function turnPrompt(
     "The conversation so far, oldest first:",
     transcript(turns),
     "",
+    deniedNote(turns),
     `Why you are being run now: ${reason}.`,
   ]
     .filter((line) => line !== "")
@@ -390,6 +391,12 @@ export class AgentPool {
           store.updateSession(sessionId, { last_tool: step });
         },
       });
+      // Kept on the turn: the owner sees what was refused, and the next
+      // turn's prompt names it.
+      if (result.denied?.length) {
+        steps.push(...result.denied.map((d) => `${DENIED_STEP}${d}`));
+        store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
+      }
       const answer = result.structured as TurnAnswer | null;
       const finished = now();
       recordFiles();
