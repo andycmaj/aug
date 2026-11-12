@@ -55,4 +55,19 @@ describe("task info", () => {
     expect(value(item, "cwd")).toBe("/repo");
     expect(value(item, "lane")).toBe("asked you");
   });
+
+  test("the thread and attached links are what enter opens", () => {
+    const t = store.createTask({
+      title: "fix login",
+      kind: Kind.coding,
+      channel: "github",
+      url: "https://github.com/acme/api/issues/12",
+    });
+    store.addTaskLink(t.id, "https://claude.ai/code/artifact/abc", "Design", "you");
+    const rows = itemInfo(taskItem(store.getTask(t.id)!)).flatMap((s) => s.rows);
+    expect(rows.filter((r) => r.open).map((r) => [r.label, r.open])).toEqual([
+      ["url", "https://github.com/acme/api/issues/12"],
+      ["Design", "https://claude.ai/code/artifact/abc"],
+    ]);
+  });
 });

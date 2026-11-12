@@ -265,11 +265,12 @@ export function StatusModal(props: {
 export type { InputRenderable };
 
 // I: what aug knows about a row. j/k pick a line, c copies its value
-// (a session id, a thread key, a path).
+// (a session id, a thread key, a path), enter opens a link line.
 export function InfoModal(props: {
   title: string;
   sections: InfoSection[];
   onCopied: (label: string, ok: boolean) => void;
+  onOpen: (target: string) => void;
   onClose: () => void;
 }) {
   const theme = useTheme();
@@ -318,7 +319,11 @@ export function InfoModal(props: {
       commands={{
         [ModalCommands.MODAL_DOWN]: () => move(1),
         [ModalCommands.MODAL_UP]: () => move(-1),
-        [ModalCommands.MODAL_SELECT]: () => props.onClose(),
+        [ModalCommands.MODAL_SELECT]: () => {
+          const target = rows()[selected()]?.open;
+          if (target) props.onOpen(target);
+          else props.onClose();
+        },
         "info.copy": () => {
           const row = rows()[selected()];
           if (!row) return;
@@ -328,7 +333,14 @@ export function InfoModal(props: {
         },
       }}
     >
-      <ModalHeader title={props.title} hint="j/k · c copy · esc" />
+      <ModalHeader
+        title={props.title}
+        hint={
+          rows().some((r) => r.open)
+            ? "j/k · enter open link · c copy · esc"
+            : "j/k · c copy · esc"
+        }
+      />
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
         height={height()}

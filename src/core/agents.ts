@@ -22,6 +22,7 @@ import {
   sessionStarted,
   turnFinished,
 } from "./lifecycle";
+import { ARTIFACT_TOOLS } from "./hooks";
 import { AGENT_MOVES } from "./moves";
 import { logger } from "./log";
 import { linkLine } from "./lookup";
@@ -446,6 +447,7 @@ export function hookSettings(): Record<string, unknown> {
     hooks: {
       UserPromptSubmit: hook("prompt"),
       PreToolUse: [{ matcher: "*", hooks: hook("tool")[0].hooks }],
+      PostToolUse: [{ matcher: ARTIFACT_TOOLS, hooks: hook("made")[0].hooks }],
       Notification: hook("notification"),
       Stop: hook("stop"),
       SessionEnd: hook("end"),

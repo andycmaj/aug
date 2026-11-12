@@ -14,7 +14,12 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { handleHook, type HookEnv, type HookPayload } from "./hooks";
+import {
+  ARTIFACT_TOOLS,
+  handleHook,
+  type HookEnv,
+  type HookPayload,
+} from "./hooks";
 import { logger } from "./log";
 import { mux } from "./mux";
 import { ensureHome, paths } from "./paths";
@@ -149,6 +154,7 @@ export async function paneEnv(paneId: string): Promise<HookEnv | null> {
 const HOOK_EVENTS: [claudeEvent: string, augEvent: string, matcher?: string][] = [
   ["UserPromptSubmit", "prompt"],
   ["PreToolUse", "tool", "*"],
+  ["PostToolUse", "made", ARTIFACT_TOOLS],
   ["Notification", "notification"],
   ["Stop", "stop"],
   ["SessionEnd", "end"],

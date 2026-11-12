@@ -608,6 +608,7 @@ export function useActions(dialogs: Dialogs) {
             ? showToast(`Copied the ${label}`)
             : showToast("No clipboard here", 3000, "error")
         }
+        onOpen={open}
         onClose={dialogs.close}
       />
     ));

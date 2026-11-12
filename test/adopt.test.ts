@@ -13,6 +13,7 @@ import {
   uninstallHooks,
   type GitInfo,
 } from "../src/core/adopt";
+import { ARTIFACT_TOOLS } from "../src/core/hooks";
 import { setMux } from "../src/core/mux";
 import { realSpawn } from "../src/core/slack/claude-mcp";
 import { createProject } from "../src/core/projects";
@@ -144,6 +145,9 @@ describe("user settings", () => {
     expect(after.hooks.Stop).toHaveLength(2);
     expect(after.hooks.PreToolUse).toEqual([
       { matcher: "*", hooks: [{ type: "command", command: expect.stringContaining("adopt-hook.sh tool") }] },
+    ]);
+    expect(after.hooks.PostToolUse).toEqual([
+      { matcher: ARTIFACT_TOOLS, hooks: [{ type: "command", command: expect.stringContaining("adopt-hook.sh made") }] },
     ]);
     expect(hooksInstalled(file)).toBe(true);
     expect(existsSync(`${file}.before-aug`)).toBe(true);

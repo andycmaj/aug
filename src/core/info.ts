@@ -12,6 +12,8 @@ import type { MessageRow, TaskRow } from "./types";
 export interface InfoRow {
   label: string;
   value: string;
+  // What enter opens: the links on a task and the thread it came from.
+  open?: string;
 }
 
 export interface InfoSection {
@@ -40,7 +42,11 @@ function section(
     title,
     rows: pairs
       .filter(([, v]) => v !== null && v !== undefined && v !== "")
-      .map(([label, v]) => ({ label, value: String(v) })),
+      .map(([label, v]) =>
+        label === "url"
+          ? { label, value: String(v), open: String(v) }
+          : { label, value: String(v) },
+      ),
   };
 }
 
@@ -101,7 +107,7 @@ function taskSections(
       title: "Links",
       rows: store
         .linksForTask(task.id)
-        .map((l) => ({ label: l.title ?? "link", value: l.url })),
+        .map((l) => ({ label: l.title ?? "link", value: l.url, open: l.url })),
     },
     section("Agent", [
       ["state", task.agent_state === "none" ? null : task.agent_state],

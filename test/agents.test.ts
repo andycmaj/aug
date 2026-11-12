@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { AgentPool, codingLaunch, hookSettings } from "../src/core/agents";
 import { actionFor } from "../src/core/outbound";
-import { handleDone, handleHook } from "../src/core/hooks";
+import { ARTIFACT_TOOLS, artifactLink, handleDone, handleHook } from "../src/core/hooks";
 import { applyLesson } from "../src/core/learn";
 import {
   brainEnv,
@@ -178,6 +178,7 @@ describe("coding agent", () => {
     expect(Object.keys(hooks)).toEqual([
       "UserPromptSubmit",
       "PreToolUse",
+      "PostToolUse",
       "Notification",
       "Stop",
       "SessionEnd",
@@ -216,6 +217,76 @@ describe("coding agent", () => {
     expect(task.unread_result).toBe(1);
     handleHook("end", {}, env);
     expect(store.getTask(t.id)!.agent_state).toBe(AgentState.agentdone);
+  });
+});
+
+describe("artifact links", () => {
+  beforeEach(() => freshHome());
+
+  const linked = (taskId: number) =>
+    store.linksForTask(taskId).map((l) => [l.title, l.url]);
+
+  test("the hook fires only for calls that make an artifact", () => {
+    const fires = (tool: string) => new RegExp(ARTIFACT_TOOLS).test(tool);
+    expect(fires("Artifact")).toBe(true);
+    expect(fires("mcp__claude_ai_Claude_Docs__batch")).toBe(true);
+    expect(fires("mcp__claude_ai_Claude_Docs__read")).toBe(false);
+    expect(fires("Bash")).toBe(false);
+  });
+
+  test("a published artifact or a new doc is linked to the task once", () => {
+    const t = store.createTask({ title: "Write up", kind: Kind.coding, channel: "owner" });
+    const env = { taskId: t.id, sessionId: "s1" };
+    const publish = {
+      tool_name: "Artifact",
+      tool_input: { file_path: "/tmp/scratch/release-notes.html", icon: "doc" },
+      tool_response: "Published https://claude.ai/code/artifact/0b7c-41aa. This session now watches it.",
+    };
+    handleHook("made", publish, env);
+    expect(linked(t.id)).toEqual([
+      ["release-notes", "https://claude.ai/code/artifact/0b7c-41aa"],
+    ]);
+
+    // A republish leaves a title someone set alone.
+    store.addTaskLink(t.id, "https://claude.ai/code/artifact/0b7c-41aa", "Release notes", "you");
+    handleHook("made", publish, env);
+    expect(linked(t.id)).toEqual([
+      ["Release notes", "https://claude.ai/code/artifact/0b7c-41aa"],
+    ]);
+
+    handleHook(
+      "made",
+      {
+        tool_name: "mcp__claude_ai_Claude_Docs__batch",
+        tool_input: { container: { kind: "project", create: { name: "Q3 plan" } }, batch: [] },
+        tool_response: [{ type: "text", text: '{"ok":true,"link":"https://claude.ai/artifact/9f3e"}' }],
+      },
+      env,
+    );
+    expect(linked(t.id).at(-1)).toEqual(["Q3 plan", "https://claude.ai/artifact/9f3e"]);
+  });
+
+  test("reads, listings and asset uploads link nothing", () => {
+    const listing = "https://claude.ai/code/artifact/aaa https://claude.ai/code/artifact/bbb";
+    for (const tool_input of [
+      { action: "list" },
+      { action: "read", url: "https://claude.ai/code/artifact/aaa" },
+      { url: "https://claude.ai/code/artifact/aaa", file_path: "a.png", asset: true },
+    ])
+      expect(artifactLink({ tool_name: "Artifact", tool_input, tool_response: listing })).toBeNull();
+    expect(
+      artifactLink({ tool_name: "Artifact", tool_input: {}, tool_response: "Publish refused" }),
+    ).toBeNull();
+  });
+
+  test("an update names its artifact in the input", () => {
+    expect(
+      artifactLink({
+        tool_name: "Artifact",
+        tool_input: { url: "https://claude.ai/code/artifact/ccc", file_path: "x.html", title: "Dash" },
+        tool_response: "copied from https://claude.ai/code/artifact/ddd",
+      }),
+    ).toEqual({ url: "https://claude.ai/code/artifact/ccc", title: "Dash" });
   });
 });
 

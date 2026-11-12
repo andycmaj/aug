@@ -26,6 +26,8 @@ export interface HookPayload {
   // UserPromptSubmit carries what was typed; every event carries the cwd.
   prompt?: string;
   cwd?: string;
+  // PostToolUse carries what the tool gave back.
+  tool_response?: unknown;
 }
 
 export type HookEnv = AgentRef;
@@ -65,7 +67,62 @@ export function handleHook(
     case "end":
       sessionEnded(env, AgentState.stopped);
       return;
+    case "made":
+      linkArtifact(payload, env);
+      return;
   }
+}
+
+// Only the calls that make or change a Claude artifact fire "made": the
+// Artifact tool and the Claude Docs connector's writes. Reads and listings
+// name artifacts the session did not make.
+export const ARTIFACT_TOOLS = "^(Artifact|mcp__.*Claude_Docs__(batch|create))$";
+
+const ARTIFACT_URL = /https:\/\/claude\.ai\/(?:code\/)?artifacts?\/[\w-]+/;
+
+function text(v: unknown): string {
+  return typeof v === "string" ? v : (JSON.stringify(v) ?? "");
+}
+
+// The artifact a call made, and what to call it. A publish to an existing
+// one names it in its input; otherwise the result carries the new link.
+export function artifactLink(
+  payload: HookPayload,
+): { url: string; title: string } | null {
+  const tool = payload.tool_name ?? "";
+  const input = payload.tool_input ?? {};
+  let title: string;
+  if (tool === "Artifact") {
+    const action = input.action ?? "publish";
+    if (action !== "publish" || input.asset) return null;
+    const file = typeof input.file_path === "string" ? input.file_path : "";
+    title =
+      (typeof input.title === "string" && input.title.trim()) ||
+      file.split("/").pop()?.replace(/\.[^.]+$/, "") ||
+      "Claude artifact";
+  } else if (/^mcp__.*Claude_Docs__/.test(tool)) {
+    const container = (input.container ?? {}) as { create?: { name?: unknown } };
+    const name = container.create?.name;
+    title = typeof name === "string" && name.trim() ? name.trim() : "Claude doc";
+  } else return null;
+  const url =
+    (typeof input.url === "string" ? input.url.match(ARTIFACT_URL)?.[0] : null) ??
+    text(payload.tool_response).match(ARTIFACT_URL)?.[0];
+  return url ? { url, title } : null;
+}
+
+// A republish keeps whatever title the link already has: the agent or the
+// owner may have named it better than a file name does.
+function linkArtifact(payload: HookPayload, env: HookEnv): void {
+  const made = artifactLink(payload);
+  if (!made) return;
+  if (store.linksForTask(env.taskId).some((l) => l.url === made.url)) return;
+  store.addTaskLink(
+    env.taskId,
+    made.url,
+    made.title,
+    `agent ${store.taskRef(env.taskId)}`,
+  );
 }
 
 export interface DoneArgs {
