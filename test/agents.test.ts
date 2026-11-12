@@ -7,7 +7,7 @@ import {
 } from "../src/core/agents";
 import { handleDone, handleHook } from "../src/core/hooks";
 import { applyLesson } from "../src/core/learn";
-import { brainEnv, claudeArgs, parseStreamLine } from "../src/core/brain";
+import { brainEnv, claudeArgs, deniedCalls, parseStreamLine } from "../src/core/brain";
 import { toMessage } from "../src/core/ingest/github";
 import { plainText, threadKeyFor } from "../src/core/slack/shared";
 import * as store from "../src/core/store";
@@ -254,6 +254,19 @@ describe("brain stream", () => {
     );
     expect(steps).toEqual(["WebSearch same-day pay"]);
     expect(acc.sessionId).toBe("s");
+  });
+
+  test("a denial names the whole command dontAsk turned away", () => {
+    expect(
+      deniedCalls({
+        type: "result",
+        permission_denials: [
+          { tool_name: "Bash", tool_input: { command: "cd /r && gh pr view 1", description: "d" } },
+          { tool_name: "mcp__x__read", tool_input: { id: "1" } },
+        ],
+      }),
+    ).toEqual(["Bash cd /r && gh pr view 1", 'mcp__x__read {"id":"1"}']);
+    expect(deniedCalls({ type: "result" })).toEqual([]);
   });
 
   test("no tools means none; allow rules deny the rest", () => {

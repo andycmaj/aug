@@ -121,7 +121,7 @@ interface StreamContent {
   text?: string;
 }
 
-interface StreamEvent {
+export interface StreamEvent {
   type: string;
   subtype?: string;
   session_id?: string;
@@ -131,6 +131,18 @@ interface StreamEvent {
   duration_ms?: number;
   is_error?: boolean;
   parent_tool_use_id?: string | null;
+  permission_denials?: { tool_name?: string; tool_input?: Record<string, unknown> }[];
+}
+
+// What dontAsk turned away, in full: the model's own account of a denial
+// rarely says which command or rule missed.
+export function deniedCalls(event: StreamEvent): string[] {
+  return (event.permission_denials ?? []).map((d) => {
+    const command = d.tool_input?.command;
+    return typeof command === "string"
+      ? `${d.tool_name ?? "tool"} ${command}`
+      : `${d.tool_name ?? "tool"} ${JSON.stringify(d.tool_input ?? {})}`;
+  });
 }
 
 // One line per tool call: "Read src/app.ts", "WebSearch payroll same-day".
@@ -226,6 +238,8 @@ async function claudeBrain(call: BrainCall): Promise<BrainResult> {
         : `claude exited ${code}: ${stderr.split("\n").slice(-3).join(" ") || "no result"}`,
     );
   }
+  const denied = deniedCalls(acc.result);
+  if (denied.length) log.warn("permission denied", { denied, allow: call.allow ?? [] });
   return {
     text: acc.result.result ?? acc.text,
     structured: acc.result.structured_output ?? null,
