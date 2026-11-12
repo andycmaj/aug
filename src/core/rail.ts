@@ -24,6 +24,10 @@ export interface RailProject {
   goals: number;
 }
 
+// FYIs are still filed and kept; the rail just does not show them until
+// they earn a place there.
+export const SHOW_FYI = false;
+
 export const Section = {
   home: "home",
   tasks: "tasks",

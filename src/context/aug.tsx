@@ -21,6 +21,7 @@ import {
   flattenRail,
   foldRail,
   nextKey,
+  SHOW_FYI,
   WALKED,
   type RailItem,
   type RailSection,
@@ -157,7 +158,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
       tasks,
       pendingActions: pending(),
       ideas: store.openIdeas(),
-      fyi: store.fyiMessages(since),
+      fyi: SHOW_FYI ? store.fyiMessages(since) : [],
       lastHeard,
       now: now(),
     });

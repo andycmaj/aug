@@ -28,7 +28,12 @@ import {
 import { Commands } from "../commands";
 import { useAug } from "../context/aug";
 import { Lane, LANE_META } from "../core/lanes";
-import { ageLabel, SECTION_TITLES, type RailItem } from "../core/rail";
+import {
+  ageLabel,
+  SECTION_TITLES,
+  SHOW_FYI,
+  type RailItem,
+} from "../core/rail";
 import { getProject, taskRef } from "../core/store";
 import { AgentState, Kind } from "../core/types";
 import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
@@ -452,12 +457,16 @@ export function RailLegend() {
       markColor: theme.accent,
       word: "advisor idea",
     },
-    {
-      bar: theme.textMuted,
-      mark: "·",
-      markColor: theme.textMuted,
-      word: "fyi",
-    },
+    ...(SHOW_FYI
+      ? [
+          {
+            bar: theme.textMuted,
+            mark: "·",
+            markColor: theme.textMuted,
+            word: "fyi",
+          },
+        ]
+      : []),
   ];
   const columns = () => {
     const all = entries();
