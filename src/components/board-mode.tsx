@@ -243,7 +243,8 @@ export function BoardMode() {
       },
       [Commands.BOARD_TAB_3]: () => setTab(Tab.knowledge),
       [Commands.BOARD_TAB_4]: () => setTab(Tab.projects),
-      [Commands.PROJECT_ADOPT]: () => void shell.actions.adoptProject(),
+      [Commands.PROJECT_ADOPT]: () =>
+        void shell.actions.adopt(tab() === Tab.projects ? projectLine()?.project.id : undefined),
       [Commands.PROJECT_ARCHIVE]: () => {
         const line = projectLine();
         if (tab() !== Tab.projects || !line) return false;
@@ -451,7 +452,7 @@ function Projects(props: {
         <box paddingLeft={1} flexDirection="column">
           <text fg={theme.textMuted}>
             No projects yet. c makes one (a tmux session); A adopts a session
-            you already have.
+            or a claude you already have.
           </text>
           <text fg={theme.textMuted}>
             Starting a coding task outside a project makes a project of its own.

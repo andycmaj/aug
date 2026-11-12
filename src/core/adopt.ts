@@ -162,9 +162,12 @@ const HOOK_EVENTS: [claudeEvent: string, augEvent: string, matcher?: string][] =
 
 const GUARD_NAME = "adopt-hook.sh";
 
+export function claudeDir(): string {
+  return process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+}
+
 export function claudeSettingsPath(): string {
-  const dir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
-  return join(dir, "settings.json");
+  return join(claudeDir(), "settings.json");
 }
 
 export function guardPath(): string {

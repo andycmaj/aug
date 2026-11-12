@@ -38,6 +38,11 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   stale ones at start, but only those made for its own `AUG_HOME`. Scripts
   it writes are embedded (`with { type: "text" }`) so the compiled binary
   carries them. Setup a user would otherwise do by hand goes here.
+- **Claudes started outside aug are `core/strays.ts`**: found through Claude
+  Code's own `~/.claude/sessions/<pid>.json` (pid, session id, cwd, tmux
+  pane). The `adopt` move and `A` on the Board make one a coding task: one in
+  tmux keeps running and its window moves into the project's session; one in
+  a plain terminal is recorded as saved, so Start resumes it in a window.
 - **Slack goes through a `SlackTransport`** (`core/slack/`): `token`,
   `claude-mcp` (a persistent `claude -p` whose session can only read, plus a
   one-shot send call), or `mcp` (a stub). claude.ai connectors load only with

@@ -20,6 +20,7 @@ import { applyProjectDoc, renderProjectDoc } from "./project-doc";
 import { editPending, sendPending } from "./outbound";
 import { setTaskRepo } from "./repos";
 import * as store from "./store";
+import { adoptStray, findStrays, type Stray } from "./strays";
 import {
   AgentState,
   IdeaStatus,
@@ -160,6 +161,18 @@ export class Desk {
 
   archiveProject(projectId: number) {
     return projects.archiveProject(projectId);
+  }
+
+  // Claudes started outside aug, and making one a task in a project.
+  async strays(): Promise<Stray[]> {
+    // The fixture day never reads your real claudes.
+    return this.offline ? [] : findStrays();
+  }
+
+  async adoptStray(stray: Stray, projectId: number): Promise<TaskRow> {
+    const project = store.getProject(projectId);
+    if (!project) throw new Error(`no project ${projectId}`);
+    return adoptStray(stray, project);
   }
 
   // The project's file as the owner edits it, and what writing it back did.

@@ -38,6 +38,10 @@ export interface PaneInfo {
   windowId: string;
   windowName: string;
   sessionId: string;
+  sessionName: string;
+  // The pane's own process (a shell, or claude itself), for telling which
+  // server a process found outside tmux lives on.
+  panePid: number;
   taskId: number | null;
   projectId: number | null;
 }
@@ -282,11 +286,31 @@ export class TmuxMux implements Mux {
         "-p",
         "-t",
         paneId,
-        ["#{window_id}", "#{window_name}", "#{session_id}", `#{${TASK_OPTION}}`, `#{${PROJECT_OPTION}}`].join(SEP),
+        [
+          "#{pane_id}",
+          "#{pane_pid}",
+          "#{window_id}",
+          "#{window_name}",
+          "#{session_id}",
+          "#{session_name}",
+          `#{${TASK_OPTION}}`,
+          `#{${PROJECT_OPTION}}`,
+        ].join(SEP),
       ]);
       if (!line) return null;
-      const [windowId, windowName, sessionId, task, project] = line.split(SEP);
-      return { windowId, windowName, sessionId, taskId: idOf(task), projectId: idOf(project) };
+      const [id, pid, windowId, windowName, sessionId, sessionName, task, project] =
+        line.split(SEP);
+      // tmux answers for the current pane when the named one is gone.
+      if (id !== paneId) return null;
+      return {
+        windowId,
+        windowName,
+        sessionId,
+        sessionName,
+        panePid: Number(pid) || 0,
+        taskId: idOf(task),
+        projectId: idOf(project),
+      };
     } catch {
       return null;
     }

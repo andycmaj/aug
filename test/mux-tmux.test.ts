@@ -224,3 +224,16 @@ describe.skipIf(!hasTmux)("host window", () => {
     expect(await hostWith({ TMUX: "", TMUX_PANE: "" }, s)).toBeNull();
   });
 });
+
+describe.skipIf(!hasTmux)("paneInfo", () => {
+  test("names the pane's session and process, and nothing for a pane that is gone", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "mine");
+    const pane = tmux(s, "display", "-p", "-t", "mine:", "#{pane_id}");
+    const pid = Number(tmux(s, "display", "-p", "-t", "mine:", "#{pane_pid}"));
+    const info = await new TmuxMux(s).paneInfo(pane);
+    expect(info?.sessionName).toBe("mine");
+    expect(info?.panePid).toBe(pid);
+    expect(await new TmuxMux(s).paneInfo("%999")).toBeNull();
+  });
+});

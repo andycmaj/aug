@@ -10,6 +10,7 @@ import { findProject, projectLine } from "./lookup";
 import { mux } from "./mux";
 import * as repos from "./repos";
 import * as store from "./store";
+import { matchStray, strayLabel, strayRef, type Stray } from "./strays";
 import {
   GoalStatus,
   Kind,
@@ -440,6 +441,33 @@ export const MOVES: Record<string, MoveSpec> = {
       const repo = args.repo ? checkRepo(args.repo) : null;
       const project = await desk.createProject(args.name.trim(), repo);
       return `made ${projectLine(project)}`;
+    },
+  },
+  adopt: {
+    help: "Make a claude started outside aug (another tmux session, a terminal) a coding task in a project. Without --claude, lists them",
+    task: false,
+    positional: "claude",
+    args: {
+      claude: { help: "the stray: its id, tmux pane (%12), tmux session name or pid" },
+      project: { help: "the project it joins", required: true },
+    },
+    async run(desk, _task, args) {
+      const project = projectNamed(args.project);
+      const strays = await desk.strays();
+      if (!args.claude?.trim())
+        return strays.length
+          ? `strays: ${strays.map((s) => `${strayRef(s)} (${strayLabel(s)})`).join("; ")}. Pass --claude <id>.`
+          : "no stray claudes running";
+      let stray: Stray;
+      try {
+        stray = matchStray(strays, args.claude);
+      } catch (err) {
+        throw new MoveError(err instanceof Error ? err.message : String(err));
+      }
+      const task = await desk.adoptStray(stray, project.id);
+      return stray.pane
+        ? `adopted ${strayLabel(stray)} as ${ref(task)} in ${project.name}; its window moved into the project's session`
+        : `adopted ${strayLabel(stray)} as ${ref(task)} in ${project.name}; quit that claude, then start ${ref(task)} to continue it in tmux`;
     },
   },
   project_repo: {

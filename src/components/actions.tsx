@@ -21,6 +21,7 @@ import {
 import { infoTitle, itemInfo } from "../core/info";
 import { errorMessage } from "../core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt";
+import { strayLabel, type Stray } from "../core/strays";
 import { loadConfig } from "../core/config";
 import { neighborKey, type RailItem } from "../core/rail";
 import * as store from "../core/store";
@@ -153,33 +154,75 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
-  async function adoptProject() {
+  // A tmux session becomes a project; a claude started outside aug becomes
+  // a task in one. The project it joins comes first when you are on it.
+  async function adopt(projectId?: number) {
     let sessions: Awaited<ReturnType<typeof desk.adoptableSessions>>;
+    let strays: Stray[];
     try {
-      sessions = await desk.adoptableSessions();
+      [sessions, strays] = await Promise.all([desk.adoptableSessions(), desk.strays()]);
     } catch (err) {
       showToast(`tmux: ${errorMessage(err)}`, 4000, "error");
       return;
     }
-    if (sessions.length === 0) {
-      showToast("Every tmux session is a project already (or none is running)");
+    if (sessions.length === 0 && strays.length === 0) {
+      showToast("No stray claudes, and every tmux session is a project already");
       return;
     }
     dialogs.show(() => (
       <ChoiceModal
-        title="Adopt a tmux session as a project"
-        hint="aug tags it; its name and windows stay as they are."
-        choices={sessions.map((s) => ({
-          label: s.name,
-          run: () =>
-            void desk.adoptSession(s.id).then(
-              (p) => {
-                showToast(`Project ${p.name}`);
-                offerHooks();
-              },
-              (err) => showToast(`Could not adopt: ${errorMessage(err)}`, 4000, "error"),
-            ),
-        }))}
+        title="Adopt"
+        hint="A claude becomes a task (its window moves into the project). A session becomes a project."
+        choices={[
+          ...strays.map((s) => ({
+            label: `claude  ${strayLabel(s)}`,
+            run: () => adoptClaude(s, projectId),
+          })),
+          ...sessions.map((s) => ({
+            label: `session ${s.name}`,
+            run: () =>
+              void desk.adoptSession(s.id).then(
+                (p) => {
+                  showToast(`Project ${p.name}`);
+                  offerHooks();
+                },
+                (err) => showToast(`Could not adopt: ${errorMessage(err)}`, 4000, "error"),
+              ),
+          })),
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function adoptClaude(stray: Stray, projectId?: number) {
+    const into = (id: number) =>
+      void desk.adoptStray(stray, id).then(
+        (task) => {
+          showToast(
+            stray.pane
+              ? `${store.taskRef(task.id)} ${task.title}`
+              : `${store.taskRef(task.id)}: quit that claude, then s continues it here`,
+            stray.pane ? 3000 : 6000,
+          );
+          aug.selectTask(task.id);
+          offerHooks();
+        },
+        (err) => showToast(`Could not adopt: ${errorMessage(err)}`, 4000, "error"),
+      );
+    const active = store.listProjects().filter((p) => p.status === "active");
+    const ordered = [
+      ...active.filter((p) => p.id === projectId),
+      ...active.filter((p) => p.id !== projectId),
+    ];
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Adopt ${strayLabel(stray)} into`}
+        hint={stray.pane ? "Its claude keeps running." : "It is outside tmux: s resumes it in the project once you quit it."}
+        choices={[
+          ...ordered.map((p) => ({ label: p.name, run: () => into(p.id) })),
+          { label: "new project…", run: () => newProject(into) },
+        ]}
         onClose={dialogs.close}
       />
     ));
@@ -696,7 +739,7 @@ export function useActions(dialogs: Dialogs) {
     jumpTo,
     nudge,
     newProject,
-    adoptProject,
+    adopt,
     moveToProject,
     archiveProject,
     jumpToProject,

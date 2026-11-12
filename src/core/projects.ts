@@ -384,6 +384,20 @@ async function archive(project: ProjectRow, state: MuxState): Promise<void> {
   store.archiveProject(project.id);
 }
 
+// A window aug did not make becomes the task's: tagged, and moved into the
+// project's session, which is where aug looks for a task's window and where
+// a hand-started claude's hooks find their project.
+export async function takeWindow(taskId: number, windowId: string): Promise<void> {
+  const task = store.getTask(taskId);
+  const project = task?.project_id ? store.getProject(task.project_id) : null;
+  if (!project) throw new Error(`${store.taskRef(taskId)} has no project`);
+  const session = await ensureSession(project);
+  await mux().tagWindow(windowId, taskId);
+  const window = (await mux().state()).windows.find((w) => w.id === windowId);
+  if (window && window.sessionId !== session.id)
+    await mux().moveWindow(windowId, window.sessionId, session.id);
+}
+
 // Moving a task keeps its claude running: the window moves with it.
 export async function moveTask(taskId: number, projectId: number): Promise<void> {
   const task = store.getTask(taskId);

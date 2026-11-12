@@ -121,6 +121,8 @@ export class FakeMux implements Mux {
     return ["tmux", "new-session", "-s", viewerName, ";", "link-window", "-s", windowId, "-t", `=${viewerName}:`];
   }
 
+  panePids = new Map<string, number>();
+
   // In the fake a pane id is its window id.
   async paneInfo(paneId: string): Promise<PaneInfo | null> {
     const w = this.windows.find((w) => w.id === paneId);
@@ -130,6 +132,8 @@ export class FakeMux implements Mux {
       windowId: w.id,
       windowName: w.name,
       sessionId: w.sessionId,
+      sessionName: s?.name ?? "",
+      panePid: this.panePids.get(paneId) ?? 0,
       taskId: w.taskId,
       projectId: s?.projectId ?? null,
     };
