@@ -7,12 +7,17 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { augHome } from "./paths";
 
+// A compiled binary (`bun run compile`) has no script on disk to hand bun; it
+// is aug-tools itself under the `tools` subcommand (src/bin/aug.ts).
+const COMPILED = import.meta.url.includes("/$bunfs/");
+export const TOOLS_SUBCOMMAND = "tools";
+
 export function toolsEntry(): string {
   return fileURLToPath(new URL("../bin/aug-tools.ts", import.meta.url));
 }
 
 export function toolsArgv(): string[] {
-  return [process.execPath, toolsEntry()];
+  return COMPILED ? [process.execPath, TOOLS_SUBCOMMAND] : [process.execPath, toolsEntry()];
 }
 
 // Quoted for a shell line (hook commands and the agent's brief are shell).
@@ -51,7 +56,11 @@ export function toolsRules(...args: string[]): string[] {
   const tail = args.map(shellQuote).join(" ");
   const entry = [toolsEntry(), ...args].map(shellQuote).join(" ");
   return [
-    ...new Set([`${TOOLS_NAME}${tail ? ` ${tail}` : ""}`, toolsCommand(...args), `bun ${entry}`]),
+    ...new Set([
+      `${TOOLS_NAME}${tail ? ` ${tail}` : ""}`,
+      toolsCommand(...args),
+      ...(COMPILED ? [] : [`bun ${entry}`]),
+    ]),
   ].map((c) => `Bash(${c}:*)`);
 }
 

@@ -5,6 +5,14 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { paths, ensureHome } from "./paths";
+import assistant from "../../docs/defaults/ASSISTANT.md" with { type: "text" };
+import coding from "../../docs/defaults/CODING.md" with { type: "text" };
+import counsel from "../../docs/defaults/COUNSEL.md" with { type: "text" };
+import job from "../../docs/defaults/JOB.md" with { type: "text" };
+import learned from "../../docs/defaults/LEARNED.md" with { type: "text" };
+import soul from "../../docs/defaults/SOUL.md" with { type: "text" };
+import style from "../../docs/defaults/STYLE.md" with { type: "text" };
+import triage from "../../docs/defaults/TRIAGE.md" with { type: "text" };
 
 export const DocName = {
   soul: "SOUL.md",
@@ -30,11 +38,21 @@ export const DOC_PURPOSE: Record<DocName, string> = {
 };
 
 // The starter text lives as Markdown in the repo so it can be read and edited
-// as the files it becomes.
-const DEFAULTS_DIR = join(import.meta.dir, "../../docs/defaults");
+// as the files it becomes. Imported as text, not read from disk, so a compiled
+// binary carries it.
+const STARTERS: Record<DocName, string> = {
+  "SOUL.md": soul,
+  "JOB.md": job,
+  "TRIAGE.md": triage,
+  "STYLE.md": style,
+  "COUNSEL.md": counsel,
+  "ASSISTANT.md": assistant,
+  "CODING.md": coding,
+  "LEARNED.md": learned,
+};
 
 function starter(name: DocName): string {
-  return readFileSync(join(DEFAULTS_DIR, name), "utf8");
+  return STARTERS[name];
 }
 
 export function docPath(name: DocName): string {
