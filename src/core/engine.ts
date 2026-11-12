@@ -9,6 +9,7 @@ import { loadConfig } from "./config";
 import { dataVersion, now } from "./db";
 import { Desk } from "./desk";
 import { ensureDocs } from "./docs";
+import { refreshInstalls } from "./install";
 import { Drivers } from "./driver";
 import { pollGithub } from "./ingest/github";
 import { errorMessage, logger } from "./log";
@@ -101,8 +102,20 @@ export class Engine {
     for (const l of this.statusListeners) l(this.status);
   }
 
+  // Your setup outside aug follows aug when it moves (a new checkout, the
+  // compiled binary): stale installs are rewritten, nothing new goes in.
+  private refreshInstalls(): void {
+    try {
+      const names = refreshInstalls();
+      if (names.length) log.info("refreshed installs", { names: names.join(",") });
+    } catch (err) {
+      log.error("refresh installs failed", { error: errorMessage(err) });
+    }
+  }
+
   start(): void {
     ensureDocs();
+    if (!this.options.offline) this.refreshInstalls();
     store.homeTask();
     this.recoverSessions();
     void this.reconcile();

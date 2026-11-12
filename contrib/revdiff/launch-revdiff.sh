@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# revdiff's launcher, user layer: symlink this to
-#   ~/.claude/plugins/data/revdiff-revdiff/scripts/launch-revdiff.sh
+# revdiff's launcher, user layer: `aug install revdiff` writes this to
+#   ~/.claude/plugins/data/revdiff-<marketplace>/scripts/launch-revdiff.sh
 # It runs the installed plugin's own launcher with one backend added ahead of
 # its tmux ones. Inside an aug task window (the window carries @aug_tools) the
 # review opens in a zoomed split of claude's own window through `aug-tools pane`,

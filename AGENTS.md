@@ -32,6 +32,12 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   viewer instead of a window of its own. `tagWindow` also sets `@aug_tools`
   (how to call aug-tools) for scripts in that pane; `contrib/revdiff/` is
   revdiff's user-layer launcher that does this.
+- **What aug writes outside its home is `core/install.ts`**: one registry
+  (`hooks`, `statusline`, `revdiff`) of idempotent install, uninstall and
+  state, behind `aug install|uninstall [name] [--check]`. The engine rewrites
+  stale ones at start, but only those made for its own `AUG_HOME`. Scripts
+  it writes are embedded (`with { type: "text" }`) so the compiled binary
+  carries them. Setup a user would otherwise do by hand goes here.
 - **Slack goes through a `SlackTransport`** (`core/slack/`): `token`,
   `claude-mcp` (a persistent `claude -p` whose session can only read, plus a
   one-shot send call), or `mcp` (a stub). claude.ai connectors load only with

@@ -96,7 +96,7 @@ export function useActions(dialogs: Dialogs) {
     dialogs.show(() => (
       <ChoiceModal
         title="Pick up claudes you start by hand?"
-        hint={`Adds hooks to ${claudeSettingsPath()} that only act inside a project's tmux session. Undo with: aug hooks uninstall`}
+        hint={`Adds hooks to ${claudeSettingsPath()} that only act inside a project's tmux session. Undo with: aug uninstall hooks`}
         choices={[
           {
             label: "Yes, install the hooks",

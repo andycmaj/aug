@@ -177,7 +177,7 @@ export function guardScript(): string {
   const tools = toolsArgv().map(shellQuote).join(" ");
   return [
     "#!/bin/sh",
-    "# Installed by `aug hooks install`; removed by `aug hooks uninstall`.",
+    "# Installed by `aug install hooks`; removed by `aug uninstall hooks`.",
     '[ -n "$AUG_TASK_ID" ] && exit 0',
     '[ -n "$TMUX_PANE" ] || exit 0',
     '[ -n "$(tmux show-options -qv -t "$TMUX_PANE" @aug_project 2>/dev/null)" ] || exit 0',
@@ -194,11 +194,11 @@ interface HookGroup {
   matcher?: string;
   hooks: HookEntry[];
 }
-type Settings = Record<string, unknown> & {
+export type Settings = Record<string, unknown> & {
   hooks?: Record<string, HookGroup[]>;
 };
 
-function readSettings(file: string): Settings {
+export function readSettings(file: string): Settings {
   if (!existsSync(file)) return {};
   const text = readFileSync(file, "utf8");
   if (!text.trim()) return {};
@@ -229,6 +229,50 @@ export function hooksInstalled(file = claudeSettingsPath()): boolean {
   }
 }
 
+function ourGroup(augEvent: string, matcher?: string): HookGroup {
+  return {
+    ...(matcher ? { matcher } : {}),
+    hooks: [{ type: "command", command: `sh ${shellQuote(guardPath())} ${augEvent}` }],
+  };
+}
+
+// Ours and calling this aug home's guard (not a scratch home's).
+export function hooksHere(file = claudeSettingsPath()): boolean {
+  try {
+    const guard = shellQuote(guardPath());
+    return Object.values(readSettings(file).hooks ?? {}).some((groups) =>
+      groups.some((g) => g.hooks.some((h) => isOurs(h) && h.command.includes(guard))),
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Installed as this aug would install them: an older aug's (an event it did
+// not hook yet, a guard calling a moved checkout) is out of date.
+export function hooksCurrent(file = claudeSettingsPath()): boolean {
+  try {
+    const hooks = readSettings(file).hooks ?? {};
+    const ours = Object.values(hooks).flatMap((groups) =>
+      groups.filter((g) => g.hooks.some(isOurs)),
+    );
+    const want = HOOK_EVENTS.map(([claudeEvent, augEvent, matcher]) => ({
+      claudeEvent,
+      group: JSON.stringify(ourGroup(augEvent, matcher)),
+    }));
+    return (
+      ours.length === want.length &&
+      want.every(({ claudeEvent, group }) =>
+        (hooks[claudeEvent] ?? []).some((g) => JSON.stringify(g) === group),
+      ) &&
+      existsSync(guardPath()) &&
+      readFileSync(guardPath(), "utf8") === guardScript()
+    );
+  } catch {
+    return false;
+  }
+}
+
 // Idempotent: our entries are replaced, nobody else's are touched, and the
 // first install keeps a copy of the file as it was.
 export function installHooks(file = claudeSettingsPath()): string {
@@ -237,18 +281,18 @@ export function installHooks(file = claudeSettingsPath()): string {
   writeFileSync(guardPath(), guardScript());
   chmodSync(guardPath(), 0o755);
   const hooks = { ...(settings.hooks ?? {}) };
-  for (const [claudeEvent, augEvent, matcher] of HOOK_EVENTS) {
-    const group: HookGroup = {
-      ...(matcher ? { matcher } : {}),
-      hooks: [{ type: "command", command: `sh ${shellQuote(guardPath())} ${augEvent}` }],
-    };
-    hooks[claudeEvent] = [...(hooks[claudeEvent] ?? []), group];
-  }
+  for (const [claudeEvent, augEvent, matcher] of HOOK_EVENTS)
+    hooks[claudeEvent] = [...(hooks[claudeEvent] ?? []), ourGroup(augEvent, matcher)];
+  writeSettings(file, { ...settings, hooks });
+  return file;
+}
+
+// The first write keeps a copy of the file as it was.
+export function writeSettings(file: string, settings: Settings): void {
   const backup = `${file}.before-aug`;
   if (existsSync(file) && !existsSync(backup)) copyFileSync(file, backup);
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, JSON.stringify({ ...settings, hooks }, null, 2) + "\n");
-  return file;
+  writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
 }
 
 export function uninstallHooks(file = claudeSettingsPath()): boolean {

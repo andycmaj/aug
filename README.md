@@ -214,11 +214,30 @@ work with them from any tmux client.
 - **PRs.** A PR whose head branch is a task's branch belongs to that task, so
   its reviews and CI land there. `u` types one line into the agent's window
   telling it to run `aug-tools feedback`. Nothing else is pasted or sent.
-- **Claudes you start by hand.** `aug hooks install` adds hooks to
+- **Claudes you start by hand.** `aug install hooks` adds hooks to
   `~/.claude/settings.json` (backed up once to `settings.json.before-aug`).
   A small `sh` guard exits at once unless the claude is in a project's session
   and is not one aug started. Then its first prompt makes it a task in that
-  project. `aug hooks uninstall` removes them; `aug hooks status` says which.
+  project. `aug uninstall hooks` removes them.
+
+### Setting up a machine
+
+`aug install` sets up everything aug adds to your other tools, and is safe to
+run again; `aug install <name>` does one, `aug install --check` says what is
+in, and `aug uninstall [name]` takes it back out. Each touches only what it
+marked as its own and moves anything of yours aside first.
+
+- `hooks`: the hand-started claude hooks above.
+- `statusline`: the task (`AUG-0059 <title>`, plus its priority) in Claude
+  Code's status line. A `[custom.aug_task]` block in `starship.toml` (or
+  `$STARSHIP_CONFIG`), put in front of your `claude-code` profile, runs
+  `aug-tools statusline`. Claude's `statusLine` is set to
+  `starship statusline claude-code` only when you have none. Needs starship.
+- `revdiff`: the revdiff plugin's user-layer launcher, so a review an agent
+  opens shows in a split of its own window in aug's viewer. Needs the plugin.
+
+When aug starts it rewrites any of these that no longer match it (a moved
+checkout, a new hook), and only ones installed for its own `AUG_HOME`.
 
 ### Env contract
 

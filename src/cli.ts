@@ -5,6 +5,7 @@ import {
   installHooks,
   uninstallHooks,
 } from "./core/adopt";
+import { INSTALLS, InstallState, installState } from "./core/install";
 
 export interface CLIConfig {
   // A built-in fixture name: no network, no AI, a fictional day.
@@ -43,12 +44,73 @@ const hooks = defineCommand({
         console.log(
           hooksInstalled()
             ? `installed in ${claudeSettingsPath()}`
-            : "not installed (aug hooks install)",
+            : "not installed (aug install hooks)",
         );
       },
     }),
   },
 });
+
+function chosen(names: string[]): string[] {
+  const unknown = names.filter((n) => !(n in INSTALLS));
+  if (unknown.length) {
+    console.error(
+      `aug: no install named ${unknown.join(", ")} (one of ${Object.keys(INSTALLS).join(", ")})`,
+    );
+    process.exit(2);
+  }
+  return names.length ? names : Object.keys(INSTALLS);
+}
+
+const indent = (text: string) => text.replace(/^/gm, "  ");
+
+// What aug sets up outside its home (core/install.ts). With no names, all of
+// them that apply here, so one command sets up a machine.
+const install = defineCommand({
+  meta: {
+    name: "install",
+    description: `Set up what aug adds to your tools: ${Object.keys(INSTALLS).join(", ")} (all when none named)`,
+  },
+  args: {
+    check: { type: "boolean", description: "say what is installed, change nothing" },
+  },
+  run({ args }) {
+    for (const name of chosen(args._.map(String))) {
+      const item = INSTALLS[name];
+      const state = installState(name);
+      if (args.check) {
+        const why = item.unavailable();
+        console.log(`${name}: ${state}${why ? ` (${why})` : ""} · ${item.help}`);
+        continue;
+      }
+      if (state === InstallState.unavailable) {
+        console.log(`${name}: skipped, ${item.unavailable()}`);
+        continue;
+      }
+      if (state === InstallState.installed) {
+        console.log(`${name}: up to date`);
+        continue;
+      }
+      console.log(`${name}: ${state === InstallState.stale ? "updated" : "installed"}`);
+      console.log(indent(item.install()));
+    }
+  },
+});
+
+const uninstall = defineCommand({
+  meta: {
+    name: "uninstall",
+    description: `Take out what aug install put in: ${Object.keys(INSTALLS).join(", ")} (all when none named)`,
+  },
+  run({ args }) {
+    for (const name of chosen(args._.map(String))) {
+      const removed = INSTALLS[name].uninstall();
+      console.log(removed ? `${name}: removed\n${indent(removed)}` : `${name}: nothing to remove`);
+    }
+  },
+});
+
+const SUBCOMMANDS = { hooks, install, uninstall };
 
 const main = defineCommand({
   meta: {
@@ -57,7 +119,7 @@ const main = defineCommand({
     description:
       "Your work manager in a terminal: GitHub and Slack become tasks, Claude does the work, nothing goes out until you approve.",
   },
-  subCommands: { hooks },
+  subCommands: SUBCOMMANDS,
   args: {
     demo: {
       type: "boolean",
@@ -66,7 +128,7 @@ const main = defineCommand({
   },
   run({ args, rawArgs }) {
     // citty runs this after a subcommand too; a subcommand is not the TUI.
-    if (rawArgs[0] === "hooks") return;
+    if (rawArgs[0] && rawArgs[0] in SUBCOMMANDS) return;
     config = {
       fixture: args.demo ? "demo" : process.env.AUG_FIXTURE || undefined,
     };
