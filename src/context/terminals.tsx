@@ -15,6 +15,7 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createRequiredContext, useTheme } from "@andycmaj/opentui-app";
 import { PtySession } from "../terminal/pty-session";
 import { TerminalModes } from "../terminal/modes";
+import { readClipboard } from "../terminal/clipboard";
 import { terminalReplies } from "../terminal/replies";
 import { ViewportTerminalRenderable } from "../terminal/viewport-terminal";
 
@@ -131,6 +132,7 @@ export function TerminalsProvider(props: ParentProps) {
           cursor: view.term.getCursor(),
           foreground: isHex(theme.text) ? theme.text : "#c0c0c0",
           background: isHex(theme.background) ? theme.background : "#000000",
+          clipboard: readClipboard,
         });
         if (replies) term.session.write(replies);
       },

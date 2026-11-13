@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { TmuxMux, viewerMayHang } from "../src/core/mux";
+import { PtySession } from "../src/terminal/pty-session";
+import { terminalReplies } from "../src/terminal/replies";
 
 // Real tmux on private servers. Clients need a terminal, so a second server
 // ("host") gives each one a pane to run in.
@@ -121,7 +123,73 @@ describe.skipIf(!hasTmux)("viewer session", () => {
       .map((w) => w.split(" ")[0]);
     expect(holders.sort()).toEqual(["aug-view-test", "outer"]);
   });
+
+  // nvim's OSC 52 paste waits 10s for an answer, and on tmux's defaults it
+  // gets one only while tmux holds a paste buffer. Through aug's viewer, tmux
+  // asks aug's terminal, which answers from the clipboard.
+  test("a pane's clipboard query is answered by aug's terminal", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const projId = tmux(s, "display", "-p", "-t", "proj:", "#{session_id}");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const argv = new TmuxMux(s).viewerArgv("aug-view-test", projId, windowId);
+    const decoder = new TextDecoder();
+    const viewer = new PtySession(argv, {
+      cols: 100,
+      rows: 30,
+      env: { TMUX: "" },
+      onData: (data) => {
+        const replies = terminalReplies(decoder.decode(data, { stream: true }), {
+          cursor: [0, 0],
+          foreground: "#ffffff",
+          background: "#000000",
+          clipboard: () => "hello",
+        });
+        if (replies) viewer.write(replies);
+      },
+      onExit: () => {},
+    });
+    try {
+      await until(() => windows(s).includes(`aug-view-test ${windowId}`));
+      expect(tmux(s, "show-options", "-sv", "set-clipboard")).toBe("on");
+      expect(tmux(s, "show-options", "-sv", "get-clipboard")).toBe("request");
+
+      const out = `${tmpdir()}/aug-osc52-${process.pid}`;
+      rmSync(out, { force: true });
+      const ask = `stty raw -echo; printf '\\033]52;c;?\\033\\\\'; dd bs=1 count=17 of=${out} 2>/dev/null`;
+      tmux(s, "respawn-pane", "-k", "-t", windowId, "sh", "-c", ask);
+      await until(() => (readText(out) ?? "").length >= 17);
+      expect(readText(out)).toBe(`\x1b]52;c;${btoa("hello")}\x1b\\`);
+      rmSync(out, { force: true });
+    } finally {
+      viewer.kill();
+    }
+  });
+
+  test("clipboard settings you chose are left alone", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    tmux(s, "set-option", "-s", "get-clipboard", "off");
+    tmux(s, "set-option", "-s", "set-clipboard", "off");
+    const projId = tmux(s, "display", "-p", "-t", "proj:", "#{session_id}");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const argv = new TmuxMux(s).viewerArgv("aug-view-test", projId, windowId);
+    const host = server("host");
+    const shell = argv.map((a) => `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
+    tmux(host, "new-session", "-d", "-x", "100", "-y", "30", "-s", "aug", shell);
+    await until(() => windows(s).includes(`aug-view-test ${windowId}`));
+    expect(tmux(s, "show-options", "-sv", "get-clipboard")).toBe("off");
+    expect(tmux(s, "show-options", "-sv", "set-clipboard")).toBe("off");
+  });
 });
+
+function readText(file: string): string | null {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
 
 describe.skipIf(!hasTmux)("split pane", () => {
   test("a diff viewer splits the viewed window, so the viewer shows it", async () => {

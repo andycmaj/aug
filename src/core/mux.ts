@@ -501,6 +501,15 @@ export class TmuxMux implements Mux {
       ";", "set-option", "prefix", "None",
       ";", "set-option", "destroy-unattached", "on",
       ";", "set-option", "-F", "@aug_client", "#{client_name}",
+      // A program's OSC 52 clipboard read (nvim's, over ssh) goes unanswered
+      // on tmux's defaults: set-clipboard external drops it, and get-clipboard
+      // buffer replies only from a paste buffer, silent when there is none.
+      // nvim then hangs 10s per paste. With these tmux asks the most recent
+      // client's terminal, aug's while you type in the viewer, and aug
+      // answers from the system clipboard. Both are server-wide, so only
+      // tmux's defaults are changed and a value set on purpose is kept.
+      ";", "if-shell", "-F", "#{==:#{set-clipboard},external}", "set-option -s set-clipboard on",
+      ";", "if-shell", "-F", "#{==:#{get-clipboard},buffer}", "set-option -s get-clipboard request",
       ";", "set-hook", "client-attached", bounce,
       ";", "set-hook", "client-session-changed", bounce,
       ";", "link-window", "-s", windowId, "-t", `=${viewerName}:`,

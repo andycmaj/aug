@@ -7,6 +7,10 @@ export interface ReplyContext {
   cursor: [number, number];
   foreground: string;
   background: string;
+  // Read only when a program asks (OSC 52 "?"): nvim's OSC 52 paste waits
+  // up to 10s for an answer, and tmux forwards the question to its most
+  // recent client, which is aug's while you type in the viewer.
+  clipboard: () => string;
 }
 
 // "#1a1b26" -> "rgb:1a1a/1b1b/2626", the 16-bit form xterm reports.
@@ -17,7 +21,7 @@ function oscColor(hex: string): string {
 }
 
 const QUERY =
-  /\x1b\[(\??)([56])n|\x1b\[(>?)0?c|\x1b\](1[01]);\?(?:\x07|\x1b\\)/g;
+  /\x1b\[(\??)([56])n|\x1b\[(>?)0?c|\x1b\](1[01]);\?(?:\x07|\x1b\\)|\x1b\]52;([a-z0-9]*);\?(?:\x07|\x1b\\)/g;
 
 export function terminalReplies(output: string, ctx: ReplyContext): string {
   let replies = "";
@@ -30,6 +34,9 @@ export function terminalReplies(output: string, ctx: ReplyContext): string {
     } else if (m[4]) {
       const color = m[4] === "10" ? ctx.foreground : ctx.background;
       replies += `\x1b]${m[4]};${oscColor(color)}\x1b\\`;
+    } else if (m[5] !== undefined) {
+      const data = Buffer.from(ctx.clipboard()).toString("base64");
+      replies += `\x1b]52;${m[5] || "c"};${data}\x1b\\`;
     }
   }
   return replies;
