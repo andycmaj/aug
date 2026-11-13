@@ -142,6 +142,8 @@ async function start(
       return result.project
         ? `started ${ref(task)}'s coding agent in project ${result.project.name}`
         : `started ${ref(task)}'s agent`;
+    case "queued":
+      return `${ref(task)} is ${result.reason}: it starts by itself when one finishes`;
     case "needs":
       switch (result.need.what) {
         case "repo":

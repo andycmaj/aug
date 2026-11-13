@@ -196,12 +196,15 @@ export class Engine {
   }
 
   // aug-tools asks for moves from another process; its commit bumps
-  // data_version, and the engine drains whatever is pending.
+  // data_version, and the engine drains whatever is pending. A slot frees
+  // from a hook in another process or from aug's own stop and tmux watch,
+  // which data_version does not show, so the pool's queue is tried each tick.
   private draining = false;
   private watchMoves(): void {
     let seen = -1;
     this.timers.push(
       setInterval(() => {
+        this.pool.drain();
         const v = dataVersion();
         if (v === seen || this.draining) return;
         seen = v;

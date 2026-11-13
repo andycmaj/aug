@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import {
   draftSent,
   finishSuperseded,
+  HELD_FOR_START,
   holdForStart,
   queued,
   recoverAtBoot,
@@ -284,6 +285,20 @@ describe("recovering at boot", () => {
     expect(agentOf(coding.id)).toBe(AgentState.working);
     expect(store.getSession(codingRef.sessionId)!.ended_at).toBeNull();
     expect(agentOf(orphan.id)).toBe(AgentState.stopped);
+  });
+
+  test("a task left waiting its turn is held for Start: its queue died with aug", () => {
+    const waiting = task();
+    const held = task();
+    queued(waiting.id, "waiting its turn (4 agents at once)");
+    holdForStart(held.id);
+    recoverAtBoot(
+      () => false,
+      () => false,
+    );
+    expect(store.getTask(waiting.id)!.agent_state).toBe(AgentState.queued);
+    expect(store.getTask(waiting.id)!.queue_reason).toBe(HELD_FOR_START);
+    expect(store.getTask(held.id)!.queue_reason).toBe(HELD_FOR_START);
   });
 
   test("a task the pool is already running is left alone", () => {

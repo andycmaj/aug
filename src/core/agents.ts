@@ -230,8 +230,11 @@ interface Running {
   abort: AbortController;
 }
 
-// Agent sessions aug starts by itself run up to Agents at once; the rest wait
-// their turn. Turns the owner asks for are never held back.
+// Agents at once (maxActiveAgents) counts every agent at work: the chat
+// turns this pool runs, coding starts on their way, and any other task whose
+// agent is working (a coding claude in tmux, which the pool does not run).
+// Chat turns aug starts by itself and the owner's coding Starts wait their
+// turn past it; chat turns the owner asks for are never held back.
 const log = logger("agents");
 
 // The chat session the next turn continues. A session that was denied calls
@@ -244,9 +247,19 @@ function chatResume(taskId: number, history: TurnRow[]): string | undefined {
     : undefined;
 }
 
+interface Waiting {
+  taskId: number;
+  reason: string;
+  // A coding start, run as is when its turn comes; a chat turn has none.
+  start?: () => Promise<unknown>;
+}
+
 export class AgentPool {
   private running = new Map<number, Running>();
-  private waiting: { taskId: number; reason: string }[] = [];
+  // Coding starts between the owner's Start and claude's first hook: not
+  // working yet, but a slot is theirs.
+  private starting = new Set<number>();
+  private waiting: Waiting[] = [];
 
   constructor(
     private options: PoolOptions = {
@@ -258,8 +271,33 @@ export class AgentPool {
     return this.running.has(taskId);
   }
 
+  isWaiting(taskId: number): boolean {
+    return this.waiting.some((w) => w.taskId === taskId);
+  }
+
   runningCount(): number {
     return this.running.size;
+  }
+
+  active(): number {
+    const ids = new Set([...this.running.keys(), ...this.starting]);
+    for (const id of store.workingTaskIds()) ids.add(id);
+    return ids.size;
+  }
+
+  private full(): boolean {
+    return this.active() >= this.options.limit();
+  }
+
+  private enqueue(entry: Waiting): void {
+    if (this.isWaiting(entry.taskId)) return;
+    this.waiting.push(entry);
+    log.debug("queued", { task: entry.taskId, reason: entry.reason });
+    queued(entry.taskId, this.waitReason());
+  }
+
+  waitReason(): string {
+    return `waiting its turn (${this.options.limit()} agents at once)`;
   }
 
   request(
@@ -268,19 +306,31 @@ export class AgentPool {
     by: "owner" | "aug",
   ): Promise<void> | null {
     if (this.running.has(taskId)) return null;
-    if (by === "aug" && this.running.size >= this.options.limit()) {
-      if (!this.waiting.some((w) => w.taskId === taskId)) {
-        this.waiting.push({ taskId, reason });
-        log.debug("queued", { task: taskId, reason });
-        queued(
-          taskId,
-          `waiting its turn (${this.options.limit()} agents at once)`,
-        );
-      }
+    if (by === "aug" && this.full()) {
+      this.enqueue({ taskId, reason });
       return null;
     }
     this.waiting = this.waiting.filter((w) => w.taskId !== taskId);
     return this.run(taskId, reason).finally(() => this.drain());
+  }
+
+  // The owner's coding Start: it runs now while there is room, else waits
+  // its turn and runs when one frees. Null when it waits.
+  claim<T>(taskId: number, start: () => Promise<T>): Promise<T> | null {
+    if (this.isWaiting(taskId)) return null;
+    if (this.full()) {
+      this.enqueue({ taskId, reason: "the owner pressed Start", start });
+      return null;
+    }
+    return this.launch(taskId, start);
+  }
+
+  private launch<T>(taskId: number, start: () => Promise<T>): Promise<T> {
+    this.starting.add(taskId);
+    return start().finally(() => {
+      this.starting.delete(taskId);
+      this.drain();
+    });
   }
 
   stop(taskId: number): void {
@@ -292,16 +342,17 @@ export class AgentPool {
     for (const r of this.running.values()) r.abort.abort();
   }
 
-  private drain(): void {
-    while (
-      this.waiting.length > 0 &&
-      this.running.size < this.options.limit()
-    ) {
+  // Run whatever waits while there is room. The engine calls it whenever
+  // the store changes, since a coding agent frees its slot from a hook.
+  drain(): void {
+    while (this.waiting.length > 0 && !this.full()) {
       const next = this.waiting.shift();
       if (!next) break;
       const task = store.getTask(next.taskId);
       if (!task || task.status !== TaskStatus.open) continue;
-      void this.run(next.taskId, next.reason).finally(() => this.drain());
+      log.debug("dequeued", { task: next.taskId, reason: next.reason });
+      if (next.start) void this.launch(next.taskId, next.start);
+      else void this.run(next.taskId, next.reason).finally(() => this.drain());
     }
   }
 

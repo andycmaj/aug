@@ -172,6 +172,14 @@ export function listTasks(): TaskRow[] {
   );
 }
 
+// Tasks whose agent is at work right now, Home's included: what counts
+// against Agents at once.
+export function workingTaskIds(): number[] {
+  return all<{ id: number }>(
+    "SELECT id FROM tasks WHERE agent_state = 'working' AND status NOT IN ('done', 'dropped')",
+  ).map((r) => r.id);
+}
+
 export function homeTask(): TaskRow {
   const found = one<TaskRow>(
     "SELECT * FROM tasks WHERE kind = 'home' ORDER BY id LIMIT 1",

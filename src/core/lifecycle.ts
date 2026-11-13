@@ -251,6 +251,12 @@ export function recoverAtBoot(
       sessionEnded({ taskId: s.task_id, sessionId: s.id }, AgentState.stopped);
     }
     for (const task of store.listTasks()) {
+      // The queue that held it waiting its turn died with the last aug.
+      if (
+        task.agent_state === AgentState.queued &&
+        task.queue_reason !== HELD_FOR_START
+      )
+        holdForStart(task.id);
       if (
         task.agent_state === AgentState.working &&
         !store.liveSessions().some((s) => s.task_id === task.id) &&

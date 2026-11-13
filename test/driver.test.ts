@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { DEFAULT_CONFIG } from "../src/core/config";
 import { Engine } from "../src/core/engine";
+import { sessionActivity } from "../src/core/lifecycle";
 import { setMux } from "../src/core/mux";
 import * as store from "../src/core/store";
 import { AgentState, Kind, TaskStatus } from "../src/core/types";
@@ -135,5 +136,95 @@ describe("a general task's driver", () => {
     expect(r).toEqual({ warnings: [], archived: false });
     expect(store.getTask(task.id)!.status).toBe(TaskStatus.done);
     expect(engine.desk.isLive(store.getTask(task.id)!)).toBe(false);
+  });
+});
+
+describe("Agents at once (maxActiveAgents)", () => {
+  const codingTask = (title: string) =>
+    engine.desk.newTask(title, Kind.coding, "", { repo: "acme/api" });
+
+  const latestRef = (taskId: number) => ({
+    taskId,
+    sessionId: store.latestSession(taskId)!.id,
+  });
+
+  beforeEach(() => {
+    freshHome({
+      github: { ...DEFAULT_CONFIG.github, repos: { "acme/api": "/src/api" } },
+      maxActiveAgents: 2,
+    });
+    fake = new FakeMux();
+    setMux(fake);
+    engine = new Engine();
+  });
+
+  test("Starts pressed back to back never run more coding agents than the limit", async () => {
+    const tasks = [1, 2, 3, 4].map((n) => codingTask(`Task ${n}`));
+    // All at once, as six quick presses of s were: none has started yet
+    // when the next asks.
+    const results = await Promise.all(
+      tasks.map((t) => engine.desk.startAgent(t.id, { branch: `b${t.id}` })),
+    );
+    expect(results.map((r) => r.type)).toEqual([
+      "started",
+      "started",
+      "queued",
+      "queued",
+    ]);
+    expect(fake.windows).toHaveLength(2);
+    expect(store.getTask(tasks[2].id)!.agent_state).toBe(AgentState.queued);
+    expect(store.getTask(tasks[2].id)!.queue_reason).toContain("waiting its turn");
+  });
+
+  test("a queued Start runs, with its branch and note, once a working agent stops working", async () => {
+    const [a, b, c] = ["A", "B", "C"].map(codingTask);
+    await engine.desk.startAgent(a.id, { branch: "ba" });
+    await engine.desk.startAgent(b.id, { branch: "bb" });
+    const r = await engine.desk.startAgent(c.id, { branch: "bc", note: "go" });
+    expect(r.type).toBe("queued");
+
+    engine.pool.drain();
+    expect(fake.windows).toHaveLength(2);
+
+    // A's claude finishes its turn (its Stop hook): idle, not working.
+    sessionActivity(latestRef(a.id), AgentState.blocked, "which way?");
+    engine.pool.drain();
+    await Bun.sleep(0);
+    await Bun.sleep(0);
+    expect(fake.windows).toHaveLength(3);
+    expect(fake.worktrees.at(-1)!.branch).toBe("bc");
+    expect(fake.windows.at(-1)!.argv.join(" ")).toContain("go");
+    expect(store.getTask(c.id)!.agent_state).toBe(AgentState.working);
+  });
+
+  test("a coding agent already running only hears the note, even at the limit", async () => {
+    const [a, b] = ["A", "B"].map(codingTask);
+    await engine.desk.startAgent(a.id, { branch: "ba" });
+    await engine.desk.startAgent(b.id, { branch: "bb" });
+    const again = await engine.desk.startAgent(a.id, { note: "also this" });
+    expect(again.type).toBe("started");
+    expect(fake.windows).toHaveLength(2);
+  });
+
+  test("working coding agents hold back chat turns aug starts by itself", async () => {
+    const [a, b] = ["A", "B"].map(codingTask);
+    await engine.desk.startAgent(a.id, { branch: "ba" });
+    await engine.desk.startAgent(b.id, { branch: "bb" });
+    const chat = engine.desk.newTask("Look into it", Kind.general);
+    expect(engine.pool.request(chat.id, "a reply came", "aug")).toBeNull();
+    expect(store.getTask(chat.id)!.agent_state).toBe(AgentState.queued);
+  });
+
+  test("Stop takes back a queued Start", async () => {
+    const [a, b, c] = ["A", "B", "C"].map(codingTask);
+    await engine.desk.startAgent(a.id, { branch: "ba" });
+    await engine.desk.startAgent(b.id, { branch: "bb" });
+    await engine.desk.startAgent(c.id, { branch: "bc" });
+    await engine.desk.stopAgent(c.id);
+    expect(store.getTask(c.id)!.agent_state).toBe(AgentState.saved);
+    await engine.desk.stopAgent(a.id);
+    engine.pool.drain();
+    await Bun.sleep(0);
+    expect(fake.windows).toHaveLength(1);
   });
 });

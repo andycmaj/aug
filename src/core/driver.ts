@@ -6,6 +6,7 @@
 
 import type { AgentPool, CodingLaunch } from "./agents";
 import { startCancelled } from "./lifecycle";
+import { logger } from "./log";
 import * as projects from "./projects";
 import { repoChoices, repoPath } from "./repos";
 import * as store from "./store";
@@ -35,6 +36,8 @@ export type StartNeed =
 
 export type StartResult =
   | { type: "started"; project: ProjectRow | null }
+  // Agents at once is reached: it starts by itself when a slot frees.
+  | { type: "queued"; reason: string }
   | { type: "needs"; need: StartNeed }
   | { type: "failed"; error: string };
 
@@ -68,6 +71,7 @@ export interface DriverOptions {
 }
 
 const NO_RESULT: CloseResult = { warnings: [], archived: false };
+const log = logger("driver");
 
 // Headless claude turns: general, reply, task, and Home (the Assistant).
 export class ChatDriver implements AgentDriver {
@@ -135,7 +139,11 @@ export class ChatDriver implements AgentDriver {
 
 // Interactive claude in a window of the task's project session.
 export class TmuxDriver implements AgentDriver {
-  constructor(private options: Omit<DriverOptions, "pool">) {}
+  constructor(private options: DriverOptions) {}
+
+  private get pool(): AgentPool {
+    return this.options.pool;
+  }
 
   async start(task: TaskRow, opts: StartOptions = {}): Promise<StartResult> {
     const resume = this.resumes(task);
@@ -158,6 +166,60 @@ export class TmuxDriver implements AgentDriver {
           },
         };
     }
+    // A claude already running only hears the note: no new agent, no slot.
+    if (this.isLive(task)) return this.launch(task, opts, noWorktree, resume);
+    // Past Agents at once it waits its turn. The note waits as a pending
+    // line, which the start that runs later sends in.
+    let waited = false;
+    const run = this.pool.claim(task.id, async () => {
+      if (!waited) return this.launch(task, opts, noWorktree, resume);
+      const result = await this.launch(
+        task,
+        { ...opts, note: undefined },
+        noWorktree,
+        this.resumes(task),
+      );
+      if (result.type !== "started") this.startFailed(task, result);
+      return result;
+    });
+    if (run) return run;
+    waited = true;
+    const note = opts.note?.trim();
+    if (note)
+      store.addTurn({
+        taskId: task.id,
+        role: TurnRole.you,
+        author: "you",
+        body: note,
+        pending: true,
+      });
+    return { type: "queued", reason: this.pool.waitReason() };
+  }
+
+  // A start that waited its turn has no one to answer: what stopped it goes
+  // on the thread, and the task is left for the owner's Start.
+  private startFailed(task: TaskRow, result: StartResult): void {
+    const why =
+      result.type === "failed"
+        ? result.error
+        : result.type === "needs"
+          ? `it needs a ${result.need.what}`
+          : "";
+    log.error("queued start failed", { task: task.id, why });
+    startCancelled(task.id);
+    store.addTurn({
+      taskId: task.id,
+      role: TurnRole.trigger,
+      body: `Could not start after waiting its turn: ${why}. Press Start to try again.`,
+    });
+  }
+
+  private async launch(
+    task: TaskRow,
+    opts: StartOptions,
+    noWorktree: boolean,
+    resume: string | undefined,
+  ): Promise<StartResult> {
     // What the owner typed while claude was not running goes in with the note.
     const pending = store.pendingTurns(task.id);
     const note = [...pending.map((t) => t.body), opts.note?.trim()]
@@ -184,11 +246,17 @@ export class TmuxDriver implements AgentDriver {
     }
   }
 
-  stop(task: TaskRow): Promise<void> {
-    return projects.stopTask(task.id);
+  // A start still waiting its turn is taken back, as a chat's is.
+  async stop(task: TaskRow): Promise<void> {
+    if (this.pool.isWaiting(task.id)) {
+      this.pool.stop(task.id);
+      startCancelled(task.id);
+    }
+    await projects.stopTask(task.id);
   }
 
   close(task: TaskRow): Promise<CloseResult> {
+    this.pool.stop(task.id);
     return projects.closeTask(task.id);
   }
 

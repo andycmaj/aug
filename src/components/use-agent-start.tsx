@@ -52,6 +52,9 @@ export function useAgentStart(
       case "failed":
         showToast(`Could not start: ${result.error}`, 4000, "error");
         return;
+      case "queued":
+        showToast(`${store.taskRef(taskId)}: ${result.reason}`);
+        return;
       case "started":
         if (!coding) {
           showToast(`${store.taskRef(taskId)}: agent started`);

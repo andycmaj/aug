@@ -37,8 +37,9 @@ export interface AugConfig {
     // Reads and sends Slack under transport claude-mcp.
     slackModel: string;
   };
-  // How many claudes aug starts by itself may run at once. Claudes you start
-  // by hand never count.
+  // How many agents may be working at once, chat and coding alike. Past it,
+  // chat turns aug starts by itself and your coding Starts wait their turn;
+  // a chat turn you ask for never waits.
   maxActiveAgents: number;
   // Makes a task's worktree. {repo_path}, {create} (-c or empty) and
   // {branch} are filled in; stdout is wt's JSON, or a path on the last line.
