@@ -140,6 +140,11 @@ export class FakeMux implements Mux {
   }
 
   host: string | null = null;
+  tmuxVersion: string | null = "3.8";
+
+  async version(): Promise<string | null> {
+    return this.tmuxVersion;
+  }
 
   async hostWindow(): Promise<string | null> {
     return this.host;

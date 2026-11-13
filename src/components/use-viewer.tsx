@@ -4,7 +4,7 @@
 import { createEffect } from "solid-js";
 import { useToast } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
-import { useTerminals } from "../context/terminals";
+import { useTerminals, type TermState } from "../context/terminals";
 import * as store from "../core/store";
 import { Kind } from "../core/types";
 
@@ -14,6 +14,23 @@ const attaching = new Set<number>();
 const refused = new Set<number>();
 
 export const viewerId = (taskId: number) => `view-${taskId}`;
+// The warning about the tmux server is said once a run.
+let warned = false;
+
+// Viewers that should go: any but the shown task's, and any whose claude
+// ended. A hidden one stays a client of the task's window at its old size,
+// and two sizes on one window is what hangs tmux 3.7 (mux.viewerMayHang).
+// Showing a task again attaches a fresh one.
+export function viewersToClose(
+  terms: readonly TermState[],
+  shownTaskId: number | null,
+  live: (taskId: number) => boolean,
+): string[] {
+  return terms
+    .filter((t) => t.kind === "agent" && t.taskId !== undefined)
+    .filter((t) => t.taskId !== shownTaskId || !live(t.taskId as number))
+    .map((t) => t.id);
+}
 
 export function useViewer() {
   const aug = useAug();
@@ -33,6 +50,8 @@ export function useViewer() {
         return false;
       }
       if (!viewer || terminals.forTask(taskId)?.running) return Boolean(viewer);
+      if (viewer.warning && !warned) showToast(viewer.warning, 10000, "error");
+      if (viewer.warning) warned = true;
       const id = viewerId(taskId);
       terminals.close(id);
       terminals.open({
@@ -49,16 +68,17 @@ export function useViewer() {
   }
 
   // Keeps the table's terminal in step with tmux: a live claude on the
-  // selected task gets a viewer, and a viewer whose claude ended goes.
+  // selected task gets a viewer, and every other viewer goes.
   createEffect(() => {
     aug.version();
     const item = aug.selected();
     const task = item?.type === "task" ? item.task : null;
-    for (const term of terminals.list()) {
-      if (term.kind !== "agent" || term.taskId === undefined) continue;
-      const row = store.getTask(term.taskId);
-      if (!row || !desk.isLive(row)) terminals.close(term.id);
-    }
+    const live = (taskId: number) => {
+      const row = store.getTask(taskId);
+      return Boolean(row && desk.isLive(row));
+    };
+    for (const id of viewersToClose(terminals.list(), task?.id ?? null, live))
+      terminals.close(id);
     if (task && task.kind === Kind.coding && desk.isLive(task))
       void attachViewer(task.id);
   });

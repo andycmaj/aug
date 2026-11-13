@@ -112,6 +112,9 @@ export interface Mux {
   // The window aug itself runs in, when that is on this server: a viewer of
   // it would show aug showing the viewer, nested without end.
   hostWindow(): Promise<string | null>;
+  // The running server's version (not the tmux on PATH: an upgrade leaves the
+  // old server up until it is killed), or null with no server.
+  version(): Promise<string | null>;
   // Calls onChange when windows or sessions come and go, until the signal
   // aborts or the server goes away. Resolves at once with no server.
   watch(onChange: () => void, signal: AbortSignal): Promise<void>;
@@ -206,6 +209,15 @@ const WATCHED = new Set([
   "session-renamed",
   "sessions-changed",
 ]);
+
+// tmux 3.7's pane status drawing wraps a column below zero and loops for
+// hours on a split window shown to two clients of different sizes, which is
+// what an embedded viewer beside your own terminal makes (pane-border-status
+// on). 3.8 rewrote that code. test/mux-tmux.test.ts checks this against the
+// tmux it runs on.
+export function viewerMayHang(version: string | null): boolean {
+  return version?.startsWith("3.7") ?? false;
+}
 
 function pidAlive(pid: number): boolean {
   try {
@@ -311,6 +323,15 @@ export class TmuxMux implements Mux {
         taskId: idOf(task),
         projectId: idOf(project),
       };
+    } catch {
+      return null;
+    }
+  }
+
+  async version(): Promise<string | null> {
+    try {
+      const [line] = await this.cmd("display-message", ["-p", "#{version}"]);
+      return line?.trim() || null;
     } catch {
       return null;
     }

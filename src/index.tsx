@@ -6,7 +6,9 @@ import { CrashGuard } from "./components/crash-guard";
 import { parseCLI } from "./cli";
 import { loadConfig } from "./core/config";
 import { Engine } from "./core/engine";
+import { claimHome, releaseHome } from "./core/home-lock";
 import { logCrashes, logger } from "./core/log";
+import { paths } from "./core/paths";
 import { exitCode } from "./core/restart";
 
 const cli = await parseCLI();
@@ -23,6 +25,18 @@ if (cli.fixture) {
 } else {
   engine = new Engine();
 }
+
+// Before the TUI takes the terminal, so the refusal is readable.
+const claim = claimHome();
+if (!claim.ok) {
+  logger("aug").warn("home taken", { pid: claim.pid });
+  console.error(
+    `aug: already running on ${paths.home()} (pid ${claim.pid}).\n` +
+      "Quit that one first, or run this one with AUG_HOME set to another folder.",
+  );
+  process.exit(1);
+}
+process.on("exit", () => releaseHome());
 engine.start();
 
 // opentui answers SIGHUP/SIGTERM by tearing the renderer down and nothing

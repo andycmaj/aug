@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { codingCwd, codingLaunch, type CodingLaunch } from "./agents";
 import { sessionEnded, sessionStarted, type SessionEnd } from "./lifecycle";
 import { logger } from "./log";
-import { mux, VIEWER_PREFIX, type MuxSession, type MuxState } from "./mux";
+import { mux, VIEWER_PREFIX, viewerMayHang, type MuxSession, type MuxState } from "./mux";
 import { paths } from "./paths";
 import { repoPath } from "./repos";
 import * as store from "./store";
@@ -443,7 +443,7 @@ export function viewerName(taskId: number): string {
   return `${VIEWER_PREFIX}${process.pid}-${taskId}`;
 }
 
-export type Viewer = { argv: string[] } | { refused: string };
+export type Viewer = { argv: string[]; warning?: string } | { refused: string };
 
 export async function viewerArgv(taskId: number): Promise<Viewer | null> {
   const state = await mux().state();
@@ -460,7 +460,13 @@ export async function viewerArgv(taskId: number): Promise<Viewer | null> {
     (projectId ? liveSessionFor(state, projectId) : null)?.id ?? window.sessionId;
   const argv = mux().viewerArgv(viewerName(taskId), session, window.id);
   log.debug("viewer", { task: taskId, argv: argv.join(" ") });
-  return { argv };
+  const version = await mux().version();
+  if (!viewerMayHang(version)) return { argv };
+  log.warn("tmux may hang", { version });
+  return {
+    argv,
+    warning: `tmux ${version} can hang its server when this viewer and another terminal of a different size show a split window. Upgrade tmux to 3.8 and restart its server.`,
+  };
 }
 
 // ── reconcile ────────────────────────────────────────────────────────────

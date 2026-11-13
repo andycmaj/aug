@@ -57,8 +57,9 @@ export function useAgentStart(
           showToast(`${store.taskRef(taskId)}: agent started`);
           return;
         }
-        await attachViewer(taskId);
+        // Shown first: a viewer of a task that is not shown is closed.
         showTask(taskId);
+        await attachViewer(taskId);
     }
   }
 

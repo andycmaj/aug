@@ -119,6 +119,9 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 
 ## Testing the TUI
 
+- One aug runs per `AUG_HOME` (`core/home-lock.ts`), so a worktree's
+  `bin/aug` on the real home is refused while the owner's aug runs. Try a
+  change with `bun run demo` or a scratch `AUG_HOME`.
 - `bun run demo` runs the fixture day. Drive it in tmux with a unique session
   name and `tmux capture-pane -p`.
 - `bun test` covers the core. Reproduce a bug in a test before fixing it.

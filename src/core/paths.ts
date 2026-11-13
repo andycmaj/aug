@@ -23,6 +23,7 @@ export const paths = {
   work: (taskId: number) => join(augHome(), "work", String(taskId)),
   drafts: () => join(augHome(), "drafts"),
   log: () => join(augHome(), "aug.log"),
+  lock: () => join(augHome(), "aug.pid"),
 };
 
 export function ensureHome(): void {

@@ -154,6 +154,15 @@ describe("viewer", () => {
     const viewer = await viewerArgv(t.id);
     expect(viewer && "refused" in viewer && viewer.refused).toContain("own tmux window");
   });
+
+  test("on a tmux server that can hang under a viewer, the viewer says so", async () => {
+    const t = codingTask();
+    await startTask(t.id);
+    expect(await viewerArgv(t.id)).not.toHaveProperty("warning");
+    fake.tmuxVersion = "3.7c";
+    const viewer = await viewerArgv(t.id);
+    expect(viewer && "argv" in viewer && viewer.warning).toContain("tmux 3.7c can hang");
+  });
 });
 
 describe("starting a task", () => {

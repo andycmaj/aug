@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { TmuxMux } from "../src/core/mux";
+import { TmuxMux, viewerMayHang } from "../src/core/mux";
 
 // Real tmux on private servers. Clients need a terminal, so a second server
 // ("host") gives each one a pane to run in.
@@ -236,4 +236,54 @@ describe.skipIf(!hasTmux)("paneInfo", () => {
     expect(info?.panePid).toBe(pid);
     expect(await new TmuxMux(s).paneInfo("%999")).toBeNull();
   });
+});
+
+// tmux 3.7 loops in its pane status drawing on a split window shown to two
+// clients of different sizes (it hung the owner's server for good). This
+// pins viewerMayHang to the tmux the tests run on, either way round.
+describe.skipIf(!hasTmux)("viewer beside a terminal of another size", () => {
+  // null when tmux did not answer in time: a hung server never does.
+  function within(socket: string, ms: number, ...args: string[]): string | null {
+    const run = Bun.spawnSync(["tmux", "-L", socket, ...args], {
+      env: { ...process.env, TMUX: "" },
+      timeout: ms,
+      killSignal: "SIGKILL",
+    });
+    return run.exitCode === 0 ? run.stdout.toString().trim() : null;
+  }
+
+  test("hangs the server exactly when viewerMayHang says so", async () => {
+    const s = server("s");
+    const host = server("host");
+    tmux(s, "new-session", "-d", "-s", "proj", "-x", "200", "-y", "50", "cat");
+    tmux(s, "set-option", "-g", "pane-border-status", "top");
+    tmux(s, "split-window", "-h", "-t", "proj", "cat");
+    const serverPid = Number(tmux(s, "display", "-p", "#{pid}"));
+    const projId = tmux(s, "display", "-p", "-t", "proj:", "#{session_id}");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const mux = new TmuxMux(s);
+    const version = await mux.version();
+
+    // Your terminal on the project, then aug's viewer at the sizes that hung.
+    const attach = ["env", "-u", "TMUX", "tmux", "-L", s, "attach", "-t", "proj"];
+    const quote = (argv: string[]) =>
+      argv.map((a) => `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
+    tmux(host, "new-session", "-d", "-x", "115", "-y", "51", "-s", "you", quote(attach));
+    await until(() => (within(s, 1000, "list-clients") ?? "").split("\n").length === 1);
+    const viewer = mux.viewerArgv("aug-view-test", projId, windowId);
+    tmux(host, "new-session", "-d", "-x", "68", "-y", "48", "-s", "aug", quote(viewer));
+    await Bun.sleep(1500);
+
+    const answered = within(s, 2000, "list-clients", "-F", "#{client_width}x#{client_height}");
+    try {
+      expect({ version, hung: answered === null }).toEqual({
+        version,
+        hung: viewerMayHang(version),
+      });
+      if (answered !== null) expect(answered.split("\n").sort()).toEqual(["115x51", "68x48"]);
+    } finally {
+      // kill-server needs the server to answer; a hung one has to be killed.
+      if (answered === null) process.kill(serverPid, "SIGKILL");
+    }
+  }, 20_000);
 });
