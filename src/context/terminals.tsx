@@ -1,5 +1,5 @@
-// Every embedded terminal: coding agents (one per session) and one-off
-// editors ($EDITOR on a draft or a doc). Sessions and their renderables live
+// Every embedded terminal: coding agents (one per session), one-off
+// editors ($EDITOR on a draft or a doc) and ghdash on a task's PR. Sessions and their renderables live
 // here, not in a pane, so they survive a pane remounting or the view
 // switching; a host box adopts the renderable when it
 // mounts and gives it back when it goes.
@@ -21,7 +21,7 @@ import { ViewportTerminalRenderable } from "../terminal/viewport-terminal";
 export interface TermRequest {
   id: string;
   title: string;
-  kind: "agent" | "editor";
+  kind: "agent" | "editor" | "ghdash";
   taskId?: number;
   argv: string[];
   cwd?: string;

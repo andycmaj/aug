@@ -6,6 +6,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { useFocus, useTheme } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
 import { useTerminals } from "../context/terminals";
+import { taskPr } from "../core/pr";
 import * as store from "../core/store";
 import { AgentState, Kind } from "../core/types";
 import type { HelpCtx } from "../keymap";
@@ -65,6 +66,7 @@ export function ChatMode() {
         coding: false,
         watching: false,
         started: false,
+        pr: false,
       };
     if (item.type !== "task")
       return {
@@ -75,6 +77,7 @@ export function ChatMode() {
         coding: false,
         watching: false,
         started: false,
+        pr: false,
       };
     const t = item.task;
     const live =
@@ -89,6 +92,7 @@ export function ChatMode() {
       coding: t.kind === Kind.coding,
       watching: Boolean(t.watching),
       started: !aug.desk.briefEditable(t.id),
+      pr: taskPr(t) !== null,
     };
   });
 

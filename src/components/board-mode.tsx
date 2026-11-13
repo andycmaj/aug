@@ -20,6 +20,7 @@ import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { BOARD_COLUMNS, LANE_META } from "../core/lanes";
 import { projectProgress, projectSummary, type GoalProgress } from "../core/lookup";
+import { taskPr } from "../core/pr";
 import { ageLabel } from "../core/rail";
 import * as store from "../core/store";
 import {
@@ -278,6 +279,11 @@ export function BoardMode() {
       },
       [Commands.NUDGE]: onTask((t) => void shell.actions.nudge(t.id)),
       [Commands.DONE]: onTask(shell.actions.done),
+      [Commands.PR_DASH]: () => {
+        const t = target();
+        if (!t) return false;
+        return shell.actions.togglePrDash(store.getTask(t.id) ?? t);
+      },
     },
     { target: p.target },
   );
@@ -290,6 +296,7 @@ export function BoardMode() {
     coding: target()?.kind === "coding",
     watching: false,
     started: false,
+    pr: Boolean(target() && taskPr(target()!)),
   });
 
   return (

@@ -8,7 +8,7 @@ import { keymap, type HelpCtx } from "../src/keymap";
 
 const ITEMS: HelpCtx["item"][] = ["task", "fyi", "idea", "project", null];
 const KINDS = ["home", "coding", "task", "chat", null];
-const FLAGS = ["hasDraft", "live", "coding", "watching", "started"] as const;
+const FLAGS = ["hasDraft", "live", "coding", "watching", "started", "pr"] as const;
 
 function* contexts(): Generator<HelpCtx> {
   for (const item of ITEMS)
@@ -23,6 +23,7 @@ function* contexts(): Generator<HelpCtx> {
           coding: false,
           watching: false,
           started: false,
+          pr: false,
         };
         FLAGS.forEach((flag, i) => {
           ctx[flag] = (bits & (1 << i)) !== 0;
@@ -78,6 +79,7 @@ test("the footer names what x and m do to the row on the table", () => {
     coding: false,
     watching: false,
     started: false,
+    pr: false,
   };
   const words = (item: HelpCtx["item"], kind: string | null = null) => {
     const f = footer("rail", { ...base, item, kind });
@@ -88,4 +90,19 @@ test("the footer names what x and m do to the row on the table", () => {
   expect(words("idea")).toEqual({ x: "dismiss", m: "make task" });
   expect(words("project")).toEqual({ x: "archive", m: undefined });
   expect(words("task", "home").x).toBeUndefined();
+});
+
+test("the footer offers ghdash only on a task with a PR", () => {
+  const ctx: HelpCtx = {
+    item: "task",
+    kind: "coding",
+    hasDraft: false,
+    live: false,
+    coding: true,
+    watching: false,
+    started: true,
+    pr: false,
+  };
+  expect(footer("rail", ctx).get("P")).toBeUndefined();
+  expect(footer("rail", { ...ctx, pr: true }).get("P")).toBe("PR");
 });

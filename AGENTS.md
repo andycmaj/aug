@@ -38,6 +38,11 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   stale ones at start, but only those made for its own `AUG_HOME`. Scripts
   it writes are embedded (`with { type: "text" }`) so the compiled binary
   carries them. Setup a user would otherwise do by hand goes here.
+- **A task's PR is `core/pr.ts`**: found from its linked threads (the PR
+  its agent or branch opened), its URL, a PR thread it came from, or a PR
+  link. The engine reads each one's checks and reviews into `pr_status` on
+  the GitHub clock; the rail and the table's header show it, and `P` opens
+  ghdash on it in the table (`components/use-pr-dash.tsx`).
 - **Claudes started outside aug are `core/strays.ts`**: found through Claude
   Code's own `~/.claude/sessions/<pid>.json` (pid, session id, cwd, tmux
   pane). The `adopt` move and `A` on the Board make one a coding task: one in

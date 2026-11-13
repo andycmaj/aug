@@ -206,6 +206,20 @@ CREATE TABLE IF NOT EXISTS moves (
 );
 CREATE INDEX IF NOT EXISTS moves_status ON moves(status);
 
+-- The last read of a task's PR (checks, reviews, state), for the rail and
+-- the table's header. core/pr.ts finds the PR and refreshes the row.
+CREATE TABLE IF NOT EXISTS pr_status (
+  task_id INTEGER PRIMARY KEY REFERENCES tasks(id),
+  repo TEXT NOT NULL,
+  number INTEGER NOT NULL,
+  url TEXT NOT NULL,
+  state TEXT NOT NULL,
+  checks TEXT NOT NULL,
+  review TEXT NOT NULL,
+  mergeable TEXT NOT NULL,
+  fetched_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

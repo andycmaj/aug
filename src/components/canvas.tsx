@@ -1,6 +1,7 @@
 // The table: whatever the rail cursor is on. A task is its chat (or, while a
-// coding agent's terminal is open, that terminal), with the draft pinned
-// above the box; an FYI or an Advisor idea shows the item itself.
+// coding agent's terminal is open, that terminal; or ghdash on its PR, while
+// the owner has that open), with the draft pinned above the box; an FYI or an
+// Advisor idea shows the item itself.
 
 import {
   createEffect,
@@ -35,6 +36,7 @@ import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
 import { LANE_META } from "../core/lanes";
 import { projectSummary } from "../core/lookup";
+import { prChip, prLine, taskPrStatus } from "../core/pr";
 import {
   type Mention,
   mentionAt,
@@ -47,6 +49,7 @@ import { AgentState, Kind, type TaskRow } from "../core/types";
 import { TerminalHost } from "./agent-terminal";
 import { ActionCard, ChatTurn } from "./chat-turn";
 import { unlessTyping, type TaskActions } from "./task-actions";
+import { prDashId, usePrDash } from "./use-pr-dash";
 import { RAIL_WIDTH } from "./rail";
 import {
   Badge,
@@ -86,7 +89,14 @@ export function Canvas(props: {
       t && t.kind === Kind.coding ? terminals.forTask(t.id) : undefined;
     return tm?.running ? tm : undefined;
   });
-  const attached = () => isPaneFocused("task") && Boolean(term()?.running);
+  // ghdash, opened with P, takes the table over the chat and the agent.
+  const dash = createMemo(() => {
+    const t = task();
+    const d = t ? terminals.get(prDashId(t.id)) : undefined;
+    return d?.running ? d : undefined;
+  });
+  const attached = () =>
+    isPaneFocused("task") && Boolean(dash() ?? term()?.running);
   const editor = () => terminals.get("editor");
 
   useScope(
@@ -106,6 +116,15 @@ export function Canvas(props: {
       () => isPaneFocused("input"),
     ),
     { target: () => pane },
+  );
+
+  // ghdash goes when the table moves on: it polls GitHub while it runs.
+  const prDash = usePrDash();
+  createEffect(
+    on(
+      () => aug.selectedKey(),
+      () => prDash.closeOthers(task()?.id ?? null),
+    ),
   );
 
   // A new item on the table opens at its newest line.
@@ -149,23 +168,35 @@ export function Canvas(props: {
             <>
               <TaskHeader task={t()} width={width()} />
               <Show
-                when={term()}
+                when={!dash()}
                 fallback={
-                  <TaskChat
-                    task={t()}
-                    width={width()}
-                    scrollRef={(r) => (scrollRef = r)}
-                  />
-                }
-              >
-                {(tm: Accessor<TermState>) => (
                   <TerminalHost
-                    id={tm().id}
+                    id={prDashId(t().id)}
                     attached={attached}
                     pane={() => pane}
                     onDetach={() => setActivePane("rail")}
                   />
-                )}
+                }
+              >
+                <Show
+                  when={term()}
+                  fallback={
+                    <TaskChat
+                      task={t()}
+                      width={width()}
+                      scrollRef={(r) => (scrollRef = r)}
+                    />
+                  }
+                >
+                  {(tm: Accessor<TermState>) => (
+                    <TerminalHost
+                      id={tm().id}
+                      attached={attached}
+                      pane={() => pane}
+                      onDetach={() => setActivePane("rail")}
+                    />
+                  )}
+                </Show>
               </Show>
               <PendingCard taskId={t().id} />
               <ChatInput
@@ -234,6 +265,20 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
     return names.length
       ? truncate(`links · ${names.join(" · ")}  (o opens)`, Math.max(20, props.width - 4))
       : null;
+  });
+  // The task's PR as of the last read; P opens it in ghdash.
+  const pr = createMemo(() => {
+    aug.version();
+    const found = taskPrStatus(props.task);
+    if (!found) return null;
+    const { pr: ref, status } = found;
+    const text = status
+      ? prLine(status)
+      : `PR ${ref.repo}#${ref.number} · not read yet`;
+    return {
+      text: truncate(`${text}  (P ghdash)`, Math.max(20, props.width - 4)),
+      tone: status ? prChip(status).tone : ("muted" as const),
+    };
   });
   const says = () => {
     const t = props.task;
@@ -305,6 +350,11 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
         <text fg={theme.textMuted} wrapMode="word">
           {`${props.task.kind} · ${came()}`}
         </text>
+        <Show when={pr()}>
+          {(p: Accessor<NonNullable<ReturnType<typeof pr>>>) => (
+            <text fg={toneColor(theme, p().tone)}>{p().text}</text>
+          )}
+        </Show>
         <Show when={links()}>
           <text fg={theme.info}>{links() ?? ""}</text>
         </Show>

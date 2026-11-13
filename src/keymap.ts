@@ -20,6 +20,8 @@ export interface HelpCtx {
   watching: boolean;
   // Its agent has run at least once: the brief is settled.
   started: boolean;
+  // The task has a pull request ghdash can show.
+  pr: boolean;
   // A text box has focus: only its own keys are worth showing.
   typing?: boolean;
 }
@@ -205,6 +207,13 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     relevant: isTask,
   },
   {
+    key: "shift+p",
+    cmd: Commands.PR_DASH,
+    desc: "its PR in ghdash, on the table (again to close)",
+    help: "PR",
+    relevant: (c) => c.pr,
+  },
+  {
     key: "shift+i",
     cmd: Commands.INFO,
     desc: "everything aug knows about it",
@@ -345,5 +354,6 @@ export const keymap: KeymapTable<HelpCtx> = {
     { key: "shift+t", cmd: Commands.JUMP, desc: "jump to the agent's tmux window" },
     { key: "u", cmd: Commands.NUDGE, desc: "nudge the agent about new feedback" },
     { key: "d", cmd: Commands.DONE, desc: "mark done" },
+    { key: "shift+p", cmd: Commands.PR_DASH, desc: "its PR in ghdash (in Chat)" },
   ],
 };

@@ -34,7 +34,12 @@ import {
   SHOW_FYI,
   type RailItem,
 } from "../core/rail";
-import { getProject, taskRef } from "../core/store";
+import { prChip } from "../core/pr";
+import {
+  getProject,
+  prStatus as getPrStatus,
+  taskRef,
+} from "../core/store";
 import { AgentState, Kind } from "../core/types";
 import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
 import { ConnectorLine } from "./connector-line";
@@ -53,6 +58,20 @@ const NEST = 2;
 
 const isNested = (item: RailItem) =>
   item.type === "task" && item.group !== null;
+
+// How a row reads. A task with a PR shows its age, the PR's chip in the
+// chip's color, then sub, in place of where the task came from.
+interface RowView {
+  bar: ThemeColor;
+  bar2: ThemeColor;
+  mark: string;
+  markColor: ThemeColor;
+  title: string;
+  titleColor: ThemeColor;
+  sub: string;
+  lead?: string;
+  chip?: { text: string; color: ThemeColor } | null;
+}
 
 type Node =
   | { type: "section"; title: string; count: number }
@@ -273,7 +292,8 @@ function RailRow(props: {
   const bg = () =>
     lit() ? (props.focused ? theme().primary : theme().secondary) : undefined;
 
-  const view = createMemo(() => {
+  const subWidth = () => RAIL_WIDTH - 7 - (props.nested ? NEST : 0);
+  const view = createMemo((): RowView => {
     const item = props.item;
     const now = aug.now();
     switch (item.type) {
@@ -299,6 +319,10 @@ function RailRow(props: {
           item.lane === Lane.later && item.task.remind_at
             ? ageLabel(item.task.remind_at, now)
             : ageLabel(item.at, now);
+        // The last read only: finding the PR anew is a few queries a row.
+        aug.version();
+        const status = getPrStatus(item.task.id);
+        const chip = status ? prChip(status) : null;
         return {
           bar: item.slipped ? theme().error : toneColor(theme(), meta.tone),
           bar2:
@@ -309,13 +333,20 @@ function RailRow(props: {
           markColor: toneColor(theme(), meta.tone),
           title: item.task.title,
           titleColor: item.priority === "urgent" ? theme().error : theme().text,
-          sub: [
-            age,
-            (!props.nested && projectChip(item.task.project_id)) ||
-              CHANNEL_WORD[item.task.channel],
-            taskRef(item.task.id),
-            word,
-          ].join(" · "),
+          sub: chip
+            ? `${taskRef(item.task.id)} · ${word}`
+            : [
+                age,
+                (!props.nested && projectChip(item.task.project_id)) ||
+                  CHANNEL_WORD[item.task.channel],
+                taskRef(item.task.id),
+                word,
+              ].join(" · "),
+          lead: `${age} · `,
+          chip: chip && {
+            text: chip.text,
+            color: toneColor(theme(), chip.tone),
+          },
         };
       }
       case "fyi":
@@ -396,9 +427,32 @@ function RailRow(props: {
       </box>
       <box flexDirection="row" gap={1}>
         <text bg={view().bar2}> </text>
-        <text fg={lit() ? selFg() : theme().textMuted}>
-          {truncate(view().sub, RAIL_WIDTH - 7 - (props.nested ? NEST : 0))}
-        </text>
+        <Show
+          when={view().chip}
+          fallback={
+            <text fg={lit() ? selFg() : theme().textMuted}>
+              {truncate(view().sub, subWidth())}
+            </text>
+          }
+        >
+          {(chip: Accessor<{ text: string; color: ThemeColor }>) => (
+            <text fg={lit() ? selFg() : theme().textMuted}>
+              <span>{view().lead ?? ""}</span>
+              <span style={{ fg: lit() ? selFg() : chip().color }}>
+                {chip().text}
+              </span>
+              <span>
+                {truncate(
+                  ` · ${view().sub}`,
+                  Math.max(
+                    0,
+                    subWidth() - (view().lead ?? "").length - chip().text.length,
+                  ),
+                )}
+              </span>
+            </text>
+          )}
+        </Show>
       </box>
     </box>
   );

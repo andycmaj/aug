@@ -12,6 +12,7 @@ import { ensureDocs } from "./docs";
 import { refreshInstalls } from "./install";
 import { Drivers } from "./driver";
 import { pollGithub } from "./ingest/github";
+import { refreshPrStatuses } from "./pr";
 import { errorMessage, logger } from "./log";
 import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
 import { slackTransport, type SlackTransport } from "./slack/transport";
@@ -277,7 +278,9 @@ export class Engine {
         await pollGithub(since, undefined, store.hasBranchTasks),
       );
       store.kvSet("github.since", startedAt);
-      done({ fresh });
+      // On the same clock: what the rail says about each task's PR.
+      const prs = await refreshPrStatuses();
+      done({ fresh, prs });
       this.setStatus("github", {
         state: "ok",
         detail: fresh ? `${fresh} new` : "up to date",

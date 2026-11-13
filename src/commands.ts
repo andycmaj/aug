@@ -44,6 +44,7 @@ export const Commands = {
   EDIT_FILE: "item.file.edit",
   MAKE_TASK: "item.task",
   INFO: "item.info",
+  PR_DASH: "pr.dash",
   TYPE: "chat.type",
 
   // Task pane

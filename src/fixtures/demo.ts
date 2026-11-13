@@ -250,7 +250,7 @@ export function seedDemo(): void {
     });
 
     // 4. A review that is yours.
-    seedTask(
+    const review = seedTask(
       {
         channel: "github",
         id: "gh:2:a",
@@ -275,6 +275,17 @@ export function seedDemo(): void {
         reason: "a review requested from you is yours to do",
       },
     );
+    store.setPrStatus({
+      task_id: review,
+      repo: "northwind/web",
+      number: 88,
+      url: "https://github.com/northwind/web/pull/88",
+      state: "open",
+      checks: "pending",
+      review: "required",
+      mergeable: "clean",
+      fetched_at: ago(5),
+    });
 
     // 5. An agent asking you something.
     const erin = seedTask(
@@ -359,6 +370,19 @@ export function seedDemo(): void {
       ended_at: ago(30),
       result:
         "Strip a UTF-8 BOM before parsing; added a regression test. 14 tests green.",
+    });
+    // Its agent opened PR #219; CI went red after a rebase.
+    store.linkThread(csv, "github:northwind/ledger#219");
+    store.setPrStatus({
+      task_id: csv,
+      repo: "northwind/ledger",
+      number: 219,
+      url: "https://github.com/northwind/ledger/pull/219",
+      state: "open",
+      checks: "fail",
+      review: "approved",
+      mergeable: "clean",
+      fetched_at: ago(5),
     });
     const csvTurn = agentTurn(csv, 80, 50, {
       about: "CSV import fails on a byte-order mark.",

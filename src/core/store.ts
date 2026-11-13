@@ -28,6 +28,7 @@ import {
   type Priority,
   type ProjectLinkRow,
   type ProjectRow,
+  type PrStatusRow,
   type SessionKind,
   type SessionRow,
   type TaskLinkRow,
@@ -279,6 +280,40 @@ export function tasksForProject(projectId: number): TaskRow[] {
   );
 }
 
+// ── PR status (core/pr.ts reads GitHub; this keeps the last answer) ─────
+
+export function prStatus(taskId: number): PrStatusRow | null {
+  return one<PrStatusRow>("SELECT * FROM pr_status WHERE task_id = ?", taskId);
+}
+
+// A read that changed nothing only moves fetched_at, without a redraw.
+export function setPrStatus(row: PrStatusRow): void {
+  const had = prStatus(row.task_id);
+  const same =
+    had !== null &&
+    (["repo", "number", "url", "state", "checks", "review", "mergeable"] as const).every(
+      (k) => had[k] === row[k],
+    );
+  const sql = `INSERT INTO pr_status (task_id, repo, number, url, state, checks, review, mergeable, fetched_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (task_id) DO UPDATE SET repo = excluded.repo, number = excluded.number,
+       url = excluded.url, state = excluded.state, checks = excluded.checks,
+       review = excluded.review, mergeable = excluded.mergeable, fetched_at = excluded.fetched_at`;
+  const params = [
+    row.task_id,
+    row.repo,
+    row.number,
+    row.url,
+    row.state,
+    row.checks,
+    row.review,
+    row.mergeable,
+    row.fetched_at,
+  ];
+  if (same) db().query(sql).run(...params);
+  else run(sql, ...params);
+}
+
 // A PR's head branch finds the task whose worktree pushed it.
 export function taskForBranch(repo: string, branch: string): TaskRow | null {
   return one<TaskRow>(
@@ -503,6 +538,13 @@ export function messagesForTasks(taskIds: number[]): Map<number, MessageRow[]> {
     else out.set(m.task_id, [m]);
   }
   return out;
+}
+
+export function firstMessageOnThread(threadKey: string): MessageRow | null {
+  return one<MessageRow>(
+    "SELECT * FROM messages WHERE thread_key = ? ORDER BY received_at, id LIMIT 1",
+    threadKey,
+  );
 }
 
 export function messagesForThread(threadKey: string): MessageRow[] {

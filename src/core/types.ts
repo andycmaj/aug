@@ -296,6 +296,49 @@ export interface TaskLinkRow {
   created_at: string;
 }
 
+export const PrState = {
+  open: "open",
+  draft: "draft",
+  merged: "merged",
+  closed: "closed",
+} as const;
+export type PrState = (typeof PrState)[keyof typeof PrState];
+
+export const PrChecks = {
+  pass: "pass",
+  fail: "fail",
+  pending: "pending",
+  none: "none",
+} as const;
+export type PrChecks = (typeof PrChecks)[keyof typeof PrChecks];
+
+export const PrReview = {
+  approved: "approved",
+  changes: "changes",
+  required: "required",
+  none: "none",
+} as const;
+export type PrReview = (typeof PrReview)[keyof typeof PrReview];
+
+export const PrMergeable = {
+  clean: "clean",
+  conflict: "conflict",
+  unknown: "unknown",
+} as const;
+export type PrMergeable = (typeof PrMergeable)[keyof typeof PrMergeable];
+
+export interface PrStatusRow {
+  task_id: number;
+  repo: string;
+  number: number;
+  url: string;
+  state: PrState;
+  checks: PrChecks;
+  review: PrReview;
+  mergeable: PrMergeable;
+  fetched_at: string;
+}
+
 export interface KnowledgeRow {
   id: number;
   topic: string;

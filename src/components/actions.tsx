@@ -35,6 +35,7 @@ import {
 import type { TaskActions } from "./task-actions";
 import { useAgentStart } from "./use-agent-start";
 import { useEditor } from "./use-editor";
+import { usePrDash } from "./use-pr-dash";
 import { useViewer } from "./use-viewer";
 
 export interface Dialogs {
@@ -66,6 +67,7 @@ export function useActions(dialogs: Dialogs) {
   const desk = aug.desk;
   const editor = useEditor();
   const { attachViewer } = useViewer();
+  const { togglePrDash } = usePrDash();
   const { startAgent } = useAgentStart(dialogs, attachViewer);
 
   // A row is about to leave the rail. On the table: the table walks on.
@@ -738,6 +740,7 @@ export function useActions(dialogs: Dialogs) {
         if (!item) return false;
         info(item);
       },
+      [Commands.PR_DASH]: onTask(togglePrDash),
     };
   }
 
@@ -762,6 +765,7 @@ export function useActions(dialogs: Dialogs) {
     newTask,
     docs,
     taskActions,
+    togglePrDash,
     editorId: editor.editorId,
   };
 }
