@@ -8,6 +8,12 @@ import {
   isSlipped,
   ageLabel,
   WALKED,
+  RAIL_FILTERS,
+  filterOf,
+  filterRail,
+  filterCounts,
+  cycleFilter,
+  type RailFilter,
 } from "../src/core/rail";
 import { railProjects } from "../src/core/lookup";
 import { taskClosed } from "../src/core/lifecycle";
@@ -307,5 +313,108 @@ describe("projects on the rail", () => {
 
   test("projects and Home are never walked", () => {
     expect(WALKED).not.toContain("home");
+  });
+});
+
+describe("the rail's status filter", () => {
+  beforeEach(() => freshHome());
+
+  function railNow(ideas = store.openIdeas()) {
+    return buildRail({
+      home: store.homeTask(),
+      projects: railProjects(),
+      tasks: store.listTasks(),
+      pendingActions: new Set(),
+      ideas,
+      fyi: [],
+      lastHeard: new Map(),
+      now: new Date(),
+    });
+  }
+
+  function setup() {
+    const api = store.createProject({ name: "api", tmuxSession: "api" });
+    const web = store.createProject({ name: "web", tmuxSession: "web" });
+    const working = store.createTask({ title: "working", kind: Kind.coding, channel: "owner", projectId: api.id });
+    const asks = store.createTask({ title: "asks", kind: Kind.coding, channel: "owner", projectId: web.id });
+    const saved = store.createTask({ title: "saved", kind: Kind.coding, channel: "owner" });
+    const mine = store.createTask({ title: "mine", kind: Kind.task, channel: "owner" });
+    store.updateTask(working.id, { agent_state: AgentState.working });
+    store.updateTask(asks.id, { agent_state: AgentState.blocked });
+    store.updateTask(saved.id, { agent_state: AgentState.saved });
+    return { api, web, working, asks, saved, mine };
+  }
+
+  test("every lane but done has a pill, and each lane only one", () => {
+    const lanes = RAIL_FILTERS.flatMap((f) => f.lanes);
+    expect(new Set(lanes).size).toBe(lanes.length);
+    for (const lane of Object.values(Lane))
+      expect(filterOf(lane) === null).toBe(lane === Lane.done);
+  });
+
+  test("no filter shows everything", () => {
+    setup();
+    const rail = railNow();
+    expect(filterRail(rail, new Set())).toBe(rail);
+  });
+
+  test("a filter keeps Home, its tasks and the project rows they sit under", () => {
+    const { api, web, working, saved } = setup();
+    const keys = (active: RailFilter[]) =>
+      flattenRail(filterRail(railNow(), new Set(active))).map((i) => i.key);
+    expect(keys(["working"])).toEqual([`t${store.homeTask().id}`, `p${api.id}`, `t${working.id}`]);
+    expect(keys(["working", "stopped"])).toEqual([
+      `t${store.homeTask().id}`,
+      `p${api.id}`,
+      `t${working.id}`,
+      `t${saved.id}`,
+    ]);
+    expect(keys(["queued"])).toEqual([`t${store.homeTask().id}`]);
+    expect(keys(["asks"])).not.toContain(`p${api.id}`);
+    expect(keys(["asks"])).toContain(`p${web.id}`);
+  });
+
+  test("Advisor ideas have no status, so any filter hides them", () => {
+    setup();
+    store.addIdea("idea", "body", null);
+    const sections = (active: RailFilter[]) =>
+      filterRail(railNow(), new Set(active)).map((s) => s.section);
+    expect(sections([])).toContain("advisor");
+    expect(sections(["open"])).not.toContain("advisor");
+  });
+
+  test("a section's count is what the filter left in it", () => {
+    setup();
+    const tasks = filterRail(railNow(), new Set<RailFilter>(["open", "stopped"]))
+      .find((s) => s.section === "tasks")!;
+    expect(tasks.count).toBe(2);
+  });
+
+  test("the pills count tasks, not Home", () => {
+    setup();
+    expect(filterCounts(railNow())).toEqual({
+      asks: 1,
+      send: 0,
+      working: 1,
+      queued: 0,
+      stopped: 1,
+      finished: 0,
+      open: 1,
+      waiting: 0,
+    });
+  });
+
+  test("f steps through the statuses that have tasks, then back to all", () => {
+    setup();
+    const counts = filterCounts(railNow());
+    const seen: string[] = [];
+    let active = new Set<RailFilter>();
+    do {
+      active = cycleFilter(active, counts);
+      seen.push([...active].join("+") || "all");
+    } while (active.size > 0);
+    expect(seen).toEqual(["asks", "working", "stopped", "open", "all"]);
+    // From a mix of pills, f starts over at one.
+    expect([...cycleFilter(new Set<RailFilter>(["open", "working"]), counts)]).toEqual(["asks"]);
   });
 });

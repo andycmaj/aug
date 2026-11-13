@@ -4,6 +4,7 @@ import {
   getHelpItems,
   getScopeBindings,
 } from "@andycmaj/opentui-app";
+import { RAIL_FILTERS } from "../src/core/rail";
 import { keymap, type HelpCtx } from "../src/keymap";
 
 const ITEMS: HelpCtx["item"][] = ["task", "fyi", "idea", "project", null];
@@ -105,4 +106,10 @@ test("the footer offers ghdash only on a task with a PR", () => {
   };
   expect(footer("rail", ctx).get("P")).toBeUndefined();
   expect(footer("rail", { ...ctx, pr: true }).get("P")).toBe("PR");
+});
+
+test("each rail filter pill has its digit", () => {
+  const digits = getScopeBindings(keymap, "rail").filter((b) => /^[1-9]$/.test(b.keys));
+  expect(digits.length).toBe(RAIL_FILTERS.length);
+  expect(new Set(digits.map((b) => b.cmd)).size).toBe(RAIL_FILTERS.length);
 });

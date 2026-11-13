@@ -18,11 +18,15 @@ import { Engine, type EngineStatus } from "../core/engine";
 import { boardColumnOf, BoardColumn, type LaneFacts } from "../core/lanes";
 import {
   buildRail,
+  cycleFilter as nextFilter,
+  filterCounts,
+  filterRail,
   flattenRail,
   foldRail,
   nextKey,
   SHOW_FYI,
   WALKED,
+  type RailFilter,
   type RailItem,
   type RailSection,
 } from "../core/rail";
@@ -44,8 +48,8 @@ interface AugContextValue {
   // Every row, folded ones included.
   rail: Accessor<RailSection[]>;
   items: Accessor<RailItem[]>;
-  // What the rail shows: folded projects' tasks left out. The cursor and the
-  // walk move over these.
+  // What the rail shows: the status filter applied and folded projects'
+  // tasks left out. The cursor and the walk move over these.
   shownRail: Accessor<RailSection[]>;
   shownItems: Accessor<RailItem[]>;
   // On the table: what the canvas shows.
@@ -67,6 +71,12 @@ interface AugContextValue {
   // Projects whose tasks the rail hides under their row.
   folded: Accessor<Set<number>>;
   toggleFold: (projectId: number) => void;
+  // The rail's status filter; empty shows every status.
+  railFilter: Accessor<Set<RailFilter>>;
+  filterCounts: Accessor<Record<RailFilter, number>>;
+  toggleFilter: (filter: RailFilter) => void;
+  cycleFilter: () => void;
+  clearFilter: () => void;
   // Home: the Assistant's thread, first on the rail.
   homeId: number;
   // Puts Home on the table in Chat and asks for its box to take focus.
@@ -166,7 +176,10 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   });
 
   const items = createMemo(() => flattenRail(rail()));
-  const shownRail = createMemo(() => foldRail(rail(), folded()));
+  const [railFilter, setRailFilter] = createSignal<Set<RailFilter>>(new Set());
+  const filtered = createMemo(() => filterRail(rail(), railFilter()));
+  const counts = createMemo(() => filterCounts(rail()));
+  const shownRail = createMemo(() => foldRail(filtered(), folded()));
   const shownItems = createMemo(() => flattenRail(shownRail()));
   // The order the walk last saw, so Next from a row that just left the rail
   // (marked done) goes on from where it stood.
@@ -202,6 +215,14 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     const item = items().find((i) => i.key === key);
     if (item?.type === "task" && item.group !== null)
       setFold(item.group, false);
+    // Nor does the status filter hide it: like tilt-tui's picker, going to
+    // a row the filter leaves out clears the filter.
+    if (
+      item &&
+      railFilter().size > 0 &&
+      !flattenRail(filtered()).some((i) => i.key === key)
+    )
+      setRailFilter(new Set<RailFilter>());
     setSelectedKey(key);
     setCursorKey(key);
   }
@@ -231,6 +252,14 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
         setCursorKey(`p${projectId}`);
     }
     setFold(projectId, fold);
+  }
+
+  function toggleFilter(filter: RailFilter) {
+    redraw.flush();
+    const next = new Set(railFilter());
+    if (next.has(filter)) next.delete(filter);
+    else next.add(filter);
+    setRailFilter(next);
   }
 
   function walk(direction: 1 | -1): string | null {
@@ -304,6 +333,14 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
         setMode,
         folded,
         toggleFold,
+        railFilter,
+        filterCounts: counts,
+        toggleFilter,
+        cycleFilter: () => {
+          redraw.flush();
+          setRailFilter(nextFilter(railFilter(), counts()));
+        },
+        clearFilter: () => setRailFilter(new Set<RailFilter>()),
         homeId,
         goHome,
         wantsInput,

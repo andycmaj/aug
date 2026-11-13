@@ -9,6 +9,7 @@ import {
   type KeymapTable,
 } from "@andycmaj/opentui-app";
 import { Commands } from "./commands";
+import { RAIL_FILTERS } from "./core/rail";
 
 // What the footer needs to know to show only the moves that apply.
 export interface HelpCtx {
@@ -24,6 +25,8 @@ export interface HelpCtx {
   pr: boolean;
   // A text box has focus: only its own keys are worth showing.
   typing?: boolean;
+  // The rail's status filter hides some rows.
+  filtered?: boolean;
 }
 
 // Hide a binding from the footer while typing (dispatch is unaffected).
@@ -42,6 +45,40 @@ export const BOARD_PANES = ["board"];
 const listNav = navBindings().filter(
   (b) => b.cmd !== Commands.SCROLL_PAGEUP && b.cmd !== Commands.SCROLL_PAGEDOWN,
 );
+
+// The rail's filter bar: a digit toggles its pill, as tilt-tui's resource
+// filter does. Digits mean nothing else on the rail.
+export const FILTER_COMMANDS = [
+  Commands.FILTER_1,
+  Commands.FILTER_2,
+  Commands.FILTER_3,
+  Commands.FILTER_4,
+  Commands.FILTER_5,
+  Commands.FILTER_6,
+  Commands.FILTER_7,
+  Commands.FILTER_8,
+] as const;
+
+const railFilters: BindingSpec<HelpCtx>[] = [
+  {
+    key: "f",
+    cmd: Commands.FILTER_CYCLE,
+    desc: "filter by status: the next one with tasks",
+    help: "filter",
+  },
+  {
+    key: "0",
+    cmd: Commands.FILTER_CLEAR,
+    desc: "filter: show every status",
+    help: "all",
+    relevant: (c) => Boolean(c.filtered),
+  },
+  ...RAIL_FILTERS.map((f, i) => ({
+    key: `${i + 1}`,
+    cmd: FILTER_COMMANDS[i],
+    desc: `filter: toggle ${f.mark} ${f.word}`,
+  })),
+];
 
 const isTask = (c: HelpCtx) => c.item === "task";
 // Home is a task row but not work: no done, later, kind or priority.
@@ -284,6 +321,7 @@ export const keymap: KeymapTable<HelpCtx> = {
       help: "fold",
       relevant: (c) => c.item === "project",
     },
+    ...railFilters,
     ...taskActions,
   ],
   task: [

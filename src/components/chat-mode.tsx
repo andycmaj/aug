@@ -97,7 +97,11 @@ export function ChatMode() {
   });
 
   const ctx = createMemo(
-    (): HelpCtx => ({ ...baseCtx(), typing: isPaneFocused("input") }),
+    (): HelpCtx => ({
+      ...baseCtx(),
+      typing: isPaneFocused("input"),
+      filtered: aug.railFilter().size > 0,
+    }),
   );
 
   return (

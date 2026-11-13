@@ -24,10 +24,12 @@ import {
   type ThemeColor,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
+import { FILTER_COMMANDS } from "../keymap";
 import { useAug } from "../context/aug";
 import { Lane, LANE_META } from "../core/lanes";
 import {
   ageLabel,
+  RAIL_FILTERS,
   SECTION_TITLES,
   SHOW_FYI,
   type RailItem,
@@ -118,6 +120,28 @@ export function Rail(props: { actions: TaskActions }) {
     }),
   );
 
+  // A filter that hides the cursor's row, or leaves it on Home (which every
+  // filter keeps), lands it on the first task the filter left.
+  function landCursor() {
+    const list = aug.shownItems();
+    const at = list.find((i) => i.key === aug.cursorKey());
+    if (at && !(at.type === "task" && at.task.kind === Kind.home)) return;
+    const first =
+      list.find((i) => i.type === "task" && i.task.kind !== Kind.home) ??
+      list[0];
+    if (first) aug.moveCursor(first.key);
+  }
+
+  const filterHandlers = Object.fromEntries(
+    RAIL_FILTERS.map((f, i) => [
+      FILTER_COMMANDS[i],
+      () => {
+        aug.toggleFilter(f.filter);
+        landCursor();
+      },
+    ]),
+  );
+
   function move(next: (i: number, n: number) => number) {
     const list = aug.shownItems();
     if (list.length === 0) return;
@@ -145,6 +169,12 @@ export function Rail(props: { actions: TaskActions }) {
         const item = aug.cursorItem();
         if (item?.type === "project") aug.toggleFold(item.project.id);
       },
+      [Commands.FILTER_CYCLE]: () => {
+        aug.cycleFilter();
+        landCursor();
+      },
+      [Commands.FILTER_CLEAR]: () => aug.clearFilter(),
+      ...filterHandlers,
       ...props.actions,
     },
     { target: () => pane },
@@ -190,6 +220,8 @@ export function Rail(props: { actions: TaskActions }) {
           >{`${counts().tasks} open`}</span>
         </text>
       </PaneHeader>
+
+      <FilterBar />
 
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
@@ -237,6 +269,38 @@ export function Rail(props: { actions: TaskActions }) {
 
       <ConnectorLine />
     </Pane>
+  );
+}
+
+// tilt-tui's filter bar: a pill per status with its count, lit while it
+// filters. Digits 1-8 toggle the pills in this order; f steps through them.
+function FilterBar() {
+  const aug = useAug();
+  const theme = useTheme();
+  const anyOn = () => aug.railFilter().size > 0;
+  return (
+    <box flexDirection="row" paddingLeft={2} flexShrink={0}>
+      <For each={RAIL_FILTERS}>
+        {(f) => {
+          const on = () => aug.railFilter().has(f.filter);
+          const count = () => aug.filterCounts()[f.filter];
+          const color = () => toneColor(theme, f.tone);
+          const fg = () =>
+            on()
+              ? contrastingForeground(color())
+              : anyOn() || count() === 0
+                ? (theme.borderSubtle ?? theme.textMuted)
+                : color();
+          return (
+            <text
+              fg={fg()}
+              bg={on() ? color() : undefined}
+              attributes={on() ? 1 : 0}
+            >{` ${f.mark}${count()} `}</text>
+          );
+        }}
+      </For>
+    </box>
   );
 }
 

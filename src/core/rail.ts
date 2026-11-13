@@ -2,9 +2,10 @@
 // sit oldest first inside each heading and never move; urgency shades a row
 // in its place rather than lifting it.
 
-import { Lane, laneOf } from "./lanes";
+import { Lane, LANE_META, laneOf, type Tone } from "./lanes";
 import {
   AgentState,
+  Kind,
   TaskStatus,
   type IdeaRow,
   type MessageRow,
@@ -239,6 +240,122 @@ export function foldRail(
       (i) => i.type !== "task" || i.group === null || !folded.has(i.group),
     ),
   }));
+}
+
+// The rail's status filter (tilt-tui's filter bar): each one a pill over the
+// rail that a digit toggles. Lanes the owner reads as one thing share a pill.
+export const RailFilter = {
+  asks: "asks",
+  send: "send",
+  working: "working",
+  queued: "queued",
+  stopped: "stopped",
+  finished: "finished",
+  open: "open",
+  waiting: "waiting",
+} as const;
+export type RailFilter = (typeof RailFilter)[keyof typeof RailFilter];
+
+export const RAIL_FILTERS: {
+  filter: RailFilter;
+  lanes: Lane[];
+  mark: string;
+  tone: Tone;
+  word: string;
+}[] = [
+  { filter: "asks", lanes: [Lane.blocked], ...pill(Lane.blocked) },
+  { filter: "send", lanes: [Lane.approve], ...pill(Lane.approve) },
+  { filter: "working", lanes: [Lane.working], ...pill(Lane.working) },
+  { filter: "queued", lanes: [Lane.queued], ...pill(Lane.queued) },
+  {
+    filter: "stopped",
+    lanes: [Lane.stopped, Lane.saved],
+    ...pill(Lane.stopped),
+  },
+  { filter: "finished", lanes: [Lane.agentdone], ...pill(Lane.agentdone) },
+  {
+    filter: "open",
+    lanes: [Lane.yours, Lane.asked],
+    ...pill(Lane.yours),
+    word: "open, on you",
+  },
+  {
+    filter: "waiting",
+    lanes: [Lane.theirs, Lane.watching, Lane.later],
+    ...pill(Lane.theirs),
+    word: "waiting on them, watching, later",
+  },
+];
+
+function pill(lane: Lane) {
+  const { mark, tone, word } = LANE_META[lane];
+  return { mark, tone, word };
+}
+
+const FILTER_OF = new Map<Lane, RailFilter>(
+  RAIL_FILTERS.flatMap((f) => f.lanes.map((l) => [l, f.filter] as const)),
+);
+
+export function filterOf(lane: Lane): RailFilter | null {
+  return FILTER_OF.get(lane) ?? null;
+}
+
+const isHome = (item: RailItem) =>
+  item.type === "task" && item.task.kind === Kind.home;
+
+// Tasks under each pill, Home left out: it is not work.
+export function filterCounts(
+  sections: RailSection[],
+): Record<RailFilter, number> {
+  const counts = Object.fromEntries(
+    RAIL_FILTERS.map((f) => [f.filter, 0]),
+  ) as Record<RailFilter, number>;
+  for (const item of flattenRail(sections)) {
+    if (item.type !== "task" || isHome(item)) continue;
+    const f = filterOf(item.lane);
+    if (f) counts[f]++;
+  }
+  return counts;
+}
+
+// What a status filter leaves: Home, the tasks in its lanes, and the project
+// rows they sit under. Advisor ideas and FYIs have no status, so they go.
+export function filterRail(
+  sections: RailSection[],
+  active: Set<RailFilter>,
+): RailSection[] {
+  if (active.size === 0) return sections;
+  const keep = (item: RailItem) => {
+    if (item.type !== "task") return false;
+    if (isHome(item)) return true;
+    const f = filterOf(item.lane);
+    return f !== null && active.has(f);
+  };
+  return sections
+    .map((s) => {
+      const tasks = s.items.filter(keep);
+      const groups = new Set(
+        tasks.map((i) => (i.type === "task" ? i.group : null)),
+      );
+      const items = s.items.filter(
+        (i) => keep(i) || (i.type === "project" && groups.has(i.project.id)),
+      );
+      return { ...s, items, count: tasks.length };
+    })
+    .filter((s) => s.items.length > 0);
+}
+
+// f on the rail: one status at a time, through the ones that have tasks, then
+// back to everything.
+export function cycleFilter(
+  active: Set<RailFilter>,
+  counts: Record<RailFilter, number>,
+): Set<RailFilter> {
+  const order = RAIL_FILTERS.map((f) => f.filter);
+  const from = active.size === 1 ? order.indexOf([...active][0]) : -1;
+  for (let i = from + 1; i < order.length; i++)
+    if (counts[order[i]] > 0) return new Set([order[i]]);
+  return new Set();
 }
 
 export function flattenRail(sections: RailSection[]): RailItem[] {
