@@ -7,10 +7,8 @@ import {
   createMemo,
   For,
   Index,
-  Match,
   on,
   Show,
-  Switch,
   type Accessor,
 } from "solid-js";
 import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
@@ -35,11 +33,7 @@ import {
   type RailItem,
 } from "../core/rail";
 import { prChip } from "../core/pr";
-import {
-  getProject,
-  prStatus as getPrStatus,
-  taskRef,
-} from "../core/store";
+import { getProject, prStatus as getPrStatus, taskRef } from "../core/store";
 import { AgentState, Kind } from "../core/types";
 import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
 import { ConnectorLine } from "./connector-line";
@@ -73,10 +67,6 @@ interface RowView {
   chip?: { text: string; color: ThemeColor } | null;
 }
 
-type Node =
-  | { type: "section"; title: string; count: number }
-  | { type: "item"; item: RailItem };
-
 export function Rail(props: { actions: TaskActions }) {
   const aug = useAug();
   const theme = useTheme();
@@ -84,17 +74,6 @@ export function Rail(props: { actions: TaskActions }) {
   const focused = () => isPaneFocused("rail");
   let scrollRef: ScrollBoxRenderable | undefined;
   let pane: Renderable | undefined;
-
-  const nodes = createMemo<Node[]>(() =>
-    aug.shownRail().flatMap((s) => [
-      {
-        type: "section" as const,
-        title: SECTION_TITLES[s.section],
-        count: s.count,
-      },
-      ...s.items.map((item) => ({ type: "item" as const, item })),
-    ]),
-  );
 
   // First visit: the first row is on the table. A cursor whose row left the
   // rail comes back to the table's row, if the rail shows it.
@@ -115,20 +94,19 @@ export function Rail(props: { actions: TaskActions }) {
   function rowOf(key: string | null): { top: number; height: number } {
     let row = 0;
     let first = true;
-    for (const node of nodes()) {
-      if (node.type === "section") {
-        row += first ? 1 : 2;
-        first = false;
-        continue;
+    for (const section of aug.shownRail()) {
+      row += first ? 1 : 2;
+      first = false;
+      for (const item of section.items) {
+        if (item.key === key) return { top: row, height: 2 };
+        row += 3;
       }
-      if (node.item.key === key) return { top: row, height: 2 };
-      row += 3;
     }
     return { top: 0, height: 1 };
   }
 
   createEffect(
-    on([aug.cursorKey, nodes], ([key]) => {
+    on([aug.cursorKey, aug.shownRail], ([key]) => {
       if (!scrollRef) return;
       const { top, height } = rowOf(key);
       const view = scrollRef.viewport.height ?? 10;
@@ -219,40 +197,39 @@ export function Rail(props: { actions: TaskActions }) {
         flexGrow={1}
         stickyScroll={false}
       >
-        <Show when={nodes().length > 0} fallback={<EmptyRail />}>
+        <Show when={aug.shownRail().length > 0} fallback={<EmptyRail />}>
           {/* Index, not For: the rail is rebuilt with fresh objects on every
               store write, and For would recreate every row (thousands of
               native text buffers) each time. By position, rows are reused
-              and only their contents change. */}
-          <Index each={nodes()}>
-            {(node, index) => (
-              <Switch>
-                <Match when={node().type === "section" && node()}>
-                  {(s: Accessor<Extract<Node, { type: "section" }>>) => (
-                    <box
-                      paddingLeft={1}
-                      marginTop={index > 0 ? 1 : 0}
-                      flexDirection="row"
-                    >
-                      <text fg={theme.accent} attributes={1}>
-                        {`${s().title} (${s().count})`}
-                      </text>
-                    </box>
-                  )}
-                </Match>
-                <Match when={node().type === "item" && node()}>
-                  {(n: Accessor<Extract<Node, { type: "item" }>>) => (
+              and only their contents change. Headings and rows get an Index
+              each, so a slot never turns from one into the other: a row
+              behind a <Match> whose own memos ran before the Switch dropped
+              it threw "Stale read from <Match>". */}
+          <Index each={aug.shownRail()}>
+            {(section, index) => (
+              <>
+                <box
+                  paddingLeft={1}
+                  marginTop={index > 0 ? 1 : 0}
+                  flexDirection="row"
+                >
+                  <text fg={theme.accent} attributes={1}>
+                    {`${SECTION_TITLES[section().section]} (${section().count})`}
+                  </text>
+                </box>
+                <Index each={section().items}>
+                  {(item) => (
                     <RailRow
-                      item={n().item}
-                      nested={isNested(n().item)}
-                      cursor={aug.cursorKey() === n().item.key}
-                      onTable={aug.selectedKey() === n().item.key}
+                      item={item()}
+                      nested={isNested(item())}
+                      cursor={aug.cursorKey() === item().key}
+                      onTable={aug.selectedKey() === item().key}
                       focused={focused()}
                       theme={theme}
                     />
                   )}
-                </Match>
-              </Switch>
+                </Index>
+              </>
             )}
           </Index>
         </Show>
@@ -446,7 +423,9 @@ function RailRow(props: {
                   ` · ${view().sub}`,
                   Math.max(
                     0,
-                    subWidth() - (view().lead ?? "").length - chip().text.length,
+                    subWidth() -
+                      (view().lead ?? "").length -
+                      chip().text.length,
                   ),
                 )}
               </span>
