@@ -279,7 +279,7 @@ function FilterBar() {
   const theme = useTheme();
   const anyOn = () => aug.railFilter().size > 0;
   return (
-    <box flexDirection="row" paddingLeft={2} flexShrink={0}>
+    <box flexDirection="row" paddingLeft={2} paddingBottom={1} flexShrink={0}>
       <For each={RAIL_FILTERS}>
         {(f) => {
           const on = () => aug.railFilter().has(f.filter);
@@ -296,7 +296,7 @@ function FilterBar() {
               fg={fg()}
               bg={on() ? color() : undefined}
               attributes={on() ? 1 : 0}
-            >{` ${f.mark}${count()} `}</text>
+            >{` ${f.mark} ${count()} `}</text>
           );
         }}
       </For>
