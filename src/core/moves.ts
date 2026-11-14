@@ -4,6 +4,7 @@
 // another process goes through the `moves` table: aug-tools inserts it and
 // waits, the desk claims it, runs it, and writes back one line of result.
 
+import { loadConfig, saveConfig, type NoiseRule } from "./config";
 import type { Desk } from "./desk";
 import { DocName } from "./docs";
 import { docNamed, propose } from "./proposals";
@@ -68,6 +69,38 @@ function kindNamed(name: string): Kind {
   if (!kind)
     throw new MoveError(`kind must be ${KINDS.join(" | ")}: got ${name}`);
   return kind;
+}
+
+// A noise rule from a move's args. Each regex compiles before it is saved,
+// so a typo is answered now rather than skipped at triage time.
+function noiseRule(args: Record<string, string>): NoiseRule {
+  const rule: NoiseRule = { reason: args.reason.trim() };
+  for (const field of ["author", "title", "body"] as const) {
+    const pattern = args[field]?.trim();
+    if (!pattern) continue;
+    try {
+      new RegExp(pattern, "i");
+    } catch {
+      throw new MoveError(`--${field} is not a regex: ${pattern}`);
+    }
+    rule[field] = pattern;
+  }
+  const channel = args.channel?.trim();
+  if (channel) {
+    if (channel !== "github" && channel !== "slack")
+      throw new MoveError(`channel must be github | slack: got ${channel}`);
+    rule.channel = channel;
+  }
+  const reasons = (args.github_reason ?? "")
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean);
+  if (reasons.length) rule.githubReason = reasons;
+  if (!rule.author && !rule.title && !rule.body && !rule.githubReason)
+    throw new MoveError(
+      "noise needs a pattern: --author, --title, --body or --github_reason",
+    );
+  return rule;
 }
 
 // A name that matches no project says which ones there are, so the caller
@@ -247,6 +280,40 @@ export const MOVES: Record<string, MoveSpec> = {
     run(desk, task, args) {
       desk.notATask(task!.id, args.why ?? "");
       return `${ref(task)}: not a task`;
+    },
+  },
+  noise: {
+    help: "Teach triage a noise pattern: matching messages are filed as FYI with no model call",
+    task: false,
+    positional: "reason",
+    args: {
+      reason: {
+        help: "why it is noise, as the owner reads it",
+        required: true,
+      },
+      author: { help: "regex on the sender" },
+      title: { help: "regex on the thread title" },
+      body: { help: "regex on the message" },
+      channel: { help: "github | slack" },
+      github_reason: { help: "GitHub notification reasons, comma separated" },
+    },
+    run(_desk, _task, args) {
+      const rule = noiseRule(args);
+      const config = loadConfig();
+      saveConfig({
+        ...config,
+        triage: { ...config.triage, noise: [...config.triage.noise, rule] },
+      });
+      const what = [
+        rule.channel,
+        rule.author && `from /${rule.author}/`,
+        rule.title && `titled /${rule.title}/`,
+        rule.body && `saying /${rule.body}/`,
+        rule.githubReason && `GitHub ${rule.githubReason.join("/")}`,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return `triage files ${what} as FYI: ${rule.reason}`;
     },
   },
   priority: {

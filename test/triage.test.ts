@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { taskClosed } from "../src/core/lifecycle";
 import * as store from "../src/core/store";
 import { DEFAULT_CONFIG } from "../src/core/config";
-import { TRIAGE_RULES, triage, type TriageRule } from "../src/core/triage";
+import { err, ok } from "../src/core/result";
+import {
+  PASS,
+  TRIAGE_RULES,
+  triage,
+  type TriageRule,
+} from "../src/core/triage";
 import { DocName, writeDoc } from "../src/core/docs";
 import {
   AgentState,
@@ -444,12 +450,14 @@ describe("triage routing", () => {
         {
           type: "agent-turn",
           taskId: first.taskId!,
-          reason: "you answered the thread yourself",
+          reason: "the owner commented on the thread",
         },
       ],
     });
     const turns = store.turnsForTask(first.taskId!);
-    expect(turns.at(-1)!.body).toContain("You answered on Slack yourself");
+    expect(turns.at(-1)!.body).toBe(
+      'A comment by the owner on the Slack thread: "5pm PT". Re-think any suggested response.',
+    );
   });
 });
 
@@ -476,8 +484,8 @@ describe("triage chain", () => {
       name: "vip",
       handle: ({ message }) =>
         message.author === "U2"
-          ? { verdict: "fyi", taskId: null, reason: "vip", effects: [] }
-          : null,
+          ? ok({ verdict: "fyi", taskId: null, reason: "vip", effects: [] })
+          : err(PASS),
     };
     const rules = [...TRIAGE_RULES.slice(0, 3), vip, ...TRIAGE_RULES.slice(3)];
     const out = await triage(slackDm(1, "Can you send me the Q3 numbers?"), {
@@ -512,5 +520,62 @@ describe("triage chain", () => {
     await expect(
       triage(slackDm(1, "anything"), { config: DEFAULT_CONFIG, rules: [] }),
     ).rejects.toThrow("no triage rule claimed");
+  });
+});
+
+describe("triage noise from config", () => {
+  function slackPost(n: number, title: string, body: string): MessageRow {
+    return store.insertMessage({
+      channel: "slack",
+      externalId: `slack:C7:${n}`,
+      threadKey: `slack:C7:${n}.0`,
+      author: "U9",
+      authorName: "Digest Bot",
+      title,
+      body,
+      receivedAt: new Date(Date.UTC(2026, 10, 5, 13, n)).toISOString(),
+      meta: { channel: "C7", ts: `${n}.0` },
+    })!;
+  }
+
+  test("a rule in config files its matches as FYI with no model call", async () => {
+    freshHome({
+      triage: {
+        noise: [
+          ...DEFAULT_CONFIG.triage.noise,
+          { reason: "the weekly digest", channel: "slack", title: "^weekly" },
+        ],
+      },
+    });
+    const calls = fakeBrain(() => verdict("task"));
+    const out = await triage(slackPost(1, "Weekly digest", "12 new posts"));
+    expect(out).toEqual({
+      verdict: "fyi",
+      taskId: null,
+      reason: "the weekly digest",
+      effects: [],
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  test("every field a rule sets must match", async () => {
+    freshHome({
+      triage: {
+        noise: [{ reason: "digest", channel: "github", title: "^weekly" }],
+      },
+    });
+    const calls = fakeBrain(() => verdict("fyi"));
+    await triage(slackPost(1, "Weekly digest", "12 new posts"));
+    expect(calls).toHaveLength(1);
+  });
+
+  test("a rule whose pattern does not compile never matches", async () => {
+    freshHome({
+      triage: { noise: [{ reason: "broken", body: "([unclosed" }] },
+    });
+    const calls = fakeBrain(() => verdict("fyi"));
+    const out = await triage(slackPost(1, "anything", "([unclosed"));
+    expect(out.reason).not.toBe("broken");
+    expect(calls).toHaveLength(1);
   });
 });

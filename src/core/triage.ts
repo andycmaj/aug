@@ -9,12 +9,13 @@
 // which keeps it testable and keeps the agent pool in one place.
 
 import { think } from "./brain";
-import { loadConfig, type AugConfig } from "./config";
+import { loadConfig, type AugConfig, type NoiseRule } from "./config";
 import { logger } from "./log";
 import { DocName, forPrompt, head } from "./docs";
 import { messageMeta } from "./meta";
 import { docsBlock } from "./prompts";
 import { finishSuperseded, holdForStart } from "./lifecycle";
+import { err, ok, type Result } from "./result";
 import * as store from "./store";
 import {
   AgentState,
@@ -150,18 +151,47 @@ export async function askVerdict(
   return answer;
 }
 
-// Gate: noise that never needs a model.
-export function noiseReason(message: MessageRow): string | null {
-  if (/\[bot\]$|^dependabot|^github-actions/i.test(message.author)) {
-    return "a bot wrote it";
-  }
+// Gate: noise that never needs a model, by the rules in config
+// (triage.noise). The first rule whose every field matches gives the reason.
+export function noiseReason(
+  message: MessageRow,
+  rules: readonly NoiseRule[],
+): string | null {
   const meta = messageMeta(message);
-  if (meta.channel !== "github") return null;
-  if (meta.reason === "ci_activity") return "CI activity";
-  if (meta.reason === "state_change" || meta.reason === "subscribed") {
-    return "a state change on a thread you only follow";
+  const githubReason = meta.channel === "github" ? meta.reason : null;
+  for (const rule of rules) {
+    if (rule.channel && rule.channel !== message.channel) continue;
+    if (
+      rule.githubReason &&
+      !(githubReason && rule.githubReason.includes(githubReason))
+    )
+      continue;
+    if (!matches(rule.author, message.author, rule)) continue;
+    if (!matches(rule.title, message.title, rule)) continue;
+    if (!matches(rule.body, message.body, rule)) continue;
+    return rule.reason;
   }
   return null;
+}
+
+// A rule with a regex that does not compile never matches: a bad learned
+// pattern must not file real work away.
+function matches(
+  pattern: string | undefined,
+  text: string,
+  rule: NoiseRule,
+): boolean {
+  if (pattern === undefined) return true;
+  try {
+    return new RegExp(pattern, "i").test(text);
+  } catch (error) {
+    logger("triage").warn("noise rule has a bad pattern", {
+      reason: rule.reason,
+      pattern,
+      error: String(error),
+    });
+    return false;
+  }
 }
 
 // Not a gate: the engine runs it on every fresh message before triage, so a
@@ -181,11 +211,16 @@ export function linkByBranch(message: MessageRow): number | null {
 
 // What the rules read from config, handed in as a value so no rule reaches
 // for the global itself.
-export type TriageConfig = Pick<AugConfig, "autostart" | "brain">;
+export type TriageConfig = Pick<AugConfig, "autostart" | "brain" | "triage">;
 
-export type Judged =
-  | { ok: true; answer: VerdictAnswer }
-  | { ok: false; error: string };
+// The model's verdict, or why there is none.
+export type Judged = Result<VerdictAnswer, string>;
+
+// A rule that does not claim the message passes it to the next one.
+export const PASS = "pass" as const;
+export type Pass = typeof PASS;
+export type RuleResult = Result<TriageOutcome, Pass>;
+const pass = (): RuleResult => err(PASS);
 
 // One inbound message and what the rules need to know about it, worked out
 // once before the chain runs.
@@ -204,32 +239,37 @@ export interface Inbound {
 
 export interface TriageRule {
   name: string;
-  // Claim the message and route it, or return null to pass it on.
-  handle(item: Inbound): TriageOutcome | null | Promise<TriageOutcome | null>;
+  // Claim the message and route it (ok), or pass it on.
+  handle(item: Inbound): RuleResult | Promise<RuleResult>;
 }
 
 const ownMessage: TriageRule = {
   name: "own message",
   handle: (i) =>
-    i.message.from_me ? ownAnswer(i.message, i.openOnThread) : null,
+    i.message.from_me ? ok(ownAnswer(i.message, i.openOnThread)) : pass(),
 };
 
 // A greeting never becomes a task; it waits for the ask it opens.
 const greeting: TriageRule = {
   name: "greeting",
   handle: ({ message }) => {
-    if (!OPENER.test(message.body.trim())) return null;
+    if (!OPENER.test(message.body.trim())) return pass();
     store.fileMessage(message.id, null, "a greeting; waits for the ask", null);
     store.markMessageRead(message.id);
-    return { verdict: "opener", taskId: null, reason: "greeting", effects: [] };
+    return ok({
+      verdict: "opener",
+      taskId: null,
+      reason: "greeting",
+      effects: [],
+    });
   },
 };
 
 const noise: TriageRule = {
   name: "noise",
-  handle: ({ message }) => {
-    const reason = noiseReason(message);
-    return reason ? fileFyi(message, reason) : null;
+  handle: ({ message, config }) => {
+    const reason = noiseReason(message, config.triage.noise);
+    return reason ? ok(fileFyi(message, reason)) : pass();
   },
 };
 
@@ -238,8 +278,8 @@ const sameThread: TriageRule = {
   name: "same thread",
   handle: (i) =>
     i.openOnThread && !i.dm
-      ? attach(i.message, i.openOnThread, i.config)
-      : null,
+      ? ok(attach(i.message, i.openOnThread, i.config))
+      : pass(),
 };
 
 // They wrote after the close (your own reply does not count).
@@ -247,8 +287,8 @@ const afterClose: TriageRule = {
   name: "after close",
   handle: (i) =>
     !i.openOnThread && i.lastOnThread?.status === TaskStatus.done && !i.dm
-      ? attach(i.message, i.lastOnThread, i.config)
-      : null,
+      ? ok(attach(i.message, i.lastOnThread, i.config))
+      : pass(),
 };
 
 // Triage breaking is quiet and safe: filed for you to read, never assumed to
@@ -257,10 +297,10 @@ const unjudged: TriageRule = {
   name: "unjudged",
   handle: async ({ message, judged }) => {
     const j = await judged();
-    if (j.ok) return null;
+    if (j.ok) return pass();
     const reason = `awaiting AI triage (${j.error})`;
     store.fileMessage(message.id, Verdict.fyi, reason, null);
-    return { verdict: "failed", taskId: null, reason, effects: [] };
+    return ok({ verdict: "failed", taskId: null, reason, effects: [] });
   },
 };
 
@@ -268,11 +308,11 @@ const unjudged: TriageRule = {
 const sameAsk: TriageRule = {
   name: "same ask",
   handle: async (i) => {
-    if (!i.dm || !i.openOnThread) return null;
+    if (!i.dm || !i.openOnThread) return pass();
     const j = await i.judged();
-    return j.ok && j.answer.same_ask
-      ? attach(i.message, i.openOnThread, i.config)
-      : null;
+    return j.ok && j.value.same_ask
+      ? ok(attach(i.message, i.openOnThread, i.config))
+      : pass();
   },
 };
 
@@ -280,9 +320,9 @@ const judgedFyi: TriageRule = {
   name: "judged fyi",
   handle: async ({ message, judged }) => {
     const j = await judged();
-    return j.ok && j.answer.verdict === Verdict.fyi
-      ? fileFyi(message, j.answer.reason)
-      : null;
+    return j.ok && j.value.verdict === Verdict.fyi
+      ? ok(fileFyi(message, j.value.reason))
+      : pass();
   },
 };
 
@@ -290,7 +330,7 @@ const newTask: TriageRule = {
   name: "new task",
   handle: async (i) => {
     const j = await i.judged();
-    return j.ok ? createFromVerdict(i.message, j.answer, i.config) : null;
+    return j.ok ? ok(createFromVerdict(i.message, j.value, i.config)) : pass();
   },
 };
 
@@ -312,8 +352,8 @@ export async function runChain(
   item: Inbound,
 ): Promise<{ rule: string; outcome: TriageOutcome }> {
   for (const rule of rules) {
-    const outcome = await rule.handle(item);
-    if (outcome) return { rule: rule.name, outcome };
+    const result = await rule.handle(item);
+    if (result.ok) return { rule: rule.name, outcome: result.value };
   }
   throw new Error(`no triage rule claimed message ${item.message.id}`);
 }
@@ -351,13 +391,13 @@ function inbound(message: MessageRow, config: TriageConfig): Inbound {
       dm ? openOnThread : null,
       config.brain.triageModel,
     ).then(
-      (answer): Judged => ({ ok: true, answer }),
-      (err: unknown): Judged => {
-        logger("triage").error("verdict failed", { message: message.id, err });
-        return {
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-        };
+      (answer): Judged => ok(answer),
+      (error: unknown): Judged => {
+        logger("triage").error("verdict failed", {
+          message: message.id,
+          err: error,
+        });
+        return err(error instanceof Error ? error.message : String(error));
       },
     ));
   return { message, openOnThread, lastOnThread, dm, config, judged };
@@ -430,8 +470,8 @@ function attach(
   };
 }
 
-// The owner answered on the thread themselves: the agent sees it, its draft
-// stays unsent, and it thinks again.
+// A comment by the owner on the task's thread: any suggested response is
+// retired, and the agent re-thinks it.
 function ownAnswer(message: MessageRow, task: TaskRow | null): TriageOutcome {
   if (!task || task.status !== TaskStatus.open) {
     store.fileMessage(message.id, null, "your own message", task?.id ?? null);
@@ -450,7 +490,7 @@ function ownAnswer(message: MessageRow, task: TaskRow | null): TriageOutcome {
     store.addTurn({
       taskId: task.id,
       role: TurnRole.trigger,
-      body: `You answered on ${message.channel === "slack" ? "Slack" : "GitHub"} yourself: "${head(message.body, 140)}"`,
+      body: `A comment by the owner on the ${message.channel === "slack" ? "Slack" : "GitHub"} thread: "${head(message.body, 140)}". Re-think any suggested response.`,
       messageId: message.id,
       startedAt: message.received_at,
     });
@@ -461,7 +501,7 @@ function ownAnswer(message: MessageRow, task: TaskRow | null): TriageOutcome {
           {
             type: "agent-turn",
             taskId: task.id,
-            reason: "you answered the thread yourself",
+            reason: "the owner commented on the thread",
           },
         ]
       : [];

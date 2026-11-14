@@ -1,8 +1,21 @@
 // ~/.aug/config.json. Every key is optional; a missing file means defaults,
 // which is enough to run with `gh` logged in and SLACK_TOKEN set.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { paths, ensureHome } from "./paths";
+
+// A message triage files as FYI without asking a model. Every field set must
+// match; author, title and body are case-insensitive regexes.
+export interface NoiseRule {
+  // What the owner reads as the reason it was filed.
+  reason: string;
+  author?: string;
+  title?: string;
+  body?: string;
+  channel?: "github" | "slack";
+  // GitHub's notification reason: ci_activity, subscribed, ...
+  githubReason?: string[];
+}
 
 export interface AugConfig {
   github: {
@@ -52,6 +65,10 @@ export interface AugConfig {
   // Characters a brain doc may take in a prompt, by file name ("JOB.md"),
   // overriding docs.ts's DOC_BUDGET.
   docBudgets?: Record<string, number>;
+  triage: {
+    // Replaces the defaults when set; the noise move appends to it.
+    noise: NoiseRule[];
+  };
   theme: "default" | "terminal" | "mono" | "tokyo-night";
   // Where a coding task with no mapped checkout works.
   scratchRepo?: string;
@@ -98,6 +115,19 @@ export const DEFAULT_CONFIG: AugConfig = {
     "wt -C {repo_path} switch {create} {branch} --no-cd --format json -y",
   autostart: true,
   learning: true,
+  triage: {
+    noise: [
+      {
+        author: "\\[bot\\]$|^dependabot|^github-actions",
+        reason: "a bot wrote it",
+      },
+      { githubReason: ["ci_activity"], reason: "CI activity" },
+      {
+        githubReason: ["state_change", "subscribed"],
+        reason: "a state change on a thread you only follow",
+      },
+    ],
+  },
   theme: "default",
   log: { enabled: false, level: "info" },
   capabilities: {
@@ -110,6 +140,11 @@ export const DEFAULT_CONFIG: AugConfig = {
 };
 
 let cached: AugConfig | undefined;
+// The file's mtime when it was read, so an edit (yours, or a learned noise
+// rule) is picked up on the next load without a restart.
+let cachedMtime: number | null = null;
+// Tests set config by value and never read the file.
+let pinned = false;
 
 type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K];
@@ -141,6 +176,7 @@ export function mergeConfig(
     github: { ...DEFAULT_CONFIG.github, ...raw.github },
     slack: { ...DEFAULT_CONFIG.slack, ...raw.slack, pollSeconds: slackPoll },
     brain: { ...DEFAULT_CONFIG.brain, ...raw.brain },
+    triage: { ...DEFAULT_CONFIG.triage, ...raw.triage },
     log: { ...DEFAULT_CONFIG.log, ...raw.log },
     capabilities: {
       servers: { ...raw.capabilities?.servers },
@@ -152,9 +188,19 @@ export function mergeConfig(
   } as AugConfig;
 }
 
+function mtimeOf(file: string): number | null {
+  try {
+    return statSync(file).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
 export function loadConfig(): AugConfig {
-  if (cached) return cached;
+  if (cached && pinned) return cached;
   const file = paths.config();
+  const mtime = mtimeOf(file);
+  if (cached && mtime === cachedMtime) return cached;
   let raw: DeepPartial<AugConfig> = {};
   if (existsSync(file)) {
     try {
@@ -164,6 +210,7 @@ export function loadConfig(): AugConfig {
     }
   }
   cached = mergeConfig(raw);
+  cachedMtime = mtime;
   return cached;
 }
 
@@ -171,6 +218,7 @@ export function saveConfig(next: AugConfig): void {
   ensureHome();
   writeFileSync(paths.config(), JSON.stringify(next, null, 2) + "\n");
   cached = next;
+  cachedMtime = mtimeOf(paths.config());
 }
 
 export function slackToken(config = loadConfig()): string | undefined {
@@ -179,4 +227,12 @@ export function slackToken(config = loadConfig()): string | undefined {
 
 export function setConfigForTest(config: AugConfig): void {
   cached = config;
+  pinned = true;
+}
+
+// Back to reading the file, for a test of loading itself.
+export function unpinConfigForTest(): void {
+  cached = undefined;
+  cachedMtime = null;
+  pinned = false;
 }

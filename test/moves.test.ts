@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG } from "../src/core/config";
+import { readFileSync } from "node:fs";
+import { DEFAULT_CONFIG, loadConfig } from "../src/core/config";
+import { paths } from "../src/core/paths";
 import { Engine } from "../src/core/engine";
 import { movesHelp } from "../src/core/assistant";
 import { codingBrief } from "../src/core/agents";
@@ -499,5 +501,50 @@ describe("links", () => {
     expect(taskDetail(task)).toContain(`Link: the plan ${doc}`);
     expect(codingBrief(task)).toContain(`Link: the plan ${doc}`);
     expect(movesHelp()).toContain("- move link AUG-0000 <url> [--title <what it is, in a few words>]");
+  });
+});
+
+describe("the noise move", () => {
+  test("appends a rule triage reads, and saves it to config", async () => {
+    const out = await engine.runMove("noise", {
+      reason: "the weekly digest",
+      title: "^weekly digest",
+      channel: "slack",
+    });
+    expect(out).toEqual({
+      ok: true,
+      result:
+        "triage files slack titled /^weekly digest/ as FYI: the weekly digest",
+    });
+    const noise = loadConfig().triage.noise;
+    expect(noise).toHaveLength(DEFAULT_CONFIG.triage.noise.length + 1);
+    expect(noise.at(-1)).toEqual({
+      reason: "the weekly digest",
+      title: "^weekly digest",
+      channel: "slack",
+    });
+    expect(readFileSync(paths.config(), "utf8")).toContain("weekly digest");
+  });
+
+  test("needs a pattern, and a pattern that compiles", async () => {
+    expect(await engine.runMove("noise", { reason: "x" })).toMatchObject({
+      ok: false,
+      result:
+        "noise needs a pattern: --author, --title, --body or --github_reason",
+    });
+    expect(
+      await engine.runMove("noise", { reason: "x", body: "([unclosed" }),
+    ).toMatchObject({ ok: false, result: "--body is not a regex: ([unclosed" });
+    expect(loadConfig().triage.noise).toEqual(DEFAULT_CONFIG.triage.noise);
+  });
+
+  test("a task's agent may not teach triage", async () => {
+    const out = await engine.runMove(
+      "noise",
+      { reason: "x", author: "sam" },
+      "agent AUG-0001",
+    );
+    expect(out.ok).toBe(false);
+    expect(loadConfig().triage.noise).toEqual(DEFAULT_CONFIG.triage.noise);
   });
 });

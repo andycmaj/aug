@@ -66,10 +66,13 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   tmux watch; it owns a desk. Triage returns effects and does not start
   agents itself.
 - **Triage is a chain of rules** (`TRIAGE_RULES` in `core/triage.ts`): each
-  claims a message and routes it or passes it on, in the order listed, and
-  `runChain` runs them. Gates come first; the rules after them read the
-  model's verdict, asked at most once. A new rule is one entry in that list.
-  Rules get config as a value (`TriageDeps`), never from `loadConfig()`.
+  returns `ok(outcome)` to claim a message or `pass()` to hand it on
+  (`core/result.ts`), in the order listed, and `runChain` runs them. Gates
+  come first; the rules after them read the model's verdict, asked at most
+  once. A new rule is one entry in that list. Rules get config as a value
+  (`TriageDeps`), never from `loadConfig()`. Noise patterns live in
+  `config.triage.noise`; the `noise` move (the owner's and the Assistant's)
+  appends one, and `loadConfig()` re-reads `config.json` when it changes.
 - **The agent lifecycle is `core/lifecycle.ts`.** Every change to a task's
   `agent_state` or a session's state is one of its named transitions
   (`sessionStarted`, `sessionActivity`, `sessionEnded`, `turnFinished`,
