@@ -5,11 +5,10 @@
 
 import { think } from "./brain";
 import { loadConfig } from "./config";
-import { DocName, readDoc } from "./docs";
 import { docsBlock } from "./prompts";
 import { isSlipped } from "./rail";
 import * as store from "./store";
-import { TaskStatus } from "./types";
+import { Kind, TaskStatus } from "./types";
 
 const IDEAS_SCHEMA = {
   type: "object",
@@ -52,7 +51,9 @@ export function workPicture(at: Date): string {
   const tasks = store.listTasks();
   const lines: string[] = [];
   for (const t of tasks.filter(
-    (t) => t.status === TaskStatus.open || t.status === TaskStatus.later,
+    (t) =>
+      t.kind !== Kind.system &&
+      (t.status === TaskStatus.open || t.status === TaskStatus.later),
   )) {
     const messages = store.messagesForTask(t.id);
     const heard = [...messages].reverse().find((m) => !m.from_me)?.received_at;
@@ -86,8 +87,7 @@ export async function runAdvisor(at = new Date()): Promise<number> {
     prompt: `${workPicture(at)}\n\nIdeas already on the rail:\n${existing.join("\n") || "(none)"}\n\nToday is ${at.toISOString().slice(0, 10)}.`,
     system: [
       "You are the Advisor in aug, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas, none repeating one already on the rail. Fewer is better; zero is fine.",
-      readDoc(DocName.counsel),
-      docsBlock({ job: 2500, learned: true }),
+      docsBlock({ persona: true, job: true, learned: true }),
     ].join("\n\n"),
     schema: IDEAS_SCHEMA,
     model: loadConfig().brain.assistantModel,

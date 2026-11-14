@@ -64,7 +64,7 @@ function seedTask(
   t: {
     title: string;
     summary: string;
-    kind: Exclude<Kind, "home">;
+    kind: Exclude<Kind, "home" | "system">;
     priority?: Priority;
     reason: string;
     repo?: string;

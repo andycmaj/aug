@@ -50,9 +50,23 @@ bun dev                       # or: bin/aug
 State lives in `~/.aug` (`AUG_HOME` overrides): `aug.db` (SQLite), `config.json`,
 `docs/`, and each general agent's scratch folder under `work/`.
 
-`docs/` is seeded from this repo's `docs/defaults/`; a file you've already
-got is never overwritten. `docs/examples/` holds filled-in ones to copy from,
-e.g. `cp docs/examples/JOB.md ~/.aug/docs/`.
+`docs/` holds the brain docs, seeded from this repo's `docs/defaults/`:
+
+- **Yours** (`PERSONA.md`: red lines and how aug speaks to you; `JOB.md`;
+  `STYLE.md`): templates. A short interview with the Assistant drafts them
+  (offered once as a System task; ask the Assistant to onboard you any time).
+- **Shipped** (`TRIAGE.md`, `ASSISTANT.md`, `CODING.md`): updated with aug
+  while you leave them alone. Once you edit one, aug never writes it again; a
+  new shipped version becomes a System task (`e` diff in revdiff, `y` take it,
+  `x` keep yours).
+- **`LEARNED.md`** writes itself (see below). Lessons that leave it go to
+  `LEARNED.archive.md`, which no prompt reads.
+
+Nothing is merged and there is no history: before aug writes over a doc, the
+old file is copied to `docs/.trash/` (kept 30 days). Each doc has a character
+budget (`shift+d` shows sizes; `docBudgets` in config overrides). Over it,
+the Advisor proposes a shorter one; past twice it, prompts cut it with a note.
+`docs/examples/` holds filled-in ones to copy from.
 
 ### Config
 
@@ -144,7 +158,7 @@ does the work, and whatever comes out waits for you.
 
 - **Triage** runs gates first: dedupe, your own message, greetings, bots and CI
   noise, and threading (a GitHub issue or Slack thread attaches to its open
-  task). Then one `claude -p --json-schema` call reads `TRIAGE.md`, `SOUL.md`,
+  task). Then one `claude -p --json-schema` call reads `TRIAGE.md`, `PERSONA.md`,
   `JOB.md` and `LEARNED.md` and returns `fyi`, `reply`, `general`, `coding`,
   `task` or `watch`. If triage fails, the message is filed as FYI. It is never
   assumed to be work.
@@ -167,7 +181,14 @@ does the work, and whatever comes out waits for you.
 - **Correcting it teaches it.** _Not a task_, a changed kind or priority, an
   edited draft and a redraft are each recorded. A small model call turns each
   one into a line in `LEARNED.md`. New lines start at strength 2 under
-  _Watching_, where nothing reads them, and move into use at strength 4.
+  _Watching_, where nothing reads them, and move into use at strength 3. A
+  _Watching_ line not seen again in 30 days goes to the archive.
+- **The docs evolve by proposal.** Once a day the Advisor reads what went into
+  use and what you corrected, and may propose an edit to `PERSONA.md`,
+  `JOB.md` or `STYLE.md` (or a shorter `LEARNED.md`) as a System task. Notes
+  you leave in revdiff, or type on the task, redraft it; `y` writes it and
+  archives the lessons it absorbed. A lesson about how aug itself should work
+  becomes an Advisor idea instead.
 - **The Advisor** reads your open work every few hours and leaves at most three
   ideas on the rail. It also marks a thread _slipped_ when it has waited on
   someone for too long.

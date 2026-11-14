@@ -45,10 +45,17 @@ import {
 } from "../core/mentions";
 import type { RailItem } from "../core/rail";
 import * as store from "../core/store";
-import { AgentState, Kind, type TaskRow } from "../core/types";
+import {
+  AgentState,
+  Kind,
+  ProposalSource,
+  ProposalStatus,
+  type TaskRow,
+} from "../core/types";
 import { TerminalHost } from "./agent-terminal";
 import { ActionCard, ChatTurn } from "./chat-turn";
 import { unlessTyping, type TaskActions } from "./task-actions";
+import { docReviewId } from "./use-doc-review";
 import { prDashId, usePrDash } from "./use-pr-dash";
 import { RAIL_WIDTH } from "./rail";
 import {
@@ -89,11 +96,15 @@ export function Canvas(props: {
       t && t.kind === Kind.coding ? terminals.forTask(t.id) : undefined;
     return tm?.running ? tm : undefined;
   });
-  // ghdash, opened with P, takes the table over the chat and the agent.
+  // ghdash (P) or a System task's diff in revdiff (e) takes the table over
+  // the chat and the agent.
   const dash = createMemo(() => {
     const t = task();
-    const d = t ? terminals.get(prDashId(t.id)) : undefined;
-    return d?.running ? d : undefined;
+    if (!t) return undefined;
+    const d = terminals.get(prDashId(t.id));
+    if (d?.running) return d;
+    const r = terminals.get(docReviewId(t.id));
+    return r?.running ? r : undefined;
   });
   const attached = () =>
     isPaneFocused("task") && Boolean(dash() ?? term()?.running);
@@ -171,7 +182,7 @@ export function Canvas(props: {
                 when={!dash()}
                 fallback={
                   <TerminalHost
-                    id={prDashId(t().id)}
+                    id={dash()?.id ?? prDashId(t().id)}
                     attached={attached}
                     pane={() => pane}
                     onDetach={() => setActivePane("rail")}
@@ -388,6 +399,15 @@ function TaskChat(props: {
   const latestAgentId = createMemo(
     () => [...turns()].reverse().find((t) => t.role === "agent")?.id ?? null,
   );
+  // A System task's open proposals: which doc, how big, and why.
+  const proposals = createMemo(() => {
+    aug.version();
+    return props.task.kind === Kind.system
+      ? store
+          .proposalsForTask(props.task.id)
+          .filter((p) => p.status === ProposalStatus.open)
+      : [];
+  });
   // Shown until the agent starts from it; after that the chat carries on.
   const brief = createMemo((): string | null => {
     aug.version();
@@ -401,6 +421,20 @@ function TaskChat(props: {
         ["@", "name a task or project"],
         ["a", "back here from anywhere"],
       ];
+    if (t.kind === Kind.system)
+      return proposals().length
+        ? [
+            ["e", "read the diff"],
+            ["y", "accept"],
+            ["x", "reject"],
+            ...(proposals().some((p) => p.source !== ProposalSource.shipped)
+              ? ([["i", "notes to redraft it"]] as [string, string][])
+              : []),
+          ]
+        : [
+            ["y", "accept"],
+            ["x", "skip"],
+          ];
     const edit: [string, string][] =
       brief() === null ? [] : [["e", "edit the brief"]];
     if (t.kind === Kind.coding)
@@ -438,11 +472,25 @@ function TaskChat(props: {
       <Show when={brief()}>
         {(text: Accessor<string>) => (
           <box flexDirection="column" marginBottom={1}>
-            <text fg={theme.textMuted}>brief</text>
+            <text fg={theme.textMuted}>
+              {props.task.kind === Kind.system ? "aug asks" : "brief"}
+            </text>
             <text wrapMode="word">{text()}</text>
           </box>
         )}
       </Show>
+      <For each={proposals()}>
+        {(p) => (
+          <box flexDirection="column" marginBottom={1}>
+            <text fg={theme.primary}>{`${p.doc} · ${p.source} · ${p.base.length} -> ${p.proposed.length} characters`}</text>
+            <Show when={p.reason}>
+              <text wrapMode="word" fg={theme.textMuted}>
+                {p.reason}
+              </text>
+            </Show>
+          </box>
+        )}
+      </For>
       <For each={turns()}>
         {(turn) => (
           <ChatTurn

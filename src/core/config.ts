@@ -49,6 +49,9 @@ export interface AugConfig {
   // Start a general agent on a fresh general or reply task by itself.
   autostart: boolean;
   learning: boolean;
+  // Characters a brain doc may take in a prompt, by file name ("JOB.md"),
+  // overriding docs.ts's DOC_BUDGET.
+  docBudgets?: Record<string, number>;
   theme: "default" | "terminal" | "mono" | "tokyo-night";
   // Where a coding task with no mapped checkout works.
   scratchRepo?: string;

@@ -5,6 +5,16 @@
 // engine does, and owns a desk.
 
 import { DocName, readDoc, writeDoc } from "./docs";
+import { onboardBrief } from "./onboard";
+import {
+  acceptProposals,
+  hasOpenProposals,
+  onboardingTask,
+  ONBOARD_TASK,
+  redraftProposals,
+  rejectProposals,
+  systemTask,
+} from "./proposals";
 import {
   type CloseResult,
   type Drivers,
@@ -95,6 +105,11 @@ export class Desk {
   async say(taskId: number, text: string): Promise<boolean> {
     const task = store.getTask(taskId);
     if (!task || !text.trim()) return false;
+    // A SYSTEM task has no agent: what you type is notes on its proposal.
+    if (task.kind === Kind.system) {
+      void this.redraftDocs(taskId, text);
+      return true;
+    }
     store.batch(() => {
       if (task.status !== TaskStatus.open) store.reopen(taskId);
       store.addTurn({
@@ -117,6 +132,11 @@ export class Desk {
   ): Promise<StartResult> {
     const task = store.getTask(taskId);
     if (!task) return { type: "failed", error: `no task ${taskId}` };
+    if (task.kind === Kind.system)
+      return {
+        type: "failed",
+        error: "a System task has no agent: y accepts, x rejects",
+      };
     return this.drivers.for(task).start(task, opts);
   }
 
@@ -401,6 +421,53 @@ export class Desk {
     if (!idea) return null;
     store.setIdeaStatus(ideaId, IdeaStatus.tasked);
     return this.newTask(idea.title, Kind.task, idea.body);
+  }
+
+  // ── brain docs (System tasks) ─────────────────────────────────────────
+
+  // y on a System task: the onboarding offer starts its interview; anything
+  // else writes the proposed docs.
+  acceptDocs(taskId: number): string {
+    const task = store.getTask(taskId);
+    if (!task || task.kind !== Kind.system) return "not a System task";
+    if (!hasOpenProposals(taskId) && onboardingTask()?.id === taskId)
+      return this.onboard();
+    return acceptProposals(taskId);
+  }
+
+  rejectDocs(taskId: number): string {
+    const task = store.getTask(taskId);
+    if (!task || task.kind !== Kind.system) return "not a System task";
+    return rejectProposals(taskId);
+  }
+
+  // Your notes on a proposal (from revdiff, or typed on the task) go back to
+  // be redrafted.
+  redraftDocs(taskId: number, notes: string): Promise<string> {
+    return redraftProposals(taskId, notes);
+  }
+
+  // The onboarding interview, in Home: the Assistant reads what it can, asks
+  // the rest, and hands drafts in on the onboarding System task. Asked for
+  // by the Assistant itself, the brief comes back as the answer instead, so
+  // it goes on in the turn it is in.
+  onboard(inline = false): string {
+    if (!onboardingTask()) {
+      const task = systemTask(
+        "Your docs, drafted from the interview",
+        "The Assistant is interviewing you in Home; its drafts land here.",
+      );
+      store.kvSet(ONBOARD_TASK, String(task.id));
+    }
+    if (inline) return onboardBrief();
+    const home = store.homeTask();
+    store.addTurn({
+      taskId: home.id,
+      role: TurnRole.trigger,
+      body: onboardBrief(),
+    });
+    void this.drivers.for(home).deliver(home);
+    return "the interview is starting in Home";
   }
 
   // A line the owner said, written straight into LEARNED.md.

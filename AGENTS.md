@@ -87,6 +87,14 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   puts them in every brief of a task in the project, so a task's own brief
   need not repeat them; `core/project-doc.ts` is the one file the owner edits
   them in. A goal is met only by the owner's say, never by its tasks closing.
+- **The brain docs are `core/docs.ts`** (files under `~/.aug/docs`, budgets,
+  the trash, LEARNED.md's header and sections), kept at start by
+  `core/doc-sync.ts` (the SOUL rename, notify-only shipped updates by one
+  hash per doc in `kv`, the onboarding offer). Every aug edit to a doc the
+  owner has not asked for is a proposal on a `kind: system` task
+  (`core/proposals.ts`, `doc_proposals`): the Advisor's daily
+  `core/doc-pass.ts`, the onboarding interview (`core/onboard.ts`, the
+  `propose_doc` move) and shipped versions. Nothing merges; no history.
 - **Home is a `kind: home` task** (`store.homeTask()`), and its agent is the
   Assistant (`core/assistant.ts`): a resumed `claude -p` allowed only
   `aug-tools`. `listTasks()` never returns it, so nothing that lists work

@@ -8,7 +8,7 @@ import { RAIL_FILTERS } from "../src/core/rail";
 import { keymap, type HelpCtx } from "../src/keymap";
 
 const ITEMS: HelpCtx["item"][] = ["task", "fyi", "idea", "project", null];
-const KINDS = ["home", "coding", "task", "chat", null];
+const KINDS = ["home", "system", "coding", "task", "chat", null];
 const FLAGS = ["hasDraft", "live", "coding", "watching", "started", "pr"] as const;
 
 function* contexts(): Generator<HelpCtx> {

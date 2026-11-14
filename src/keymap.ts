@@ -81,8 +81,11 @@ const railFilters: BindingSpec<HelpCtx>[] = [
 ];
 
 const isTask = (c: HelpCtx) => c.item === "task";
-// Home is a task row but not work: no done, later, kind or priority.
-const isWork = (c: HelpCtx) => isTask(c) && c.kind !== "home";
+// Home is a task row but not work: no done, later, kind or priority. Nor is
+// a System task (aug asking about its docs): it has its own keys.
+const isWork = (c: HelpCtx) =>
+  isTask(c) && c.kind !== "home" && c.kind !== "system";
+const isSystem = (c: HelpCtx) => isTask(c) && c.kind === "system";
 
 // The actions on a row, the same from the rail and from the table.
 const taskActions: BindingSpec<HelpCtx>[] = [
@@ -199,6 +202,29 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     help: "archive",
     relevant: (c) => c.item === "project",
   },
+  // A System task's keys share y, e and x with the draft's and the work's;
+  // a System task never has a draft and is never work.
+  {
+    key: "y",
+    cmd: Commands.DOC_ACCEPT,
+    desc: "System: accept (take the shipped doc, write the drafts, or start the interview)",
+    help: "accept",
+    relevant: (c) => isSystem(c) && !c.hasDraft,
+  },
+  {
+    key: "x",
+    cmd: Commands.DOC_REJECT,
+    desc: "System: reject (keep your doc, or skip)",
+    help: "reject",
+    relevant: isSystem,
+  },
+  {
+    key: "e",
+    cmd: Commands.DOC_REVIEW,
+    desc: "System: read the diff in revdiff (notes you leave redraft it)",
+    help: "diff",
+    relevant: (c) => isSystem(c) && !c.hasDraft,
+  },
   // Shares e with the task's brief and draft; each declines the other's rows.
   {
     key: "e",
@@ -303,7 +329,7 @@ export const keymap: KeymapTable<HelpCtx> = {
     {
       key: "shift+d",
       cmd: Commands.DOCS_OPEN,
-      desc: "edit SOUL / JOB / LEARNED ...",
+      desc: "edit PERSONA / JOB / LEARNED ...",
     },
     {
       key: "shift+c",

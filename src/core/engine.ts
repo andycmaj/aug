@@ -4,11 +4,12 @@
 // drain and the tmux watch. The owner's moves themselves live on its desk.
 
 import { advisorDue, runAdvisor } from "./advisor";
+import { runDocPass } from "./doc-pass";
 import { AgentPool, type CodingLaunch } from "./agents";
 import { loadConfig } from "./config";
 import { dataVersion, now } from "./db";
 import { Desk } from "./desk";
-import { ensureDocs } from "./docs";
+import { syncDocs } from "./doc-sync";
 import { refreshInstalls } from "./install";
 import { Drivers } from "./driver";
 import { pollGithub } from "./ingest/github";
@@ -114,8 +115,19 @@ export class Engine {
     }
   }
 
+  // The brain docs at start: the SOUL rename, shipped updates, the
+  // onboarding offer (not on the fixture day). A failure costs a notice,
+  // never the start.
+  private syncDocs(): void {
+    try {
+      syncDocs({ offer: !this.options.offline });
+    } catch (err) {
+      log.error("doc sync failed", { error: errorMessage(err) });
+    }
+  }
+
   start(): void {
-    ensureDocs();
+    this.syncDocs();
     if (!this.options.offline) this.refreshInstalls();
     store.homeTask();
     this.recoverSessions();
@@ -372,6 +384,12 @@ export class Engine {
         detail: errorMessage(err),
         at: now(),
       });
+    }
+    // The daily doc pass rides the same clock; it gates itself.
+    try {
+      await runDocPass(new Date(), force);
+    } catch (err) {
+      log.error("doc pass failed", { error: errorMessage(err) });
     }
   }
 

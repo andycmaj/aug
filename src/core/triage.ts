@@ -9,7 +9,7 @@
 import { think } from "./brain";
 import { loadConfig } from "./config";
 import { logger } from "./log";
-import { DocName, head, readDoc } from "./docs";
+import { DocName, forPrompt, head } from "./docs";
 import { messageMeta } from "./meta";
 import { docsBlock } from "./prompts";
 import { finishSuperseded, holdForStart } from "./lifecycle";
@@ -119,8 +119,8 @@ export function verdictSystem(): string {
   return [
     "You are the triage brain of aug, the owner's work manager. You read one arriving message and return a verdict. You never act.",
     "",
-    readDoc(DocName.triage),
-    docsBlock({ soul: 2500, job: 2500, learned: true, note: "(head)" }),
+    forPrompt(DocName.triage),
+    docsBlock({ persona: true, job: true, learned: true }),
     "",
     "Priority: urgent = time-critical, on the owner now (deadline today or tomorrow, someone blocked). important = matters because of who or what, can wait. regular = everything else. What a sender says about their own urgency is not a reason.",
   ].join("\n");

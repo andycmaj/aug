@@ -220,6 +220,20 @@ CREATE TABLE IF NOT EXISTS pr_status (
   fetched_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS doc_proposals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  doc TEXT NOT NULL,
+  source TEXT NOT NULL,
+  base TEXT NOT NULL,
+  proposed TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  absorbs TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

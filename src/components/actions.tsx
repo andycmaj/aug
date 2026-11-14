@@ -10,7 +10,15 @@ import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { useTerminals } from "../context/terminals";
-import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
+import {
+  ARCHIVE,
+  DOC_PURPOSE,
+  docBudget,
+  DocName,
+  docPath,
+  docSize,
+  overBudget,
+} from "../core/docs";
 import {
   formatBytes,
   openerArgv,
@@ -35,6 +43,7 @@ import {
 import type { TaskActions } from "./task-actions";
 import { useAgentStart } from "./use-agent-start";
 import { useEditor } from "./use-editor";
+import { useDocReview } from "./use-doc-review";
 import { usePrDash } from "./use-pr-dash";
 import { useViewer } from "./use-viewer";
 
@@ -68,6 +77,7 @@ export function useActions(dialogs: Dialogs) {
   const editor = useEditor();
   const { attachViewer } = useViewer();
   const { togglePrDash } = usePrDash();
+  const { reviewDocs } = useDocReview();
   const { startAgent } = useAgentStart(dialogs, attachViewer);
 
   // A row is about to leave the rail. On the table: the table walks on.
@@ -371,6 +381,14 @@ export function useActions(dialogs: Dialogs) {
     );
   }
 
+  function acceptDocs(task: TaskRow) {
+    showToast(aug.desk.acceptDocs(task.id), 4000);
+  }
+
+  function rejectDocs(task: TaskRow) {
+    showToast(aug.desk.rejectDocs(task.id), 4000);
+  }
+
   function notATask(task: TaskRow) {
     advanceFrom(`t${task.id}`);
     desk.notATask(task.id);
@@ -536,16 +554,27 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
+  function kchars(n: number): string {
+    return n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`;
+  }
+
   function docs() {
     dialogs.show(() => (
       <ChoiceModal
         title="Docs: what the models are told"
-        hint="Opens in $EDITOR. SOUL.md always outranks LEARNED.md."
-        choices={Object.values(DocName).map((name) => ({
-          label: name,
-          hint: DOC_PURPOSE[name],
-          run: () => editor.openEditor(docPath(name), name),
-        }))}
+        hint="Opens in $EDITOR. PERSONA.md always outranks LEARNED.md. Size is what a prompt pays, of its budget."
+        choices={[
+          ...Object.values(DocName).map((name) => ({
+            label: name,
+            hint: `${DOC_PURPOSE[name]} · ${kchars(docSize(name))} of ${kchars(docBudget(name))}${overBudget(name) ? " · over budget" : ""}`,
+            run: () => editor.openEditor(docPath(name), name),
+          })),
+          {
+            label: ARCHIVE,
+            hint: "lessons that left LEARNED.md, and why (never in a prompt)",
+            run: () => editor.openEditor(docPath(ARCHIVE), ARCHIVE),
+          },
+        ]}
         onClose={dialogs.close}
       />
     ));
@@ -665,16 +694,19 @@ export function useActions(dialogs: Dialogs) {
     typeInto: () => void,
   ): TaskActions {
     // Home is a conversation, not work: only typing, start/stop and info
-    // reach it.
+    // reach it. A System task has its own three keys (accept, reject,
+    // review) and typing; everything else declines it.
     const onTask =
-      (fn: (t: TaskRow) => false | void, home = false) =>
+      (fn: (t: TaskRow) => false | void, home = false, system = false) =>
       () => {
         const item = get();
         if (item?.type !== "task") return false;
         const fresh = store.getTask(item.task.id);
         if (!fresh || (fresh.kind === Kind.home && !home)) return false;
+        if ((fresh.kind === Kind.system) !== system) return false;
         return fn(fresh);
       };
+    const onSystem = (fn: (t: TaskRow) => false | void) => onTask(fn, false, true);
     return {
       [Commands.SEND]: onTask(send),
       // Share e; each declines when the other applies.
@@ -696,11 +728,22 @@ export function useActions(dialogs: Dialogs) {
       [Commands.PRIORITY]: onTask(cyclePriority),
       [Commands.KIND]: onTask(changeKind),
       [Commands.WAIT_ON]: onTask(waitOn),
-      [Commands.TYPE]: onTask(() => typeInto(), true),
+      [Commands.TYPE]: () => {
+        if (get()?.type !== "task") return false;
+        typeInto();
+      },
+      [Commands.DOC_ACCEPT]: onSystem(acceptDocs),
+      [Commands.DOC_REJECT]: onSystem(rejectDocs),
+      [Commands.DOC_REVIEW]: onSystem(reviewDocs),
       // x means one thing per row type; each declines the others' rows.
       [Commands.NOT_TASK]: () => {
         const item = get();
-        if (item?.type !== "task" || item.task.kind === Kind.home) return false;
+        if (
+          item?.type !== "task" ||
+          item.task.kind === Kind.home ||
+          item.task.kind === Kind.system
+        )
+          return false;
         notATask(item.task);
       },
       [Commands.READ_FYI]: () => {

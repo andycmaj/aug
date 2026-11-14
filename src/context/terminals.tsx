@@ -22,7 +22,7 @@ import { ViewportTerminalRenderable } from "../terminal/viewport-terminal";
 export interface TermRequest {
   id: string;
   title: string;
-  kind: "agent" | "editor" | "ghdash";
+  kind: "agent" | "editor" | "ghdash" | "review";
   taskId?: number;
   argv: string[];
   cwd?: string;

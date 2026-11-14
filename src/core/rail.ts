@@ -31,6 +31,7 @@ export const SHOW_FYI = false;
 
 export const Section = {
   home: "home",
+  system: "system",
   tasks: "tasks",
   reviews: "reviews",
   watching: "watching",
@@ -42,6 +43,7 @@ export type Section = (typeof Section)[keyof typeof Section];
 
 export const SECTION_TITLES: Record<Section, string> = {
   home: "Home",
+  system: "System",
   tasks: "Tasks",
   reviews: "Code Reviews",
   watching: "Watching",
@@ -53,6 +55,7 @@ export const SECTION_TITLES: Record<Section, string> = {
 // The walk visits these in order; For later is never offered by Next, nor is
 // a project row.
 export const WALKED: Section[] = [
+  "system",
   "tasks",
   "reviews",
   "watching",
@@ -115,6 +118,7 @@ export function isSlipped(
 export function buildRail(input: RailInput): RailSection[] {
   const sections: Record<Section, RailItem[]> = {
     home: [],
+    system: [],
     tasks: [],
     reviews: [],
     watching: [],
@@ -153,6 +157,12 @@ export function buildRail(input: RailInput): RailSection[] {
       at: task.created_at,
       group: null,
     };
+    // aug asking about its own docs: on you until answered, never later.
+    if (task.kind === Kind.system) {
+      if (task.status === TaskStatus.open || task.status === TaskStatus.later)
+        sections.system.push(item);
+      continue;
+    }
     if (task.status === TaskStatus.done) {
       // An agent-closed task stays until you have read its result.
       if (lane === Lane.agentdone) onYou.push(item);

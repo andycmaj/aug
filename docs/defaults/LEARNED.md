@@ -1,7 +1,7 @@
 # LEARNED
 
 What was learned from what you do. Machine-written lines carry [s:strength | ev:evidence | seen:date].
-Lines you write yourself are never rewritten. SOUL.md always outranks this file.
+Lines you write yourself are never rewritten. PERSONA.md always outranks this file.
 
 ## Your people
 

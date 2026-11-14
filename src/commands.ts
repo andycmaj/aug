@@ -56,6 +56,9 @@ export const Commands = {
   INFO: "item.info",
   PR_DASH: "pr.dash",
   TYPE: "chat.type",
+  DOC_ACCEPT: "docs.accept",
+  DOC_REJECT: "docs.reject",
+  DOC_REVIEW: "docs.review",
 
   // Task pane
   BACK_TO_RAIL: "task.back",

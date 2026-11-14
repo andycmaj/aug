@@ -31,9 +31,11 @@ stored one:
 - File missing: write the shipped text.
 - File equals the previously shipped text (never edited): replace it
   silently.
-- File edited: leave it alone and open one SYSTEM task, "CODING.md: new
-  shipped version". Keys: view (revdiff, your file vs shipped), take shipped,
-  keep mine. Either answer closes it.
+- File edited: leave it alone. A shipped doc (TRIAGE, ASSISTANT, CODING)
+  gets one SYSTEM task, "CODING.md: new shipped version". Keys: view
+  (revdiff, your file vs shipped), take shipped, keep mine. Either answer
+  closes it. An owner doc (PERSONA, JOB, STYLE) ships only a template, so
+  an edited one is never asked about.
 
 Then store the new hash, so each shipped change is announced once. A doc that
 differs from the shipped text on the first run after this ships counts as
@@ -65,11 +67,10 @@ reject closes.
 
 ## Onboarding
 
-Triggered on first run when PERSONA.md and JOB.md are both untouched
-templates. Existing installs get a SYSTEM task offering it, never an
-automatic start. It can be run again with a new `onboard` move.
+Every install gets a SYSTEM task offering it, once; it never starts by
+itself. It can be run again with a new `onboard` move.
 
-Start runs the interview in Home with the Assistant:
+`y` on the offer runs the interview in Home with the Assistant:
 
 1. It reads Slack and GitHub first, to pre-fill channels, teams and repos.
 2. It asks only what it couldn't find: role, team, company; the channels and

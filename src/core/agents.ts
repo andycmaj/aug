@@ -12,7 +12,7 @@ import { think, BrainError, type BrainCall } from "./brain";
 import { capabilityAllow, capabilityGrant, DENIED_STEP, deniedNote, GH_READS, grantedNote, lastDenials, SHELL_HOWTO } from "./capabilities";
 import { loadConfig } from "./config";
 import { now } from "./db";
-import { DocName, readDoc } from "./docs";
+import { DocName, forPrompt } from "./docs";
 import { docsBlock } from "./prompts";
 import { changedFiles, snapshotDir } from "./files";
 import { actionFor, lastIncoming } from "./outbound";
@@ -139,8 +139,8 @@ export function generalAllow(): string[] {
 
 export function turnSystem(): string {
   return [
-    readDoc(DocName.assistant),
-    docsBlock({ soul: 4000, job: 2500, style: 2500, learned: true }),
+    forPrompt(DocName.assistant),
+    docsBlock({ persona: true, job: true, style: true, learned: true }),
     "",
     "Answer as three short sections (about, did, next). Lead 'did' with the result itself. Keep it tight: the owner reads this in a terminal.",
     "When the result is a document or a table (a report, a plan, figures), write it as a .md or .csv file in the current folder: the owner sees it under What it made, rendered. Name it plainly (overtime-september.csv).",
@@ -525,7 +525,7 @@ export function codingBrief(task: TaskRow): string {
   const ref = store.taskRef(task.id);
   const project = projectContext(task);
   return [
-    readDoc(DocName.coding),
+    forPrompt(DocName.coding),
     "",
     `You are working aug task ${ref}. When the work is finished, run:`,
     `  ${toolsCommand("done", "--summary", "<one line: what you did>")} [--reply "<words to the person who asked>"]`,

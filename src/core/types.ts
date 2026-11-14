@@ -27,6 +27,9 @@ export const Kind = {
   task: "task",
   // The one Home thread: you and the Assistant. Not work, never closes.
   home: "home",
+  // aug asking about its own install: a brain doc proposal, a shipped doc
+  // you did not get, the onboarding offer. No agent; accept or reject.
+  system: "system",
 } as const;
 export type Kind = (typeof Kind)[keyof typeof Kind];
 
@@ -363,6 +366,41 @@ export interface IdeaRow {
   task_id: number | null;
   status: IdeaStatus;
   created_at: string;
+}
+
+// Where a doc proposal came from.
+export const ProposalSource = {
+  // A new shipped version of a doc the owner edited.
+  shipped: "shipped",
+  // The Advisor's daily pass: a lesson worth a place in a doc, or a shrink.
+  evolve: "evolve",
+  // The onboarding interview's drafts.
+  onboard: "onboard",
+} as const;
+export type ProposalSource = (typeof ProposalSource)[keyof typeof ProposalSource];
+
+export const ProposalStatus = {
+  open: "open",
+  accepted: "accepted",
+  rejected: "rejected",
+} as const;
+export type ProposalStatus = (typeof ProposalStatus)[keyof typeof ProposalStatus];
+
+// A whole new text for one brain doc, waiting on the owner in a SYSTEM task.
+export interface DocProposalRow {
+  id: number;
+  task_id: number;
+  doc: string;
+  source: ProposalSource;
+  // The file as it was when proposed: the diff's left side.
+  base: string;
+  proposed: string;
+  reason: string;
+  // JSON array: LEARNED.md lines that leave for the archive on accept.
+  absorbs: string;
+  status: ProposalStatus;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CorrectionRow {

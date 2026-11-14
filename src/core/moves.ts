@@ -5,6 +5,8 @@
 // waits, the desk claims it, runs it, and writes back one line of result.
 
 import type { Desk } from "./desk";
+import { DocName } from "./docs";
+import { docNamed, propose } from "./proposals";
 import { logger } from "./log";
 import { findProject, projectLine } from "./lookup";
 import { mux } from "./mux";
@@ -16,6 +18,7 @@ import {
   Kind,
   MoveStatus,
   ProjectStatus,
+  ProposalSource,
   SessionKind,
   TaskStatus,
   TurnRole,
@@ -616,6 +619,36 @@ export const MOVES: Record<string, MoveSpec> = {
       store.updateGoal(goal.id, { status, title });
       const now = store.getGoal(goal.id)!;
       return `${store.goalRef(now.id)} [${now.status}] ${now.title}`;
+    },
+  },
+  onboard: {
+    help: "Start the onboarding interview: the Assistant asks about the owner and drafts PERSONA, JOB and STYLE for a System task",
+    task: false,
+    args: {},
+    run(desk, _task, _args, by) {
+      return desk.onboard(by === "assistant");
+    },
+  },
+  propose_doc: {
+    help: "Propose a whole new text for one of the owner's docs (PERSONA, JOB, STYLE). It waits on a System task until the owner accepts",
+    task: false,
+    args: {
+      doc: { help: "PERSONA | JOB | STYLE", required: true },
+      text: { help: "the whole doc", required: true },
+      reason: { help: "one line: why" },
+    },
+    run(_desk, _task, args) {
+      const doc = docNamed(args.doc);
+      if (doc !== DocName.persona && doc !== DocName.job && doc !== DocName.style)
+        throw new MoveError(`doc must be PERSONA | JOB | STYLE: got ${args.doc}`);
+      if (!args.text.trim()) throw new MoveError("text is empty");
+      const p = propose({
+        doc,
+        source: ProposalSource.onboard,
+        proposed: args.text.trimEnd() + "\n",
+        reason: args.reason ?? "",
+      });
+      return `${doc} proposed on ${store.taskRef(p.task_id)}: the owner reviews it there`;
     },
   },
   remember: {

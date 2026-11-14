@@ -4,24 +4,19 @@
 // next message like it.
 //
 // A new line starts at strength 2 under Watching, where nothing reads it. The
-// same lesson seen again comes back stronger and replaces its old line; at 4
-// it moves into the section it belongs to and is in use.
+// same lesson seen again comes back stronger and replaces its old line; at 3
+// it moves into the section it belongs to and is in use. A Watching line not
+// seen again in a month goes to the archive (core/doc-pass.ts).
 
 import { think } from "./brain";
 import { loadConfig } from "./config";
-import { DocName, readDoc, writeDoc } from "./docs";
+import { DocName, LEARNED_SECTIONS, readDoc, writeDoc } from "./docs";
 import * as store from "./store";
 import type { CorrectionRow } from "./types";
 
-export const LEARNED_SECTIONS = [
-  "Your people",
-  "What you care about",
-  "How you work",
-  "Promises",
-  "What to bring up",
-] as const;
+export { LEARNED_SECTIONS };
 
-export const PROMOTE_AT = 4;
+export const PROMOTE_AT = 3;
 
 const LESSON_SCHEMA = {
   type: "object",

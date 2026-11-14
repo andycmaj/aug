@@ -16,6 +16,9 @@ import {
   type Channel,
   type IdeaStatus,
   type CorrectionRow,
+  type DocProposalRow,
+  type ProposalSource,
+  type ProposalStatus,
   type DraftAction,
   type GoalRow,
   type KnowledgeRow,
@@ -897,6 +900,87 @@ export function openIdeas(): IdeaRow[] {
 
 export function setIdeaStatus(id: number, status: IdeaStatus): void {
   run("UPDATE ideas SET status = ? WHERE id = ?", status, id);
+}
+
+// ── doc proposals (a SYSTEM task's new text for a brain doc) ─────────────
+
+export function addProposal(p: {
+  taskId: number;
+  doc: string;
+  source: ProposalSource;
+  base: string;
+  proposed: string;
+  reason?: string;
+  absorbs?: string[];
+}): DocProposalRow {
+  const at = now();
+  const id = run(
+    "INSERT INTO doc_proposals (task_id, doc, source, base, proposed, reason, absorbs, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    p.taskId,
+    p.doc,
+    p.source,
+    p.base,
+    p.proposed,
+    p.reason ?? "",
+    JSON.stringify(p.absorbs ?? []),
+    at,
+    at,
+  );
+  return getProposal(id)!;
+}
+
+export function getProposal(id: number): DocProposalRow | null {
+  return one<DocProposalRow>("SELECT * FROM doc_proposals WHERE id = ?", id);
+}
+
+export function proposalsForTask(taskId: number): DocProposalRow[] {
+  return all<DocProposalRow>(
+    "SELECT * FROM doc_proposals WHERE task_id = ? ORDER BY id",
+    taskId,
+  );
+}
+
+export function openProposalFor(
+  doc: string,
+  source: ProposalSource,
+): DocProposalRow | null {
+  return one<DocProposalRow>(
+    "SELECT * FROM doc_proposals WHERE doc = ? AND source = ? AND status = 'open' AND task_id IN (SELECT id FROM tasks WHERE status IN ('open', 'later')) ORDER BY id DESC LIMIT 1",
+    doc,
+    source,
+  );
+}
+
+export function openProposals(): DocProposalRow[] {
+  return all<DocProposalRow>(
+    "SELECT * FROM doc_proposals WHERE status = 'open' AND task_id IN (SELECT id FROM tasks WHERE status IN ('open', 'later')) ORDER BY id",
+  );
+}
+
+export function reviseProposal(
+  id: number,
+  fields: { proposed: string; reason?: string; absorbs?: string[]; base?: string },
+): void {
+  const current = getProposal(id);
+  if (!current) return;
+  run(
+    "UPDATE doc_proposals SET proposed = ?, reason = ?, absorbs = ?, base = ?, updated_at = ? WHERE id = ?",
+    fields.proposed,
+    fields.reason ?? current.reason,
+    fields.absorbs ? JSON.stringify(fields.absorbs) : current.absorbs,
+    fields.base ?? current.base,
+    now(),
+    id,
+  );
+}
+
+export function setProposalStatus(id: number, status: ProposalStatus): void {
+  run(
+    "UPDATE doc_proposals SET status = ?, updated_at = ? WHERE id = ?",
+    status,
+    now(),
+    id,
+  );
 }
 
 // ── corrections (what LEARNED.md is taught from) ─────────────────────────
