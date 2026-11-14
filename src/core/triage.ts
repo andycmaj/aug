@@ -1,13 +1,15 @@
 // Every message gets one verdict, and only one check asks a model anything.
-// Gates run first, in a fixed order; a gate is deterministic (same input,
-// same answer, no cost), so "a rule caught it" is always distinguishable from
-// "triage judged it".
+// Triage is a chain of rules (TRIAGE_RULES, in order): each one claims the
+// message and routes it, or passes it on. Gates come first and are
+// deterministic (same input, same answer, no cost), so "a rule caught it" is
+// always distinguishable from "triage judged it"; the rules after them read
+// the model's verdict, which is asked at most once.
 //
 // Triage never starts work itself: it returns effects for the caller to run,
 // which keeps it testable and keeps the agent pool in one place.
 
 import { think } from "./brain";
-import { loadConfig } from "./config";
+import { loadConfig, type AugConfig } from "./config";
 import { logger } from "./log";
 import { DocName, forPrompt, head } from "./docs";
 import { messageMeta } from "./meta";
@@ -130,6 +132,7 @@ export async function askVerdict(
   message: MessageRow,
   thread: MessageRow[],
   candidate: TaskRow | null,
+  model: string,
 ): Promise<VerdictAnswer> {
   const openTasks = store
     .listTasks()
@@ -138,7 +141,7 @@ export async function askVerdict(
     prompt: verdictPrompt(message, thread, candidate, openTasks),
     system: verdictSystem(),
     schema: VERDICT_SCHEMA,
-    model: loadConfig().brain.triageModel,
+    model,
   });
   const answer = result.structured as VerdictAnswer | null;
   if (!answer || !Object.values(Verdict).includes(answer.verdict)) {
@@ -161,6 +164,207 @@ export function noiseReason(message: MessageRow): string | null {
   return null;
 }
 
+// Not a gate: the engine runs it on every fresh message before triage, so a
+// PR whose head branch is a task's worktree branch is that task's thread and
+// the threading rules below attach its reviews and CI to the task.
+export function linkByBranch(message: MessageRow): number | null {
+  const meta = messageMeta(message);
+  if (meta.channel !== "github" || !meta.repo || !meta.head) return null;
+  const task = store.taskForBranch(meta.repo, meta.head);
+  if (!task || task.thread_key === message.thread_key) return null;
+  store.linkThread(task.id, message.thread_key);
+  if (!task.url && message.url) store.updateTask(task.id, { url: message.url });
+  return task.id;
+}
+
+// ── the chain ──────────────────────────────────────────────────────────────
+
+// What the rules read from config, handed in as a value so no rule reaches
+// for the global itself.
+export type TriageConfig = Pick<AugConfig, "autostart" | "brain">;
+
+export type Judged =
+  | { ok: true; answer: VerdictAnswer }
+  | { ok: false; error: string };
+
+// One inbound message and what the rules need to know about it, worked out
+// once before the chain runs.
+export interface Inbound {
+  message: MessageRow;
+  openOnThread: TaskRow | null;
+  // The open task on the thread, else the last one it had.
+  lastOnThread: TaskRow | null;
+  // A DM is a stream of asks; any other thread is one conversation.
+  dm: boolean;
+  config: TriageConfig;
+  // The model's verdict. Asked on first call and only then, so a message a
+  // gate claims costs nothing.
+  judged(): Promise<Judged>;
+}
+
+export interface TriageRule {
+  name: string;
+  // Claim the message and route it, or return null to pass it on.
+  handle(item: Inbound): TriageOutcome | null | Promise<TriageOutcome | null>;
+}
+
+const ownMessage: TriageRule = {
+  name: "own message",
+  handle: (i) =>
+    i.message.from_me ? ownAnswer(i.message, i.openOnThread) : null,
+};
+
+// A greeting never becomes a task; it waits for the ask it opens.
+const greeting: TriageRule = {
+  name: "greeting",
+  handle: ({ message }) => {
+    if (!OPENER.test(message.body.trim())) return null;
+    store.fileMessage(message.id, null, "a greeting; waits for the ask", null);
+    store.markMessageRead(message.id);
+    return { verdict: "opener", taskId: null, reason: "greeting", effects: [] };
+  },
+};
+
+const noise: TriageRule = {
+  name: "noise",
+  handle: ({ message }) => {
+    const reason = noiseReason(message);
+    return reason ? fileFyi(message, reason) : null;
+  },
+};
+
+// A GitHub issue or a Slack thread is one conversation, so it attaches.
+const sameThread: TriageRule = {
+  name: "same thread",
+  handle: (i) =>
+    i.openOnThread && !i.dm
+      ? attach(i.message, i.openOnThread, i.config)
+      : null,
+};
+
+// They wrote after the close (your own reply does not count).
+const afterClose: TriageRule = {
+  name: "after close",
+  handle: (i) =>
+    !i.openOnThread && i.lastOnThread?.status === TaskStatus.done && !i.dm
+      ? attach(i.message, i.lastOnThread, i.config)
+      : null,
+};
+
+// Triage breaking is quiet and safe: filed for you to read, never assumed to
+// be work.
+const unjudged: TriageRule = {
+  name: "unjudged",
+  handle: async ({ message, judged }) => {
+    const j = await judged();
+    if (j.ok) return null;
+    const reason = `awaiting AI triage (${j.error})`;
+    store.fileMessage(message.id, Verdict.fyi, reason, null);
+    return { verdict: "failed", taskId: null, reason, effects: [] };
+  },
+};
+
+// In a DM the model judges whether this continues the open ask.
+const sameAsk: TriageRule = {
+  name: "same ask",
+  handle: async (i) => {
+    if (!i.dm || !i.openOnThread) return null;
+    const j = await i.judged();
+    return j.ok && j.answer.same_ask
+      ? attach(i.message, i.openOnThread, i.config)
+      : null;
+  },
+};
+
+const judgedFyi: TriageRule = {
+  name: "judged fyi",
+  handle: async ({ message, judged }) => {
+    const j = await judged();
+    return j.ok && j.answer.verdict === Verdict.fyi
+      ? fileFyi(message, j.answer.reason)
+      : null;
+  },
+};
+
+const newTask: TriageRule = {
+  name: "new task",
+  handle: async (i) => {
+    const j = await i.judged();
+    return j.ok ? createFromVerdict(i.message, j.answer, i.config) : null;
+  },
+};
+
+// The order is the routing: a message goes to the first rule that claims it.
+export const TRIAGE_RULES: readonly TriageRule[] = [
+  ownMessage,
+  greeting,
+  noise,
+  sameThread,
+  afterClose,
+  unjudged,
+  sameAsk,
+  judgedFyi,
+  newTask,
+];
+
+export async function runChain(
+  rules: readonly TriageRule[],
+  item: Inbound,
+): Promise<{ rule: string; outcome: TriageOutcome }> {
+  for (const rule of rules) {
+    const outcome = await rule.handle(item);
+    if (outcome) return { rule: rule.name, outcome };
+  }
+  throw new Error(`no triage rule claimed message ${item.message.id}`);
+}
+
+export interface TriageDeps {
+  config: TriageConfig;
+  rules?: readonly TriageRule[];
+}
+
+export async function triage(
+  message: MessageRow,
+  deps: TriageDeps = { config: loadConfig() },
+): Promise<TriageOutcome> {
+  const { rule, outcome } = await runChain(
+    deps.rules ?? TRIAGE_RULES,
+    inbound(message, deps.config),
+  );
+  logger("triage").debug("routed", { message: message.id, rule });
+  return outcome;
+}
+
+const DM_THREAD = /:dm$/;
+
+function inbound(message: MessageRow, config: TriageConfig): Inbound {
+  const openOnThread = store.openTaskForThread(message.thread_key);
+  const lastOnThread =
+    openOnThread ?? store.lastTaskForThread(message.thread_key);
+  const dm = DM_THREAD.test(message.thread_key);
+  let verdict: Promise<Judged> | null = null;
+  const judged = (): Promise<Judged> =>
+    (verdict ??= askVerdict(
+      message,
+      store.messagesForThread(message.thread_key),
+      // Only a DM offers its open task as a same-ask candidate.
+      dm ? openOnThread : null,
+      config.brain.triageModel,
+    ).then(
+      (answer): Judged => ({ ok: true, answer }),
+      (err: unknown): Judged => {
+        logger("triage").error("verdict failed", { message: message.id, err });
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      },
+    ));
+  return { message, openOnThread, lastOnThread, dm, config, judged };
+}
+
+// ── routing decisions the rules share ──────────────────────────────────────
+
 function isLive(task: TaskRow): boolean {
   return (
     task.agent_state === AgentState.working ||
@@ -172,7 +376,16 @@ function wantsAgent(kind: Kind): boolean {
   return kind === Kind.general || kind === Kind.reply;
 }
 
-function attach(message: MessageRow, task: TaskRow): TriageOutcome {
+function fileFyi(message: MessageRow, reason: string): TriageOutcome {
+  store.fileMessage(message.id, Verdict.fyi, reason, null);
+  return { verdict: Verdict.fyi, taskId: null, reason, effects: [] };
+}
+
+function attach(
+  message: MessageRow,
+  task: TaskRow,
+  config: TriageConfig,
+): TriageOutcome {
   const effects: TriageEffect[] = [];
   store.batch(() => {
     store.fileMessage(
@@ -202,7 +415,7 @@ function attach(message: MessageRow, task: TaskRow): TriageOutcome {
       taskId: task.id,
       messageId: message.id,
     });
-  } else if (wantsAgent(task.kind) && loadConfig().autostart) {
+  } else if (wantsAgent(task.kind) && config.autostart) {
     effects.push({
       type: "agent-turn",
       taskId: task.id,
@@ -255,75 +468,11 @@ function ownAnswer(message: MessageRow, task: TaskRow | null): TriageOutcome {
   return { verdict: "own", taskId: task.id, reason: "you answered", effects };
 }
 
-// Gate: a PR whose head branch is a task's worktree branch is that task's
-// thread, so its reviews and CI land on the task instead of making a new one.
-export function linkByBranch(message: MessageRow): number | null {
-  const meta = messageMeta(message);
-  if (meta.channel !== "github" || !meta.repo || !meta.head) return null;
-  const task = store.taskForBranch(meta.repo, meta.head);
-  if (!task || task.thread_key === message.thread_key) return null;
-  store.linkThread(task.id, message.thread_key);
-  if (!task.url && message.url) store.updateTask(task.id, { url: message.url });
-  return task.id;
-}
-
-const DM_THREAD = /:dm$/;
-
-export async function triage(message: MessageRow): Promise<TriageOutcome> {
-  const openOnThread = store.openTaskForThread(message.thread_key);
-  const lastOnThread =
-    openOnThread ?? store.lastTaskForThread(message.thread_key);
-
-  if (message.from_me) return ownAnswer(message, openOnThread);
-
-  // Gate: a greeting never becomes a task; it waits for the ask it opens.
-  if (OPENER.test(message.body.trim())) {
-    store.fileMessage(message.id, null, "a greeting; waits for the ask", null);
-    store.markMessageRead(message.id);
-    return { verdict: "opener", taskId: null, reason: "greeting", effects: [] };
-  }
-
-  const noise = noiseReason(message);
-  if (noise) {
-    store.fileMessage(message.id, Verdict.fyi, noise, null);
-    return { verdict: Verdict.fyi, taskId: null, reason: noise, effects: [] };
-  }
-
-  // Gate (threading): a GitHub issue or a Slack thread is one conversation, so
-  // it attaches. A DM is a stream of asks, so the model judges same-ask.
-  const dm = DM_THREAD.test(message.thread_key);
-  if (openOnThread && !dm) return attach(message, openOnThread);
-  if (!openOnThread && lastOnThread?.status === TaskStatus.done && !dm) {
-    // They wrote after the close (your own reply does not count).
-    return attach(message, lastOnThread);
-  }
-
-  const thread = store.messagesForThread(message.thread_key);
-  let answer: VerdictAnswer;
-  try {
-    answer = await askVerdict(message, thread, dm ? openOnThread : null);
-  } catch (err) {
-    // Triage breaking is quiet and safe: filed for you to read, never assumed
-    // to be work.
-    const reason = `awaiting AI triage (${err instanceof Error ? err.message : String(err)})`;
-    logger("triage").error("verdict failed", { message: message.id, err });
-    store.fileMessage(message.id, Verdict.fyi, reason, null);
-    return { verdict: "failed", taskId: null, reason, effects: [] };
-  }
-
-  if (dm && openOnThread && answer.same_ask)
-    return attach(message, openOnThread);
-
-  if (answer.verdict === Verdict.fyi) {
-    store.fileMessage(message.id, Verdict.fyi, answer.reason, null);
-    return {
-      verdict: Verdict.fyi,
-      taskId: null,
-      reason: answer.reason,
-      effects: [],
-    };
-  }
-
+function createFromVerdict(
+  message: MessageRow,
+  answer: VerdictAnswer,
+  config: TriageConfig,
+): TriageOutcome {
   const kind: Kind =
     answer.verdict === Verdict.watch ? Kind.task : (answer.verdict as Kind);
   const meta = messageMeta(message);
@@ -353,9 +502,8 @@ export async function triage(message: MessageRow): Promise<TriageOutcome> {
     if (kind === Kind.coding) holdForStart(created.id);
     return created;
   });
-
   const effects: TriageEffect[] =
-    wantsAgent(kind) && loadConfig().autostart
+    wantsAgent(kind) && config.autostart
       ? [
           {
             type: "agent-turn",

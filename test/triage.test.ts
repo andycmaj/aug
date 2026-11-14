@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { taskClosed } from "../src/core/lifecycle";
 import * as store from "../src/core/store";
-import { triage } from "../src/core/triage";
+import { DEFAULT_CONFIG } from "../src/core/config";
+import { TRIAGE_RULES, triage, type TriageRule } from "../src/core/triage";
 import { DocName, writeDoc } from "../src/core/docs";
 import {
   AgentState,
@@ -305,7 +306,9 @@ describe("triage routing", () => {
     const calls = fakeBrain(() =>
       verdict("reply", { priority: "urgent", title: "Answer Priya" }),
     );
-    const first = await triage(slackThread(1, "<@UME> can you confirm the cutoff?"));
+    const first = await triage(
+      slackThread(1, "<@UME> can you confirm the cutoff?"),
+    );
     expect(calls).toHaveLength(1);
     expect(calls[0].system).toContain("Slack mentions of me");
     // Not a DM: no same-ask candidate is offered.
@@ -314,7 +317,7 @@ describe("triage routing", () => {
     expect(first.effects).toEqual([
       {
         type: "agent-turn",
-        taskId: first.taskId,
+        taskId: first.taskId!,
         reason: "triage sent it to the agent",
       },
     ]);
@@ -323,12 +326,12 @@ describe("triage routing", () => {
     expect(calls).toHaveLength(1);
     expect(second).toEqual({
       verdict: "attached",
-      taskId: first.taskId,
+      taskId: first.taskId!,
       reason: `joined ${store.taskRef(first.taskId!)}`,
       effects: [
         {
           type: "agent-turn",
-          taskId: first.taskId,
+          taskId: first.taskId!,
           reason: "Priya wrote again",
         },
       ],
@@ -341,7 +344,11 @@ describe("triage routing", () => {
     store.updateTask(first.taskId!, { agent_state: AgentState.working });
     const second = await triage(ghComment(2, "any update?"));
     expect(second.effects).toEqual([
-      { type: "agent-message", taskId: first.taskId, messageId: expect.any(Number) },
+      {
+        type: "agent-message",
+        taskId: first.taskId!,
+        messageId: expect.any(Number),
+      },
     ]);
   });
 
@@ -383,8 +390,12 @@ describe("triage routing", () => {
     const calls = fakeBrain(() =>
       n++ === 0 ? verdict("general") : verdict("general", { same_ask: false }),
     );
-    const first = await triage(slackDm(1, "Which payroll providers do same-day pay?"));
-    const second = await triage(slackDm(2, "Separately, who owns the SOC2 doc?"));
+    const first = await triage(
+      slackDm(1, "Which payroll providers do same-day pay?"),
+    );
+    const second = await triage(
+      slackDm(2, "Separately, who owns the SOC2 doc?"),
+    );
     expect(calls[1].prompt).toContain("Candidate open task");
     expect(second.verdict).toBe("general");
     expect(second.taskId).not.toBe(first.taskId);
@@ -392,7 +403,9 @@ describe("triage routing", () => {
 
   test("a DM after the close is judged again, not reopened", async () => {
     const calls = fakeBrain(() => verdict("general"));
-    const first = await triage(slackDm(1, "Which payroll providers do same-day pay?"));
+    const first = await triage(
+      slackDm(1, "Which payroll providers do same-day pay?"),
+    );
     taskClosed(first.taskId!);
     const again = await triage(slackDm(2, "Who owns the SOC2 doc?"));
     expect(calls).toHaveLength(2);
@@ -425,17 +438,79 @@ describe("triage routing", () => {
     const out = await triage(own);
     expect(out).toEqual({
       verdict: "own",
-      taskId: first.taskId,
+      taskId: first.taskId!,
       reason: "you answered",
       effects: [
         {
           type: "agent-turn",
-          taskId: first.taskId,
+          taskId: first.taskId!,
           reason: "you answered the thread yourself",
         },
       ],
     });
     const turns = store.turnsForTask(first.taskId!);
     expect(turns.at(-1)!.body).toContain("You answered on Slack yourself");
+  });
+});
+
+describe("triage chain", () => {
+  beforeEach(() => freshHome());
+
+  test("the routing order, in one place", () => {
+    expect(TRIAGE_RULES.map((r) => r.name)).toEqual([
+      "own message",
+      "greeting",
+      "noise",
+      "same thread",
+      "after close",
+      "unjudged",
+      "same ask",
+      "judged fyi",
+      "new task",
+    ]);
+  });
+
+  test("a new rule is one entry, and the first rule to claim wins", async () => {
+    const calls = fakeBrain(() => verdict("general"));
+    const vip: TriageRule = {
+      name: "vip",
+      handle: ({ message }) =>
+        message.author === "U2"
+          ? { verdict: "fyi", taskId: null, reason: "vip", effects: [] }
+          : null,
+    };
+    const rules = [...TRIAGE_RULES.slice(0, 3), vip, ...TRIAGE_RULES.slice(3)];
+    const out = await triage(slackDm(1, "Can you send me the Q3 numbers?"), {
+      config: DEFAULT_CONFIG,
+      rules,
+    });
+    expect(out.reason).toBe("vip");
+    expect(calls).toHaveLength(0);
+  });
+
+  test("config comes in as a value, not from the global", async () => {
+    fakeBrain(() => verdict("general"));
+    const out = await triage(slackDm(1, "Which payroll providers?"), {
+      config: { ...DEFAULT_CONFIG, autostart: false },
+    });
+    expect(out.verdict).toBe("general");
+    expect(out.effects).toEqual([]);
+  });
+
+  test("the model is asked once however many rules read the verdict", async () => {
+    let n = 0;
+    const calls = fakeBrain(() =>
+      n++ === 0 ? verdict("general") : verdict("fyi", { same_ask: false }),
+    );
+    await triage(slackDm(1, "Which payroll providers do same-day pay?"));
+    const out = await triage(slackDm(2, "fyi the vendor emailed"));
+    expect(out.verdict).toBe("fyi");
+    expect(calls).toHaveLength(2);
+  });
+
+  test("a chain where nobody claims is a bug, not a silent drop", async () => {
+    await expect(
+      triage(slackDm(1, "anything"), { config: DEFAULT_CONFIG, rules: [] }),
+    ).rejects.toThrow("no triage rule claimed");
   });
 });
