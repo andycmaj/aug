@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { taskClosed } from "../src/core/lifecycle";
 import * as store from "../src/core/store";
 import { triage } from "../src/core/triage";
+import { DocName, writeDoc } from "../src/core/docs";
 import {
   AgentState,
+  SessionKind,
   TaskStatus,
   TurnRole,
   type MessageRow,
@@ -186,5 +188,254 @@ describe("triage", () => {
     expect(store.fyiMessages("2000-01-01")[0].reason).toContain(
       "awaiting AI triage",
     );
+  });
+});
+
+// Today's routing, pinned before triage became a chain of rules: which rule
+// claims each kind of inbound item, and what it routes to.
+describe("triage routing", () => {
+  beforeEach(() => freshHome());
+
+  function ghNotice(
+    n: number,
+    opts: {
+      reason?: string;
+      type?: string;
+      author?: string;
+      thread?: string;
+      body?: string;
+    } = {},
+  ): MessageRow {
+    return store.insertMessage({
+      channel: "github",
+      externalId: `gh:n${n}`,
+      threadKey: opts.thread ?? "github:acme/api#40",
+      author: opts.author ?? "erin",
+      authorName: opts.author ?? "erin",
+      title: "acme/api#40 PullRequest: speed up export",
+      body: opts.body ?? "Please take a look at this change.",
+      url: "https://github.com/acme/api/pull/40",
+      receivedAt: new Date(Date.UTC(2026, 10, 5, 11, n)).toISOString(),
+      meta: {
+        repo: "acme/api",
+        number: 40,
+        type: opts.type ?? "PullRequest",
+        reason: opts.reason ?? "review_requested",
+      },
+    })!;
+  }
+
+  function slackThread(n: number, body: string): MessageRow {
+    return store.insertMessage({
+      channel: "slack",
+      externalId: `slack:C9:${n}`,
+      threadKey: "slack:C9:100.0",
+      author: "U3",
+      authorName: "Priya",
+      title: "#payments thread",
+      body,
+      receivedAt: new Date(Date.UTC(2026, 10, 5, 12, n)).toISOString(),
+      meta: { channel: "C9", ts: `${100 + n}.0`, thread_ts: "100.0" },
+    })!;
+  }
+
+  const message = (id: number) => store.getMessage(id)!;
+
+  test("your own message comes first, even when it looks like a greeting", async () => {
+    const calls = fakeBrain(() => verdict("general"));
+    const own = slackDm(1, "hey!", { fromMe: true });
+    const out = await triage(own);
+    expect(out).toMatchObject({ verdict: "own", taskId: null, effects: [] });
+    expect(message(own.id).read_at).not.toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  test("a greeting wins over the bot gate", async () => {
+    const calls = fakeBrain(() => verdict("task"));
+    const m = ghNotice(1, { author: "renovate[bot]", body: "hi" });
+    const out = await triage(m);
+    expect(out.verdict).toBe("opener");
+    expect(message(m.id).read_at).not.toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  test.each([
+    ["dependabot", "review_requested", "a bot wrote it"],
+    ["github-actions", "mention", "a bot wrote it"],
+    ["erin", "ci_activity", "CI activity"],
+    ["erin", "state_change", "a state change on a thread you only follow"],
+    ["erin", "subscribed", "a state change on a thread you only follow"],
+  ])("noise by gate: %s / %s", async (author, reason, why) => {
+    const calls = fakeBrain(() => verdict("task"));
+    const m = ghNotice(1, { author, reason });
+    const out = await triage(m);
+    expect(out).toEqual({
+      verdict: "fyi",
+      taskId: null,
+      reason: why,
+      effects: [],
+    });
+    expect(message(m.id).verdict).toBe("fyi");
+    expect(calls).toHaveLength(0);
+  });
+
+  test("a GitHub review request goes to the model with JOB.md in hand, and its priority sticks", async () => {
+    writeDoc(
+      DocName.job,
+      "# JOB\n\nHigh priority:\n- GitHub review requests, to me directly or to a GitHub team I'm on.\n",
+    );
+    const calls = fakeBrain(() =>
+      verdict("task", { title: "Review acme/api#40", priority: "urgent" }),
+    );
+    const out = await triage(ghNotice(1, { reason: "review_requested" }));
+    expect(calls).toHaveLength(1);
+    expect(calls[0].system).toContain("GitHub review requests");
+    expect(calls[0].prompt).toContain('"reason":"review_requested"');
+    const task = store.getTask(out.taskId!)!;
+    expect(task.priority).toBe("urgent");
+    expect(task.kind).toBe("task");
+    // Repo falls back to the notification's own.
+    expect(task.repo).toBe("acme/api");
+    expect(task.url).toBe("https://github.com/acme/api/pull/40");
+    expect(out.effects).toEqual([]);
+  });
+
+  test("a Slack mention in a channel thread is judged once, then the thread attaches", async () => {
+    writeDoc(DocName.job, "# JOB\n\nHigh priority:\n- Slack mentions of me.\n");
+    const calls = fakeBrain(() =>
+      verdict("reply", { priority: "urgent", title: "Answer Priya" }),
+    );
+    const first = await triage(slackThread(1, "<@UME> can you confirm the cutoff?"));
+    expect(calls).toHaveLength(1);
+    expect(calls[0].system).toContain("Slack mentions of me");
+    // Not a DM: no same-ask candidate is offered.
+    expect(calls[0].prompt).not.toContain("Candidate open task");
+    expect(store.getTask(first.taskId!)!.priority).toBe("urgent");
+    expect(first.effects).toEqual([
+      {
+        type: "agent-turn",
+        taskId: first.taskId,
+        reason: "triage sent it to the agent",
+      },
+    ]);
+
+    const second = await triage(slackThread(2, "also the timezone"));
+    expect(calls).toHaveLength(1);
+    expect(second).toEqual({
+      verdict: "attached",
+      taskId: first.taskId,
+      reason: `joined ${store.taskRef(first.taskId!)}`,
+      effects: [
+        {
+          type: "agent-turn",
+          taskId: first.taskId,
+          reason: "Priya wrote again",
+        },
+      ],
+    });
+  });
+
+  test("a message joining a live task's thread is delivered to its agent", async () => {
+    fakeBrain(() => verdict("task"));
+    const first = await triage(ghComment(1, "please look"));
+    store.updateTask(first.taskId!, { agent_state: AgentState.working });
+    const second = await triage(ghComment(2, "any update?"));
+    expect(second.effects).toEqual([
+      { type: "agent-message", taskId: first.taskId, messageId: expect.any(Number) },
+    ]);
+  });
+
+  test("autostart off: nothing is woken", async () => {
+    freshHome({ autostart: false });
+    fakeBrain(() => verdict("general"));
+    const first = await triage(slackThread(1, "what is the cutoff?"));
+    expect(first.effects).toEqual([]);
+    const second = await triage(slackThread(2, "and the timezone?"));
+    expect(second.verdict).toBe("attached");
+    expect(second.effects).toEqual([]);
+  });
+
+  test("an FYI verdict is filed with no task", async () => {
+    fakeBrain(() => verdict("fyi", { reason: "release notes" }));
+    const m = slackThread(1, "v2.3 is out");
+    const out = await triage(m);
+    expect(out).toEqual({
+      verdict: "fyi",
+      taskId: null,
+      reason: "release notes",
+      effects: [],
+    });
+    expect(message(m.id).verdict).toBe("fyi");
+    expect(store.listTasks()).toHaveLength(0);
+  });
+
+  test("a watch verdict makes a task that watches", async () => {
+    fakeBrain(() => verdict("watch"));
+    const out = await triage(ghComment(1, "deploying the fix now"));
+    const task = store.getTask(out.taskId!)!;
+    expect(out.verdict).toBe("watch");
+    expect(task.kind).toBe("task");
+    expect(task.watching).toBe(1);
+  });
+
+  test("a DM that is a new ask makes a second task", async () => {
+    let n = 0;
+    const calls = fakeBrain(() =>
+      n++ === 0 ? verdict("general") : verdict("general", { same_ask: false }),
+    );
+    const first = await triage(slackDm(1, "Which payroll providers do same-day pay?"));
+    const second = await triage(slackDm(2, "Separately, who owns the SOC2 doc?"));
+    expect(calls[1].prompt).toContain("Candidate open task");
+    expect(second.verdict).toBe("general");
+    expect(second.taskId).not.toBe(first.taskId);
+  });
+
+  test("a DM after the close is judged again, not reopened", async () => {
+    const calls = fakeBrain(() => verdict("general"));
+    const first = await triage(slackDm(1, "Which payroll providers do same-day pay?"));
+    taskClosed(first.taskId!);
+    const again = await triage(slackDm(2, "Who owns the SOC2 doc?"));
+    expect(calls).toHaveLength(2);
+    expect(calls[1].prompt).not.toContain("Candidate open task");
+    expect(again.taskId).not.toBe(first.taskId);
+    expect(store.getTask(first.taskId!)!.status).toBe(TaskStatus.done);
+  });
+
+  test("your own answer wakes the agent of a task that has a session", async () => {
+    fakeBrain(() => verdict("general"));
+    const first = await triage(slackThread(1, "what is the cutoff?"));
+    store.createSession({
+      id: "s1",
+      taskId: first.taskId!,
+      kind: SessionKind.chat,
+      cwd: "/tmp",
+      startedBy: "aug",
+    });
+    const own = store.insertMessage({
+      channel: "slack",
+      externalId: "slack:C9:own",
+      threadKey: "slack:C9:100.0",
+      author: "UME",
+      authorName: "me",
+      title: "",
+      body: "5pm PT",
+      receivedAt: new Date().toISOString(),
+      fromMe: true,
+    })!;
+    const out = await triage(own);
+    expect(out).toEqual({
+      verdict: "own",
+      taskId: first.taskId,
+      reason: "you answered",
+      effects: [
+        {
+          type: "agent-turn",
+          taskId: first.taskId,
+          reason: "you answered the thread yourself",
+        },
+      ],
+    });
+    const turns = store.turnsForTask(first.taskId!);
+    expect(turns.at(-1)!.body).toContain("You answered on Slack yourself");
   });
 });
