@@ -222,13 +222,21 @@ export async function redraftProposals(
   const open = openOn(taskId).filter(
     (p) => p.source !== ProposalSource.shipped && isDocName(p.doc),
   );
-  if (!notes.trim() || open.length === 0) return "nothing to redraft";
+  if (!notes.trim()) return "nothing to redraft";
   store.addTurn({
     taskId,
     role: TurnRole.you,
     author: "you",
     body: notes.trim(),
   });
+  if (open.length === 0) {
+    store.addTurn({
+      taskId,
+      role: TurnRole.trigger,
+      body: "Nothing here to redraft: a shipped version is taken (y) or kept (x)",
+    });
+    return "nothing to redraft";
+  }
   const done: string[] = [];
   for (const p of open) {
     const doc = p.doc as DocName;

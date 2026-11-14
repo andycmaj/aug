@@ -230,6 +230,17 @@ describe("proposals", () => {
     expect(calls[0].prompt).toContain("too long");
   });
 
+  test("notes on a shipped version are kept and answered, not dropped", async () => {
+    writeDoc(DocName.coding, "# CODING\n\nMine.\n");
+    syncShipped();
+    const [task] = systemTasks();
+    expect(await redraftProposals(task.id, "why the change?")).toBe(
+      "nothing to redraft",
+    );
+    const turns = store.turnsForTask(task.id);
+    expect(turns.map((t) => t.role)).toEqual([TurnRole.you, TurnRole.trigger]);
+  });
+
   test("a closed System task's proposal is not revised: a new one opens", () => {
     const a = propose({ doc: DocName.job, source: ProposalSource.evolve, proposed: "a\n" });
     store.updateTask(a.task_id, { status: TaskStatus.done });
