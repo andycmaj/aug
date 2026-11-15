@@ -5,7 +5,6 @@
 // engine does, and owns a desk.
 
 import { DocName, readDoc, writeDoc } from "./docs";
-import { onboardBrief } from "./onboard";
 import {
   acceptProposals,
   hasOpenProposals,
@@ -16,6 +15,7 @@ import {
   systemTask,
 } from "./proposals";
 import {
+  inTmux,
   type CloseResult,
   type Drivers,
   type StartOptions,
@@ -132,7 +132,7 @@ export class Desk {
   ): Promise<StartResult> {
     const task = store.getTask(taskId);
     if (!task) return { type: "failed", error: `no task ${taskId}` };
-    if (task.kind === Kind.system)
+    if (task.kind === Kind.system && !inTmux(task))
       return {
         type: "failed",
         error: "a System task has no agent: y accepts, x rejects",
@@ -432,13 +432,20 @@ export class Desk {
     if (!task || task.kind !== Kind.system) return "not a System task";
     if (!hasOpenProposals(taskId) && onboardingTask()?.id === taskId)
       return this.onboard();
-    return acceptProposals(taskId);
+    return this.closedDocs(task, acceptProposals(taskId));
   }
 
   rejectDocs(taskId: number): string {
     const task = store.getTask(taskId);
     if (!task || task.kind !== Kind.system) return "not a System task";
-    return rejectProposals(taskId);
+    return this.closedDocs(task, rejectProposals(taskId));
+  }
+
+  // A System task y or x closed takes its interview's window with it.
+  private closedDocs(task: TaskRow, said: string): string {
+    if (store.getTask(task.id)?.status !== TaskStatus.open && inTmux(task))
+      void this.drivers.for(task).close(task);
+    return said;
   }
 
   // Your notes on a proposal (from revdiff, or typed on the task) go back to
@@ -447,27 +454,32 @@ export class Desk {
     return redraftProposals(taskId, notes);
   }
 
-  // The onboarding interview, in Home: the Assistant reads what it can, asks
-  // the rest, and hands drafts in on the onboarding System task. Asked for
-  // by the Assistant itself, the brief comes back as the answer instead, so
-  // it goes on in the turn it is in.
-  onboard(inline = false): string {
-    if (!onboardingTask()) {
-      const task = systemTask(
-        "Your docs, drafted from the interview",
-        "The Assistant is interviewing you in Home; its drafts land here.",
+  // The onboarding interview: interactive claude in the System task's own
+  // window (its canvas shows it), which reads what it can, asks the rest,
+  // and hands drafts in on the same task. Again, it resumes that session.
+  onboard(): string {
+    let task = onboardingTask();
+    if (!task) {
+      task = systemTask(
+        "Your docs: the interview",
+        "aug interviews you in this task's terminal; its drafts land here.",
       );
       store.kvSet(ONBOARD_TASK, String(task.id));
     }
-    if (inline) return onboardBrief();
-    const home = store.homeTask();
-    store.addTurn({
-      taskId: home.id,
-      role: TurnRole.trigger,
-      body: onboardBrief(),
-    });
-    void this.drivers.for(home).deliver(home);
-    return "the interview is starting in Home";
+    const ref = store.taskRef(task.id);
+    const started = task;
+    void this.drivers
+      .for(started)
+      .start(started, { noWorktree: true })
+      .then((result) => {
+        if (result.type !== "failed" && result.type !== "needs") return;
+        store.addTurn({
+          taskId: started.id,
+          role: TurnRole.trigger,
+          body: `Could not start the interview: ${result.type === "failed" ? result.error : `it needs a ${result.need.what}`}. y tries again.`,
+        });
+      });
+    return `the interview is starting in ${ref}`;
   }
 
   // A line the owner said, written straight into LEARNED.md.

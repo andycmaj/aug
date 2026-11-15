@@ -293,6 +293,14 @@ describe("projects on the rail", () => {
     expect(rail[1].count).toBe(4);
   });
 
+  test("the interview's project of one is not a row: its task is under System", () => {
+    const solo = store.createProject({ name: "docs", tmuxSession: "docs", solo: true });
+    const t = store.createTask({ title: "interview", kind: Kind.system, channel: "owner", projectId: solo.id });
+    const keys = flattenRail(railNow()).map((i) => i.key);
+    expect(keys).not.toContain(`p${solo.id}`);
+    expect(keys).toContain(`t${t.id}`);
+  });
+
   test("a project with nothing open still has its row", () => {
     const api = store.createProject({ name: "api", tmuxSession: "api" });
     const rail = railNow();

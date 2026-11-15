@@ -79,8 +79,9 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `workFinished`, `taskClosed`, ...). Nothing else writes those columns.
 - **A task's agent is behind `core/driver.ts`.** `ChatDriver` (the pool's
   `claude -p` turns) and `TmuxDriver` (`projects.ts`) implement `start`,
-  `stop`, `close`, `deliver`, `wake` and `isLive`; the desk picks one by the
-  task's kind and nothing above the driver branches on it. What a coding
+  `stop`, `close`, `deliver`, `wake` and `isLive`; the desk picks one with
+  `inTmux(task)` (coding, and the onboarding interview's System task) and
+  nothing above the driver branches on it. What a coding
   start still needs comes back as `needs: repo | path | branch`.
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `aug-tools move <verb>`, the Assistant's
@@ -103,6 +104,9 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   (`core/proposals.ts`, `doc_proposals`): the Advisor's daily
   `core/doc-pass.ts`, the onboarding interview (`core/onboard.ts`, the
   `propose_doc` move) and shipped versions. Nothing merges; no history.
+  The interview is interactive claude in its System task's own window
+  (`inTmux` in `core/driver.ts`), shown in that task's canvas; it writes
+  drafts to `drafts/docs` and hands them in with `propose_doc --file`.
 - **Home is a `kind: home` task** (`store.homeTask()`), and its agent is the
   Assistant (`core/assistant.ts`): a resumed `claude -p` allowed only
   `aug-tools`. `listTasks()` never returns it, so nothing that lists work

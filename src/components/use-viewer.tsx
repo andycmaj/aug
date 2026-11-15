@@ -6,7 +6,7 @@ import { useToast } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
 import * as store from "../core/store";
-import { Kind } from "../core/types";
+import { inTmux } from "../core/driver";
 
 // Both modes mount the actions; one viewer attach per task at a time.
 const attaching = new Set<number>();
@@ -79,7 +79,7 @@ export function useViewer() {
     };
     for (const id of viewersToClose(terminals.list(), task?.id ?? null, live))
       terminals.close(id);
-    if (task && task.kind === Kind.coding && desk.isLive(task))
+    if (task && inTmux(task) && desk.isLive(task))
       void attachViewer(task.id);
   });
 

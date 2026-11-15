@@ -125,9 +125,9 @@ export function offerOnboarding(): boolean {
   const task = systemTask(
     "Set up your docs: a short interview",
     [
-      "The Assistant asks about your role, channels, priorities and how you work (reading Slack and GitHub first, so it only asks what it cannot find), then drafts PERSONA, JOB and STYLE for you to review here.",
+      "A claude session in this task's terminal asks about your role, channels, priorities and how you work (reading Slack and GitHub first, so it only asks what it cannot find), then drafts PERSONA, JOB and STYLE for you to review here.",
       "",
-      "y: start the interview in Home. x: skip it (the templates stay). Run it again any time: ask the Assistant to onboard you.",
+      "y: start the interview here. x: skip it (the templates stay). Run it again any time: ask the Assistant to onboard you.",
     ].join("\n"),
   );
   store.kvSet(ONBOARD_TASK, String(task.id));

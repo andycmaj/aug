@@ -48,7 +48,8 @@ import {
   TurnRole,
 } from "../src/core/types";
 import { ASSISTANT_TOOLS, assistantAllow } from "../src/core/assistant";
-import { onboardBrief } from "../src/core/onboard";
+import { ONBOARD_START } from "../src/core/onboard";
+import { inTmux } from "../src/core/driver";
 import { docDraftsDir } from "../src/core/paths";
 import { REAL_JOB } from "./doc-fixture";
 import { FakeMux } from "./fake-mux";
@@ -355,25 +356,66 @@ describe("the daily doc pass", () => {
 });
 
 describe("onboarding", () => {
+  let mux: FakeMux;
   beforeEach(() => {
     fakeBrain(() => null);
-    setMux(new FakeMux());
+    mux = new FakeMux();
+    setMux(mux);
   });
 
-  test("offered once, and y starts the interview in Home", () => {
+  // The window's start runs after acceptDocs answers.
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+
+  test("offered once, and y starts the interview in the task's own claude", async () => {
     expect(offerOnboarding()).toBe(true);
     expect(offerOnboarding()).toBe(false);
     const offer = onboardingTask()!;
     expect(offer.title).toBe("Set up your docs: a short interview");
+    expect(inTmux(offer)).toBe(true);
     const engine = new Engine();
     expect(engine.desk.acceptDocs(offer.id)).toBe(
-      "the interview is starting in Home",
+      `the interview is starting in ${store.taskRef(offer.id)}`,
     );
-    const home = store.homeTask();
-    const brief = store
-      .turnsForTask(home.id)
-      .find((t) => t.role === TurnRole.trigger)!;
-    expect(brief.body).toContain("move propose_doc --doc PERSONA");
+    await settle();
+    const [window] = mux.windows;
+    expect(window!.taskId).toBe(offer.id);
+    expect(window!.cwd).toBe(docDraftsDir());
+    expect(window!.argv[0]).toBe("claude");
+    const system = window!.argv[window!.argv.indexOf("--append-system-prompt") + 1]!;
+    expect(system).toContain("onboarding interview");
+    expect(system).toContain(`--file ${join(docDraftsDir(), "PERSONA.md")}`);
+    expect(window!.argv.at(-1)).toBe(ONBOARD_START);
+    expect(engine.desk.isLive(store.getTask(offer.id)!)).toBe(true);
+    // Home is not involved.
+    expect(
+      store.turnsForTask(store.homeTask().id).some((t) => t.role === TurnRole.trigger),
+    ).toBe(false);
+  });
+
+  test("the interview's own agent may hand drafts in, and nothing else", async () => {
+    offerOnboarding();
+    const engine = new Engine();
+    const offer = onboardingTask()!;
+    const by = `agent ${store.taskRef(offer.id)}`;
+    const ok = store.enqueueMove("propose_doc", { doc: "JOB", text: "draft" }, by);
+    const no = store.enqueueMove("new", { title: "x" }, by);
+    await engine.drainMoves();
+    expect(store.getMove(ok.id)!.status).toBe(MoveStatus.done);
+    expect(store.getMove(no.id)!.result).toContain("the owner's move");
+    expect(store.proposalsForTask(offer.id).map((p) => p.doc)).toEqual(["JOB.md"]);
+  });
+
+  test("y on the drafts closes the interview's window", async () => {
+    offerOnboarding();
+    const engine = new Engine();
+    const offer = onboardingTask()!;
+    engine.desk.acceptDocs(offer.id);
+    await settle();
+    propose({ doc: DocName.job, source: ProposalSource.onboard, proposed: "# JOB\n" });
+    expect(mux.windows).toHaveLength(1);
+    expect(engine.desk.acceptDocs(offer.id)).toBe("wrote JOB.md");
+    await settle();
+    expect(mux.windows).toHaveLength(0);
   });
 
   test("the Assistant's drafts land on the onboarding task", async () => {
@@ -453,15 +495,18 @@ describe("onboarding", () => {
     expect(ASSISTANT_TOOLS).toContain("Write");
     const writes = assistantAllow().filter((r) => /^(Edit|Write)\b/.test(r));
     expect(writes).toEqual([`Edit(/${docDraftsDir()}/**)`]);
-    expect(onboardBrief()).toContain(`--file ${join(docDraftsDir(), "PERSONA.md")}`);
   });
 
-  test("the onboard move from the Assistant answers with the brief", async () => {
+  test("the onboard move from the Assistant starts the interview's claude", async () => {
     const engine = new Engine();
     const move = store.enqueueMove("onboard", {}, "assistant");
     await engine.drainMoves();
-    expect(store.getMove(move.id)!.result).toStartWith("Onboarding:");
-    expect(onboardingTask()).not.toBeNull();
+    const task = onboardingTask()!;
+    expect(store.getMove(move.id)!.result).toBe(
+      `the interview is starting in ${store.taskRef(task.id)}`,
+    );
+    await settle();
+    expect(mux.windows.map((w) => w.taskId)).toEqual([task.id]);
   });
 
   test("x on the offer skips it and the templates stay", () => {

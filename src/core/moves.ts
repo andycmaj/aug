@@ -710,11 +710,11 @@ export const MOVES: Record<string, MoveSpec> = {
     },
   },
   onboard: {
-    help: "Start the onboarding interview: the Assistant asks about the owner and drafts PERSONA, JOB and STYLE for a System task",
+    help: "Start the onboarding interview: a claude session on a System task asks about the owner and drafts PERSONA, JOB and STYLE there",
     task: false,
     args: {},
-    run(desk, _task, _args, by) {
-      return desk.onboard(by === "assistant");
+    run(desk) {
+      return desk.onboard();
     },
   },
   propose_doc: {
@@ -774,6 +774,9 @@ export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "project_link",
 ]);
 
+// What the onboarding interview's agent (on a System task) may ask for.
+const INTERVIEW_MOVES: ReadonlySet<string> = new Set(["propose_doc"]);
+
 function agentTask(by: string): number | null {
   return by.startsWith("agent ") ? store.parseTaskRef(by.slice(6)) : null;
 }
@@ -809,7 +812,9 @@ export async function runMove(
   }
   const own = agentTask(by);
   if (own !== null) {
-    if (!AGENT_MOVES.has(verb))
+    const allowed =
+      store.getTask(own)?.kind === Kind.system ? INTERVIEW_MOVES : AGENT_MOVES;
+    if (!allowed.has(verb))
       return { ok: false, result: `${verb} is the owner's move: say what you need under Next steps` };
     if (task && task.id !== own)
       return { ok: false, result: `an agent changes only its own task (${store.taskRef(own)})` };

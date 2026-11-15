@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { useAug, ViewMode } from "../context/aug";
 import { useTerminals } from "../context/terminals";
-import type { StartOptions } from "../core/driver";
+import { inTmux, type StartOptions } from "../core/driver";
 import { errorMessage } from "../core/log";
 import { mapRepo } from "../core/repos";
 import * as store from "../core/store";
@@ -34,7 +34,7 @@ export function useAgentStart(
   async function startAgent(taskId: number, opts: StartOptions = {}) {
     const task = store.getTask(taskId);
     if (!task) return;
-    const coding = task.kind === Kind.coding;
+    const coding = inTmux(task);
     if (coding && terminals.forTask(taskId)?.running) return showTask(taskId);
     if (coding) showToast(`Starting ${store.taskRef(taskId)}...`);
     const result = await desk.startAgent(taskId, opts);

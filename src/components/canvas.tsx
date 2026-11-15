@@ -52,6 +52,7 @@ import {
   ProposalStatus,
   type TaskRow,
 } from "../core/types";
+import { inTmux } from "../core/driver";
 import { TerminalHost } from "./agent-terminal";
 import { ActionCard, ChatTurn } from "./chat-turn";
 import { unlessTyping, type TaskActions } from "./task-actions";
@@ -93,7 +94,7 @@ export function Canvas(props: {
     const t = task();
     // Live, it takes the table; once it stops, its Result in the chat does.
     const tm =
-      t && t.kind === Kind.coding ? terminals.forTask(t.id) : undefined;
+      t && inTmux(t) ? terminals.forTask(t.id) : undefined;
     return tm?.running ? tm : undefined;
   });
   // ghdash (P) or a System task's diff in revdiff (e) takes the table over

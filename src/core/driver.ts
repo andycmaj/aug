@@ -8,6 +8,7 @@ import type { AgentPool, CodingLaunch } from "./agents";
 import { startCancelled } from "./lifecycle";
 import { logger } from "./log";
 import * as projects from "./projects";
+import { onboardingTask } from "./proposals";
 import { repoChoices, repoPath } from "./repos";
 import * as store from "./store";
 import {
@@ -68,6 +69,19 @@ export interface DriverOptions {
   noWorktrees?: boolean;
   // Replaces the coding agent's command line (fixture mode's fake claude).
   launchOverride?: (task: TaskRow, launch: CodingLaunch) => CodingLaunch;
+}
+
+// Whose agent is interactive claude in a tmux window: a coding task's, and
+// the onboarding interview's on its System task (the owner answers it
+// there, with their own settings, connectors and permission prompts).
+// Asked of the session too, so a closed interview's window still closes.
+export function inTmux(task: TaskRow): boolean {
+  if (task.kind === Kind.coding) return true;
+  if (task.kind !== Kind.system) return false;
+  return (
+    onboardingTask()?.id === task.id ||
+    store.latestSession(task.id)?.kind === SessionKind.tmux
+  );
 }
 
 const NO_RESULT: CloseResult = { warnings: [], archived: false };
@@ -301,6 +315,6 @@ export class Drivers {
   }
 
   for(task: TaskRow): AgentDriver {
-    return task.kind === Kind.coding ? this.tmux : this.chat;
+    return inTmux(task) ? this.tmux : this.chat;
   }
 }

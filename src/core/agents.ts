@@ -26,7 +26,8 @@ import { ARTIFACT_TOOLS } from "./hooks";
 import { AGENT_MOVES } from "./moves";
 import { logger } from "./log";
 import { linkLine, projectContext } from "./lookup";
-import { paths } from "./paths";
+import { docDraftsDir, paths } from "./paths";
+import { ONBOARD_START, onboardBrief } from "./onboard";
 import { TOOLS_NAME, toolsCommand, toolsEnv, toolsRules } from "./self";
 import { transcript } from "./transcript";
 import * as store from "./store";
@@ -509,6 +510,8 @@ export function hookSettings(): Record<string, unknown> {
 }
 
 export function codingCwd(task: TaskRow): string {
+  // The interview writes its drafts there, so Write needs no other folder.
+  if (task.kind === Kind.system) return docDraftsDir();
   const config = loadConfig();
   const mapped = task.repo ? config.github.repos[task.repo] : undefined;
   if (mapped) return mapped;
@@ -563,11 +566,14 @@ export function codingLaunch(
   if (opts.resume) argv.push("--resume", opts.resume);
   else argv.push("--session-id", sessionId);
   argv.push("--settings", JSON.stringify(hookSettings()));
-  argv.push("--append-system-prompt", codingBrief(task));
+  const interview = task.kind === Kind.system;
+  argv.push("--append-system-prompt", interview ? onboardBrief(task) : codingBrief(task));
   argv.push("-n", store.taskRef(task.id));
   const first = opts.resume
     ? (opts.note ?? "")
-    : `Work ${store.taskRef(task.id)}: ${task.title}.${opts.note ? ` Note from the owner: ${opts.note}` : ""} Start by reading the notes board, then the task brief in your system prompt.`;
+    : interview
+      ? ONBOARD_START
+      : `Work ${store.taskRef(task.id)}: ${task.title}.${opts.note ? ` Note from the owner: ${opts.note}` : ""} Start by reading the notes board, then the task brief in your system prompt.`;
   if (first) argv.push(first);
   return {
     argv,

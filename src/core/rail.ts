@@ -210,7 +210,14 @@ export function buildRail(input: RailInput): RailSection[] {
   // project.
   const loose = sections.tasks.filter((i) => groupOf(i) === null);
   const grouped: RailItem[] = [];
+  // The onboarding interview's window needs a project of one; it is not
+  // the owner's work, and its task already shows under System.
+  const systemOnly = (projectId: number) => {
+    const own = input.tasks.filter((t) => t.project_id === projectId);
+    return own.length > 0 && own.every((t) => t.kind === Kind.system);
+  };
   for (const p of input.projects ?? []) {
+    if (p.project.solo && systemOnly(p.project.id)) continue;
     grouped.push({
       type: "project",
       key: `p${p.project.id}`,

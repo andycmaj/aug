@@ -9,7 +9,6 @@ import { claudeBrain, setBrain, think } from "../src/core/brain";
 import { openDb, useDb } from "../src/core/db";
 import { Engine } from "../src/core/engine";
 import { setMux } from "../src/core/mux";
-import { onboardBrief } from "../src/core/onboard";
 import { paths } from "../src/core/paths";
 import { toolsEnv } from "../src/core/self";
 import * as store from "../src/core/store";
@@ -36,9 +35,7 @@ describe.skipIf(!process.env.AUG_REAL_CLAUDE)("propose_doc through real claude",
       try {
         const result = await think({
           prompt: [
-            onboardBrief().split("\n").slice(0, 6).join("\n"),
-            "",
-            "The interview is done. Hand in this JOB.md exactly as it is, then stop:",
+            "The owner asked you to propose this JOB.md for them, exactly as it is. Hand it in with move propose_doc, then stop:",
             "",
             REAL_JOB,
           ].join("\n"),
