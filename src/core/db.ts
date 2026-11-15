@@ -250,7 +250,60 @@ export function openDb(file = paths.db()): Database {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
   migrate(db);
+  trackTables(db);
   return db;
+}
+
+// Every table, so the TUI can re-read only what a write touched.
+export const Table = {
+  tasks: "tasks",
+  messages: "messages",
+  turns: "turns",
+  sessions: "sessions",
+  notes: "notes",
+  knowledge: "hub",
+  ideas: "ideas",
+  corrections: "corrections",
+  projects: "projects",
+  goals: "project_goals",
+  projectLinks: "project_links",
+  taskThreads: "task_threads",
+  taskLinks: "task_links",
+  moves: "moves",
+  prStatus: "pr_status",
+  proposals: "doc_proposals",
+  kv: "kv",
+} as const;
+export type Table = (typeof Table)[keyof typeof Table];
+
+export const TABLES: Table[] = Object.values(Table);
+
+// A counter per table, bumped by triggers, so a write from any process (an
+// agent's hook, aug-tools) says which table it touched. data_version only
+// says that something changed.
+function trackTables(db: Database): void {
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS table_versions (name TEXT PRIMARY KEY, v INTEGER NOT NULL DEFAULT 0)",
+  );
+  const seed = db.query("INSERT OR IGNORE INTO table_versions (name) VALUES (?)");
+  for (const table of TABLES) {
+    seed.run(table);
+    for (const op of ["INSERT", "UPDATE", "DELETE"])
+      db.exec(
+        `CREATE TRIGGER IF NOT EXISTS tv_${table}_${op.toLowerCase()} AFTER ${op} ON ${table} BEGIN UPDATE table_versions SET v = v + 1 WHERE name = '${table}'; END`,
+      );
+  }
+}
+
+export function tableVersions(): Record<Table, number> {
+  const rows = db().query("SELECT name, v FROM table_versions").all() as {
+    name: Table;
+    v: number;
+  }[];
+  const out = {} as Record<Table, number>;
+  for (const table of TABLES) out[table] = 0;
+  for (const row of rows) out[row.name] = row.v;
+  return out;
 }
 
 // Columns added after a table first shipped: added in place on an old file.

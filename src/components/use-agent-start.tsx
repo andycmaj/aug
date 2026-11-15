@@ -9,7 +9,7 @@ import { useTerminals } from "../context/terminals";
 import { inTmux, type StartOptions } from "../core/driver";
 import { errorMessage } from "../core/log";
 import { mapRepo } from "../core/repos";
-import * as store from "../core/store";
+import { taskRef } from "../core/rows";
 import { Kind, type TaskRow } from "../core/types";
 import type { Dialogs } from "./actions";
 import { ChoiceModal, PromptModal } from "./modals";
@@ -32,11 +32,11 @@ export function useAgentStart(
   }
 
   async function startAgent(taskId: number, opts: StartOptions = {}) {
-    const task = store.getTask(taskId);
+    const task = aug.task(taskId);
     if (!task) return;
     const coding = inTmux(task);
     if (coding && terminals.forTask(taskId)?.running) return showTask(taskId);
-    if (coding) showToast(`Starting ${store.taskRef(taskId)}...`);
+    if (coding) showToast(`Starting ${taskRef(taskId)}...`);
     const result = await desk.startAgent(taskId, opts);
     switch (result.type) {
       case "needs":
@@ -53,11 +53,11 @@ export function useAgentStart(
         showToast(`Could not start: ${result.error}`, 4000, "error");
         return;
       case "queued":
-        showToast(`${store.taskRef(taskId)}: ${result.reason}`);
+        showToast(`${taskRef(taskId)}: ${result.reason}`);
         return;
       case "started":
         if (!coding) {
-          showToast(`${store.taskRef(taskId)}: agent started`);
+          showToast(`${taskRef(taskId)}: agent started`);
           return;
         }
         // Shown first: a viewer of a task that is not shown is closed.
@@ -80,7 +80,7 @@ export function useAgentStart(
     };
     dialogs.show(() => (
       <ChoiceModal
-        title={`Which repo is ${store.taskRef(task.id)} in?`}
+        title={`Which repo is ${taskRef(task.id)} in?`}
         hint="It gets a worktree and a branch there."
         choices={[
           ...choices.map((repo) => ({ label: repo, run: () => use(repo) })),
@@ -135,7 +135,7 @@ export function useAgentStart(
   function askBranch(task: TaskRow, suggested: string, opts: StartOptions) {
     dialogs.show(() => (
       <PromptModal
-        title={`Branch for ${store.taskRef(task.id)}`}
+        title={`Branch for ${taskRef(task.id)}`}
         hint="A new branch gets a worktree of its own. An existing branch or pr:N works too."
         initial={suggested}
         onSubmit={(branch) =>

@@ -7,7 +7,7 @@ import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { useAug, ViewMode } from "../context/aug";
 import { useTerminals } from "../context/terminals";
 import { taskPr } from "../core/pr";
-import * as store from "../core/store";
+import { taskRef } from "../core/rows";
 import type { TaskRow } from "../core/types";
 
 export const prDashId = (taskId: number) => `ghdash-${taskId}`;
@@ -41,7 +41,7 @@ export function usePrDash() {
     closeOthers(task.id);
     terminals.open({
       id,
-      title: `${store.taskRef(task.id)} ${pr.repo}#${pr.number}`,
+      title: `${taskRef(task.id)} ${pr.repo}#${pr.number}`,
       kind: "ghdash",
       taskId: task.id,
       argv: [bin, pr.url],

@@ -7,7 +7,7 @@ import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { useAug, ViewMode } from "../context/aug";
 import { useTerminals } from "../context/terminals";
 import { writeReview } from "../core/proposals";
-import * as store from "../core/store";
+import { taskRef } from "../core/rows";
 import { Kind, type TaskRow } from "../core/types";
 
 export const docReviewId = (taskId: number) => `review-${taskId}`;
@@ -50,7 +50,7 @@ export function useDocReview() {
     aug.selectTask(task.id);
     terminals.open({
       id,
-      title: `${store.taskRef(task.id)} ${task.title}`,
+      title: `${taskRef(task.id)} ${task.title}`,
       kind: "review",
       taskId: task.id,
       argv: argv(

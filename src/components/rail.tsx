@@ -35,16 +35,15 @@ import {
   type RailItem,
 } from "../core/rail";
 import { prChip } from "../core/pr";
-import { getProject, prStatus as getPrStatus, taskRef } from "../core/store";
-import { AgentState, Kind } from "../core/types";
+import { taskRef } from "../core/rows";
+import { AgentState, Kind, type ProjectRow } from "../core/types";
 import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
 import { ConnectorLine } from "./connector-line";
 import type { TaskActions } from "./task-actions";
 
 // A task in a project shows the project's name where its channel would be.
-function projectChip(projectId: number | null): string | null {
-  if (!projectId) return null;
-  const name = getProject(projectId)?.tmux_session;
+function projectChip(project: ProjectRow | null): string | null {
+  const name = project?.tmux_session;
   return name ? `◫ ${name.length > 14 ? `${name.slice(0, 13)}…` : name}` : null;
 }
 
@@ -361,8 +360,7 @@ function RailRow(props: {
             ? ageLabel(item.task.remind_at, now)
             : ageLabel(item.at, now);
         // The last read only: finding the PR anew is a few queries a row.
-        aug.version();
-        const status = getPrStatus(item.task.id);
+        const status = aug.prStatus(item.task.id);
         const chip = status ? prChip(status) : null;
         return {
           bar: item.slipped ? theme().error : toneColor(theme(), meta.tone),
@@ -378,7 +376,7 @@ function RailRow(props: {
             ? `${taskRef(item.task.id)} · ${word}`
             : [
                 age,
-                (!props.nested && projectChip(item.task.project_id)) ||
+                (!props.nested && projectChip(item.task.project_id ? aug.project(item.task.project_id) : null)) ||
                   CHANNEL_WORD[item.task.channel],
                 taskRef(item.task.id),
                 word,

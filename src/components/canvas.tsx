@@ -35,8 +35,7 @@ import { Commands } from "../commands";
 import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
 import { LANE_META } from "../core/lanes";
-import { projectSummary } from "../core/lookup";
-import { prChip, prLine, taskPrStatus } from "../core/pr";
+import { prChip, prLine } from "../core/pr";
 import {
   type Mention,
   mentionAt,
@@ -44,12 +43,13 @@ import {
   suggestMentions,
 } from "../core/mentions";
 import type { RailItem } from "../core/rail";
-import * as store from "../core/store";
+import { taskRef } from "../core/rows";
 import {
   AgentState,
   Kind,
   ProposalSource,
   ProposalStatus,
+  type ProjectRow,
   type TaskRow,
 } from "../core/types";
 import { inTmux } from "../core/driver";
@@ -86,9 +86,8 @@ export function Canvas(props: {
     dims().width - (sidebarVisible() ? RAIL_WIDTH + 2 : 0) - 6;
   const item = () => aug.selected();
   const task = createMemo(() => {
-    aug.version();
     const i = item();
-    return i?.type === "task" ? store.getTask(i.task.id) : null;
+    return i?.type === "task" ? aug.task(i.task.id) : null;
   });
   const term = createMemo(() => {
     const t = task();
@@ -253,7 +252,6 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   const theme = useTheme();
   const aug = useAug();
   const lane = () => {
-    aug.version();
     const item = aug
       .items()
       .find((i) => i.type === "task" && i.task.id === props.task.id);
@@ -261,8 +259,7 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   };
   const meta = () => (lane() ? LANE_META[lane()!] : null);
   const came = createMemo(() => {
-    aug.version();
-    const first = store.messagesForTask(props.task.id)[0];
+    const first = aug.messages(props.task.id)[0];
     const from = first
       ? `${CHANNEL_WORD[first.channel]} · ${first.author_name} · ${first.title}`
       : "typed by you";
@@ -270,9 +267,8 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   });
   // One line of what is attached: titles, else the bare address. o opens.
   const links = createMemo(() => {
-    aug.version();
-    const names = store
-      .linksForTask(props.task.id)
+    const names = aug
+      .taskLinks(props.task.id)
       .map((l) => l.title ?? l.url.replace(/^https?:\/\//, ""));
     return names.length
       ? truncate(`links · ${names.join(" · ")}  (o opens)`, Math.max(20, props.width - 4))
@@ -280,8 +276,7 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   });
   // The task's PR as of the last read; P opens it in ghdash.
   const pr = createMemo(() => {
-    aug.version();
-    const found = taskPrStatus(props.task);
+    const found = aug.taskPrStatus(props.task);
     if (!found) return null;
     const { pr: ref, status } = found;
     const text = status
@@ -335,7 +330,7 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
           <text>
             <span
               style={{ fg: theme.textMuted }}
-            >{`${store.taskRef(props.task.id)}  `}</span>
+            >{`${taskRef(props.task.id)}  `}</span>
             <span
               style={{
                 fg: priorityColor(theme, props.task.priority) ?? theme.primary,
@@ -393,27 +388,22 @@ function TaskChat(props: {
 }) {
   const aug = useAug();
   const theme = useTheme();
-  const turns = createMemo(() => {
-    aug.version();
-    return store.turnsForTask(props.task.id);
-  });
+  const turns = createMemo(() => aug.turns(props.task.id));
   const latestAgentId = createMemo(
     () => [...turns()].reverse().find((t) => t.role === "agent")?.id ?? null,
   );
   // A System task's open proposals: which doc, how big, and why.
   const proposals = createMemo(() => {
-    aug.version();
     return props.task.kind === Kind.system
-      ? store
-          .proposalsForTask(props.task.id)
+      ? aug
+          .proposals(props.task.id)
           .filter((p) => p.status === ProposalStatus.open)
       : [];
   });
   // Shown until the agent starts from it; after that the chat carries on.
-  const brief = createMemo((): string | null => {
-    aug.version();
-    return aug.desk.briefEditable(props.task.id) ? props.task.summary : null;
-  });
+  const brief = createMemo((): string | null =>
+    aug.briefEditable(props.task.id) ? props.task.summary : null,
+  );
   const hint = createMemo((): [string, string][] => {
     const t = props.task;
     if (t.kind === Kind.home)
@@ -517,26 +507,23 @@ function TaskChat(props: {
 
 function PendingCard(props: { taskId: number }) {
   const aug = useAug();
-  const pending = createMemo(() => {
-    aug.version();
-    return store.pendingAction(props.taskId);
-  });
+  const pending = createMemo(() => aug.pendingAction(props.taskId));
   return (
     <Show when={pending()}>
-      {(p: Accessor<NonNullable<ReturnType<typeof store.pendingAction>>>) => (
+      {(p: Accessor<NonNullable<ReturnType<typeof aug.pendingAction>>>) => (
         <ActionCard action={p().action} result={p().turn.action_result} />
       )}
     </Show>
   );
 }
 
-function mentionLine(m: Mention): string {
+function mentionLine(m: Mention, openTasks: (p: ProjectRow) => number): string {
   if (m.type === "project") {
-    const open = projectSummary(m.project).open;
+    const open = openTasks(m.project);
     return `@${mentionRef(m)}  project ${m.project.name}, ${open} open`;
   }
   const t = m.task;
-  return `${store.taskRef(t.id)}  ${t.title}${t.status === "open" ? "" : ` (${t.status})`}`;
+  return `${taskRef(t.id)}  ${t.title}${t.status === "open" ? "" : ` (${t.status})`}`;
 }
 
 // Text the editor handed back unsent. The box unmounts while the editor has
@@ -554,6 +541,7 @@ function ChatInput(props: {
   onCompose: Compose;
 }) {
   const theme = useTheme();
+  const aug = useAug();
   const { setActivePane } = useFocus();
   const p = usePane("input");
   let input: InputRenderable | undefined;
@@ -665,7 +653,7 @@ function ChatInput(props: {
                 }
                 bg={i() === pick() ? theme.secondary : undefined}
               >
-                {truncate(mentionLine(m), 70)}
+                {truncate(mentionLine(m, (p) => aug.projectSummary(p).open), 70)}
               </text>
             )}
           </For>
@@ -751,8 +739,7 @@ function ProjectView(props: {
   const aug = useAug();
   const p = () => props.item.project;
   const tasks = createMemo(() => {
-    aug.version();
-    return store
+    return aug
       .tasksForProject(p().id)
       .filter((t) => t.status === "open" || t.status === "later");
   });
@@ -798,7 +785,7 @@ function ProjectView(props: {
                 <span style={{ fg: meta ? toneColor(theme, meta.tone) : theme.textMuted }}>
                   {`${meta?.mark ?? "·"} `}
                 </span>
-                <span style={{ fg: theme.textMuted }}>{`${store.taskRef(t.id)}  `}</span>
+                <span style={{ fg: theme.textMuted }}>{`${taskRef(t.id)}  `}</span>
                 <span style={{ fg: theme.text }}>
                   {truncate(t.title, Math.max(20, props.width - 40))}
                 </span>
@@ -843,7 +830,7 @@ function IdeaView(props: {
       <Show when={idea().task_id}>
         <text
           fg={theme.textMuted}
-        >{`about ${store.taskRef(idea().task_id!)}`}</text>
+        >{`about ${taskRef(idea().task_id!)}`}</text>
       </Show>
       <box marginTop={1} flexGrow={1}>
         <Markdown text={idea().body} width={Math.max(20, props.width)} />

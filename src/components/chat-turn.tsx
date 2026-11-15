@@ -16,7 +16,7 @@ import {
   tableLines,
   type MadeFile,
 } from "../core/files";
-import { getMessage, turnSteps } from "../core/store";
+import { turnSteps } from "../core/rows";
 import { TurnRole, type DraftAction, type TurnRow } from "../core/types";
 import { CHANNEL_WORD, clock, dayClock, duration } from "./ui";
 
@@ -69,7 +69,7 @@ function IncomingTurn(props: { turn: TurnRow; width: number }) {
   const theme = useTheme();
   const aug = useAug();
   const message = createMemo(() =>
-    props.turn.message_id ? getMessage(props.turn.message_id) : null,
+    props.turn.message_id ? aug.message(props.turn.message_id) : null,
   );
   const where = () => {
     const m = message();

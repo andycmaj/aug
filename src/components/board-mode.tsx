@@ -19,10 +19,9 @@ import {
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { BOARD_COLUMNS, LANE_META } from "../core/lanes";
-import { projectProgress, projectSummary, type GoalProgress } from "../core/lookup";
-import { taskPr } from "../core/pr";
+import type { GoalProgress } from "../core/lookup";
 import { ageLabel } from "../core/rail";
-import * as store from "../core/store";
+import { goalRef, noteReadBy, projectRepos, taskRef } from "../core/rows";
 import {
   AgentState,
   GoalStatus,
@@ -83,29 +82,22 @@ export function BoardMode() {
     columns()[col()]?.tasks[
       Math.min(row(), (columns()[col()]?.tasks.length ?? 1) - 1)
     ] ?? null;
-  const knowledge = createMemo(() => {
-    aug.version();
-    return store.listKnowledge();
-  });
-  const notes = createMemo(() => {
-    aug.version();
-    return store.listNotes(100);
-  });
+  const knowledge = createMemo(() => aug.knowledge());
+  const notes = createMemo(() => aug.notes(100));
   const projectLines = createMemo((): ProjectLine[] => {
-    aug.version();
     const out: ProjectLine[] = [];
     const isOpen = (t: TaskRow) =>
       t.status === TaskStatus.open || t.status === TaskStatus.later;
-    for (const project of store.listProjects()) {
-      const summary = projectSummary(project);
-      const progress = projectProgress(project);
+    for (const project of aug.projects()) {
+      const summary = aug.projectSummary(project);
+      const progress = aug.projectProgress(project);
       out.push({
         type: "project",
         project,
         tasks: summary.open,
         goalsMet: summary.goalsMet,
         goals: summary.goals,
-        docs: store.linksForProject(project.id).length,
+        docs: aug.projectLinks(project.id).length,
       });
       for (const g of progress.goals) {
         if (g.goal.status === GoalStatus.dropped) continue;
@@ -138,7 +130,7 @@ export function BoardMode() {
   const onTask = (fn: (t: TaskRow) => void) => () => {
     const t = target();
     if (!t) return false;
-    fn(store.getTask(t.id) ?? t);
+    fn(aug.task(t.id) ?? t);
   };
 
   function compose() {
@@ -162,7 +154,7 @@ export function BoardMode() {
               );
               return;
             }
-            store.addKnowledge(m[1], m[2], m[3], "you");
+            aug.desk.addKnowledge(m[1], m[2], m[3]);
           }}
           onClose={shell.dialogs.close}
         />
@@ -180,7 +172,7 @@ export function BoardMode() {
               <PromptModal
                 title={`Handoff (${label})`}
                 placeholder="the census sync is behind a VPN and will not run from a laptop"
-                onSubmit={(body) => store.addNote("you", label, body)}
+                onSubmit={(body) => aug.desk.note(label, body)}
                 onClose={shell.dialogs.close}
               />
             )),
@@ -240,7 +232,7 @@ export function BoardMode() {
       [Commands.BOARD_TAB_1]: () => setTab(Tab.columns),
       [Commands.BOARD_TAB_2]: () => {
         setTab(Tab.notes);
-        store.markNotesRead("you");
+        aug.desk.readNotes();
       },
       [Commands.BOARD_TAB_3]: () => setTab(Tab.knowledge),
       [Commands.BOARD_TAB_4]: () => setTab(Tab.projects),
@@ -282,7 +274,7 @@ export function BoardMode() {
       [Commands.PR_DASH]: () => {
         const t = target();
         if (!t) return false;
-        return shell.actions.togglePrDash(store.getTask(t.id) ?? t);
+        return shell.actions.togglePrDash(aug.task(t.id) ?? t);
       },
     },
     { target: p.target },
@@ -296,7 +288,7 @@ export function BoardMode() {
     coding: target()?.kind === "coding",
     watching: false,
     started: false,
-    pr: Boolean(target() && taskPr(target()!)),
+    pr: Boolean(target() && aug.taskPr(target()!)),
   });
 
   return (
@@ -374,7 +366,7 @@ export function BoardMode() {
                   }
                 >
                   {(n) => {
-                    const readBy = store.noteReadBy(n);
+                    const readBy = noteReadBy(n);
                     const tone =
                       n.label === "blocked"
                         ? theme.error
@@ -448,8 +440,7 @@ function Projects(props: {
   const theme = useTheme();
   const aug = useAug();
   const live = (task: TaskRow) => {
-    aug.version();
-    const s = store.latestSession(task.id);
+    const s = aug.latestSession(task.id);
     return Boolean(s?.tmux_window && !s.ended_at);
   };
   return (
@@ -474,7 +465,7 @@ function Projects(props: {
             const fg = (color: ThemeColor) =>
               on() ? contrastingForeground(theme.primary) : color;
             if (line.type === "project") {
-              const repos = store.projectRepos(line.project);
+              const repos = projectRepos(line.project);
               const brief = line.project.brief.split("\n").find((l) => l.trim()) ?? "";
               return (
                 <box flexDirection="column" marginTop={i() === 0 ? 0 : 1}>
@@ -523,7 +514,7 @@ function Projects(props: {
                   backgroundColor={on() ? theme.primary : undefined}
                 >
                   <text fg={fg(met ? theme.success : theme.secondary)}>
-                    {`${met ? "◉" : "◎"} ${store.goalRef(g.goal.id)}`}
+                    {`${met ? "◉" : "◎"} ${goalRef(g.goal.id)}`}
                   </text>
                   <text fg={fg(met ? theme.textMuted : theme.text)}>
                     {truncate(g.goal.title, 44)}
@@ -548,7 +539,7 @@ function Projects(props: {
                 paddingLeft={line.underGoal ? 4 : 2}
                 backgroundColor={on() ? theme.primary : undefined}
               >
-                <text fg={fg(theme.textMuted)}>{store.taskRef(t.id)}</text>
+                <text fg={fg(theme.textMuted)}>{taskRef(t.id)}</text>
                 <text fg={fg(theme.text)}>{truncate(t.title, 44)}</text>
                 <text fg={fg(theme.textMuted)}>
                   {truncate(
@@ -634,10 +625,7 @@ function Card(props: {
 }) {
   const theme = useTheme();
   const aug = useAug();
-  const session = createMemo(() => {
-    aug.version();
-    return store.latestSession(props.task.id);
-  });
+  const session = createMemo(() => aug.latestSession(props.task.id));
   const fg = () =>
     props.on ? contrastingForeground(theme.primary) : undefined;
   const line = () => {
@@ -666,7 +654,7 @@ function Card(props: {
     >
       <text fg={fg() ?? theme.textMuted}>
         {truncate(
-          `${store.taskRef(props.task.id)} · ${props.task.kind}${props.task.repo ? ` · ${props.task.repo}` : ""}`,
+          `${taskRef(props.task.id)} · ${props.task.kind}${props.task.repo ? ` · ${props.task.repo}` : ""}`,
           props.width - 2,
         )}
       </text>

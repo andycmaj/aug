@@ -5,7 +5,7 @@ import { createEffect } from "solid-js";
 import { useToast } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
-import * as store from "../core/store";
+import { taskRef } from "../core/rows";
 import { inTmux } from "../core/driver";
 
 // Both modes mount the actions; one viewer attach per task at a time.
@@ -56,7 +56,7 @@ export function useViewer() {
       terminals.close(id);
       terminals.open({
         id,
-        title: store.taskRef(taskId),
+        title: taskRef(taskId),
         kind: "agent",
         taskId,
         argv: viewer.argv,
@@ -70,16 +70,15 @@ export function useViewer() {
   // Keeps the table's terminal in step with tmux: a live claude on the
   // selected task gets a viewer, and every other viewer goes.
   createEffect(() => {
-    aug.version();
     const item = aug.selected();
     const task = item?.type === "task" ? item.task : null;
     const live = (taskId: number) => {
-      const row = store.getTask(taskId);
-      return Boolean(row && desk.isLive(row));
+      const row = aug.task(taskId);
+      return Boolean(row && aug.isLive(row));
     };
     for (const id of viewersToClose(terminals.list(), task?.id ?? null, live))
       terminals.close(id);
-    if (task && inTmux(task) && desk.isLive(task))
+    if (task && inTmux(task) && aug.isLive(task))
       void attachViewer(task.id);
   });
 

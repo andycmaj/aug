@@ -7,7 +7,7 @@ import { useAug, ViewMode } from "../context/aug";
 import { useTerminals } from "../context/terminals";
 import { draftFile, readDraft, removeDraft, writeDraft } from "../core/drafts";
 import { actionText } from "../core/outbound";
-import * as store from "../core/store";
+import { taskRef } from "../core/rows";
 import type { TaskRow } from "../core/types";
 
 export const EDITOR_ID = "editor";
@@ -45,9 +45,9 @@ export function useEditor() {
   }
 
   function editDraft(task: TaskRow): false | void {
-    const pending = store.pendingAction(task.id);
+    const pending = aug.pendingAction(task.id);
     if (!pending) return false;
-    const ref = store.taskRef(task.id);
+    const ref = taskRef(task.id);
     const file = draftFile(ref);
     writeDraft(file, actionText(pending.action));
     openEditor(file, `draft for ${ref}`, () => {
@@ -59,7 +59,7 @@ export function useEditor() {
   // The brief in $EDITOR, while the agent has not started from it yet.
   function editBrief(task: TaskRow): false | void {
     if (!desk.briefEditable(task.id)) return false;
-    const ref = store.taskRef(task.id);
+    const ref = taskRef(task.id);
     const file = draftFile(ref, "brief");
     writeDraft(file, task.summary ? `${task.summary}\n` : "");
     openEditor(file, `brief for ${ref}`, () => {
@@ -93,7 +93,7 @@ export function useEditor() {
     initial: string,
     keep: (text: string) => void,
   ) {
-    const ref = store.taskRef(task.id);
+    const ref = taskRef(task.id);
     const file = draftFile(ref, "message");
     writeDraft(file, initial);
     openEditor(file, `a message on ${ref}`, (code) => {

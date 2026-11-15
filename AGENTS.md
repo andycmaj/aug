@@ -52,6 +52,14 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `claude-mcp` (a persistent `claude -p` whose session can only read, plus a
   one-shot send call), or `mcp` (a stub). claude.ai connectors load only with
   `--setting-sources user`.
+- **Views read through the read model** (`core/read-model.ts`), never the
+  store: `aug.task(id)`, `aug.turns(id)`, `aug.pendingAction(id)` and the
+  rest sit on the aug context. Each read names the tables it queries, and
+  re-runs only when one of them changes: triggers bump a counter per table
+  in `table_versions`, so a write from any process says what it touched. A
+  new read is one entry in `reads()`; `test/read-model.test.ts` fails if its
+  SQL touches a table it does not name. Pure row helpers (`taskRef`,
+  `turnSteps`) are `core/rows.ts`.
 - **The rail has a cursor and a table** (`cursorKey` and `selectedKey` in
   `context/aug.tsx`). Task actions (`components/task-actions.ts`, the key
   handlers on a row) act on the cursor row from the rail and on the table row

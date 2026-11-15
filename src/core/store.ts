@@ -4,6 +4,7 @@
 
 import type { SQLQueryBindings } from "bun:sqlite";
 import { db, now } from "./db";
+import { noteReadBy, projectRepos, taskRef, turnSteps } from "./rows";
 import {
   ActionState,
   AgentState,
@@ -39,6 +40,16 @@ import {
   type TurnRow,
   type Verdict,
 } from "./types";
+
+export {
+  goalRef,
+  noteReadBy,
+  parseGoalRef,
+  parseTaskRef,
+  projectRepos,
+  taskRef,
+  turnSteps,
+} from "./rows";
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -108,15 +119,6 @@ function patchRow<Row extends object>(
   if (touch)
     run(`UPDATE ${table} SET ${sets}, ${touch} = ? WHERE id = ?`, ...values, now(), id);
   else run(`UPDATE ${table} SET ${sets} WHERE id = ?`, ...values, id);
-}
-
-export function taskRef(id: number): string {
-  return `AUG-${String(id).padStart(4, "0")}`;
-}
-
-export function parseTaskRef(ref: string): number | null {
-  const m = ref.trim().match(/^@?(?:aug-)?0*(\d+)$/i);
-  return m ? Number(m[1]) : null;
 }
 
 // ── tasks ────────────────────────────────────────────────────────────────
@@ -368,10 +370,6 @@ export function listProjects(): ProjectRow[] {
   );
 }
 
-export function projectRepos(project: ProjectRow): string[] {
-  return JSON.parse(project.repos) as string[];
-}
-
 type ProjectPatch = Partial<Omit<ProjectRow, "id" | "created_at">>;
 
 export function updateProject(id: number, patch: ProjectPatch): void {
@@ -437,15 +435,6 @@ export function removeProjectLink(projectId: number, url: string): boolean {
 }
 
 // ── project goals ────────────────────────────────────────────────────────
-
-export function goalRef(id: number): string {
-  return `G${id}`;
-}
-
-export function parseGoalRef(ref: string): number | null {
-  const m = ref.trim().match(/^g?0*(\d+)$/i);
-  return m ? Number(m[1]) : null;
-}
 
 export function addGoal(projectId: number, title: string): GoalRow {
   const at = now();
@@ -681,10 +670,6 @@ export function updateTurn(id: number, patch: TurnPatch): void {
 }
 
 // JSON array of one-line tool steps, live while the turn runs.
-export function turnSteps(turn: TurnRow): string[] {
-  return JSON.parse(turn.steps || "[]") as string[];
-}
-
 // A turn keeps its own draft; only the newest one can be sent, so a new draft
 // retires the older pending ones.
 export function setTurnAction(turnId: number, action: DraftAction): void {
@@ -835,10 +820,6 @@ export function listNotes(limit = 100): NoteRow[] {
 }
 
 // Who has read a note, as the JSON column holds it.
-export function noteReadBy(note: NoteRow): string[] {
-  return JSON.parse(note.read_by) as string[];
-}
-
 export function markNotesRead(reader: string): void {
   const notes = listNotes(200);
   batch(() => {

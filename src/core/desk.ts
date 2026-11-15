@@ -29,6 +29,7 @@ import * as projects from "./projects";
 import { applyProjectDoc, renderProjectDoc } from "./project-doc";
 import { editPending, sendPending } from "./outbound";
 import { setTaskRepo } from "./repos";
+import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
 import {
@@ -39,8 +40,13 @@ import {
   TaskStatus,
   TurnRole,
   Verdict,
+  type NoteLabel,
   type TaskRow,
 } from "./types";
+
+// How the owner signs what they write on the Board.
+const OWNER = "you";
+const HOOKS_OFFERED = "hooks.offered";
 
 export interface DeskOptions {
   drivers: Drivers;
@@ -84,10 +90,7 @@ export class Desk {
   // The brief is what the agent starts from. Once it has started, a new
   // brief would say something the agent never read: tell it instead.
   briefEditable(taskId: number): boolean {
-    const task = store.getTask(taskId);
-    return (
-      Boolean(task) && task?.kind !== Kind.home && !store.latestSession(taskId)
-    );
+    return briefEditable(taskId);
   }
 
   editBrief(taskId: number, text: string): boolean {
@@ -492,5 +495,26 @@ export class Desk {
         ? `${text.trimEnd()}\n\n${marker}\n- ${line}\n`
         : text.replace(marker, `${marker}\n- ${line}`);
     writeDoc(DocName.learned, next);
+  }
+
+  // ── the Board's notes and knowledge ───────────────────────────────────
+
+  note(label: NoteLabel, body: string): void {
+    store.addNote(OWNER, label, body);
+  }
+
+  readNotes(): void {
+    store.markNotesRead(OWNER);
+  }
+
+  addKnowledge(topic: string, title: string, body: string): void {
+    store.addKnowledge(topic, title, body, OWNER);
+  }
+
+  // The hooks are offered once, with the first project made or adopted.
+  offerHooksOnce(): boolean {
+    if (store.kvGet(HOOKS_OFFERED)) return false;
+    store.kvSet(HOOKS_OFFERED, "1");
+    return true;
   }
 }

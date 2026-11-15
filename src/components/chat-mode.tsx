@@ -6,8 +6,6 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { useFocus, useTheme } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
 import { useTerminals } from "../context/terminals";
-import { taskPr } from "../core/pr";
-import * as store from "../core/store";
 import { AgentState, Kind } from "../core/types";
 import type { HelpCtx } from "../keymap";
 import { Canvas } from "./canvas";
@@ -43,19 +41,18 @@ export function ChatMode() {
   const onSay = (text: string) => {
     const item = aug.selected();
     if (item?.type !== "task") return;
-    const task = store.getTask(item.task.id);
+    const task = aug.task(item.task.id);
     if (task) shell.actions.say(task, text);
   };
 
   const onCompose = (initial: string, keep: (text: string) => void) => {
     const item = aug.selected();
     if (item?.type !== "task") return;
-    const task = store.getTask(item.task.id);
+    const task = aug.task(item.task.id);
     if (task) shell.actions.compose(task, initial, keep);
   };
 
   const baseCtx = createMemo((): HelpCtx => {
-    aug.version();
     const item = isPaneFocused("rail") ? aug.cursorItem() : aug.selected();
     if (!item)
       return {
@@ -83,7 +80,7 @@ export function ChatMode() {
     const live =
       t.agent_state === AgentState.working ||
       Boolean(terminals.forTask(t.id)?.running) ||
-      aug.desk.isLive(t);
+      aug.isLive(t);
     return {
       item: "task",
       kind: t.kind,
@@ -91,8 +88,8 @@ export function ChatMode() {
       live,
       coding: t.kind === Kind.coding,
       watching: Boolean(t.watching),
-      started: !aug.desk.briefEditable(t.id),
-      pr: taskPr(t) !== null,
+      started: !aug.briefEditable(t.id),
+      pr: aug.taskPr(t) !== null,
     };
   });
 

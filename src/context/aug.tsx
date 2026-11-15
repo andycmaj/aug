@@ -1,47 +1,50 @@
-// The app's view of the store. Reads are plain SQLite queries re-run when a
-// version signal bumps: on any in-process write (store.onChange) and when
-// another process commits (an agent's hook; PRAGMA data_version).
+// The app's view of the store. Views read through the read model
+// (core/read-model.ts), each read subscribing to the tables it queries. A
+// table's signal bumps when its row in table_versions moves: checked on any
+// in-process write (store.onChange) and when another process commits (an
+// agent's hook; PRAGMA data_version).
 
 import {
+  batch,
   createMemo,
   createSignal,
   onCleanup,
   onMount,
   type Accessor,
   type ParentProps,
+  type Setter,
 } from "solid-js";
 import { createRequiredContext } from "@andycmaj/opentui-app";
 import { coalesce } from "../core/coalesce";
-import { dataVersion } from "../core/db";
+import { dataVersion, TABLES, tableVersions, type Table } from "../core/db";
 import type { Desk } from "../core/desk";
 import { Engine, type EngineStatus } from "../core/engine";
-import { boardColumnOf, BoardColumn, type LaneFacts } from "../core/lanes";
+import type { BoardColumn, LaneFacts } from "../core/lanes";
+import { readModel, type ReadModel } from "../core/read-model";
 import {
-  buildRail,
   cycleFilter as nextFilter,
   filterCounts,
   filterRail,
   flattenRail,
   foldRail,
   nextKey,
-  SHOW_FYI,
   WALKED,
   type RailFilter,
   type RailItem,
   type RailSection,
 } from "../core/rail";
-import { railProjects } from "../core/lookup";
-import * as store from "../core/store";
+import { onChange } from "../core/store";
 import { AgentState, type TaskRow } from "../core/types";
 
 export const ViewMode = { chat: "chat", board: "board" } as const;
 export type ViewMode = (typeof ViewMode)[keyof typeof ViewMode];
 
-interface AugContextValue {
+// The read model's reads sit on the context itself: aug.task(id),
+// aug.turns(id), aug.pendingAction(id).
+interface AugContextValue extends ReadModel {
   engine: Engine;
   // The owner's moves: what the keys and the palette call.
   desk: Desk;
-  version: Accessor<number>;
   status: Accessor<EngineStatus>;
   now: Accessor<Date>;
   spinner: Accessor<string>;
@@ -90,11 +93,26 @@ const [AugContext, useAug] = createRequiredContext<AugContextValue>("Aug");
 export { useAug };
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const FYI_DAYS = 14;
 
 export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   const engine = props.engine;
-  const [version, setVersion] = createSignal(0);
+  // One counter per table; a read subscribes to the ones it queries.
+  const tableSignals = new Map<Table, [Accessor<number>, Setter<number>]>(
+    TABLES.map((t) => [t, createSignal(0)]),
+  );
+  const track = (tables: readonly Table[]) => {
+    for (const t of tables) tableSignals.get(t)![0]();
+  };
+  const reads = readModel(track, engine.desk);
+  let seenTables = tableVersions();
+  const refresh = () => {
+    const next = tableVersions();
+    batch(() => {
+      for (const t of TABLES)
+        if (next[t] !== seenTables[t]) tableSignals.get(t)![1]((v) => v + 1);
+    });
+    seenTables = next;
+  };
   const [status, setStatus] = createSignal(engine.status);
   const [now, setNow] = createSignal(new Date());
   const [frame, setFrame] = createSignal(0);
@@ -102,13 +120,14 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   const [selectedKey, setSelectedKey] = createSignal<string | null>(null);
   const [cursorKey, setCursorKey] = createSignal<string | null>(null);
   // Writes come in bursts (a poll files a dozen messages, each with a few
-  // writes), and every bump re-runs the rail and the views on it. One redraw
-  // per burst keeps that from churning thousands of native text buffers.
-  const redraw = coalesce(() => setVersion((v) => v + 1));
+  // writes), and every bump re-runs the views over the tables it touched.
+  // One redraw per burst keeps that from churning thousands of native text
+  // buffers.
+  const redraw = coalesce(refresh);
   const bump = () => redraw.schedule();
 
   onMount(() => {
-    const offChange = store.onChange(bump);
+    const offChange = onChange(bump);
     const offStatus = engine.onStatus(setStatus);
     let seen = dataVersion();
     const poll = setInterval(() => {
@@ -133,10 +152,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     });
   });
 
-  const pending = createMemo(() => {
-    version();
-    return store.tasksWithPendingAction();
-  });
+  const pending = createMemo(() => reads.tasksWithPendingAction());
 
   const [folded, setFolded] = createSignal<Set<number>>(new Set());
   const setFold = (projectId: number, on: boolean) => {
@@ -147,33 +163,10 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     setFolded(next);
   };
 
-  const homeId = store.homeTask().id;
+  const homeId = reads.home().id;
   const [wantsInput, setWantsInput] = createSignal(false);
 
-  const rail = createMemo(() => {
-    version();
-    const tasks = store.listTasks();
-    const lastHeard = new Map<number, string>();
-    for (const t of tasks) {
-      if (!t.waiting_on) continue;
-      const heard = [...store.messagesForTask(t.id)]
-        .reverse()
-        .find((m) => !m.from_me);
-      if (heard) lastHeard.set(t.id, heard.received_at);
-    }
-    const since = new Date(now().getTime() - FYI_DAYS * 86400000).toISOString();
-    return buildRail({
-      home: store.getTask(homeId),
-      projects: railProjects(),
-      tasks,
-      pendingActions: pending(),
-      reviews: store.tasksFromReviewRequests(),
-      ideas: store.openIdeas(),
-      fyi: SHOW_FYI ? store.fyiMessages(since) : [],
-      lastHeard,
-      now: now(),
-    });
-  });
+  const rail = createMemo(() => reads.rail(now(), pending()));
 
   const items = createMemo(() => flattenRail(rail()));
   const [railFilter, setRailFilter] = createSignal<Set<RailFilter>>(new Set());
@@ -283,34 +276,16 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   );
   const spinner = () => (anyWorking() ? SPINNER[frame()] : SPINNER[0]);
 
-  const board = createMemo(() => {
-    version();
-    const today = new Date().toISOString().slice(0, 10);
-    const out: Record<BoardColumn, TaskRow[]> = {
-      queued: [],
-      working: [],
-      blocked: [],
-      left: [],
-      agentdone: [],
-    };
-    const set = pending();
-    for (const task of store.listTasks()) {
-      const col = boardColumnOf(
-        task,
-        { hasPendingAction: set.has(task.id) },
-        today,
-      );
-      if (col) out[col].push(task);
-    }
-    return out;
-  });
+  const board = createMemo((): Record<BoardColumn, TaskRow[]> =>
+    reads.board(pending()),
+  );
 
   return (
     <AugContext.Provider
       value={{
+        ...reads,
         engine,
         desk: engine.desk,
-        version,
         status,
         now,
         spinner,

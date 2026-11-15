@@ -32,7 +32,7 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { loadConfig } from "../core/config";
 import { neighborKey, type RailItem } from "../core/rail";
-import * as store from "../core/store";
+import { taskRef } from "../core/rows";
 import { Kind, Priority, type TaskRow } from "../core/types";
 import {
   ChoiceModal,
@@ -103,9 +103,7 @@ export function useActions(dialogs: Dialogs) {
   // The first project you make or adopt offers the hooks that pick up
   // claudes you start by hand. Asked once; `aug hooks` is there after.
   function offerHooks() {
-    if (desk.offline || hooksInstalled() || store.kvGet("hooks.offered"))
-      return;
-    store.kvSet("hooks.offered", "1");
+    if (desk.offline || hooksInstalled() || !desk.offerHooksOnce()) return;
     dialogs.show(() => (
       <ChoiceModal
         title="Pick up claudes you start by hand?"
@@ -213,8 +211,8 @@ export function useActions(dialogs: Dialogs) {
         (task) => {
           showToast(
             stray.pane
-              ? `${store.taskRef(task.id)} ${task.title}`
-              : `${store.taskRef(task.id)}: quit that claude, then s continues it here`,
+              ? `${taskRef(task.id)} ${task.title}`
+              : `${taskRef(task.id)}: quit that claude, then s continues it here`,
             stray.pane ? 3000 : 6000,
           );
           aug.selectTask(task.id);
@@ -222,7 +220,7 @@ export function useActions(dialogs: Dialogs) {
         },
         (err) => showToast(`Could not adopt: ${errorMessage(err)}`, 4000, "error"),
       );
-    const active = store.listProjects().filter((p) => p.status === "active");
+    const active = aug.projects().filter((p) => p.status === "active");
     const ordered = [
       ...active.filter((p) => p.id === projectId),
       ...active.filter((p) => p.id !== projectId),
@@ -243,13 +241,13 @@ export function useActions(dialogs: Dialogs) {
   function moveToProject(task: TaskRow) {
     const move = (projectId: number) =>
       void desk.moveTask(task.id, projectId).then(
-        () => showToast(`${store.taskRef(task.id)} moved`),
+        () => showToast(`${taskRef(task.id)} moved`),
         (err) => showToast(`Could not move: ${errorMessage(err)}`, 4000, "error"),
       );
-    const others = store.listProjects().filter((p) => p.id !== task.project_id);
+    const others = aug.projects().filter((p) => p.id !== task.project_id);
     dialogs.show(() => (
       <ChoiceModal
-        title={`Move ${store.taskRef(task.id)} to a project`}
+        title={`Move ${taskRef(task.id)} to a project`}
         hint="Its window moves with it; the claude keeps running."
         choices={[
           ...others.map((p) => ({ label: p.name, run: () => move(p.id) })),
@@ -261,9 +259,9 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function archiveProject(projectId: number) {
-    const project = store.getProject(projectId);
+    const project = aug.project(projectId);
     if (!project) return;
-    const open = store
+    const open = aug
       .tasksForProject(projectId)
       .filter((t) => t.status === "open" || t.status === "later").length;
     dialogs.show(() => (
@@ -298,7 +296,7 @@ export function useActions(dialogs: Dialogs) {
     try {
       showToast(
         (await desk.nudge(taskId))
-          ? `${store.taskRef(taskId)}: nudged`
+          ? `${taskRef(taskId)}: nudged`
           : "Its window is gone; s starts it again",
       );
     } catch (err) {
@@ -326,7 +324,7 @@ export function useActions(dialogs: Dialogs) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
     void desk.stopAgent(task.id).then(
-      () => showToast(`${store.taskRef(task.id)}: stopped and saved`),
+      () => showToast(`${taskRef(task.id)}: stopped and saved`),
       (err) => showToast(`Could not stop: ${errorMessage(err)}`, 4000, "error"),
     );
   }
@@ -339,8 +337,8 @@ export function useActions(dialogs: Dialogs) {
       (r) =>
         showToast(
           r.warnings.length
-            ? `${store.taskRef(task.id)} done; ${r.warnings.join("; ")}`
-            : `${store.taskRef(task.id)} done${r.archived ? ", project archived" : ""}`,
+            ? `${taskRef(task.id)} done; ${r.warnings.join("; ")}`
+            : `${taskRef(task.id)} done${r.archived ? ", project archived" : ""}`,
           r.warnings.length ? 5000 : 2000,
           r.warnings.length ? "error" : "info",
         ),
@@ -360,7 +358,7 @@ export function useActions(dialogs: Dialogs) {
     const toMonday = (8 - new Date().getDay()) % 7 || 7;
     dialogs.show(() => (
       <ChoiceModal
-        title={`Remind me about ${store.taskRef(task.id)}`}
+        title={`Remind me about ${taskRef(task.id)}`}
         hint="Put away until the day you pick, then back on your rail that morning."
         choices={[
           pick("Tomorrow", 1),
@@ -403,7 +401,7 @@ export function useActions(dialogs: Dialogs) {
     ];
     const next = order[(order.indexOf(task.priority) + 1) % order.length];
     desk.setPriority(task.id, next);
-    showToast(`${store.taskRef(task.id)} is ${next}`);
+    showToast(`${taskRef(task.id)} is ${next}`);
   }
 
   function changeKind(task: TaskRow) {
@@ -441,7 +439,7 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function send(task: TaskRow) {
-    const pending = store.pendingAction(task.id);
+    const pending = aug.pendingAction(task.id);
     if (!pending) {
       showToast("Nothing waits to be sent");
       return;
@@ -486,13 +484,13 @@ export function useActions(dialogs: Dialogs) {
       const task = desk.fyiToTask(item.message.id);
       if (task) {
         aug.selectTask(task.id);
-        showToast(`${store.taskRef(task.id)}: it was work; triage will learn`);
+        showToast(`${taskRef(task.id)}: it was work; triage will learn`);
       }
     } else if (item.type === "idea") {
       const task = desk.ideaToTask(item.idea.id);
       if (task) {
         aug.selectTask(task.id);
-        showToast(`${store.taskRef(task.id)} on your list`);
+        showToast(`${taskRef(task.id)} on your list`);
       }
     }
   }
@@ -585,7 +583,7 @@ export function useActions(dialogs: Dialogs) {
     if (item.type !== "task") return [];
     const seen = new Set<string>();
     const out: MadeFile[] = [];
-    for (const turn of [...store.turnsForTask(item.task.id)].reverse()) {
+    for (const turn of [...aug.turns(item.task.id)].reverse()) {
       for (const f of parseFiles(turn.files)) {
         if (seen.has(f.path) || !existsSync(f.path)) continue;
         seen.add(f.path);
@@ -612,7 +610,7 @@ export function useActions(dialogs: Dialogs) {
         : item.type === "fyi"
           ? item.message.url
           : null;
-    const links = item.type === "task" ? store.linksForTask(item.task.id) : [];
+    const links = item.type === "task" ? aug.taskLinks(item.task.id) : [];
     const short = (u: string) => u.replace(/^https?:\/\//, "").slice(0, 30);
     const choices = [
       ...(url
@@ -701,7 +699,7 @@ export function useActions(dialogs: Dialogs) {
       () => {
         const item = get();
         if (item?.type !== "task") return false;
-        const fresh = store.getTask(item.task.id);
+        const fresh = aug.task(item.task.id);
         if (!fresh || (fresh.kind === Kind.home && !home)) return false;
         if ((fresh.kind === Kind.system) !== system) return false;
         return fn(fresh);
