@@ -41,11 +41,16 @@ import { buildRail, Section } from "../src/core/rail";
 import * as store from "../src/core/store";
 import {
   Kind,
+  MoveStatus,
   ProposalSource,
   ProposalStatus,
   TaskStatus,
   TurnRole,
 } from "../src/core/types";
+import { ASSISTANT_TOOLS, assistantAllow } from "../src/core/assistant";
+import { onboardBrief } from "../src/core/onboard";
+import { docDraftsDir } from "../src/core/paths";
+import { REAL_JOB } from "./doc-fixture";
 import { FakeMux } from "./fake-mux";
 import { fakeBrain, freshHome } from "./helpers";
 
@@ -395,6 +400,60 @@ describe("onboarding", () => {
     );
     expect(engine.desk.acceptDocs(offer.id)).toBe("wrote PERSONA.md, JOB.md");
     expect(readDoc(DocName.job)).toBe("# JOB\n\ndraft\n");
+  });
+
+  test("a whole doc handed in as a file, Markdown and all", async () => {
+    offerOnboarding();
+    const engine = new Engine();
+    const offer = onboardingTask()!;
+    const file = join(docDraftsDir(), "JOB.md");
+    writeFileSync(file, REAL_JOB);
+    const ok = store.enqueueMove(
+      "propose_doc",
+      { doc: "JOB", file, reason: "interview" },
+      "assistant",
+    );
+    // A bare name is read from the drafts folder too.
+    writeFileSync(join(docDraftsDir(), "STYLE.md"), "# STYLE\n\n## Tone\nShort.\n");
+    const bare = store.enqueueMove(
+      "propose_doc",
+      { doc: "STYLE", file: "STYLE.md" },
+      "assistant",
+    );
+    await engine.drainMoves();
+    expect(store.getMove(ok.id)!.result).toContain("JOB.md proposed on");
+    expect(store.getMove(bare.id)!.status).toBe(MoveStatus.done);
+    const [job] = store.proposalsForTask(offer.id).filter((p) => p.doc === "JOB.md");
+    expect(job!.proposed).toBe(REAL_JOB);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  test("propose_doc reads no file outside the drafts folder", async () => {
+    const engine = new Engine();
+    const outside = join(process.env.AUG_HOME!, "config.json");
+    writeFileSync(outside, "{}");
+    const cases = [
+      [{ doc: "JOB", file: outside }, "must be in"],
+      [{ doc: "JOB", file: "../../config.json" }, "must be in"],
+      [{ doc: "JOB", file: "nope.md" }, "no such file"],
+      [{ doc: "JOB" }, "needs --file or --text"],
+      [{ doc: "JOB", file: "x.md", text: "y" }, "not both"],
+    ] as const;
+    const moves = cases.map(([args]) =>
+      store.enqueueMove("propose_doc", { ...args }, "assistant"),
+    );
+    await engine.drainMoves();
+    cases.forEach(([, want], i) =>
+      expect(store.getMove(moves[i]!.id)!.result).toContain(want),
+    );
+    expect(existsSync(outside)).toBe(true);
+  });
+
+  test("the Assistant may write only in the drafts folder", () => {
+    expect(ASSISTANT_TOOLS).toContain("Write");
+    const writes = assistantAllow().filter((r) => /^(Edit|Write)\b/.test(r));
+    expect(writes).toEqual([`Edit(/${docDraftsDir()}/**)`]);
+    expect(onboardBrief()).toContain(`--file ${join(docDraftsDir(), "PERSONA.md")}`);
   });
 
   test("the onboard move from the Assistant answers with the brief", async () => {

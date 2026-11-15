@@ -4,6 +4,8 @@
 // another process goes through the `moves` table: aug-tools inserts it and
 // waits, the desk claims it, runs it, and writes back one line of result.
 
+import { readFileSync, realpathSync, rmSync } from "node:fs";
+import { isAbsolute, join, relative } from "node:path";
 import { loadConfig, saveConfig, type NoiseRule } from "./config";
 import type { Desk } from "./desk";
 import { DocName } from "./docs";
@@ -11,6 +13,7 @@ import { docNamed, propose } from "./proposals";
 import { logger } from "./log";
 import { findProject, projectLine } from "./lookup";
 import { mux } from "./mux";
+import { docDraftsDir } from "./paths";
 import * as repos from "./repos";
 import * as store from "./store";
 import { matchStray, strayLabel, strayRef, type Stray } from "./strays";
@@ -101,6 +104,24 @@ function noiseRule(args: Record<string, string>): NoiseRule {
       "noise needs a pattern: --author, --title, --body or --github_reason",
     );
   return rule;
+}
+
+// A doc the Assistant wrote for propose_doc. Its text cannot ride on the
+// Bash line: Claude Code denies a command with a line starting with # in a
+// quoted argument, which is every Markdown heading. Only files in the
+// docDrafts folder, so the move cannot be pointed at any file on disk.
+function docDraftFile(given: string): string {
+  const dir = docDraftsDir();
+  let file: string;
+  try {
+    file = realpathSync(isAbsolute(given) ? given : join(dir, given));
+  } catch {
+    throw new MoveError(`no such file: ${given} (write it to ${dir} first)`);
+  }
+  const rel = relative(dir, file);
+  if (!rel || rel.startsWith("..") || isAbsolute(rel))
+    throw new MoveError(`the file must be in ${dir}: got ${given}`);
+  return file;
 }
 
 // A name that matches no project says which ones there are, so the caller
@@ -701,20 +722,26 @@ export const MOVES: Record<string, MoveSpec> = {
     task: false,
     args: {
       doc: { help: "PERSONA | JOB | STYLE", required: true },
-      text: { help: "the whole doc", required: true },
+      file: { help: "the file you wrote the whole doc to, in aug's drafts/docs folder" },
+      text: { help: "the whole doc inline (no Markdown headings: use --file)" },
       reason: { help: "one line: why" },
     },
     run(_desk, _task, args) {
       const doc = docNamed(args.doc);
       if (doc !== DocName.persona && doc !== DocName.job && doc !== DocName.style)
         throw new MoveError(`doc must be PERSONA | JOB | STYLE: got ${args.doc}`);
-      if (!args.text.trim()) throw new MoveError("text is empty");
+      if (!args.file?.trim() === !args.text?.trim())
+        throw new MoveError("propose_doc needs --file or --text, not both");
+      const file = args.file?.trim() ? docDraftFile(args.file.trim()) : null;
+      const text = file ? readFileSync(file, "utf8") : args.text;
+      if (!text.trim()) throw new MoveError("the doc is empty");
       const p = propose({
         doc,
         source: ProposalSource.onboard,
-        proposed: args.text.trimEnd() + "\n",
+        proposed: text.trimEnd() + "\n",
         reason: args.reason ?? "",
       });
+      if (file) rmSync(file, { force: true });
       return `${doc} proposed on ${store.taskRef(p.task_id)}: the owner reviews it there`;
     },
   },

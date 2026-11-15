@@ -214,7 +214,7 @@ export function parseStreamLine(
   if (event.type === "result") acc.result = event;
 }
 
-async function claudeBrain(call: BrainCall): Promise<BrainResult> {
+export async function claudeBrain(call: BrainCall): Promise<BrainResult> {
   const started = Date.now();
   const proc = Bun.spawn(["claude", ...claudeArgs(call)], {
     cwd: call.cwd,

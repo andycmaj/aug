@@ -1,7 +1,7 @@
 // Where aug keeps its state. Everything lives under one home so a fixture run
 // (or a test) can point AUG_HOME at a scratch dir and touch nothing real.
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -22,12 +22,22 @@ export const paths = {
   // nowhere that matters.
   work: (taskId: number) => join(augHome(), "work", String(taskId)),
   drafts: () => join(augHome(), "drafts"),
+  // Where the Assistant writes a whole doc before `move propose_doc --file`:
+  // a doc's Markdown headings cannot go on a Bash line (see propose_doc).
+  docDrafts: () => join(augHome(), "drafts", "docs"),
   log: () => join(augHome(), "aug.log"),
   lock: () => join(augHome(), "aug.pid"),
 };
 
 export function ensureHome(): void {
-  for (const dir of [paths.home(), paths.docs(), paths.drafts()]) {
+  for (const dir of [paths.home(), paths.docs(), paths.drafts(), paths.docDrafts()]) {
     mkdirSync(dir, { recursive: true });
   }
+}
+
+// docDrafts made and resolved: allow rules and the move's path check compare
+// real paths (/tmp is /private/tmp on macOS).
+export function docDraftsDir(): string {
+  mkdirSync(paths.docDrafts(), { recursive: true });
+  return realpathSync(paths.docDrafts());
 }

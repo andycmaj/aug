@@ -10,6 +10,7 @@ import { mentionedProjects, mentionedTasks } from "./mentions";
 import { docsBlock } from "./prompts";
 import { findTasks, projectDetail, projectLine, taskDetail, taskLine } from "./lookup";
 import { MOVES } from "./moves";
+import { docDraftsDir } from "./paths";
 import { TOOLS_NAME, toolsEnv, toolsRules } from "./self";
 import * as store from "./store";
 import { transcript } from "./transcript";
@@ -23,7 +24,13 @@ import type { BrainCall } from "./brain";
 
 const READS = ["Read", "Grep", "Glob", "WebSearch", "WebFetch"];
 
-export const ASSISTANT_TOOLS = ["Bash", ...READS];
+export const ASSISTANT_TOOLS = ["Bash", "Write", ...READS];
+
+// Write only into the doc drafts folder, for propose_doc --file. `//` makes
+// the rule's path absolute.
+export function docDraftsRule(): string {
+  return `Edit(/${docDraftsDir()}/**)`;
+}
 
 // aug-tools and gh's reads on the shell; a headless call cannot ask, so
 // anything else is denied unasked.
@@ -32,6 +39,7 @@ export function assistantAllow(): string[] {
     ...toolsRules(),
     ...GH_READS,
     ...READS,
+    docDraftsRule(),
     ...capabilityAllow("assistant"),
   ];
 }
@@ -73,6 +81,7 @@ export function assistantSystem(): string {
     "Look up issues, PRs and runs with gh's read commands: gh pr view|list|diff|checks|status, gh issue view|list|status, gh search, gh run view|list, gh repo view. Nothing that writes (no comments, no gh api).",
     grantedNote("assistant"),
     SHELL_HOWTO,
+    `Write is allowed only in ${docDraftsDir()}: a doc you hand in with propose_doc goes there first, then --file <path>.`,
     "",
     "## How you work",
     "- Look before you move: check a task or project exists rather than guess its ref or name.",
