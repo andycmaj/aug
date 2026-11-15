@@ -208,6 +208,10 @@ export const TurnRole = {
 } as const;
 export type TurnRole = (typeof TurnRole)[keyof typeof TurnRole];
 
+// The author of an owner line that came from Slack (core/slack/remote.ts):
+// the Assistant answers it short, since it is read in Slack.
+export const SLACK_AUTHOR = "you via Slack";
+
 export const ActionState = {
   pending: "pending",
   sent: "sent",

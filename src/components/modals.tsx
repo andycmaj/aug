@@ -226,6 +226,7 @@ export function StatusModal(props: {
     [
       ["GitHub", aug.status().github],
       ["Slack", aug.status().slack],
+      ["Slack remote", aug.status().remote],
       ["Advisor", aug.status().advisor],
     ] as const;
   return (

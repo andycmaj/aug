@@ -59,6 +59,19 @@ export interface AugConfig {
     // mentions of you are.
     channels: string[];
   };
+  // Talking to the Assistant from Slack (core/slack/remote.ts): your
+  // messages in one conversation that only you are in reach Home, and its
+  // answers come back in the thread. Separate from slack.enabled (the
+  // inbound triage poller) and off until turned on. It reads and posts the
+  // way slack.transport says.
+  remote: {
+    enabled: boolean;
+    // Your self-DM (D...) or a private channel with only you in it. The
+    // token transport finds your self-DM when unset; claude-mcp needs it.
+    channel?: string;
+    // Default 15 with a token, 60 under claude-mcp (each read is a turn).
+    pollSeconds: number;
+  };
   brain: {
     triageModel: string;
     agentModel: string;
@@ -134,6 +147,7 @@ export interface AugConfig {
 export const DEFAULT_CONFIG: AugConfig = {
   github: { enabled: true, pollSeconds: 120, repos: {}, mergeMethod: "squash" },
   slack: { enabled: true, transport: "token", pollSeconds: 60, channels: [] },
+  remote: { enabled: false, pollSeconds: 15 },
   brain: {
     triageModel: "haiku",
     agentModel: "sonnet",
@@ -181,6 +195,7 @@ interface LegacyKeys {
 // Under claude-mcp every poll is a model turn, so it polls less often unless
 // told otherwise.
 const CLAUDE_MCP_POLL_SECONDS = 180;
+const CLAUDE_MCP_REMOTE_SECONDS = 60;
 
 export function mergeConfig(
   raw: DeepPartial<AugConfig> & LegacyKeys,
@@ -198,6 +213,15 @@ export function mergeConfig(
       raw.maxActiveAgents ?? agentsAtOnce ?? DEFAULT_CONFIG.maxActiveAgents,
     github: { ...DEFAULT_CONFIG.github, ...raw.github },
     slack: { ...DEFAULT_CONFIG.slack, ...raw.slack, pollSeconds: slackPoll },
+    remote: {
+      ...DEFAULT_CONFIG.remote,
+      ...raw.remote,
+      pollSeconds:
+        raw.remote?.pollSeconds ??
+        (raw.slack?.transport === "claude-mcp"
+          ? CLAUDE_MCP_REMOTE_SECONDS
+          : DEFAULT_CONFIG.remote.pollSeconds),
+    },
     brain: { ...DEFAULT_CONFIG.brain, ...raw.brain },
     triage: { ...DEFAULT_CONFIG.triage, ...raw.triage },
     log: { ...DEFAULT_CONFIG.log, ...raw.log },

@@ -32,6 +32,10 @@ export function ConnectorLine() {
   const rows = () => [
     { name: "github", s: aug.status().github },
     { name: "slack", s: aug.status().slack },
+    // Shown once it is turned on.
+    ...(aug.status().remote.state === "off"
+      ? []
+      : [{ name: "remote", s: aug.status().remote }]),
   ];
   return (
     <box

@@ -32,6 +32,8 @@ import { errorMessage, logger } from "./log";
 import { count, measure, perfStart } from "./perf";
 import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
 import { slackTransport, type SlackTransport } from "./slack/transport";
+import { Remote, remoteChannel, type RemoteLink } from "./slack/remote";
+import { remoteLink } from "./slack/remote-links";
 import { recoverAtBoot } from "./lifecycle";
 import { drainMoves, runMove, type MoveOutcome } from "./moves";
 import * as projects from "./projects";
@@ -52,6 +54,8 @@ export interface ConnectorStatus {
 export interface EngineStatus {
   github: ConnectorStatus;
   slack: ConnectorStatus;
+  // Talking to the Assistant from Slack (core/slack/remote.ts).
+  remote: ConnectorStatus;
   advisor: ConnectorStatus;
 }
 
@@ -70,6 +74,8 @@ export interface EngineOptions {
   slack?: SlackTransport;
   // Replaces gh for the GitHub poll (tests).
   github?: { api?: GhApi; prs?: PrFetch; clock?: GateClock };
+  // Replaces the remote's Slack link chosen from config (tests).
+  remoteLink?: RemoteLink;
 }
 
 // A poll this slow is worth saying so on the status line.
@@ -99,6 +105,7 @@ export class Engine {
   readonly drivers: Drivers;
   readonly desk: Desk;
   private slack: SlackTransport | null = null;
+  private remote: Remote | null = null;
   private timers: ReturnType<typeof setInterval>[] = [];
   private polling = new Set<string>();
   private gate: GithubGate | null = null;
@@ -106,6 +113,7 @@ export class Engine {
   status: EngineStatus = {
     github: off("not started"),
     slack: off("not started"),
+    remote: off("not started"),
     advisor: off("not started"),
   };
 
@@ -186,6 +194,7 @@ export class Engine {
     if (this.options.offline) {
       this.setStatus("github", off("fixture mode"));
       this.setStatus("slack", off("fixture mode"));
+      this.setStatus("remote", off("fixture mode"));
       this.setStatus("advisor", off("fixture mode"));
       return;
     }
@@ -225,6 +234,7 @@ export class Engine {
           ? { state: "error", detail: canSlack.detail, at: now() }
           : off(canSlack.detail),
       );
+    this.startRemote();
     this.timers.push(setInterval(() => void this.advisorTick(), 10 * 60_000));
     setTimeout(() => void this.advisorTick(), 20_000);
     // A local merge needs no network, so it has its own clock.
@@ -254,6 +264,8 @@ export class Engine {
     this.watching?.abort();
     this.watching = null;
     this.slack?.stop();
+    this.remote?.stop();
+    this.remote = null;
     this.pool.stopAll();
   }
 
@@ -504,12 +516,18 @@ export class Engine {
             !t.thread_key.endsWith(":dm"),
         )
         .map((t) => t.thread_key!.slice("slack:".length));
-      const result = await slack.poll({
+      const own = remoteChannel(this.options.config);
+      const polled = await slack.poll({
         cursor,
         watchChannels: config.slack.channels,
         trackedThreads,
         firstLookSeconds: 86400,
       });
+      // The remote's conversation is aug talking with the owner, not inbox.
+      const result = {
+        ...polled,
+        messages: polled.messages.filter((m) => m.meta?.channel !== own),
+      };
       store.kvSet(`slack.cursor.${slack.kind}`, JSON.stringify(result.cursor));
       const fresh = await this.ingest(result.messages);
       done({ read: result.messages.length, fresh });
@@ -527,6 +545,65 @@ export class Engine {
       });
     } finally {
       this.polling.delete("slack");
+    }
+  }
+
+  // ── the remote: the owner's Slack line to the Assistant ───────────────
+
+  private startRemote(): void {
+    const config = this.options.config.get();
+    if (!config.remote.enabled) {
+      this.setStatus("remote", off("disabled in config"));
+      return;
+    }
+    const link = this.options.remoteLink ?? remoteLink(config);
+    if ("error" in link) {
+      this.setStatus("remote", { state: "error", detail: link.error, at: now() });
+      return;
+    }
+    this.remote = new Remote({
+      link,
+      config: this.options.config,
+      say: (taskId, text, author) => this.desk.say(taskId, text, author),
+      wake: (taskId) => {
+        const home = store.getTask(taskId);
+        if (home)
+          this.drivers.for(home).wake(home, "the owner wrote from Slack");
+      },
+    });
+    void this.pollRemote();
+    this.timers.push(
+      setInterval(() => void this.pollRemote(), config.remote.pollSeconds * 1000),
+    );
+  }
+
+  async pollRemote(): Promise<void> {
+    const remote = this.remote;
+    if (!remote || !this.options.config.get().remote.enabled) return;
+    if (this.status.remote.state !== "error")
+      this.setStatus("remote", { ...this.status.remote, state: "polling" });
+    try {
+      const result = await remote.tick();
+      if (!result) return;
+      const did = [
+        result.heard ? `${result.heard} heard` : "",
+        result.answered ? `${result.answered} answered` : "",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      this.setStatus("remote", {
+        state: "ok",
+        detail: `${did || "listening"} · ${result.channel} · ${remote.kind}`,
+        at: now(),
+      });
+    } catch (err) {
+      // Slack unreachable, or the conversation is not the owner's alone:
+      // nothing is heard or lost, and the next tick tries again.
+      this.setStatus("remote", {
+        state: "error",
+        detail: errorMessage(err),
+        at: now(),
+      });
     }
   }
 

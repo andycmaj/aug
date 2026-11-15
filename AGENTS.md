@@ -65,6 +65,11 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `--setting-sources ""`, but under `-p` they connect before the first request
   only with `MCP_CONNECTION_NONBLOCKING=false` (`brainEnv`), and a tool runs
   only if a granted capability names it (Knowledge #26, claude 2.1.322).
+- **The Slack remote is `core/slack/remote.ts`** (`docs/slack-remote.md`):
+  opt-in (`remote.enabled`), separate from the triage poller. It reads one
+  conversation only the owner is in (self-DM or a private channel), hears
+  the owner's own plain lines into Home (author `SLACK_AUTHOR`) and posts
+  the Assistant's answer in the thread, marked `[aug]`.
 - **Views read through the read model** (`core/read-model.ts`), never the
   store: `aug.task(id)`, `aug.turns(id)`, `aug.pendingAction(id)` and the
   rest sit on the aug context. Each read names the tables it queries, and

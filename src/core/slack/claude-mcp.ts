@@ -435,7 +435,8 @@ export class ClaudeMcpTransport implements SlackTransport {
     return { ok: true, detail: "Claude with a Slack MCP" };
   }
 
-  private async discover(): Promise<SlackTools> {
+  // The Slack MCP's tools, found once (the remote reads with them too).
+  async slackTools(): Promise<SlackTools> {
     if (this.tools) return this.tools;
     const list =
       this.options.listTools ?? (() => listTools(this.options.spawn));
@@ -464,7 +465,15 @@ export class ClaudeMcpTransport implements SlackTransport {
     return found;
   }
 
-  readArgv(tools: SlackTools): string[] {
+  // The read-only session's command line; the remote passes its own
+  // schema and system prompt.
+  readArgv(
+    tools: SlackTools,
+    as: { schema: object; system: string } = {
+      schema: POLL_SCHEMA,
+      system: READ_SYSTEM,
+    },
+  ): string[] {
     return [
       "claude",
       "-p",
@@ -481,9 +490,9 @@ export class ClaudeMcpTransport implements SlackTransport {
       "",
       "--no-session-persistence",
       "--json-schema",
-      JSON.stringify(POLL_SCHEMA),
+      JSON.stringify(as.schema),
       "--append-system-prompt",
-      READ_SYSTEM,
+      as.system,
       "--permission-mode",
       "dontAsk",
       "--allowedTools",
@@ -493,7 +502,7 @@ export class ClaudeMcpTransport implements SlackTransport {
   }
 
   async poll(ctx: PollContext): Promise<SlackPollResult> {
-    const tools = await this.discover();
+    const tools = await this.slackTools();
     this.session ??= new PersistentClaude(() => this.readArgv(tools), {
       maxTurns: this.options.maxTurns ?? 30,
       spawn: this.options.spawn,
@@ -535,7 +544,7 @@ export class ClaudeMcpTransport implements SlackTransport {
   }
 
   async send(action: SlackReply): Promise<string> {
-    const tools = await this.discover();
+    const tools = await this.slackTools();
     const { allow, disallow } = this.sendArgs(tools);
     const result = await think({
       prompt: [

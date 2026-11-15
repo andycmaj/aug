@@ -69,6 +69,7 @@ export function toolsRules(...args: string[]): string[] {
 // have its hooks adopt it into that task (and aug-tools would take the pane's
 // task for its own).
 export function claudeEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
-  const { TMUX_PANE: _, ...env } = process.env;
+  // The Slack token stays with aug: an agent's shell never sees it.
+  const { TMUX_PANE: _, SLACK_TOKEN: _token, ...env } = process.env;
   return { ...env, ...extra, CLAUDE_CODE_ENTRYPOINT: "aug" };
 }

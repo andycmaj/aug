@@ -37,6 +37,25 @@ export function slackApi(token: string): SlackApi {
   };
 }
 
+// The same, as a JSON POST: for a write whose text is too long for a URL.
+export function slackPostApi(token: string): SlackApi {
+  return async (method, params) => {
+    const res = await fetch(`https://slack.com/api/${method}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(params),
+    });
+    const json = (await res.json()) as Record<string, unknown>;
+    log.trace("api", { method, ok: json.ok === true, status: res.status });
+    if (!json.ok)
+      throw new Error(`slack ${method}: ${String(json.error ?? res.status)}`);
+    return json;
+  };
+}
+
 export interface SlackMessage {
   ts: string;
   thread_ts?: string;

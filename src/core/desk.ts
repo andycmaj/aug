@@ -155,7 +155,9 @@ export class Desk {
   // working, finished or stopped. A closed task's chat reopens it. The line
   // is recorded as pending until the agent has it; a coding claude that is
   // not running hears it at its next start. True when the agent has it now.
-  async say(taskId: number, text: string): Promise<boolean> {
+  // `author` says where the line came from: the remote's lines are
+  // SLACK_AUTHOR.
+  async say(taskId: number, text: string, author = "you"): Promise<boolean> {
     const task = store.getTask(taskId);
     if (!task || !text.trim()) return false;
     // A SYSTEM task has no agent: what you type is notes on its proposal.
@@ -168,7 +170,7 @@ export class Desk {
       store.addTurn({
         taskId,
         role: TurnRole.you,
-        author: "you",
+        author,
         body: text.trim(),
         pending: true,
       });

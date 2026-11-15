@@ -2,7 +2,7 @@
 // the Assistant) reads back.
 
 import { head } from "./docs";
-import { TurnRole, type TurnRow } from "./types";
+import { SLACK_AUTHOR, TurnRole, type TurnRow } from "./types";
 
 export function transcript(turns: TurnRow[]): string {
   return turns
@@ -12,7 +12,9 @@ export function transcript(turns: TurnRow[]): string {
         case TurnRole.incoming:
           return `[${at}] ${turn.author} wrote:\n${head(turn.body, 3000)}`;
         case TurnRole.you:
-          return `[${at}] The owner typed:\n${turn.body}`;
+          return turn.author === SLACK_AUTHOR
+            ? `[${at}] The owner wrote from Slack (your answer goes back there: a few short lines, no tables):\n${turn.body}`
+            : `[${at}] The owner typed:\n${turn.body}`;
         case TurnRole.trigger:
           return `[${at}] (${turn.body})`;
         default: {
