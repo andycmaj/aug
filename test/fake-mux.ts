@@ -1,3 +1,4 @@
+import type { CheckoutState, FoundCheckout } from "../src/core/checkouts";
 import type {
   Mux,
   MuxSession,
@@ -25,6 +26,10 @@ export class FakeMux implements Mux {
   branches = new Set<string>();
   // Checkouts deleted after they were mapped.
   gone = new Set<string>();
+  // What is at a path; any other path is a checkout with no GitHub remote.
+  checkouts = new Map<string, CheckoutState>();
+  cloned: { repo: string; dest: string }[] = [];
+  cloneFails: string | null = null;
   private next = 0;
 
   // tmux timing out: empty to most callers, an error to a strict one.
@@ -162,8 +167,21 @@ export class FakeMux implements Mux {
     return this.branches.has(branch);
   }
 
-  async isCheckout(path: string): Promise<boolean> {
-    return !this.gone.has(path);
+  inspectCheckout(path: string): CheckoutState {
+    if (this.gone.has(path)) return { kind: "missing" };
+    return this.checkouts.get(path) ?? { kind: "checkout", repos: [] };
+  }
+
+  async findCheckouts(): Promise<FoundCheckout[]> {
+    return [...this.checkouts]
+      .filter(([path, c]) => c.kind === "checkout" && !this.gone.has(path))
+      .map(([path, c]) => ({ path, repos: c.kind === "checkout" ? c.repos : [] }));
+  }
+
+  async clone(repo: string, dest: string): Promise<void> {
+    if (this.cloneFails) throw new Error(this.cloneFails);
+    this.cloned.push({ repo, dest });
+    this.checkouts.set(dest, { kind: "checkout", repos: [repo] });
   }
 
   async worktree(w: Worktree): Promise<MadeWorktree> {

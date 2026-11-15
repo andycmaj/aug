@@ -72,6 +72,7 @@ export function assistantSystem(config: AugConfig): string {
     "- task AUG-0000: one task in full, with its recent chat",
     "- projects [--all]: projects and their repos",
     "- project <name>: one project in full: its brief, goals and how far each has come, docs, open work",
+    "- repos [--scan]: every repo aug knows, where it is checked out and whether that checkout is good, and checkouts on disk with no path in aug. When the owner names a repo with no path, look here and offer what is on disk (move repo <owner/repo> --path <it>); never map one they did not pick.",
     "- notes: the agents' live handoff board",
     "- knowledge search <words>: what agents learned",
     "Change things (the running aug makes the move and prints one line back; a failure says why):",

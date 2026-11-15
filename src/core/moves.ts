@@ -170,6 +170,50 @@ function checkUrl(url: string): string {
   return clean;
 }
 
+// --path, --clone, --rename and --anyway answer "needs path". --path never
+// moves a repo whose checkout is still good: a path an agent passes may be
+// its own worktree, which goes.
+async function answerPath(desk: Desk, repo: string, args: Record<string, string>): Promise<void> {
+  try {
+    if (args.rename) {
+      desk.renameRepo(repo, args.rename);
+      return;
+    }
+    if (args.clone === "yes") {
+      if (repos.checkMapped(desk.config(), repo)) await desk.cloneRepo(repo);
+      return;
+    }
+    if (args.path && repos.checkMapped(desk.config(), repo)) desk.mapRepo(repo, args.path);
+    const path = repos.repoPath(desk.config(), repo);
+    if (args.anyway === "yes" && path) desk.allowMismatch(repo, path);
+  } catch (err) {
+    throw new MoveError(err instanceof Error ? err.message : String(err));
+  }
+}
+
+function pathWords(need: repos.PathNeed): string {
+  const { repo, problem } = need;
+  const found = need.candidates.map(
+    (c) => `${repos.tildePath(c.path)}${c.guess ? " (folder name only, no GitHub remote)" : ""}`,
+  );
+  const fix = repos.problemFix(problem);
+  const options = [
+    problem.kind === "mismatch" &&
+      `--rename ${problem.remotes[0]} to call the repo that everywhere, or --anyway yes to use it as is`,
+    fix && `--path ${repos.tildePath(fix)}`,
+    `--path /path/to/checkout`,
+    `--clone yes (to ${repos.tildePath(need.clone)})`,
+    `--scratch yes`,
+  ].filter(Boolean);
+  return [
+    `needs path: ${repos.describeProblem(repo, problem)}.`,
+    found.length ? `Found on disk: ${found.join(", ")}.` : "",
+    `Ask the owner, then pass --repo ${repo} with ${options.join("; ")}.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 // A start that would open a dialog in the TUI answers in words: the caller
 // asks the owner and calls again with what they said. The branch question
 // is the TUI's; a move takes the suggested one.
@@ -179,13 +223,8 @@ async function start(
   args: Record<string, string>,
 ): Promise<string> {
   if (args.repo) desk.setTaskRepo(task.id, checkRepo(args.repo));
-  // --path answers "needs path". It never moves a repo whose checkout is
-  // still there: a path an agent passes may be its own worktree, which goes.
-  if (args.repo && args.path) {
-    const mapped = repos.repoPath(desk.config(), args.repo.trim());
-    if (!mapped || !(await mux().isCheckout(mapped)))
-      desk.mapRepo(args.repo.trim(), args.path);
-  }
+  const repo = store.getTask(task.id)?.repo ?? null;
+  if (repo) await answerPath(desk, repo, args);
   const opts = {
     note: args.note || undefined,
     branch: args.branch?.trim() || undefined,
@@ -208,9 +247,7 @@ async function start(
             `needs repo: which repo is ${ref(task)} in? ${result.need.choices.length ? `Known: ${result.need.choices.join(", ")}. ` : ""}Pass --repo owner/repo, or --scratch yes for a scratch folder.`,
           );
         case "path":
-          throw new MoveError(
-            `needs path: where is ${result.need.repo} checked out? Pass --repo ${result.need.repo} --path /path/to/checkout, or --scratch yes.`,
-          );
+          throw new MoveError(pathWords(result.need));
         case "branch":
           throw new MoveError(`needs branch: pass --branch`);
       }
@@ -269,6 +306,9 @@ export const MOVES: Record<string, MoveSpec> = {
       note: { help: "a note for the agent" },
       repo: { help: "coding: the owner/repo to work in" },
       path: { help: "coding: where that repo is checked out" },
+      clone: { help: "coding: yes = gh repo clone it into the first repo root" },
+      rename: { help: "coding: the repo's real owner/repo, when its checkout's remote names another" },
+      anyway: { help: "coding: yes = use the checkout though its remote names another repo" },
       branch: { help: "coding: the branch (new, existing, or pr:N)" },
       scratch: { help: "coding: yes = a scratch folder, no worktree" },
     },
@@ -560,17 +600,54 @@ export const MOVES: Record<string, MoveSpec> = {
     },
   },
   project_repo: {
-    help: "Add a repo to a project: its coding tasks default to the first",
+    help: "Add a repo to a project (its coding tasks default to the first), or take one out",
     task: false,
     positional: "project",
     args: {
       project: { help: "the project's name", required: true },
       repo: { help: "owner/repo", required: true },
+      remove: { help: "yes = take it out of the project" },
     },
-    run(_engine, _task, args) {
+    async run(desk, _task, args) {
       const project = projectNamed(args.project);
-      store.addProjectRepo(project.id, checkRepo(args.repo));
-      return projectLine(store.getProject(project.id) ?? project);
+      const repo = checkRepo(args.repo);
+      if (args.remove === "yes") desk.removeProjectRepo(project.id, repo);
+      else store.addProjectRepo(project.id, repo);
+      const line = projectLine(store.getProject(project.id) ?? project);
+      if (args.remove === "yes" || !repos.checkMapped(desk.config(), repo)) return line;
+      const found = await repos.candidates(desk.config(), repo);
+      return `${line}. ${repo} has no good checkout${found.length ? `; found at ${found.map((c) => repos.tildePath(c.path)).join(", ")} (map one with: repo ${repo} --path <it>)` : ` (map it with: repo ${repo} --path <checkout>, or --clone yes)`}`;
+    },
+  },
+  repo: {
+    help: "Where a repo is checked out: map a path, clone it, rename it, or forget it",
+    task: false,
+    positional: "repo",
+    args: {
+      repo: { help: "owner/repo", required: true },
+      path: { help: "its checkout" },
+      clone: { help: "yes = gh repo clone it (to --path, or the first repo root)" },
+      rename: { help: "its new owner/repo, in config, projects and open tasks" },
+      anyway: { help: "yes = use its checkout though the remote names another repo" },
+      remove: { help: "yes = forget its path (the checkout stays on disk)" },
+    },
+    async run(desk, _task, args) {
+      let repo = checkRepo(args.repo);
+      try {
+        if (args.remove === "yes") {
+          desk.unmapRepo(repo);
+          return `${repo}: path forgotten`;
+        }
+        if (args.rename) repo = desk.renameRepo(repo, args.rename);
+        if (args.clone === "yes") await desk.cloneRepo(repo, args.path);
+        else if (args.path) desk.mapRepo(repo, args.path);
+        const path = repos.repoPath(desk.config(), repo);
+        if (args.anyway === "yes" && path) desk.allowMismatch(repo, path);
+      } catch (err) {
+        throw new MoveError(err instanceof Error ? err.message : String(err));
+      }
+      const state = (await desk.repoReport()).repos.find((r) => r.repo === repo);
+      return state ? repos.repoStateLine(state) : `${repo}: no path`;
     },
   },
   project_archive: {

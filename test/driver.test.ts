@@ -34,9 +34,9 @@ describe("a coding task's driver", () => {
 
     engine.desk.setTaskRepo(task.id, "acme/web");
     const noPath = await engine.desk.startAgent(task.id);
-    expect(noPath).toEqual({
+    expect(noPath).toMatchObject({
       type: "needs",
-      need: { what: "path", repo: "acme/web" },
+      need: { what: "path", repo: "acme/web", problem: { kind: "unmapped" } },
     });
 
     engine.desk.setTaskRepo(task.id, "acme/api");

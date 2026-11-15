@@ -43,6 +43,7 @@ export const Commands = {
   PROJECT_ADOPT: "project.adopt",
   PROJECT_ARCHIVE: "project.archive",
   PROJECT_EDIT: "project.edit",
+  REPOS: "project.repos",
   SEND: "action.send",
   EDIT_DRAFT: "action.edit",
   EDIT_BRIEF: "task.brief",

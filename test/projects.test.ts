@@ -226,7 +226,10 @@ describe("starting a task", () => {
 
   test("an unmapped repo asks for its path; declining works in scratch", async () => {
     const t = codingTask("acme/web");
-    expect(await startTask(config(), t.id)).toEqual({ type: "needs-repo-path", repo: "acme/web" });
+    expect(await startTask(config(), t.id)).toMatchObject({
+      type: "needs-path",
+      need: { repo: "acme/web", problem: { kind: "unmapped" } },
+    });
     const r = await startTask(config(), t.id, { noWorktree: true });
     expect(r.type).toBe("started");
     expect(fake.worktrees).toHaveLength(0);
@@ -236,7 +239,10 @@ describe("starting a task", () => {
   test("a mapped checkout that is gone asks for its path again", async () => {
     fake.gone.add("/src/api");
     const t = codingTask("acme/api");
-    expect(await startTask(config(), t.id)).toEqual({ type: "needs-repo-path", repo: "acme/api" });
+    expect(await startTask(config(), t.id)).toMatchObject({
+      type: "needs-path",
+      need: { repo: "acme/api", problem: { kind: "missing", path: "/src/api" } },
+    });
     expect(fake.worktrees).toHaveLength(0);
   });
 

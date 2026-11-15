@@ -186,15 +186,16 @@ describe("the project file the owner edits", () => {
     store.updateProject(p.id, { brief: "Ship the ledger export." });
     const g = store.addGoal(p.id, "CSV export works");
     store.addProjectLink(p.id, notion, "the plan", "you");
-    const text = renderProjectDoc(store.getProject(p.id)!);
+    const text = renderProjectDoc(store.getProject(p.id)!, config());
     expect(text).toContain(`## Goals\n- [ ] ${store.goalRef(g.id)} CSV export works`);
     expect(text).toContain(`## Docs\n- the plan ${notion}`);
     expect(parseProjectDoc(text)).toEqual({
       brief: "Ship the ledger export.",
       goals: [{ id: g.id, title: "CSV export works", status: GoalStatus.open }],
+      repos: [],
       docs: [{ url: notion, title: "the plan" }],
     });
-    expect(applyProjectDoc(p.id, text, "you")).toBe("");
+    expect(applyProjectDoc(testConfig(), p.id, text, "you")).toBe("");
   });
 
   test("editing it retitles, meets, adds and drops goals and rewrites docs", () => {
@@ -216,7 +217,7 @@ describe("the project file the owner edits", () => {
       "- https://example.com/spec",
       "- not a link",
     ].join("\n");
-    expect(applyProjectDoc(p.id, edited, "you")).toBe(
+    expect(applyProjectDoc(testConfig(), p.id, edited, "you")).toBe(
       "Ledger: brief rewritten, 1 goal added, 1 goal changed, 1 goal dropped, docs updated",
     );
     expect(store.getProject(p.id)!.brief).toBe("Ship the export.\n\nBoth formats, by Friday.");
@@ -236,7 +237,7 @@ describe("the project file the owner edits", () => {
   test("a doc line without a title clears the old one", () => {
     const p = ledger();
     store.addProjectLink(p.id, notion, "the plan", "you");
-    applyProjectDoc(p.id, `## Docs\n- ${notion}`, "you");
+    applyProjectDoc(testConfig(), p.id, `## Docs\n- ${notion}`, "you");
     expect(store.linksForProject(p.id).map((l) => l.title)).toEqual([null]);
   });
 });

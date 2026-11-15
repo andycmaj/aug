@@ -27,6 +27,7 @@ import { MOVES, waitForMove } from "../core/moves";
 import { mux, setMux, socketFromEnv, TmuxMux } from "../core/mux";
 import { runInPane } from "../core/pane";
 import * as projects from "../core/projects";
+import { repoReport, reportText } from "../core/repos";
 import * as store from "../core/store";
 import { MoveStatus, NoteLabel } from "../core/types";
 
@@ -330,6 +331,17 @@ const projectsList = defineCommand({
   },
 });
 
+const reposList = defineCommand({
+  meta: {
+    name: "repos",
+    description: "Repos aug knows, where each is checked out and whether that checkout is good, and checkouts on disk it has no path for",
+  },
+  args: { scan: { type: "boolean", description: "look on disk again now" } },
+  async run({ args }) {
+    console.log(reportText(await repoReport(loadConfig(), Boolean(args.scan))));
+  },
+});
+
 // Claude Code runs the status line command inside the agent's process, so
 // it has the agent's env; a claude started by hand is found by its window's
 // tag. Outside aug it prints nothing, which hides a prompt module.
@@ -457,6 +469,7 @@ const main = defineCommand({
     tasks,
     task,
     projects: projectsList,
+    repos: reposList,
     project: projectShow,
     statusline,
     pane,

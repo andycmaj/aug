@@ -1,4 +1,4 @@
-// The one door to tmux and worktrunk. tmux owns every coding agent's claude,
+// The one door to tmux, worktrunk and the checkouts on disk. tmux owns every coding agent's claude,
 // so it outlives aug and you can reach it from any client; aug only tags what
 // it made and reads the tags back. Identity is the @aug_project / @aug_task
 // user options, never a name, so renaming a session or window breaks nothing.
@@ -6,6 +6,7 @@
 // any macOS trouble stay here. Tests swap in a fake with setMux.
 
 import { Server, TmuxServerRestartedError } from "libtmux";
+import { inspect, scan, type CheckoutState, type FoundCheckout } from "./checkouts";
 import { logger } from "./log";
 import { shellQuote, toolsCommand } from "./self";
 
@@ -121,8 +122,12 @@ export interface Mux {
   watch(onChange: () => void, signal: AbortSignal): Promise<void>;
   // A local or origin branch by that name.
   branchExists(repoPath: string, branch: string): Promise<boolean>;
-  // A mapped path can be a worktree that has since been removed.
-  isCheckout(path: string): Promise<boolean>;
+  // What is at a path: gone, a checkout and its GitHub repos, a worktree.
+  inspectCheckout(path: string): CheckoutState;
+  // Main checkouts under the roots, depth folders down.
+  findCheckouts(roots: string[], depth: number): Promise<FoundCheckout[]>;
+  // gh repo clone into dest.
+  clone(repo: string, dest: string): Promise<void>;
   // Makes the worktree and answers its path.
   worktree(w: Worktree): Promise<MadeWorktree>;
   removeWorktree(repoPath: string, branch: string): Promise<void>;
@@ -184,6 +189,8 @@ export function parseWorktree(stdout: string): MadeWorktree | null {
 }
 
 const WT_TIMEOUT_MS = 5 * 60_000;
+// A big repo over a slow link.
+const CLONE_TIMEOUT_MS = 10 * 60_000;
 
 // ── tmux ─────────────────────────────────────────────────────────────────
 
@@ -555,13 +562,24 @@ export class TmuxMux implements Mux {
     return false;
   }
 
-  async isCheckout(path: string): Promise<boolean> {
-    const proc = Bun.spawn(["git", "-C", path, "rev-parse", "--git-dir"], {
+  inspectCheckout(path: string): CheckoutState {
+    return inspect(path);
+  }
+
+  findCheckouts(roots: string[], depth: number): Promise<FoundCheckout[]> {
+    return scan(roots, depth);
+  }
+
+  async clone(repo: string, dest: string): Promise<void> {
+    const proc = Bun.spawn(["gh", "repo", "clone", repo, dest], {
       stdout: "ignore",
-      stderr: "ignore",
+      stderr: "pipe",
       stdin: "ignore",
+      timeout: CLONE_TIMEOUT_MS,
     });
-    return (await proc.exited) === 0;
+    const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+    if (code !== 0)
+      throw new MuxError(stderr.trim().split("\n").pop() || `gh repo clone exited ${code}`);
   }
 
   async worktree(w: Worktree): Promise<MadeWorktree> {

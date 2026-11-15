@@ -44,6 +44,7 @@ import { useAgentStart } from "./use-agent-start";
 import { useEditor } from "./use-editor";
 import { useDocReview } from "./use-doc-review";
 import { usePrDash } from "./use-pr-dash";
+import { useRepos } from "./use-repos";
 import { useViewer } from "./use-viewer";
 
 const log = logger("actions");
@@ -80,6 +81,7 @@ export function useActions(dialogs: Dialogs) {
   const { togglePrDash } = usePrDash();
   const { reviewDocs } = useDocReview();
   const { startAgent } = useAgentStart(dialogs, attachViewer);
+  const { showRepos } = useRepos(dialogs);
 
   // A row is about to leave the rail. On the table: the table walks on.
   // Only under the cursor: the cursor steps to a neighbor, the table stays.
@@ -800,6 +802,7 @@ export function useActions(dialogs: Dialogs) {
     jumpToProject,
     openEditor: editor.openEditor,
     editProject: editor.editProject,
+    showRepos,
     start,
     stop,
     done,

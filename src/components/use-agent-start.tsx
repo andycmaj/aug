@@ -2,16 +2,17 @@
 // still needs (a repo, where it is checked out, a branch); each need is one
 // dialog here, and the answer starts again. Nothing here decides the order.
 
-import { homedir } from "node:os";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { useAug, ViewMode } from "../context/aug";
 import { useTerminals } from "../context/terminals";
 import { inTmux, type StartOptions } from "../core/driver";
 import { errorMessage } from "../core/log";
+import { describeProblem, type PathNeed } from "../core/repos";
 import { taskRef } from "../core/rows";
 import { Kind, type TaskRow } from "../core/types";
 import type { Dialogs } from "./actions";
 import { ChoiceModal, PromptModal } from "./modals";
+import { useRepos } from "./use-repos";
 
 export function useAgentStart(
   dialogs: Dialogs,
@@ -22,6 +23,7 @@ export function useAgentStart(
   const { setActivePane } = useFocus();
   const { showToast } = useToast();
   const desk = aug.desk;
+  const { pathChoices } = useRepos(dialogs);
 
   function showTask(taskId: number) {
     if (aug.mode() === ViewMode.chat) {
@@ -43,7 +45,7 @@ export function useAgentStart(
           case "repo":
             return askRepo(task, result.need.choices, opts);
           case "path":
-            return askRepoPath(task, result.need.repo, opts);
+            return askRepoPath(task, result.need, opts);
           case "branch":
             return askBranch(task, result.need.suggested, opts);
         }
@@ -106,27 +108,26 @@ export function useAgentStart(
     ));
   }
 
-  // An unmapped repo: ask once where it lives; Esc works in scratch instead.
-  function askRepoPath(task: TaskRow, repo: string, opts: StartOptions) {
-    let submitted = false;
+  // The repo's checkout will not do (none yet, gone, a worktree, another
+  // repo's): say why and offer what was found on disk, a clone, a typed
+  // path or scratch. Start asks again if what was picked still will not do.
+  function askRepoPath(task: TaskRow, need: PathNeed, opts: StartOptions) {
+    const { repo, problem } = need;
+    const choices = pathChoices(
+      { ...need, mapped: false },
+      () => void startAgent(task.id, opts),
+    );
+    choices.push({
+      label: "No worktree: a scratch folder",
+      run: () => void startAgent(task.id, { ...opts, noWorktree: true }),
+    });
     dialogs.show(() => (
-      <PromptModal
-        title={`Where is ${repo} checked out?`}
-        hint="Saved to config. Esc starts it in a scratch folder with no worktree."
-        placeholder="/path/to/checkout"
-        onSubmit={(path) => {
-          submitted = true;
-          desk.mapRepo(repo, path.trim().replace(/^~/, homedir()));
-          void startAgent(task.id, opts);
-        }}
-        onClose={() => {
-          dialogs.close();
-          // onSubmit runs right after onClose; only a bare Esc gets here.
-          queueMicrotask(() => {
-            if (!submitted)
-              void startAgent(task.id, { ...opts, noWorktree: true });
-          });
-        }}
+      <ChoiceModal
+        title={problem.kind === "unmapped" ? `Where is ${repo} checked out?` : `${repo}: ${describeProblem(repo, problem)}`}
+        hint="Its worktrees are made from this checkout."
+        choices={choices}
+        wide
+        onClose={dialogs.close}
       />
     ));
   }

@@ -229,7 +229,7 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   {
     key: "e",
     cmd: Commands.PROJECT_EDIT,
-    desc: "edit the project's brief, goals and docs in $EDITOR",
+    desc: "edit the project's brief, goals, repos and docs in $EDITOR",
     help: "brief",
     relevant: (c) => c.item === "project",
   },
@@ -404,7 +404,8 @@ export const keymap: KeymapTable<HelpCtx> = {
     { key: "4", cmd: Commands.BOARD_TAB_4, desc: "projects", help: "projects" },
     { key: "shift+a", cmd: Commands.PROJECT_ADOPT, desc: "projects: adopt a tmux session or a stray claude" },
     { key: "x", cmd: Commands.PROJECT_ARCHIVE, desc: "projects: archive the project" },
-    { key: "e", cmd: Commands.PROJECT_EDIT, desc: "projects: edit the brief, goals and docs" },
+    { key: "e", cmd: Commands.PROJECT_EDIT, desc: "projects: edit the brief, goals, repos and docs" },
+    { key: "shift+r", cmd: Commands.REPOS, desc: "repos: where each is checked out, and checkouts to add" },
     { key: "shift+m", cmd: Commands.MOVE_TO_PROJECT, desc: "move the task to a project" },
     { key: "return", cmd: Commands.OPEN, desc: "open", help: "open" },
     {

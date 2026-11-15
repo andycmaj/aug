@@ -248,6 +248,7 @@ export function BoardMode() {
         if (tab() !== Tab.projects || !line) return false;
         return shell.actions.editProject(line.project.id);
       },
+      [Commands.REPOS]: () => void shell.actions.showRepos(),
       [Commands.MOVE_TO_PROJECT]: onTask(shell.actions.moveToProject),
       [Commands.OPEN]: () => {
         const line = tab() === Tab.projects ? projectLine() : null;

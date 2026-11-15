@@ -9,7 +9,7 @@ import { sessionEnded, sessionStarted, type SessionEnd } from "./lifecycle";
 import { logger } from "./log";
 import { mux, VIEWER_PREFIX, viewerMayHang, type MuxSession, type MuxState } from "./mux";
 import { paths } from "./paths";
-import { repoPath } from "./repos";
+import { checkMapped, pathNeed, repoPath, type PathNeed } from "./repos";
 import * as store from "./store";
 import {
   AgentState,
@@ -157,7 +157,7 @@ export interface StartOptions {
 
 export type StartResult =
   | { type: "started"; session: SessionRow; windowId: string; project: ProjectRow }
-  | { type: "needs-repo-path"; repo: string }
+  | { type: "needs-path"; need: PathNeed }
   | { type: "failed"; error: string };
 
 export function defaultBranch(task: TaskRow): string {
@@ -171,14 +171,22 @@ export async function startTask(
 ): Promise<StartResult> {
   let task = store.getTask(taskId);
   if (!task) return { type: "failed", error: `no task ${taskId}` };
+  // A worktree removed by hand (or with its repo moved) is made again on
+  // the same branch, rather than claude starting in a folder that is gone.
+  if (task.worktree && mux().inspectCheckout(task.worktree).kind === "missing") {
+    store.addTurn({
+      taskId,
+      role: TurnRole.trigger,
+      body: `Its worktree ${task.worktree} was gone: making it again${task.branch ? ` on ${task.branch}` : ""}.`,
+    });
+    store.updateTask(taskId, { worktree: null });
+    task = store.getTask(taskId)!;
+  }
+  const problem =
+    task.repo && !opts.noWorktree && !task.worktree ? checkMapped(config, task.repo) : null;
+  if (task.repo && problem)
+    return { type: "needs-path", need: await pathNeed(config, task.repo, problem) };
   const path = repoPath(config, task.repo);
-  if (
-    task.repo &&
-    !opts.noWorktree &&
-    !task.worktree &&
-    !(path && (await mux().isCheckout(path)))
-  )
-    return { type: "needs-repo-path", repo: task.repo };
 
   try {
     let project = task.project_id ? store.getProject(task.project_id) : null;

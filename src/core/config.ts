@@ -79,6 +79,9 @@ export interface AugConfig {
   theme: "default" | "terminal" | "mono" | "tokyo-night";
   // Where a coding task with no mapped checkout works.
   scratchRepo?: string;
+  // Folders searched for checkouts to offer (repos.ts); default ~/workspace,
+  // ~/src, ~/code, ~/projects, ~/dev, ~/git. The first is where Clone puts one.
+  repoRoots?: string[];
   // Opens a link or a file an agent made: a command, or argv; the target is
   // appended. Default: open (macOS), wslview (WSL), xdg-open (Linux).
   opener?: string | string[];

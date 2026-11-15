@@ -77,16 +77,28 @@ export interface Choice {
   run: () => void;
 }
 
+const CHOICES_SHOWN = 14;
+
 export function ChoiceModal(props: {
   title: string;
   hint?: string;
   choices: Choice[];
+  // lg for choices with paths in them.
+  wide?: boolean;
   onClose: () => void;
 }) {
   const theme = useTheme();
   const [selected, setSelected] = createSignal(0);
   const move = (d: number) =>
     setSelected((s) => Math.max(0, Math.min(props.choices.length - 1, s + d)));
+  // A long list (every checkout on disk) shows a window that follows the
+  // selection, so the modal never grows past the screen.
+  const shown = () => {
+    const total = props.choices.length;
+    if (total <= CHOICES_SHOWN) return { start: 0, end: total };
+    const start = Math.max(0, Math.min(total - CHOICES_SHOWN, selected() - Math.floor(CHOICES_SHOWN / 2)));
+    return { start, end: start + CHOICES_SHOWN };
+  };
   const bindings: BindingSpec[] = [
     ...modalNavBindings,
     { key: "j", cmd: ModalCommands.MODAL_DOWN, desc: "down" },
@@ -94,7 +106,7 @@ export function ChoiceModal(props: {
   ];
   return (
     <Modal
-      size="md"
+      size={props.wide ? "lg" : "md"}
       onClose={props.onClose}
       bindings={bindings}
       commands={{
@@ -122,8 +134,12 @@ export function ChoiceModal(props: {
         paddingTop={1}
         paddingBottom={1}
       >
-        <For each={props.choices}>
-          {(choice, i) => {
+        <Show when={shown().start > 0}>
+          <text fg={theme.textMuted}>{`  ↑ ${shown().start} more`}</text>
+        </Show>
+        <For each={props.choices.slice(shown().start, shown().end)}>
+          {(choice, at) => {
+            const i = () => at() + shown().start;
             const on = () => i() === selected();
             return (
               <box
@@ -154,6 +170,9 @@ export function ChoiceModal(props: {
             );
           }}
         </For>
+        <Show when={shown().end < props.choices.length}>
+          <text fg={theme.textMuted}>{`  ↓ ${props.choices.length - shown().end} more`}</text>
+        </Show>
       </box>
     </Modal>
   );

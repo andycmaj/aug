@@ -29,7 +29,7 @@ import { now } from "./db";
 import * as projects from "./projects";
 import { applyProjectDoc, renderProjectDoc } from "./project-doc";
 import { editPending, sendPending } from "./outbound";
-import { mapRepo, setTaskRepo } from "./repos";
+import * as repos from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
@@ -77,11 +77,6 @@ export class Desk {
   }
 
   // ── config ────────────────────────────────────────────────────────────
-
-  // Where a repo is checked out, so a start that asked for it can run.
-  mapRepo(repo: string, path: string): void {
-    mapRepo(this.options.config, repo, path);
-  }
 
   // A noise pattern triage reads on the next message.
   addNoise(rule: NoiseRule): void {
@@ -224,15 +219,46 @@ export class Desk {
   // The project's file as the owner edits it, and what writing it back did.
   projectDoc(projectId: number): string | null {
     const project = store.getProject(projectId);
-    return project ? renderProjectDoc(project) : null;
+    return project ? renderProjectDoc(project, this.config()) : null;
   }
 
   editProject(projectId: number, text: string): string {
-    return applyProjectDoc(projectId, text, "you");
+    return applyProjectDoc(this.options.config, projectId, text, "you");
   }
 
   setTaskRepo(taskId: number, repo: string) {
-    setTaskRepo(taskId, repo);
+    repos.setTaskRepo(taskId, repo);
+  }
+
+  // ── repos and their checkouts ─────────────────────────────────────────
+
+  repoReport(fresh = false) {
+    return repos.repoReport(this.config(), fresh);
+  }
+
+  // Where a repo is checked out, so a start that asked for it can run.
+  mapRepo(repo: string, path: string) {
+    repos.mapRepo(this.options.config, repo, path);
+  }
+
+  unmapRepo(repo: string) {
+    repos.unmapRepo(this.options.config, repo);
+  }
+
+  cloneRepo(repo: string, dest?: string) {
+    return repos.cloneRepo(this.options.config, repo, dest);
+  }
+
+  renameRepo(from: string, to: string) {
+    return repos.renameRepo(this.options.config, from, to);
+  }
+
+  allowMismatch(repo: string, path: string) {
+    repos.allowMismatch(repo, path);
+  }
+
+  removeProjectRepo(projectId: number, repo: string) {
+    store.removeProjectRepo(projectId, repo);
   }
 
   moveTask(taskId: number, projectId: number) {

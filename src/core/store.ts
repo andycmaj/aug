@@ -290,6 +290,10 @@ export function updateTask(id: number, patch: TaskPatch): void {
   patchRow<TaskRow>("tasks", id, patch, "updated_at");
 }
 
+export function tasksWithRepo(repo: string): TaskRow[] {
+  return all<TaskRow>("SELECT * FROM tasks WHERE repo = ? ORDER BY id", repo);
+}
+
 export function tasksForProject(projectId: number): TaskRow[] {
   return all<TaskRow>(
     "SELECT * FROM tasks WHERE project_id = ? AND status != 'dropped' ORDER BY created_at, id",
@@ -386,6 +390,14 @@ export function addProjectRepo(id: number, repo: string): void {
   const repos = projectRepos(project);
   if (repos.includes(repo)) return;
   updateProject(id, { repos: JSON.stringify([...repos, repo]) });
+}
+
+export function removeProjectRepo(id: number, repo: string): void {
+  const project = getProject(id);
+  if (!project) return;
+  const repos = projectRepos(project);
+  if (!repos.includes(repo)) return;
+  updateProject(id, { repos: JSON.stringify(repos.filter((r) => r !== repo)) });
 }
 
 // Only for a project that never got its tmux tag: nothing points at it yet.

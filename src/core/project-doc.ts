@@ -1,12 +1,15 @@
-// A project's brief, goals and docs as one Markdown file the owner edits in
-// $EDITOR. Goals are a checklist keyed by their ref, so a retitled line stays
+// A project's brief, goals, repos and docs as one Markdown file the owner
+// edits in $EDITOR. Goals are a checklist keyed by their ref, so a retitled line stays
 // the same goal and the tasks pointing at it keep pointing; a line without a
 // ref is a new goal, and a goal whose line is gone is dropped (never deleted).
 
+import { checkMapped, checkRepo, describeProblem, expandHome, mapRepo, repoPath, tildePath } from "./repos";
+import type { AugConfig, ConfigSource } from "./config";
 import * as store from "./store";
 import { GoalStatus, type ProjectRow } from "./types";
 
 const GOALS = "## Goals";
+const REPOS = "## Repos";
 const DOCS = "## Docs";
 
 const MARK: Record<GoalStatus, string> = {
@@ -15,21 +18,32 @@ const MARK: Record<GoalStatus, string> = {
   [GoalStatus.dropped]: "-",
 };
 
-export function renderProjectDoc(p: ProjectRow): string {
+export function renderProjectDoc(p: ProjectRow, config: AugConfig): string {
   const goals = store
     .goalsForProject(p.id)
     .filter((g) => g.status !== GoalStatus.dropped);
   const links = store.linksForProject(p.id);
+  const repoLine = (repo: string) => {
+    const path = repoPath(config, repo);
+    const problem = checkMapped(config, repo);
+    const why = problem && problem.kind !== "unmapped" ? `  <!-- ${describeProblem(repo, problem)} -->` : "";
+    return `- ${repo}${path ? `  ${tildePath(path)}` : ""}${why}`;
+  };
   return [
     `# ${p.name}`,
     "<!-- What every task in this project reads. The brief goes under this line.",
     "     Goals: [x] met, [-] dropped; a line without a G ref is a new goal.",
+    "     Repos: owner/repo, then where it is checked out (every project shares",
+    "     it); coding tasks default to the first.",
     "     Docs: one URL a line, with what it is in front. -->",
     "",
     p.brief,
     "",
     GOALS,
     ...goals.map((g) => `- [${MARK[g.status]}] ${store.goalRef(g.id)} ${g.title}`),
+    "",
+    REPOS,
+    ...store.projectRepos(p).map(repoLine),
     "",
     DOCS,
     ...links.map((l) => `- ${l.title ? `${l.title} ` : ""}${l.url}`),
@@ -48,26 +62,38 @@ export interface ParsedDoc {
   title: string | null;
 }
 
+export interface ParsedRepo {
+  repo: string;
+  path: string | null;
+}
+
 export interface ParsedProject {
   brief: string;
   goals: ParsedGoal[];
+  // Null when the file has no Repos heading: the repos are left alone.
+  repos: ParsedRepo[] | null;
   docs: ParsedDoc[];
 }
 
 const GOAL_LINE = /^[-*]\s*\[([ xX-])\]\s*(?:(G\d+)\b\s*)?(.*)$/;
+const REPO_LINE = /^[-*]\s*([\w.-]+\/[\w.-]+)(?:\s+(\S.*))?$/;
 const DOC_LINE = /^[-*]\s*(?:(.*?)\s+)?<?(https?:\/\/[^\s>]+)>?$/;
 
 export function parseProjectDoc(text: string): ParsedProject {
   const brief: string[] = [];
   const goals: ParsedGoal[] = [];
   const docs: ParsedDoc[] = [];
-  let part: "brief" | "goals" | "docs" = "brief";
+  let repos: ParsedRepo[] | null = null;
+  let part: "brief" | "goals" | "repos" | "docs" = "brief";
   const body = text.replace(/<!--[\s\S]*?-->/g, "");
   for (const raw of body.split("\n")) {
     const line = raw.trim();
     const heading = line.toLowerCase();
     if (heading === GOALS.toLowerCase()) part = "goals";
-    else if (heading === DOCS.toLowerCase()) part = "docs";
+    else if (heading === REPOS.toLowerCase()) {
+      part = "repos";
+      repos ??= [];
+    } else if (heading === DOCS.toLowerCase()) part = "docs";
     else if (part === "brief") {
       if (!(brief.length === 0 && /^# /.test(line))) brief.push(raw);
     } else if (part === "goals") {
@@ -80,16 +106,24 @@ export function parseProjectDoc(text: string): ParsedProject {
         title: m[3].trim(),
         status,
       });
+    } else if (part === "repos") {
+      const m = line.match(REPO_LINE);
+      if (m) repos?.push({ repo: m[1], path: m[2]?.trim() || null });
     } else {
       const m = line.match(DOC_LINE);
       if (m) docs.push({ url: m[2], title: m[1]?.trim() || null });
     }
   }
-  return { brief: brief.join("\n").trim(), goals, docs };
+  return { brief: brief.join("\n").trim(), goals, repos, docs };
 }
 
 // Writes what changed and says it in words for a toast.
-export function applyProjectDoc(projectId: number, text: string, by: string): string {
+export function applyProjectDoc(
+  config: ConfigSource,
+  projectId: number,
+  text: string,
+  by: string,
+): string {
   const project = store.getProject(projectId);
   if (!project) return "";
   const next = parseProjectDoc(text);
@@ -148,6 +182,32 @@ export function applyProjectDoc(projectId: number, text: string, by: string): st
       docs++;
     }
     if (docs) said.push("docs updated");
+    if (next.repos) said.push(...applyRepos(config, projectId, next.repos));
     return said.length ? `${project.name}: ${said.join(", ")}` : "";
   });
+}
+
+// The project's list is the file's, in its order. A path sets where the
+// repo is checked out for every project; one that is not a checkout is not
+// saved, and the toast says why. A line without a path leaves the mapping.
+function applyRepos(config: ConfigSource, projectId: number, lines: ParsedRepo[]): string[] {
+  const said: string[] = [];
+  const project = store.getProject(projectId);
+  if (!project) return said;
+  const had = store.projectRepos(project);
+  const repos = [...new Set(lines.map((l) => checkRepo(l.repo)))];
+  if (repos.join("\n") !== had.join("\n")) {
+    store.updateProject(projectId, { repos: JSON.stringify(repos) });
+    said.push("repos updated");
+  }
+  for (const { repo, path } of lines) {
+    if (!path || expandHome(path) === repoPath(config.get(), repo)) continue;
+    try {
+      mapRepo(config, repo, path);
+      said.push(`${repo} at ${tildePath(expandHome(path))}`);
+    } catch (err) {
+      said.push(`${repo} path not saved: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return said;
 }

@@ -10,7 +10,7 @@ import { startCancelled } from "./lifecycle";
 import { logger } from "./log";
 import * as projects from "./projects";
 import { onboardingTask } from "./proposals";
-import { repoChoices, repoPath } from "./repos";
+import { checkMapped, pathNeed, repoChoices, type PathNeed } from "./repos";
 import * as store from "./store";
 import {
   Kind,
@@ -33,7 +33,7 @@ export interface StartOptions {
 // TUI turns each into a dialog, a move into words; neither decides it.
 export type StartNeed =
   | { what: "repo"; choices: string[] }
-  | { what: "path"; repo: string }
+  | PathNeed
   | { what: "branch"; suggested: string };
 
 export type StartResult =
@@ -177,8 +177,9 @@ export class TmuxDriver implements AgentDriver {
           type: "needs",
           need: { what: "repo", choices: repoChoices(config, task) },
         };
-      if (!repoPath(config, task.repo))
-        return { type: "needs", need: { what: "path", repo: task.repo } };
+      const problem = checkMapped(config, task.repo);
+      if (problem)
+        return { type: "needs", need: await pathNeed(config, task.repo, problem) };
       if (opts.branch === undefined)
         return {
           type: "needs",
@@ -261,8 +262,8 @@ export class TmuxDriver implements AgentDriver {
           false,
         );
         return { type: "started", project: result.project };
-      case "needs-repo-path":
-        return { type: "needs", need: { what: "path", repo: result.repo } };
+      case "needs-path":
+        return { type: "needs", need: result.need };
       case "failed":
         return result;
     }
