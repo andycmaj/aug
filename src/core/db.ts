@@ -356,6 +356,33 @@ export function dataVersion(): number {
   return row.data_version;
 }
 
+// Another process can hold the write lock past busy_timeout.
+export function isBusy(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    "code" in err &&
+    typeof err.code === "string" &&
+    err.code.startsWith("SQLITE_BUSY")
+  );
+}
+
+// For a write that must land, like the record of a failure the owner should
+// see: a busy database is tried again a few times before giving up.
+export async function writeWhenFree<T>(
+  write: () => T,
+  tries = 8,
+  waitMs = 250,
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return write();
+    } catch (err) {
+      if (!isBusy(err) || attempt >= tries) throw err;
+      await Bun.sleep(waitMs);
+    }
+  }
+}
+
 export function now(): string {
   return new Date().toISOString();
 }

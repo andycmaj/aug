@@ -11,7 +11,7 @@ import { assistantCall } from "./assistant";
 import { think, BrainError, type BrainCall } from "./brain";
 import { capabilityAllow, capabilityGrant, DENIED_STEP, deniedNote, GH_READS, grantedNote, lastDenials, SHELL_HOWTO } from "./capabilities";
 import type { AugConfig, ConfigSource } from "./config";
-import { now } from "./db";
+import { now, writeWhenFree } from "./db";
 import { DocName, forPrompt } from "./docs";
 import { docsBlock } from "./prompts";
 import { changedFiles, snapshotDir } from "./files";
@@ -24,7 +24,7 @@ import {
 } from "./lifecycle";
 import { ARTIFACT_TOOLS } from "./hooks";
 import { AGENT_MOVES } from "./moves";
-import { logger } from "./log";
+import { errorMessage, logger } from "./log";
 import { linkLine, projectContext } from "./lookup";
 import { docDraftsDir, paths } from "./paths";
 import { ONBOARD_START, onboardBrief } from "./onboard";
@@ -380,22 +380,29 @@ export class AgentPool {
     const ref = { taskId, sessionId };
     // Home's agent is the Assistant: it talks, and runs aug with aug-tools.
     const home = task.kind === Kind.home;
-    const turn = store.batch(() => {
-      sessionStarted({
-        id: sessionId,
-        taskId,
-        kind: SessionKind.chat,
-        cwd,
-        startedBy: "aug",
+    const author = home ? "aug" : "agent";
+    let turn: TurnRow;
+    try {
+      turn = store.batch(() => {
+        sessionStarted({
+          id: sessionId,
+          taskId,
+          kind: SessionKind.chat,
+          cwd,
+          startedBy: "aug",
+        });
+        return store.addTurn({
+          taskId,
+          role: TurnRole.agent,
+          author,
+          status: TurnStatus.running,
+          sessionId,
+        });
       });
-      return store.addTurn({
-        taskId,
-        role: TurnRole.agent,
-        author: home ? "aug" : "agent",
-        status: TurnStatus.running,
-        sessionId,
-      });
-    });
+    } catch (err) {
+      await this.couldNotStart(taskId, sessionId, reason, author, err);
+      return;
+    }
     const abort = new AbortController();
     this.running.set(taskId, { turnId: turn.id, abort });
     log.info("turn start", {
@@ -477,16 +484,63 @@ export class AgentPool {
         err instanceof BrainError || err instanceof Error
           ? err.message
           : String(err);
-      store.batch(() => {
-        store.updateTurn(turn.id, {
-          status: "failed",
-          body: stopped ? "Stopped and saved." : `The agent failed: ${message}`,
-          finished_at: now(),
+      try {
+        await writeWhenFree(() =>
+          store.batch(() => {
+            store.updateTurn(turn.id, {
+              status: "failed",
+              body: stopped
+                ? "Stopped and saved."
+                : `The agent failed: ${message}`,
+              finished_at: now(),
+            });
+            sessionEnded(ref, stopped ? AgentState.saved : AgentState.stopped);
+          }),
+        );
+      } catch (writeErr) {
+        log.error("turn failure not recorded", {
+          task: taskId,
+          session: sessionId,
+          err: writeErr,
         });
-        sessionEnded(ref, stopped ? AgentState.saved : AgentState.stopped);
-      });
+      }
     } finally {
       this.running.delete(taskId);
+    }
+  }
+
+  // The turn never began (the database was locked past busy_timeout, say):
+  // nothing changed, so the owner sees why in the thread and types again.
+  // Called from a void request, so it must not throw.
+  private async couldNotStart(
+    taskId: number,
+    sessionId: string,
+    reason: string,
+    author: string,
+    err: unknown,
+  ): Promise<void> {
+    log.error("turn could not start", {
+      task: taskId,
+      session: sessionId,
+      reason,
+      err,
+    });
+    try {
+      await writeWhenFree(() =>
+        store.addTurn({
+          taskId,
+          role: TurnRole.agent,
+          author,
+          status: TurnStatus.failed,
+          body: `The turn could not start: ${errorMessage(err)}. Type again to retry.`,
+        }),
+      );
+    } catch (writeErr) {
+      log.error("turn failure not recorded", {
+        task: taskId,
+        session: sessionId,
+        err: writeErr,
+      });
     }
   }
 }

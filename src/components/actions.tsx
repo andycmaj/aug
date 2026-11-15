@@ -27,7 +27,7 @@ import {
   type MadeFile,
 } from "../core/files";
 import { infoTitle, itemInfo } from "../core/info";
-import { errorMessage } from "../core/log";
+import { errorMessage, logger } from "../core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt";
 import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
@@ -45,6 +45,8 @@ import { useEditor } from "./use-editor";
 import { useDocReview } from "./use-doc-review";
 import { usePrDash } from "./use-pr-dash";
 import { useViewer } from "./use-viewer";
+
+const log = logger("actions");
 
 export interface Dialogs {
   dialog: Accessor<(() => JSX.Element) | null>;
@@ -473,7 +475,10 @@ export function useActions(dialogs: Dialogs) {
   // The engine records the line and hands it on; a coding claude gets it
   // typed into its tmux window, which the embedded viewer shows.
   function say(task: TaskRow, text: string) {
-    void desk.say(task.id, text);
+    desk.say(task.id, text).catch((err) => {
+      log.error("say failed", { task: task.id, err });
+      showToast(`Not sent: ${errorMessage(err)}`, 4000, "error");
+    });
   }
 
   // ── on an FYI / an idea ───────────────────────────────────────────────

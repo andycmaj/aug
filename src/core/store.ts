@@ -71,10 +71,14 @@ export function changed(): void {
 }
 
 // Many writes, one notification: a poll that files ten messages redraws once.
+// IMMEDIATE takes the write lock up front, waiting out busy_timeout. A
+// deferred one that reads first cannot wait: SQLite answers "database is
+// locked" at once when its read has to become a write while another process
+// (a hook, aug-tools) writes. Nested batches are savepoints either way.
 export function batch<T>(fn: () => T): T {
   batching++;
   try {
-    return db().transaction(fn)();
+    return db().transaction(fn).immediate();
   } finally {
     batching--;
     if (batching === 0 && pending) {
