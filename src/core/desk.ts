@@ -24,11 +24,12 @@ import {
 import { nudgeText } from "./feedback";
 import { correct } from "./learn";
 import { holdForStart, taskClosed } from "./lifecycle";
+import type { AugConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
 import * as projects from "./projects";
 import { applyProjectDoc, renderProjectDoc } from "./project-doc";
 import { editPending, sendPending } from "./outbound";
-import { setTaskRepo } from "./repos";
+import { mapRepo, setTaskRepo } from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
@@ -50,6 +51,7 @@ const HOOKS_OFFERED = "hooks.offered";
 
 export interface DeskOptions {
   drivers: Drivers;
+  config: ConfigSource;
   // Fixture mode never touches your real settings (the hooks offer).
   offline?: boolean;
   onLearned?: (line: string) => void;
@@ -66,6 +68,27 @@ export class Desk {
 
   get offline(): boolean {
     return Boolean(this.options.offline);
+  }
+
+  // Read each time a setting is used, so an edit to config.json (or a move
+  // below) applies without a restart.
+  config(): AugConfig {
+    return this.options.config.get();
+  }
+
+  // ── config ────────────────────────────────────────────────────────────
+
+  // Where a repo is checked out, so a start that asked for it can run.
+  mapRepo(repo: string, path: string): void {
+    mapRepo(this.options.config, repo, path);
+  }
+
+  // A noise pattern triage reads on the next message.
+  addNoise(rule: NoiseRule): void {
+    this.options.config.update((c) => ({
+      ...c,
+      triage: { ...c.triage, noise: [...c.triage.noise, rule] },
+    }));
   }
 
   // ── tasks ─────────────────────────────────────────────────────────────
@@ -171,7 +194,7 @@ export class Desk {
   // ── projects ──────────────────────────────────────────────────────────
 
   createProject(name: string, repo?: string | null) {
-    return projects.createProject({ name, repo });
+    return projects.createProject(this.config(), { name, repo });
   }
 
   adoptableSessions() {
@@ -195,7 +218,7 @@ export class Desk {
   async adoptStray(stray: Stray, projectId: number): Promise<TaskRow> {
     const project = store.getProject(projectId);
     if (!project) throw new Error(`no project ${projectId}`);
-    return adoptStray(stray, project);
+    return adoptStray(this.config(), stray, project);
   }
 
   // The project's file as the owner edits it, and what writing it back did.
@@ -213,11 +236,11 @@ export class Desk {
   }
 
   moveTask(taskId: number, projectId: number) {
-    return projects.moveTask(taskId, projectId);
+    return projects.moveTask(this.config(), taskId, projectId);
   }
 
   jumpToProject(projectId: number) {
-    return projects.jumpToProject(projectId);
+    return projects.jumpToProject(this.config(), projectId);
   }
 
   // Your own tmux client, moved to the task's window.
@@ -233,13 +256,14 @@ export class Desk {
   // ── drafts ────────────────────────────────────────────────────────────
 
   async send(taskId: number): Promise<string> {
-    return sendPending(taskId);
+    return sendPending(this.config(), taskId);
   }
 
   editDraft(taskId: number, text: string): boolean {
     const before = editPending(taskId, text);
     if (before === null) return false;
     correct(
+      this.config(),
       { taskId, what: "edited the draft before sending", before, after: text },
       this.learnedNotice,
     );
@@ -249,6 +273,7 @@ export class Desk {
   redraft(taskId: number, instruction: string): void {
     const pending = store.pendingAction(taskId);
     correct(
+      this.config(),
       {
         taskId,
         what: "asked for a redraft",
@@ -274,6 +299,7 @@ export class Desk {
   watch(taskId: number, on: boolean): void {
     store.setWatching(taskId, on);
     correct(
+      this.config(),
       {
         taskId,
         what: on
@@ -292,6 +318,7 @@ export class Desk {
       .turnsForTask(taskId)
       .some((t) => t.role === TurnRole.agent || t.role === TurnRole.you);
     correct(
+      this.config(),
       {
         taskId,
         what: "Not a task: should have been FYI",
@@ -319,6 +346,7 @@ export class Desk {
     if (!task || task.priority === priority) return;
     store.updateTask(taskId, { priority, priority_pinned: 1 });
     correct(
+      this.config(),
       {
         taskId,
         what: "changed priority",
@@ -338,6 +366,7 @@ export class Desk {
         holdForStart(taskId);
     });
     correct(
+      this.config(),
       {
         taskId,
         what: "changed what kind of work it is",
@@ -403,6 +432,7 @@ export class Desk {
       return created;
     });
     correct(
+      this.config(),
       {
         messageId,
         taskId: task.id,
@@ -454,7 +484,7 @@ export class Desk {
   // Your notes on a proposal (from revdiff, or typed on the task) go back to
   // be redrafted.
   redraftDocs(taskId: number, notes: string): Promise<string> {
-    return redraftProposals(taskId, notes);
+    return redraftProposals(this.config(), taskId, notes);
   }
 
   // The onboarding interview: interactive claude in the System task's own

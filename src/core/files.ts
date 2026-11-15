@@ -4,7 +4,6 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import { loadConfig } from "./config";
 
 export interface MadeFile {
   path: string;
@@ -166,7 +165,7 @@ export function isWsl(): boolean {
 
 export function openerArgv(
   target: string,
-  opener: string | string[] | undefined = loadConfig().opener,
+  opener: string | string[] | undefined,
   platform: NodeJS.Platform = process.platform,
   wsl: boolean = isWsl(),
 ): string[] {
@@ -179,8 +178,11 @@ export function openerArgv(
   return ["xdg-open", target];
 }
 
-export function openTarget(target: string): void {
-  Bun.spawn(openerArgv(target), {
+export function openTarget(
+  target: string,
+  opener: string | string[] | undefined,
+): void {
+  Bun.spawn(openerArgv(target, opener), {
     stdin: "ignore",
     stdout: "ignore",
     stderr: "ignore",

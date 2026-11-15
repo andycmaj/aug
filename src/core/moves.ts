@@ -6,7 +6,7 @@
 
 import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
-import { loadConfig, saveConfig, type NoiseRule } from "./config";
+import type { NoiseRule } from "./config";
 import type { Desk } from "./desk";
 import { DocName } from "./docs";
 import { docNamed, propose } from "./proposals";
@@ -182,9 +182,9 @@ async function start(
   // --path answers "needs path". It never moves a repo whose checkout is
   // still there: a path an agent passes may be its own worktree, which goes.
   if (args.repo && args.path) {
-    const mapped = repos.repoPath(args.repo.trim());
+    const mapped = repos.repoPath(desk.config(), args.repo.trim());
     if (!mapped || !(await mux().isCheckout(mapped)))
-      repos.mapRepo(args.repo.trim(), args.path);
+      desk.mapRepo(args.repo.trim(), args.path);
   }
   const opts = {
     note: args.note || undefined,
@@ -318,13 +318,9 @@ export const MOVES: Record<string, MoveSpec> = {
       channel: { help: "github | slack" },
       github_reason: { help: "GitHub notification reasons, comma separated" },
     },
-    run(_desk, _task, args) {
+    run(desk, _task, args) {
       const rule = noiseRule(args);
-      const config = loadConfig();
-      saveConfig({
-        ...config,
-        triage: { ...config.triage, noise: [...config.triage.noise, rule] },
-      });
+      desk.addNoise(rule);
       const what = [
         rule.channel,
         rule.author && `from /${rule.author}/`,

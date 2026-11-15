@@ -6,7 +6,7 @@
 import { advisorDue, runAdvisor } from "./advisor";
 import { runDocPass } from "./doc-pass";
 import { AgentPool, type CodingLaunch } from "./agents";
-import { loadConfig } from "./config";
+import type { ConfigSource } from "./config";
 import { dataVersion, now } from "./db";
 import { Desk } from "./desk";
 import { syncDocs } from "./doc-sync";
@@ -40,6 +40,9 @@ export interface EngineStatus {
 }
 
 export interface EngineOptions {
+  // config.json for a real aug, fixedConfig for tests and the fixture day.
+  // Everything the engine owns reads it through this, never a global.
+  config: ConfigSource;
   // Fixture mode: no pollers, no Advisor clock.
   offline?: boolean;
   // Replaces the coding agent's command line (fixture mode's fake claude).
@@ -60,7 +63,7 @@ const off = (detail: string): ConnectorStatus => ({
 });
 
 export class Engine {
-  readonly pool = new AgentPool();
+  readonly pool: AgentPool;
   readonly drivers: Drivers;
   readonly desk: Desk;
   private slack: SlackTransport | null = null;
@@ -73,14 +76,18 @@ export class Engine {
     advisor: off("not started"),
   };
 
-  constructor(private options: EngineOptions = {}) {
+  constructor(private options: EngineOptions) {
+    const { config } = options;
+    this.pool = new AgentPool({ config });
     this.drivers = new Drivers({
       pool: this.pool,
+      config,
       noWorktrees: options.noWorktrees,
       launchOverride: options.launchOverride,
     });
     this.desk = new Desk({
       drivers: this.drivers,
+      config,
       offline: options.offline,
       onLearned: options.onLearned,
     });
@@ -148,7 +155,7 @@ export class Engine {
       this.setStatus("advisor", off("fixture mode"));
       return;
     }
-    const config = loadConfig();
+    const config = this.options.config.get();
     log.info("engine start", {
       github: config.github.enabled,
       slack: config.slack.enabled ? config.slack.transport : false,
@@ -251,7 +258,7 @@ export class Engine {
       if (!row) continue;
       fresh++;
       linkByBranch(row);
-      const outcome = await triage(row);
+      const outcome = await triage(row, { config: this.options.config.get() });
       log.debug("triaged", {
         message: row.id,
         channel: m.channel,
@@ -320,7 +327,7 @@ export class Engine {
     this.setStatus("slack", { ...this.status.slack, state: "polling" });
     const done = log.time("slack poll", { transport: slack.kind });
     try {
-      const config = loadConfig();
+      const config = this.options.config.get();
       const cursor = JSON.parse(
         store.kvGet(`slack.cursor.${slack.kind}`) ??
           JSON.stringify(EMPTY_CURSOR),
@@ -370,7 +377,7 @@ export class Engine {
     this.setStatus("advisor", { ...this.status.advisor, state: "polling" });
     const done = log.time("advisor run", { force });
     try {
-      const added = await runAdvisor();
+      const added = await runAdvisor(this.options.config.get());
       done({ added });
       this.setStatus("advisor", {
         state: "ok",
@@ -387,7 +394,7 @@ export class Engine {
     }
     // The daily doc pass rides the same clock; it gates itself.
     try {
-      await runDocPass(new Date(), force);
+      await runDocPass(this.options.config.get(), new Date(), force);
     } catch (err) {
       log.error("doc pass failed", { error: errorMessage(err) });
     }

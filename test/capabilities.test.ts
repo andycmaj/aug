@@ -18,7 +18,6 @@ import {
 import {
   DEFAULT_CONFIG,
   mergeConfig,
-  setConfigForTest,
   type AugConfig,
 } from "../src/core/config";
 
@@ -195,23 +194,20 @@ describe("capabilities", () => {
   });
 
   test("roles' allow lists carry their grants", () => {
-    setConfigForTest(
-      withCaps({
-        grants: { general: ["docs.read"], assistant: ["slack.read"] },
-      }),
-    );
-    expect(generalAllow()).toContain("mcp__claude_ai_Claude_Docs__query");
-    expect(generalAllow()).not.toContain(
+    const config = withCaps({
+      grants: { general: ["docs.read"], assistant: ["slack.read"] },
+    });
+    expect(generalAllow(config)).toContain("mcp__claude_ai_Claude_Docs__query");
+    expect(generalAllow(config)).not.toContain(
       "mcp__claude_ai_Slack__slack_read_thread",
     );
-    expect(assistantAllow()).toContain(
+    expect(assistantAllow(config)).toContain(
       "mcp__claude_ai_Slack__slack_read_thread",
     );
-    setConfigForTest(DEFAULT_CONFIG);
   });
 
   test("the assistant may read GitHub with gh, but never write", () => {
-    const allow = assistantAllow();
+    const allow = assistantAllow(DEFAULT_CONFIG);
     expect(allow).toContain("Bash(gh issue view:*)");
     expect(allow).toContain("Bash(gh pr list:*)");
     expect(allow.filter((r) => r.startsWith("Bash(gh "))).not.toContain(
@@ -220,7 +216,7 @@ describe("capabilities", () => {
     for (const rule of allow.filter((r) => r.startsWith("Bash(gh "))) {
       expect(rule).not.toMatch(/comment|create|edit|merge|close|review/);
     }
-    expect(generalAllow()).toContain("Bash(gh issue view:*)");
+    expect(generalAllow(DEFAULT_CONFIG)).toContain("Bash(gh issue view:*)");
   });
 });
 
@@ -253,7 +249,6 @@ describe("plugin and command capabilities", () => {
   afterEach(() => {
     if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = saved;
-    setConfigForTest(DEFAULT_CONFIG);
   });
 
   test("an installed plugin resolves by full or bare name", () => {
@@ -397,8 +392,7 @@ describe("plugin and command capabilities", () => {
     });
     expect(grantedNote("assistant", config)).toContain("jq");
     expect(grantedNote("general", config)).toBe("");
-    setConfigForTest(config);
-    expect(assistantAllow()).toContain("Bash(jq:*)");
-    expect(generalAllow()).not.toContain("Bash(jq:*)");
+    expect(assistantAllow(config)).toContain("Bash(jq:*)");
+    expect(generalAllow(config)).not.toContain("Bash(jq:*)");
   });
 });

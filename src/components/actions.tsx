@@ -30,7 +30,6 @@ import { infoTitle, itemInfo } from "../core/info";
 import { errorMessage } from "../core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt";
 import { strayLabel, type Stray } from "../core/strays";
-import { loadConfig } from "../core/config";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
 import { Kind, Priority, type TaskRow } from "../core/types";
@@ -127,7 +126,7 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function newProject(then?: (projectId: number) => void) {
-    const repos = Object.keys(loadConfig().github.repos);
+    const repos = Object.keys(desk.config().github.repos);
     const create = (name: string, repo: string | null) =>
       void desk.createProject(name, repo).then(
         (p) => {
@@ -564,7 +563,7 @@ export function useActions(dialogs: Dialogs) {
         choices={[
           ...Object.values(DocName).map((name) => ({
             label: name,
-            hint: `${DOC_PURPOSE[name]} · ${kchars(docSize(name))} of ${kchars(docBudget(name))}${overBudget(name) ? " · over budget" : ""}`,
+            hint: `${DOC_PURPOSE[name]} · ${kchars(docSize(name))} of ${kchars(docBudget(desk.config(), name))}${overBudget(desk.config(), name) ? " · over budget" : ""}`,
             run: () => editor.openEditor(docPath(name), name),
           })),
           {
@@ -595,7 +594,7 @@ export function useActions(dialogs: Dialogs) {
 
   function open(target: string) {
     try {
-      openTarget(target);
+      openTarget(target, desk.config().opener);
     } catch (err) {
       showToast(`Could not open: ${errorMessage(err)}`, 5000, "error");
     }
@@ -638,7 +637,7 @@ export function useActions(dialogs: Dialogs) {
     dialogs.show(() => (
       <ChoiceModal
         title="Open"
-        hint={`With ${openerArgv("…").slice(0, -1).join(" ")} (set "opener" in config).`}
+        hint={`With ${openerArgv("…", desk.config().opener).slice(0, -1).join(" ")} (set "opener" in config).`}
         choices={choices}
         onClose={dialogs.close}
       />

@@ -15,7 +15,7 @@ import * as store from "../src/core/store";
 import { ProposalStatus } from "../src/core/types";
 import { REAL_JOB } from "./doc-fixture";
 import { FakeMux } from "./fake-mux";
-import { freshHome } from "./helpers";
+import { freshHome, testConfig, config } from "./helpers";
 
 describe.skipIf(!process.env.AUG_REAL_CLAUDE)("propose_doc through real claude", () => {
   afterAll(() => setBrain(async () => {
@@ -30,7 +30,7 @@ describe.skipIf(!process.env.AUG_REAL_CLAUDE)("propose_doc through real claude",
       useDb(openDb(paths.db()));
       setMux(new FakeMux());
       setBrain(claudeBrain);
-      const engine = new Engine();
+      const engine = new Engine({ config: testConfig() });
       const drain = setInterval(() => void engine.drainMoves(), 100);
       try {
         const result = await think({
@@ -39,10 +39,10 @@ describe.skipIf(!process.env.AUG_REAL_CLAUDE)("propose_doc through real claude",
             "",
             REAL_JOB,
           ].join("\n"),
-          system: assistantSystem(),
+          system: assistantSystem(config()),
           model: "haiku",
           tools: ASSISTANT_TOOLS,
-          allow: assistantAllow(),
+          allow: assistantAllow(config()),
           env: { AUG_ASKED_BY: "assistant", ...toolsEnv() },
         });
         expect(result.denied ?? []).toEqual([]);

@@ -4,7 +4,7 @@ import { AgentPool } from "../src/core/agents";
 import { buildRail } from "../src/core/rail";
 import * as store from "../src/core/store";
 import { Kind, TurnRole } from "../src/core/types";
-import { freshHome } from "./helpers";
+import { freshHome, withLimit, testConfig, config } from "./helpers";
 
 let calls: BrainCall[];
 
@@ -60,7 +60,7 @@ describe("Home", () => {
       channel: "owner",
     });
     say(home.id, `make a coding task for @${store.taskRef(job.id)} in aug-mvp`);
-    await new AgentPool({ limit: () => 4 }).request(home.id, "the owner typed", "owner");
+    await new AgentPool({ config: withLimit(4) }).request(home.id, "the owner typed", "owner");
 
     const call = calls[0];
     expect(call.tools).toContain("Bash");
@@ -86,7 +86,7 @@ describe("Home", () => {
 
   test("a resumed turn sends only what the owner said since the last answer", async () => {
     const home = store.homeTask();
-    const pool = new AgentPool({ limit: () => 4 });
+    const pool = new AgentPool({ config: withLimit(4) });
     say(home.id, "first question");
     await pool.request(home.id, "typed", "owner");
     say(home.id, "second question");
@@ -99,7 +99,7 @@ describe("Home", () => {
   test("Start on Home does nothing: the Assistant answers only what you say", async () => {
     const { Engine } = await import("../src/core/engine");
     const home = store.homeTask();
-    void new Engine().desk.startAgent(home.id);
+    void new Engine({ config: testConfig() }).desk.startAgent(home.id);
     await Bun.sleep(10);
     expect(calls).toHaveLength(0);
     expect(store.turnsForTask(home.id)).toHaveLength(0);
@@ -107,7 +107,7 @@ describe("Home", () => {
 
   test("a general agent's tools know which task is asking", async () => {
     const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
-    await new AgentPool({ limit: () => 4 }).request(task.id, "go", "owner");
+    await new AgentPool({ config: withLimit(4) }).request(task.id, "go", "owner");
     expect(calls[0].env).toMatchObject({ AUG_TASK_ID: String(task.id) });
     expect(calls[0].env!.PATH).toStartWith(`${process.env.AUG_HOME}/bin:`);
   });
@@ -115,7 +115,7 @@ describe("Home", () => {
 
 test("a general agent may run aug's lookups and the agent moves, nothing else", async () => {
   const { generalAllow } = await import("../src/core/agents");
-  const bash = generalAllow().filter((r) => r.includes("aug-tools.ts"));
+  const bash = generalAllow(config()).filter((r) => r.includes("aug-tools.ts"));
   expect(bash.some((r) => r.endsWith("aug-tools.ts move new:*)"))).toBe(true);
   expect(bash.some((r) => r.endsWith("aug-tools.ts projects:*)"))).toBe(true);
   expect(bash.some((r) => r.endsWith("aug-tools.ts move project_new:*)"))).toBe(true);
@@ -127,7 +127,7 @@ test("a general agent may run aug's lookups and the agent moves, nothing else", 
 test("a general agent's aug-tools rules match the bun path written either way", async () => {
   const { generalAllow } = await import("../src/core/agents");
   const { toolsCommand, toolsEntry } = await import("../src/core/self");
-  const allow = generalAllow();
+  const allow = generalAllow(config());
   expect(allow).toContain("Bash(aug-tools move project:*)");
   expect(allow).toContain(`Bash(${toolsCommand("move", "project")}:*)`);
   expect(allow).toContain(`Bash(bun ${toolsEntry()} move project:*)`);
@@ -143,7 +143,7 @@ test("aug-tools on a headless agent's PATH runs aug-tools", async () => {
 test("a general agent is told it has gh and how to write shell commands that are allowed", async () => {
   const { turnSystem } = await import("../src/core/agents");
   const { SHELL_HOWTO } = await import("../src/core/capabilities");
-  const system = turnSystem();
+  const system = turnSystem(config());
   expect(system).toContain("gh pr view");
   expect(system).toContain(SHELL_HOWTO);
 });
@@ -162,7 +162,7 @@ test("a denied call is kept on the turn, and the next turn is told not to repeat
     };
   });
   const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
-  const pool = new AgentPool({ limit: () => 4 });
+  const pool = new AgentPool({ config: withLimit(4) });
   await pool.request(task.id, "go", "owner");
   await Bun.sleep(10);
   const first = store.turnsForTask(task.id).findLast((t) => t.role === TurnRole.agent)!;

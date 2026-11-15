@@ -10,7 +10,7 @@
 // Advisor idea to change aug instead.
 
 import { think } from "./brain";
-import { loadConfig } from "./config";
+import type { AugConfig } from "./config";
 import {
   archiveLearned,
   DOC_PURPOSE,
@@ -124,9 +124,9 @@ function sinceLastPass(): string {
   return fresh.length ? fresh.join("\n\n") : "(none)";
 }
 
-function docSection(name: Editable): string {
+function docSection(config: AugConfig, name: Editable): string {
   const size = docSize(name);
-  const budget = docBudget(name);
+  const budget = docBudget(config, name);
   return [
     `## ${name} (${DOC_PURPOSE[name]}; ${size} of ${budget} characters${size > budget ? ", OVER BUDGET: shrink it" : ""})`,
     readDoc(name),
@@ -134,13 +134,14 @@ function docSection(name: Editable): string {
 }
 
 export async function runDocPass(
+  config: AugConfig,
   at = new Date(),
   force = false,
 ): Promise<{ proposed: number; ideas: number; archived: number; skipped?: string }> {
   const archived = archiveStale(at);
   if (!force && !docPassDue(at))
     return { proposed: 0, ideas: 0, archived, skipped: "not due" };
-  const over = EDITABLE.filter(overBudget);
+  const over = EDITABLE.filter((name) => overBudget(config, name));
   const sig = signature();
   if (!force && sig === store.kvGet(SEEN) && over.length === 0) {
     store.kvSet(LAST_RUN, at.toISOString());
@@ -148,7 +149,7 @@ export async function runDocPass(
   }
   const result = await think({
     prompt: [
-      ...EDITABLE.map(docSection),
+      ...EDITABLE.map((name) => docSection(config, name)),
       "## Corrections since the last pass",
       sinceLastPass(),
       `Today is ${at.toISOString().slice(0, 10)}.`,
@@ -163,7 +164,7 @@ export async function runDocPass(
       "Zero edits is the usual answer.",
     ].join("\n"),
     schema: PASS_SCHEMA,
-    model: loadConfig().brain.assistantModel,
+    model: config.brain.assistantModel,
   });
   const answer = result.structured as PassAnswer | null;
   let proposed = 0;
@@ -176,7 +177,7 @@ export async function runDocPass(
     const size = doc === DocName.learned ? learnedInUse(text).length : text.length;
     // Never a proposal that is over budget and no smaller than what it
     // replaces.
-    if (size > docBudget(doc) && text.length >= current.length) continue;
+    if (size > docBudget(config, doc) && text.length >= current.length) continue;
     propose({
       doc,
       source: ProposalSource.evolve,

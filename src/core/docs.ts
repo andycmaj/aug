@@ -20,7 +20,10 @@ import {
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { loadConfig } from "./config";
+import type { AugConfig } from "./config";
+
+// All a doc's budget reads from config.
+export type BudgetConfig = Pick<AugConfig, "docBudgets">;
 import { paths, ensureHome } from "./paths";
 import assistant from "../../docs/defaults/ASSISTANT.md" with { type: "text" };
 import coding from "../../docs/defaults/CODING.md" with { type: "text" };
@@ -84,8 +87,8 @@ export const DOC_BUDGET: Record<DocName, number> = {
   "LEARNED.md": 3000,
 };
 
-export function docBudget(name: DocName): number {
-  return loadConfig().docBudgets?.[name] ?? DOC_BUDGET[name];
+export function docBudget(config: BudgetConfig, name: DocName): number {
+  return config.docBudgets?.[name] ?? DOC_BUDGET[name];
 }
 
 export const LEARNED_SECTIONS = [
@@ -201,18 +204,23 @@ export function docSize(name: DocName): number {
     : readDoc(name).length;
 }
 
-export function overBudget(name: DocName): boolean {
-  return docSize(name) > docBudget(name);
+export function overBudget(config: BudgetConfig, name: DocName): boolean {
+  return docSize(name) > docBudget(config, name);
 }
 
 // A doc as a prompt gets it: whole up to twice its budget, past that cut
 // with a note, so a runaway file costs a known amount and nobody wonders
 // where its tail went.
-export function forPrompt(name: DocName, text = readDoc(name)): string {
-  const cap = docBudget(name) * 2;
+export function forPrompt(
+  config: BudgetConfig,
+  name: DocName,
+  text = readDoc(name),
+): string {
+  const budget = docBudget(config, name);
+  const cap = budget * 2;
   return text.length <= cap
     ? text
-    : `${text.slice(0, cap)}\n(cut at budget: ${name} is ${text.length} characters, budget ${docBudget(name)})`;
+    : `${text.slice(0, cap)}\n(cut at budget: ${name} is ${text.length} characters, budget ${budget})`;
 }
 
 // ── LEARNED.md ────────────────────────────────────────────────────────────

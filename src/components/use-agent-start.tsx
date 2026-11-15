@@ -8,7 +8,6 @@ import { useAug, ViewMode } from "../context/aug";
 import { useTerminals } from "../context/terminals";
 import { inTmux, type StartOptions } from "../core/driver";
 import { errorMessage } from "../core/log";
-import { mapRepo } from "../core/repos";
 import { taskRef } from "../core/rows";
 import { Kind, type TaskRow } from "../core/types";
 import type { Dialogs } from "./actions";
@@ -117,7 +116,7 @@ export function useAgentStart(
         placeholder="/path/to/checkout"
         onSubmit={(path) => {
           submitted = true;
-          mapRepo(repo, path.trim().replace(/^~/, homedir()));
+          desk.mapRepo(repo, path.trim().replace(/^~/, homedir()));
           void startAgent(task.id, opts);
         }}
         onClose={() => {

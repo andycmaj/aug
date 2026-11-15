@@ -3,7 +3,7 @@
 // Sending never closes the task: Mark done does.
 
 import type { TurnAnswer } from "./agents";
-import { loadConfig } from "./config";
+import type { AugConfig } from "./config";
 import { draftSent } from "./lifecycle";
 import { logger } from "./log";
 import { messageMeta } from "./meta";
@@ -16,7 +16,10 @@ import {
   type TaskRow,
 } from "./types";
 
-export type Sender = (action: DraftAction) => Promise<string>;
+export type Sender = (
+  action: DraftAction,
+  config: AugConfig,
+) => Promise<string>;
 
 export function lastIncoming(taskId: number): MessageRow | null {
   const messages = store.messagesForTask(taskId).filter((m) => !m.from_me);
@@ -99,6 +102,7 @@ export function setSlackSender(next: SlackSend): void {
 
 async function githubSend(
   action: Extract<DraftAction, { type: "github_comment" }>,
+  config: AugConfig,
 ): Promise<string> {
   const ref = `${action.repo}#${action.number}`;
   switch (action.close) {
@@ -121,7 +125,7 @@ async function githubSend(
         "-f",
         `body=${action.body}`,
       ]);
-      const method = loadConfig().github.mergeMethod;
+      const method = config.github.mergeMethod;
       await gh([
         "pr",
         "merge",
@@ -154,8 +158,13 @@ async function githubSend(
   }
 }
 
-async function realSend(action: DraftAction): Promise<string> {
-  return action.type === "slack_reply" ? slackSend(action) : githubSend(action);
+async function realSend(
+  action: DraftAction,
+  config: AugConfig,
+): Promise<string> {
+  return action.type === "slack_reply"
+    ? slackSend(action)
+    : githubSend(action, config);
 }
 
 export function describeAction(action: DraftAction): string {
@@ -186,11 +195,14 @@ export function withText(action: DraftAction, text: string): DraftAction {
 const log = logger("outbound");
 
 // Sends the pending action on a task. A refused act sends nothing and says why.
-export async function sendPending(taskId: number): Promise<string> {
+export async function sendPending(
+  config: AugConfig,
+  taskId: number,
+): Promise<string> {
   const pending = store.pendingAction(taskId);
   if (!pending) throw new SendError("nothing waits to be sent");
   try {
-    const receipt = await impl(pending.action);
+    const receipt = await impl(pending.action, config);
     log.info("sent", {
       task: taskId,
       action: describeAction(pending.action),

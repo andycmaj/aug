@@ -5,18 +5,34 @@ import { openDb, useDb } from "../src/core/db";
 import { setBrain, type BrainCall, type BrainResult } from "../src/core/brain";
 import {
   DEFAULT_CONFIG,
-  setConfigForTest,
+  fixedConfig,
   type AugConfig,
+  type ConfigSource,
 } from "../src/core/config";
 import { ensureDocs } from "../src/core/docs";
-import { resetLog } from "../src/core/log";
+import { configureLog } from "../src/core/log";
 
-export function freshHome(config: Partial<AugConfig> = {}): void {
+let current: ConfigSource = fixedConfig();
+
+// A new home, and the config its engine is handed (in memory, never a file).
+export function freshHome(config: Partial<AugConfig> = {}): ConfigSource {
   process.env.AUG_HOME = mkdtempSync(join(tmpdir(), "aug-test-"));
   useDb(openDb(":memory:"));
-  setConfigForTest({ ...DEFAULT_CONFIG, ...config });
+  const source = fixedConfig({ ...DEFAULT_CONFIG, ...config });
+  current = source;
+  configureLog(() => source.get().log);
   ensureDocs();
-  resetLog();
+  return source;
+}
+
+// The last freshHome's config: the source to hand an Engine or a pool, and
+// the value a function takes.
+export function testConfig(): ConfigSource {
+  return current;
+}
+
+export function config(): AugConfig {
+  return current.get();
 }
 
 export function fakeBrain(answer: (call: BrainCall) => unknown): BrainCall[] {
@@ -33,4 +49,9 @@ export function fakeBrain(answer: (call: BrainCall) => unknown): BrainCall[] {
     };
   });
   return calls;
+}
+
+// The test's config with room for this many agents at once.
+export function withLimit(maxActiveAgents: number): ConfigSource {
+  return fixedConfig({ ...current.get(), maxActiveAgents });
 }

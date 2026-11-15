@@ -19,7 +19,7 @@ import {
   TaskStatus,
   TurnRole,
 } from "../src/core/types";
-import { fakeBrain, freshHome } from "./helpers";
+import { fakeBrain, freshHome, withLimit, config } from "./helpers";
 
 let seq = 0;
 function slackTask(): number {
@@ -64,7 +64,7 @@ describe("general agent turns", () => {
       state: "ready",
       action: { kind: "reply", text: "42 seats." },
     }));
-    const pool = new AgentPool({ limit: () => 4 });
+    const pool = new AgentPool({ config: withLimit(4) });
     await pool.request(taskId, "test", "owner");
     const turn = store.turnsForTask(taskId).at(-1)!;
     expect(turn.role).toBe(TurnRole.agent);
@@ -93,7 +93,7 @@ describe("general agent turns", () => {
       state: "ready",
       action: { kind: "reply", text: `draft ${++n}` },
     }));
-    const pool = new AgentPool({ limit: () => 4 });
+    const pool = new AgentPool({ config: withLimit(4) });
     await pool.request(taskId, "first", "owner");
     await pool.request(taskId, "second", "owner");
     expect(calls[1].resume).toBe(calls[0].sessionId);
@@ -111,7 +111,7 @@ describe("general agent turns", () => {
       next: "Which licence tier?",
       state: "asking",
     }));
-    await new AgentPool({ limit: () => 4 }).request(taskId, "x", "owner");
+    await new AgentPool({ config: withLimit(4) }).request(taskId, "x", "owner");
     const task = store.getTask(taskId)!;
     expect(task.agent_state).toBe(AgentState.blocked);
     expect(task.agent_says).toBe("Which licence tier?");
@@ -120,7 +120,7 @@ describe("general agent turns", () => {
   test("aug-started turns queue past Agents at once; owner-started ones never wait", async () => {
     const ids = [slackTask(), slackTask(), slackTask()];
     fakeBrain(() => ({ about: "a", did: "b", next: "c", state: "done" }));
-    const pool = new AgentPool({ limit: () => 1 });
+    const pool = new AgentPool({ config: withLimit(1) });
     const first = pool.request(ids[0], "x", "aug");
     expect(pool.request(ids[1], "x", "aug")).toBeNull();
     expect(store.getTask(ids[1])!.agent_state).toBe(AgentState.queued);
@@ -170,7 +170,7 @@ describe("coding agent", () => {
       kind: Kind.coding,
       channel: "owner",
     });
-    const launch = codingLaunch(t);
+    const launch = codingLaunch(config(), t);
     expect(launch.argv[0]).toBe("claude");
     expect(launch.argv).toContain("--settings");
     expect(launch.env.AUG_TASK_ID).toBe(String(t.id));

@@ -6,7 +6,6 @@
 // any macOS trouble stay here. Tests swap in a fake with setMux.
 
 import { Server, TmuxServerRestartedError } from "libtmux";
-import { loadConfig } from "./config";
 import { logger } from "./log";
 import { shellQuote, toolsCommand } from "./self";
 
@@ -73,6 +72,8 @@ export interface SplitPane {
 }
 
 export interface Worktree {
+  // config's worktreeCommand: {repo_path}, {create} and {branch} filled in.
+  command: string;
   repoPath: string;
   branch: string;
   create: boolean;
@@ -254,12 +255,9 @@ export class TmuxMux implements Mux {
   private server: Server;
   private socket: TmuxSocket;
 
+  // A name is config's tmuxSocket; none is your default server.
   constructor(socket?: TmuxSocket | string) {
-    const name = typeof socket === "string" ? socket : undefined;
-    this.socket =
-      typeof socket === "object"
-        ? socket
-        : { socketName: name ?? loadConfig().tmuxSocket };
+    this.socket = typeof socket === "object" ? socket : { socketName: socket };
     this.server = this.connect();
   }
 
@@ -567,7 +565,7 @@ export class TmuxMux implements Mux {
   }
 
   async worktree(w: Worktree): Promise<MadeWorktree> {
-    const argv = fillTemplate(loadConfig().worktreeCommand, {
+    const argv = fillTemplate(w.command, {
       repo_path: w.repoPath,
       create: w.create ? "-c" : "",
       branch: w.branch,

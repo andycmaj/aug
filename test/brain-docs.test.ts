@@ -53,7 +53,7 @@ import { inTmux } from "../src/core/driver";
 import { docDraftsDir } from "../src/core/paths";
 import { REAL_JOB } from "./doc-fixture";
 import { FakeMux } from "./fake-mux";
-import { fakeBrain, freshHome } from "./helpers";
+import { fakeBrain, freshHome, testConfig, config } from "./helpers";
 
 // The shipped SOUL.md and COUNSEL.md before PERSONA.md.
 const OLD_SOUL = `# SOUL
@@ -229,7 +229,7 @@ describe("proposals", () => {
       source: ProposalSource.evolve,
       proposed: "# STYLE\n\nVery long.\n",
     });
-    expect(await redraftProposals(p.task_id, "## STYLE.md:3\ntoo long")).toBe(
+    expect(await redraftProposals(config(), p.task_id, "## STYLE.md:3\ntoo long")).toBe(
       "redrafted STYLE.md",
     );
     expect(store.getProposal(p.id)!.proposed).toBe("# STYLE\n\nTerse.\n");
@@ -240,7 +240,7 @@ describe("proposals", () => {
     writeDoc(DocName.coding, "# CODING\n\nMine.\n");
     syncShipped();
     const [task] = systemTasks();
-    expect(await redraftProposals(task.id, "why the change?")).toBe(
+    expect(await redraftProposals(config(), task.id, "why the change?")).toBe(
       "nothing to redraft",
     );
     const turns = store.turnsForTask(task.id);
@@ -312,8 +312,8 @@ describe("LEARNED.md", () => {
 describe("budgets", () => {
   test("a doc is whole up to twice its budget, then cut with a note", () => {
     freshHome({ ...DEFAULT_CONFIG, docBudgets: { "STYLE.md": 10 } });
-    expect(forPrompt(DocName.style, "x".repeat(20))).toBe("x".repeat(20));
-    const cut = forPrompt(DocName.style, "x".repeat(50));
+    expect(forPrompt(config(), DocName.style, "x".repeat(20))).toBe("x".repeat(20));
+    const cut = forPrompt(config(), DocName.style, "x".repeat(50));
     expect(cut).toStartWith("x".repeat(20) + "\n(cut at budget");
   });
 });
@@ -321,12 +321,12 @@ describe("budgets", () => {
 describe("the daily doc pass", () => {
   test("nothing new and nothing over budget: no model call", async () => {
     const calls = fakeBrain(() => ({ edits: [] }));
-    await runDocPass(new Date("2026-11-13T09:00:00Z"));
+    await runDocPass(config(), new Date("2026-11-13T09:00:00Z"));
     expect(calls).toHaveLength(1);
-    const next = await runDocPass(new Date("2026-11-14T10:00:00Z"));
+    const next = await runDocPass(config(), new Date("2026-11-14T10:00:00Z"));
     expect(next.skipped).toBe("nothing new");
     expect(calls).toHaveLength(1);
-    const early = await runDocPass(new Date("2026-11-14T11:00:00Z"));
+    const early = await runDocPass(config(), new Date("2026-11-14T11:00:00Z"));
     expect(early.skipped).toBe("not due");
   });
 
@@ -338,7 +338,7 @@ describe("the daily doc pass", () => {
       ],
       ideas: [{ title: "Teach CODING.md to run lint", body: "Agents skip lint." }],
     }));
-    const result = await runDocPass(new Date());
+    const result = await runDocPass(config(), new Date());
     expect(result.proposed).toBe(1);
     expect(result.ideas).toBe(1);
     const [task] = systemTasks();
@@ -351,7 +351,7 @@ describe("the daily doc pass", () => {
     fakeBrain(() => ({
       edits: [{ doc: "STYLE.md", text: "y".repeat(500), reason: "longer" }],
     }));
-    expect((await runDocPass(new Date(), true)).proposed).toBe(0);
+    expect((await runDocPass(config(), new Date(), true)).proposed).toBe(0);
   });
 });
 
@@ -372,7 +372,7 @@ describe("onboarding", () => {
     const offer = onboardingTask()!;
     expect(offer.title).toBe("Set up your docs: a short interview");
     expect(inTmux(offer)).toBe(true);
-    const engine = new Engine();
+    const engine = new Engine({ config: testConfig() });
     expect(engine.desk.acceptDocs(offer.id)).toBe(
       `the interview is starting in ${store.taskRef(offer.id)}`,
     );
@@ -394,7 +394,7 @@ describe("onboarding", () => {
 
   test("the interview's own agent may hand drafts in, and nothing else", async () => {
     offerOnboarding();
-    const engine = new Engine();
+    const engine = new Engine({ config: testConfig() });
     const offer = onboardingTask()!;
     const by = `agent ${store.taskRef(offer.id)}`;
     const ok = store.enqueueMove("propose_doc", { doc: "JOB", text: "draft" }, by);
@@ -407,7 +407,7 @@ describe("onboarding", () => {
 
   test("y on the drafts closes the interview's window", async () => {
     offerOnboarding();
-    const engine = new Engine();
+    const engine = new Engine({ config: testConfig() });
     const offer = onboardingTask()!;
     engine.desk.acceptDocs(offer.id);
     await settle();
@@ -420,7 +420,7 @@ describe("onboarding", () => {
 
   test("the Assistant's drafts land on the onboarding task", async () => {
     offerOnboarding();
-    const engine = new Engine();
+    const engine = new Engine({ config: testConfig() });
     const offer = onboardingTask()!;
     for (const doc of ["PERSONA", "JOB"])
       store.enqueueMove(
@@ -446,7 +446,7 @@ describe("onboarding", () => {
 
   test("a whole doc handed in as a file, Markdown and all", async () => {
     offerOnboarding();
-    const engine = new Engine();
+    const engine = new Engine({ config: testConfig() });
     const offer = onboardingTask()!;
     const file = join(docDraftsDir(), "JOB.md");
     writeFileSync(file, REAL_JOB);
@@ -471,7 +471,7 @@ describe("onboarding", () => {
   });
 
   test("propose_doc reads no file outside the drafts folder", async () => {
-    const engine = new Engine();
+    const engine = new Engine({ config: testConfig() });
     const outside = join(process.env.AUG_HOME!, "config.json");
     writeFileSync(outside, "{}");
     const cases = [
@@ -493,12 +493,12 @@ describe("onboarding", () => {
 
   test("the Assistant may write only in the drafts folder", () => {
     expect(ASSISTANT_TOOLS).toContain("Write");
-    const writes = assistantAllow().filter((r) => /^(Edit|Write)\b/.test(r));
+    const writes = assistantAllow(config()).filter((r) => /^(Edit|Write)\b/.test(r));
     expect(writes).toEqual([`Edit(/${docDraftsDir()}/**)`]);
   });
 
   test("the onboard move from the Assistant starts the interview's claude", async () => {
-    const engine = new Engine();
+    const engine = new Engine({ config: testConfig() });
     const move = store.enqueueMove("onboard", {}, "assistant");
     await engine.drainMoves();
     const task = onboardingTask()!;
@@ -511,7 +511,7 @@ describe("onboarding", () => {
 
   test("x on the offer skips it and the templates stay", () => {
     offerOnboarding();
-    const engine = new Engine();
+    const engine = new Engine({ config: testConfig() });
     expect(engine.desk.rejectDocs(onboardingTask()!.id)).toBe(
       "onboarding skipped: the templates stay",
     );

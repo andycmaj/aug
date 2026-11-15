@@ -4,7 +4,7 @@
 // make it a task.
 
 import { think } from "./brain";
-import { loadConfig } from "./config";
+import type { AugConfig } from "./config";
 import { docsBlock } from "./prompts";
 import { isSlipped } from "./rail";
 import * as store from "./store";
@@ -81,16 +81,19 @@ export function workPicture(at: Date): string {
   ].join("\n");
 }
 
-export async function runAdvisor(at = new Date()): Promise<number> {
+export async function runAdvisor(
+  config: AugConfig,
+  at = new Date(),
+): Promise<number> {
   const existing = store.openIdeas().map((i) => i.title.toLowerCase());
   const result = await think({
     prompt: `${workPicture(at)}\n\nIdeas already on the rail:\n${existing.join("\n") || "(none)"}\n\nToday is ${at.toISOString().slice(0, 10)}.`,
     system: [
       "You are the Advisor in aug, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas, none repeating one already on the rail. Fewer is better; zero is fine.",
-      docsBlock({ persona: true, job: true, learned: true }),
+      docsBlock(config, { persona: true, job: true, learned: true }),
     ].join("\n\n"),
     schema: IDEAS_SCHEMA,
-    model: loadConfig().brain.assistantModel,
+    model: config.brain.assistantModel,
   });
   const answer = result.structured as IdeasAnswer | null;
   let added = 0;

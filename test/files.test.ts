@@ -18,7 +18,7 @@ import { paths } from "../src/core/paths";
 import { neighborKey } from "../src/core/rail";
 import * as store from "../src/core/store";
 import { Kind, TurnRole } from "../src/core/types";
-import { fakeBrain, freshHome } from "./helpers";
+import { fakeBrain, freshHome, withLimit } from "./helpers";
 
 describe("csv", () => {
   test("quotes, doubled quotes, delimiters and newlines inside quotes", () => {
@@ -78,7 +78,7 @@ describe("what a turn made", () => {
       writeFileSync(join(call.cwd!, "overtime.csv"), "site,hours\nA,1\n");
       return { about: "a", did: "b", next: "c", state: "done" };
     });
-    await new AgentPool({ limit: () => 1 }).request(t.id, "x", "owner");
+    await new AgentPool({ config: withLimit(1) }).request(t.id, "x", "owner");
     const turn = store.turnsForTask(t.id).at(-1)!;
     expect(parseFiles(turn.files)).toEqual([
       {

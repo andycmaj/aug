@@ -15,7 +15,7 @@
 
 import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { dirname } from "node:path";
-import { loadConfig } from "./config";
+import { DEFAULT_CONFIG, type AugConfig } from "./config";
 import { paths } from "./paths";
 
 export const LogLevel = {
@@ -42,10 +42,22 @@ const isLevel = (value: string): value is LogLevelName => value in LogLevel;
 const truthy = (value: string | undefined) =>
   !!value && !/^(0|false|off|no)$/i.test(value);
 
+type LogConfig = AugConfig["log"];
+
+// The log is a process-wide sink, so its config is the one thing set once
+// per process: each entry point says where the log section comes from, read
+// when the first line is written and again after resetLog().
+let logConfig: () => LogConfig = () => DEFAULT_CONFIG.log;
+
+export function configureLog(from: () => LogConfig): void {
+  logConfig = from;
+  resetLog();
+}
+
 export function resolveLogSettings(
   env: Record<string, string | undefined> = process.env,
+  config: LogConfig = logConfig(),
 ): LogSettings | null {
-  const config = loadConfig().log;
   const file = config.file ?? paths.log();
   const maxBytes = config.maxBytes ?? DEFAULT_MAX_BYTES;
   const fromEnv = env.AUG_LOG?.trim().toLowerCase();

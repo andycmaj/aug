@@ -5,6 +5,7 @@
 // or tell it, and never branch on the kind themselves.
 
 import type { AgentPool, CodingLaunch } from "./agents";
+import type { AugConfig, ConfigSource } from "./config";
 import { startCancelled } from "./lifecycle";
 import { logger } from "./log";
 import * as projects from "./projects";
@@ -65,6 +66,8 @@ export interface AgentDriver {
 
 export interface DriverOptions {
   pool: AgentPool;
+  // Read at each start, so a repo mapped mid-start is seen on the retry.
+  config: ConfigSource;
   // Fixture mode has no checkouts: coding windows open in scratch.
   noWorktrees?: boolean;
   // Replaces the coding agent's command line (fixture mode's fake claude).
@@ -159,7 +162,12 @@ export class TmuxDriver implements AgentDriver {
     return this.options.pool;
   }
 
+  private config(): AugConfig {
+    return this.options.config.get();
+  }
+
   async start(task: TaskRow, opts: StartOptions = {}): Promise<StartResult> {
+    const config = this.config();
     const resume = this.resumes(task);
     const noWorktree = opts.noWorktree || Boolean(this.options.noWorktrees);
     // Resuming never asks again: the first start settled repo and branch.
@@ -167,9 +175,9 @@ export class TmuxDriver implements AgentDriver {
       if (!task.repo)
         return {
           type: "needs",
-          need: { what: "repo", choices: repoChoices(task) },
+          need: { what: "repo", choices: repoChoices(config, task) },
         };
-      if (!repoPath(task.repo))
+      if (!repoPath(config, task.repo))
         return { type: "needs", need: { what: "path", repo: task.repo } };
       if (opts.branch === undefined)
         return {
@@ -239,7 +247,7 @@ export class TmuxDriver implements AgentDriver {
     const note = [...pending.map((t) => t.body), opts.note?.trim()]
       .filter(Boolean)
       .join("\n\n");
-    const result = await projects.startTask(task.id, {
+    const result = await projects.startTask(this.config(), task.id, {
       note: note || undefined,
       branch: opts.branch?.trim() || undefined,
       noWorktree,
@@ -271,7 +279,7 @@ export class TmuxDriver implements AgentDriver {
 
   close(task: TaskRow): Promise<CloseResult> {
     this.pool.stop(task.id);
-    return projects.closeTask(task.id);
+    return projects.closeTask(this.config(), task.id);
   }
 
   // Claimed before sending, so two lines typed at once are sent once.

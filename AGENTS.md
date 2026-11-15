@@ -78,9 +78,18 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   (`core/result.ts`), in the order listed, and `runChain` runs them. Gates
   come first; the rules after them read the model's verdict, asked at most
   once. A new rule is one entry in that list. Rules get config as a value
-  (`TriageDeps`), never from `loadConfig()`. Noise patterns live in
+  (`TriageDeps`, from the engine per message). Noise patterns live in
   `config.triage.noise`; the `noise` move (the owner's and the Assistant's)
-  appends one, and `loadConfig()` re-reads `config.json` when it changes.
+  appends one through the desk, and the next message reads it.
+- **Config is handed down, never reached for** (`core/config.ts`). An entry
+  point makes the `ConfigSource`: `index.tsx` a `fileConfig()` (config.json,
+  re-read when its mtime changes), tests (`freshHome()`, `testConfig()`) and
+  the fixture day a `fixedConfig()`. The engine gives it to its pool,
+  drivers and desk, which call `get()` each time they use a setting, so an
+  edit applies without a restart; functions below them take the `AugConfig`
+  value, and components read `desk.config()`. Writes (`noise`, a repo
+  mapped mid-start) are `update()` on the desk. `loadConfig()` is one read
+  for an entry point that has no source (aug-tools' log and tmux server).
 - **The agent lifecycle is `core/lifecycle.ts`.** Every change to a task's
   `agent_state` or a session's state is one of its named transitions
   (`sessionStarted`, `sessionActivity`, `sessionEnded`, `turnFinished`,

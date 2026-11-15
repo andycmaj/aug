@@ -12,7 +12,8 @@ import {
   unreadFeedback,
 } from "../core/feedback";
 import { handleDone, handleHook, type HookEnv, type HookPayload } from "../core/hooks";
-import { logger } from "../core/log";
+import { loadConfig } from "../core/config";
+import { configureLog, logger } from "../core/log";
 import {
   findProject,
   findTasks,
@@ -29,10 +30,14 @@ import * as projects from "../core/projects";
 import * as store from "../core/store";
 import { MoveStatus, NoteLabel } from "../core/types";
 
-// Inside a pane, talk to the tmux server the pane lives on.
+// A hook is one short process: config.json is read when a line is logged,
+// not on every start.
+configureLog(() => loadConfig().log);
+
+// Inside a pane, talk to the tmux server the pane lives on; without $TMUX,
+// the one config names.
 function usePaneServer(): void {
-  const socket = socketFromEnv();
-  if (socket) setMux(new TmuxMux(socket));
+  setMux(new TmuxMux(socketFromEnv() ?? loadConfig().tmuxSocket));
 }
 
 // An aug-launched agent has its ids in env; a claude you started by hand in

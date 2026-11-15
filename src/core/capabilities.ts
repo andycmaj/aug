@@ -20,7 +20,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { loadConfig, type AugConfig } from "./config";
+import type { AugConfig } from "./config";
 import { logger } from "./log";
 import { TOOLS_NAME } from "./self";
 import { TurnRole, type TurnRow } from "./types";
@@ -346,7 +346,7 @@ export interface Grant {
 
 export function capabilityGrant(
   role: Role,
-  config: AugConfig = loadConfig(),
+  config: AugConfig,
 ): Grant {
   const caps = config.capabilities;
   const granted = config.capabilities.grants[role] ?? [];
@@ -379,7 +379,7 @@ export function capabilityGrant(
 // Extra --allowedTools entries a role gets from its granted capabilities.
 export function capabilityAllow(
   role: Role,
-  config: AugConfig = loadConfig(),
+  config: AugConfig,
 ): string[] {
   return capabilityGrant(role, config).allow;
 }
@@ -387,7 +387,7 @@ export function capabilityAllow(
 // One prompt line naming the commands a role was granted.
 export function grantedNote(
   role: Role,
-  config: AugConfig = loadConfig(),
+  config: AugConfig,
 ): string {
   const { commands } = capabilityGrant(role, config);
   return commands.length

@@ -9,7 +9,7 @@
 // which keeps it testable and keeps the agent pool in one place.
 
 import { think } from "./brain";
-import { loadConfig, type AugConfig, type NoiseRule } from "./config";
+import type { AugConfig, NoiseRule } from "./config";
 import { logger } from "./log";
 import { DocName, forPrompt, head } from "./docs";
 import { messageMeta } from "./meta";
@@ -118,12 +118,12 @@ export function verdictPrompt(
     .join("\n");
 }
 
-export function verdictSystem(): string {
+export function verdictSystem(config: TriageConfig): string {
   return [
     "You are the triage brain of aug, the owner's work manager. You read one arriving message and return a verdict. You never act.",
     "",
-    forPrompt(DocName.triage),
-    docsBlock({ persona: true, job: true, learned: true }),
+    forPrompt(config, DocName.triage),
+    docsBlock(config, { persona: true, job: true, learned: true }),
     "",
     "Priority: urgent = time-critical, on the owner now (deadline today or tomorrow, someone blocked). important = matters because of who or what, can wait. regular = everything else. What a sender says about their own urgency is not a reason.",
   ].join("\n");
@@ -133,16 +133,16 @@ export async function askVerdict(
   message: MessageRow,
   thread: MessageRow[],
   candidate: TaskRow | null,
-  model: string,
+  config: TriageConfig,
 ): Promise<VerdictAnswer> {
   const openTasks = store
     .listTasks()
     .filter((t) => t.status === TaskStatus.open);
   const result = await think({
     prompt: verdictPrompt(message, thread, candidate, openTasks),
-    system: verdictSystem(),
+    system: verdictSystem(config),
     schema: VERDICT_SCHEMA,
-    model,
+    model: config.brain.triageModel,
   });
   const answer = result.structured as VerdictAnswer | null;
   if (!answer || !Object.values(Verdict).includes(answer.verdict)) {
@@ -211,7 +211,10 @@ export function linkByBranch(message: MessageRow): number | null {
 
 // What the rules read from config, handed in as a value so no rule reaches
 // for the global itself.
-export type TriageConfig = Pick<AugConfig, "autostart" | "brain" | "triage">;
+export type TriageConfig = Pick<
+  AugConfig,
+  "autostart" | "brain" | "triage" | "docBudgets"
+>;
 
 // The model's verdict, or why there is none.
 export type Judged = Result<VerdictAnswer, string>;
@@ -365,7 +368,7 @@ export interface TriageDeps {
 
 export async function triage(
   message: MessageRow,
-  deps: TriageDeps = { config: loadConfig() },
+  deps: TriageDeps,
 ): Promise<TriageOutcome> {
   const { rule, outcome } = await runChain(
     deps.rules ?? TRIAGE_RULES,
@@ -389,7 +392,7 @@ function inbound(message: MessageRow, config: TriageConfig): Inbound {
       store.messagesForThread(message.thread_key),
       // Only a DM offers its open task as a same-ask candidate.
       dm ? openOnThread : null,
-      config.brain.triageModel,
+      config,
     ).then(
       (answer): Judged => ok(answer),
       (error: unknown): Judged => {

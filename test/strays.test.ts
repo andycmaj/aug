@@ -19,7 +19,7 @@ import {
 } from "../src/core/strays";
 import { AgentState, Kind, SessionKind, TaskStatus } from "../src/core/types";
 import { FakeMux } from "./fake-mux";
-import { fakeBrain, freshHome } from "./helpers";
+import { fakeBrain, freshHome, testConfig, config } from "./helpers";
 
 let fake: FakeMux;
 let engine: Engine;
@@ -45,7 +45,7 @@ beforeEach(() => {
   fake = new FakeMux();
   setMux(fake);
   setStraySource(source);
-  engine = new Engine();
+  engine = new Engine({ config: testConfig() });
   claudes = [];
   dead.clear();
 });
@@ -121,7 +121,7 @@ describe("finding strays", () => {
     const gone = await ownSession("old", 201);
     dead.add(gone.pid);
     const known = await ownSession("known", 301);
-    const project = await createProject({ name: "Aug" });
+    const project = await createProject(config(), { name: "Aug" });
     const task = store.createTask({ title: "x", kind: Kind.coding, channel: "owner", projectId: project.id });
     store.createSession({ id: known.sessionId, taskId: task.id, kind: SessionKind.tmux, cwd: "/", startedBy: "aug" });
     const host = await ownSession("host", 401);
@@ -154,7 +154,7 @@ describe("finding strays", () => {
 describe("adopting a stray", () => {
   test("a claude in tmux becomes a task whose window moves into the project", async () => {
     const claude = await ownSession("beanstream", 101, "idle");
-    const project = await createProject({ name: "Ledger" });
+    const project = await createProject(config(), { name: "Ledger" });
     const [stray] = await findStrays();
     const task = await engine.desk.adoptStray(stray, project.id);
 
@@ -176,7 +176,7 @@ describe("adopting a stray", () => {
 
   test("its hooks then reach the task through the project session", async () => {
     const claude = await ownSession("beanstream", 101);
-    const project = await createProject({ name: "Ledger" });
+    const project = await createProject(config(), { name: "Ledger" });
     const task = await engine.desk.adoptStray((await findStrays())[0], project.id);
     const env = await adoptHook("stop", { session_id: claude.sessionId }, claude.pane!);
     expect(env).toEqual({ taskId: task.id, sessionId: claude.sessionId });
@@ -187,7 +187,7 @@ describe("adopting a stray", () => {
     const shared = { ...git, branch: "main", worktree: false };
     setStraySource({ ...source, git: () => shared });
     await ownSession("beanstream", 101);
-    const project = await createProject({ name: "Ledger" });
+    const project = await createProject(config(), { name: "Ledger" });
     const task = await engine.desk.adoptStray((await findStrays())[0], project.id);
     expect(task.title).toBe("beanstream");
     expect(task.branch).toBeNull();
@@ -196,7 +196,7 @@ describe("adopting a stray", () => {
   test("a claude outside tmux is saved, so Start resumes it in the project", async () => {
     setStraySource({ ...source, git: () => ({ ...git, branch: "main", worktree: false }) });
     claudes.push({ pid: 9, sessionId: "term-session", cwd: "/src/ledger", pane: null, name: "ledger export", status: "busy" });
-    const project = await createProject({ name: "Ledger" });
+    const project = await createProject(config(), { name: "Ledger" });
     const task = await engine.desk.adoptStray((await findStrays())[0], project.id);
     expect(task.title).toBe("ledger export");
     expect(task.agent_state).toBe(AgentState.saved);
@@ -212,7 +212,7 @@ describe("adopting a stray", () => {
 
   test("a window that cannot be taken leaves no task behind", async () => {
     await ownSession("beanstream", 101);
-    const project = await createProject({ name: "Ledger" });
+    const project = await createProject(config(), { name: "Ledger" });
     const [stray] = await findStrays();
     fake.windows = [];
     await expect(engine.desk.adoptStray(stray, project.id)).rejects.toThrow();
@@ -223,7 +223,7 @@ describe("adopting a stray", () => {
 describe("the adopt move", () => {
   test("lists strays without --claude, adopts one with it", async () => {
     await ownSession("beanstream", 101);
-    await createProject({ name: "Ledger" });
+    await createProject(config(), { name: "Ledger" });
     const list = store.enqueueMove("adopt", { project: "Ledger" }, "you");
     await engine.drainMoves();
     expect(store.getMove(list.id)!.result).toStartWith("strays: beanstre (beanstream:claude");
@@ -236,7 +236,7 @@ describe("the adopt move", () => {
 
   test("an agent cannot adopt, and an unknown claude says which there are", async () => {
     await ownSession("beanstream", 101);
-    await createProject({ name: "Ledger" });
+    await createProject(config(), { name: "Ledger" });
     const byAgent = store.enqueueMove("adopt", { project: "Ledger", claude: "beanstream" }, "agent AUG-0001");
     const unknown = store.enqueueMove("adopt", { project: "Ledger", claude: "nope" }, "you");
     await engine.drainMoves();

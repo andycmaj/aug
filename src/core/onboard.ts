@@ -6,6 +6,7 @@
 // never writes a doc itself.
 
 import { join } from "node:path";
+import type { AugConfig } from "./config";
 import { docBudget, DocName, readDoc } from "./docs";
 import { docDraftsDir } from "./paths";
 import { toolsCommand } from "./self";
@@ -15,10 +16,10 @@ import type { TaskRow } from "./types";
 export const ONBOARD_START =
   "Start the onboarding interview: look first, then ask me what you could not find.";
 
-export function onboardBrief(task: TaskRow): string {
-  const persona = docBudget(DocName.persona);
-  const job = docBudget(DocName.job);
-  const style = docBudget(DocName.style);
+export function onboardBrief(config: AugConfig, task: TaskRow): string {
+  const persona = docBudget(config, DocName.persona);
+  const job = docBudget(config, DocName.job);
+  const style = docBudget(config, DocName.style);
   const draft = (doc: string) => join(docDraftsDir(), `${doc}.md`);
   return [
     `You are running aug's onboarding interview (${store.taskRef(task.id)}). The owner of aug asked you to interview them in this session and draft their brain docs (PERSONA.md, JOB.md, STYLE.md), which go into every prompt aug runs.`,

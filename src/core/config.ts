@@ -1,8 +1,15 @@
 // ~/.aug/config.json. Every key is optional; a missing file means defaults,
 // which is enough to run with `gh` logged in and SLACK_TOKEN set.
 
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { paths, ensureHome } from "./paths";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname } from "node:path";
+import { paths } from "./paths";
 
 // A message triage files as FYI without asking a model. Every field set must
 // match; author, title and body are case-insensitive regexes.
@@ -139,13 +146,6 @@ export const DEFAULT_CONFIG: AugConfig = {
   },
 };
 
-let cached: AugConfig | undefined;
-// The file's mtime when it was read, so an edit (yours, or a learned noise
-// rule) is picked up on the next load without a restart.
-let cachedMtime: number | null = null;
-// Tests set config by value and never read the file.
-let pinned = false;
-
 type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K];
 };
@@ -196,11 +196,7 @@ function mtimeOf(file: string): number | null {
   }
 }
 
-export function loadConfig(): AugConfig {
-  if (cached && pinned) return cached;
-  const file = paths.config();
-  const mtime = mtimeOf(file);
-  if (cached && mtime === cachedMtime) return cached;
+function readFile(file: string): AugConfig {
   let raw: DeepPartial<AugConfig> = {};
   if (existsSync(file)) {
     try {
@@ -209,30 +205,62 @@ export function loadConfig(): AugConfig {
       raw = {};
     }
   }
-  cached = mergeConfig(raw);
-  cachedMtime = mtime;
-  return cached;
+  return mergeConfig(raw);
 }
 
-export function saveConfig(next: AugConfig): void {
-  ensureHome();
-  writeFileSync(paths.config(), JSON.stringify(next, null, 2) + "\n");
-  cached = next;
-  cachedMtime = mtimeOf(paths.config());
+// One read of config.json, for an entry point that needs a setting before
+// it has a source to hand around (the theme, the log, the tmux server).
+export function loadConfig(file = paths.config()): AugConfig {
+  return readFile(file);
 }
 
-export function slackToken(config = loadConfig()): string | undefined {
+// What the engine, the desk and the drivers are handed instead of reaching
+// for a global: the config as it is now, and the one way to change it. A
+// long-lived holder keeps the source and asks get() when it needs a setting,
+// so an edit (yours, a learned noise rule, a repo mapped mid-start) is seen
+// on the next use without a restart. Functions that run once take the
+// AugConfig value get() returned.
+export interface ConfigSource {
+  get(): AugConfig;
+  update(change: (config: AugConfig) => AugConfig): AugConfig;
+}
+
+// ~/.aug/config.json, re-read when its mtime changes.
+export function fileConfig(file = paths.config()): ConfigSource {
+  let cached: AugConfig | undefined;
+  let cachedMtime: number | null = null;
+  const get = (): AugConfig => {
+    const mtime = mtimeOf(file);
+    if (cached && mtime === cachedMtime) return cached;
+    cached = readFile(file);
+    cachedMtime = mtime;
+    return cached;
+  };
+  return {
+    get,
+    update(change) {
+      const next = change(get());
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
+      cached = next;
+      cachedMtime = mtimeOf(file);
+      return next;
+    },
+  };
+}
+
+// In memory, never the file: tests and the fixture day.
+export function fixedConfig(initial: AugConfig = DEFAULT_CONFIG): ConfigSource {
+  let current = initial;
+  return {
+    get: () => current,
+    update(change) {
+      current = change(current);
+      return current;
+    },
+  };
+}
+
+export function slackToken(config: AugConfig): string | undefined {
   return process.env.SLACK_TOKEN ?? config.slack.token;
-}
-
-export function setConfigForTest(config: AugConfig): void {
-  cached = config;
-  pinned = true;
-}
-
-// Back to reading the file, for a test of loading itself.
-export function unpinConfigForTest(): void {
-  cached = undefined;
-  cachedMtime = null;
-  pinned = false;
 }

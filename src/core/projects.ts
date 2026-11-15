@@ -4,6 +4,7 @@
 
 import { homedir } from "node:os";
 import { codingCwd, codingLaunch, type CodingLaunch } from "./agents";
+import type { AugConfig } from "./config";
 import { sessionEnded, sessionStarted, type SessionEnd } from "./lifecycle";
 import { logger } from "./log";
 import { mux, VIEWER_PREFIX, viewerMayHang, type MuxSession, type MuxState } from "./mux";
@@ -62,7 +63,7 @@ function liveSessionFor(state: MuxState, projectId: number): MuxSession | null {
   );
 }
 
-export async function createProject(opts: {
+export async function createProject(config: AugConfig, opts: {
   name: string;
   repo?: string | null;
   solo?: boolean;
@@ -72,7 +73,7 @@ export async function createProject(opts: {
     slug(opts.name),
     new Set(state.sessions.map((s) => s.name)),
   );
-  const cwd = repoPath(opts.repo ?? null) ?? homedir();
+  const cwd = repoPath(config, opts.repo ?? null) ?? homedir();
   const session = await mux().newSession(name, cwd);
   const project = store.createProject({
     name: opts.name,
@@ -118,7 +119,10 @@ export async function adoptSession(sessionId: string): Promise<ProjectRow> {
 }
 
 // The project's live session, made again (and re-tagged) if you killed it.
-async function ensureSession(project: ProjectRow): Promise<MuxSession> {
+async function ensureSession(
+  config: AugConfig,
+  project: ProjectRow,
+): Promise<MuxSession> {
   const state = await mux().state();
   const live = liveSessionFor(state, project.id);
   if (live) {
@@ -131,7 +135,10 @@ async function ensureSession(project: ProjectRow): Promise<MuxSession> {
     new Set(state.sessions.map((s) => s.name)),
   );
   const first = store.projectRepos(project)[0];
-  const session = await mux().newSession(name, repoPath(first ?? null) ?? homedir());
+  const session = await mux().newSession(
+    name,
+    repoPath(config, first ?? null) ?? homedir(),
+  );
   await mux().tagSession(session.id, project.id);
   store.updateProject(project.id, { tmux_session: session.name });
   return session;
@@ -158,12 +165,13 @@ export function defaultBranch(task: TaskRow): string {
 }
 
 export async function startTask(
+  config: AugConfig,
   taskId: number,
   opts: StartOptions = {},
 ): Promise<StartResult> {
   let task = store.getTask(taskId);
   if (!task) return { type: "failed", error: `no task ${taskId}` };
-  const path = repoPath(task.repo);
+  const path = repoPath(config, task.repo);
   if (
     task.repo &&
     !opts.noWorktree &&
@@ -175,14 +183,14 @@ export async function startTask(
   try {
     let project = task.project_id ? store.getProject(task.project_id) : null;
     if (!project || project.status !== "active") {
-      project = await createProject({
+      project = await createProject(config, {
         name: task.title,
         repo: task.repo,
         solo: true,
       });
       store.updateTask(task.id, { project_id: project.id });
     }
-    const session = await ensureSession(project);
+    const session = await ensureSession(config, project);
 
     // A claude still running keeps its window; one that has exited left a
     // shell behind, which a fresh window replaces.
@@ -202,6 +210,7 @@ export async function startTask(
       const existing =
         branch.startsWith("pr:") || (await mux().branchExists(path, branch));
       const made = await mux().worktree({
+        command: config.worktreeCommand,
         repoPath: path,
         branch,
         create: !existing,
@@ -214,8 +223,11 @@ export async function startTask(
     }
     task = store.getTask(task.id)!;
 
-    let launch = codingLaunch(task, { resume: opts.resume, note: opts.note });
-    launch = { ...launch, cwd: cwd ?? codingCwd(task) };
+    let launch = codingLaunch(config, task, {
+      resume: opts.resume,
+      note: opts.note,
+    });
+    launch = { ...launch, cwd: cwd ?? codingCwd(config, task) };
     if (opts.launchOverride) launch = opts.launchOverride(task, launch);
     const window = await mux().newWindow({
       sessionId: session.id,
@@ -318,7 +330,10 @@ export interface CloseResult {
 // Closing a task: kill its window, remove its worktree (wt refuses on a
 // dirty tree and keeps an unmerged branch), and archive a project-of-one
 // left empty.
-export async function closeTask(taskId: number): Promise<CloseResult> {
+export async function closeTask(
+  config: AugConfig,
+  taskId: number,
+): Promise<CloseResult> {
   const task = store.getTask(taskId);
   const result: CloseResult = { warnings: [], archived: false };
   if (!task) return result;
@@ -331,7 +346,7 @@ export async function closeTask(taskId: number): Promise<CloseResult> {
     }
   }
   endTmuxSessions(taskId);
-  const path = repoPath(task.repo);
+  const path = repoPath(config, task.repo);
   if (task.worktree && task.branch && path) {
     try {
       await mux().removeWorktree(path, task.branch);
@@ -387,11 +402,15 @@ async function archive(project: ProjectRow, state: MuxState): Promise<void> {
 // A window aug did not make becomes the task's: tagged, and moved into the
 // project's session, which is where aug looks for a task's window and where
 // a hand-started claude's hooks find their project.
-export async function takeWindow(taskId: number, windowId: string): Promise<void> {
+export async function takeWindow(
+  config: AugConfig,
+  taskId: number,
+  windowId: string,
+): Promise<void> {
   const task = store.getTask(taskId);
   const project = task?.project_id ? store.getProject(task.project_id) : null;
   if (!project) throw new Error(`${store.taskRef(taskId)} has no project`);
-  const session = await ensureSession(project);
+  const session = await ensureSession(config, project);
   await mux().tagWindow(windowId, taskId);
   const window = (await mux().state()).windows.find((w) => w.id === windowId);
   if (window && window.sessionId !== session.id)
@@ -399,12 +418,16 @@ export async function takeWindow(taskId: number, windowId: string): Promise<void
 }
 
 // Moving a task keeps its claude running: the window moves with it.
-export async function moveTask(taskId: number, projectId: number): Promise<void> {
+export async function moveTask(
+  config: AugConfig,
+  taskId: number,
+  projectId: number,
+): Promise<void> {
   const task = store.getTask(taskId);
   const target = store.getProject(projectId);
   if (!task || !target) return;
   const from = task.project_id ? store.getProject(task.project_id) : null;
-  const session = await ensureSession(target);
+  const session = await ensureSession(config, target);
   const state = await mux().state();
   for (const w of state.windows.filter((w) => w.taskId === taskId))
     await mux().moveWindow(w.id, w.sessionId, session.id);
@@ -431,10 +454,13 @@ export async function nudge(taskId: number, text: string): Promise<boolean> {
 
 // One viewer per task: each is a session holding just that task's window,
 // so several agents of one project can be viewed at once.
-export async function jumpToProject(projectId: number): Promise<boolean> {
+export async function jumpToProject(
+  config: AugConfig,
+  projectId: number,
+): Promise<boolean> {
   const project = store.getProject(projectId);
   if (!project) return false;
-  const session = await ensureSession(project);
+  const session = await ensureSession(config, project);
   await mux().switchClient(session.id);
   return true;
 }

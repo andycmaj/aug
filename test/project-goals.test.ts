@@ -13,7 +13,7 @@ import { applyProjectDoc, parseProjectDoc, renderProjectDoc } from "../src/core/
 import * as store from "../src/core/store";
 import { GoalStatus, Kind, TaskStatus } from "../src/core/types";
 import { FakeMux } from "./fake-mux";
-import { fakeBrain, freshHome } from "./helpers";
+import { fakeBrain, freshHome, testConfig, config } from "./helpers";
 
 let engine: Engine;
 
@@ -21,7 +21,7 @@ beforeEach(() => {
   freshHome();
   fakeBrain(() => null);
   setMux(new FakeMux());
-  engine = new Engine();
+  engine = new Engine({ config: testConfig() });
 });
 
 const notion = "https://notion.so/ledger-plan";
@@ -168,7 +168,7 @@ describe("what a task in a project is told", () => {
         `Project doc: the plan ${notion}`,
       ].join("\n"),
     );
-    expect(codingBrief(task)).toContain(context);
+    expect(codingBrief(config(), task)).toContain(context);
     expect(turnPrompt(task, [], "test")).toContain(context);
   });
 
@@ -176,7 +176,7 @@ describe("what a task in a project is told", () => {
     const p = ledger();
     const task = engine.desk.newTask("x", Kind.coding, "", { projectId: p.id });
     expect(projectContext(task)).toBe("");
-    expect(codingBrief(task)).not.toContain("## The project");
+    expect(codingBrief(config(), task)).not.toContain("## The project");
   });
 });
 

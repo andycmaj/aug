@@ -3,7 +3,7 @@
 // stitching, once, so a new prompt names what it wants. Each doc comes whole
 // up to twice its budget (docs.ts forPrompt).
 
-import { DocName, forPrompt, learnedInUse } from "./docs";
+import { DocName, forPrompt, learnedInUse, type BudgetConfig } from "./docs";
 
 export interface DocsBlock {
   persona?: boolean;
@@ -13,16 +13,16 @@ export interface DocsBlock {
   learned?: boolean;
 }
 
-export function docsBlock(parts: DocsBlock): string {
+export function docsBlock(config: BudgetConfig, parts: DocsBlock): string {
   const out: string[] = [];
-  if (parts.persona) out.push("## PERSONA.md", forPrompt(DocName.persona));
-  if (parts.job) out.push("## JOB.md", forPrompt(DocName.job));
+  if (parts.persona) out.push("## PERSONA.md", forPrompt(config, DocName.persona));
+  if (parts.job) out.push("## JOB.md", forPrompt(config, DocName.job));
   if (parts.style)
-    out.push("## STYLE.md (for any reply you draft)", forPrompt(DocName.style));
+    out.push("## STYLE.md (for any reply you draft)", forPrompt(config, DocName.style));
   if (parts.learned)
     out.push(
       "## LEARNED.md (lines in use)",
-      forPrompt(DocName.learned, learnedInUse()),
+      forPrompt(config, DocName.learned, learnedInUse()),
     );
   return out.join("\n");
 }

@@ -20,7 +20,7 @@ import { createProject } from "../src/core/projects";
 import * as store from "../src/core/store";
 import { AgentState, SessionKind } from "../src/core/types";
 import { FakeMux } from "./fake-mux";
-import { freshHome } from "./helpers";
+import { freshHome, config } from "./helpers";
 
 let fake: FakeMux;
 const git: GitInfo = {
@@ -38,7 +38,7 @@ beforeEach(() => {
 });
 
 async function projectWindow(): Promise<{ projectId: number; windowId: string }> {
-  const p = await createProject({ name: "Ledger" });
+  const p = await createProject(config(), { name: "Ledger" });
   const session = fake.sessions.find((s) => s.projectId === p.id)!;
   const w = await fake.newWindow({ sessionId: session.id, name: "zsh", cwd: "/", env: {}, argv: [] });
   return { projectId: p.id, windowId: w.id };

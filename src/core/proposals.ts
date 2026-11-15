@@ -6,7 +6,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { think } from "./brain";
-import { loadConfig } from "./config";
+import type { AugConfig } from "./config";
 import {
   archiveLearned,
   DOC_PURPOSE,
@@ -216,6 +216,7 @@ const REDRAFT_SCHEMA = {
 // model call per doc, the proposal revised in place. A shipped version has
 // nobody to redraft it.
 export async function redraftProposals(
+  config: AugConfig,
   taskId: number,
   notes: string,
 ): Promise<string> {
@@ -249,9 +250,9 @@ export async function redraftProposals(
         "## The owner's notes on the proposal (file:line, then the note)",
         notes,
       ].join("\n\n"),
-      system: `You revise a proposed edit to ${doc} (${DOC_PURPOSE[doc]}), one of the brain docs that aug, the owner's work manager, puts into its prompts. Apply the owner's notes that are about ${doc}; leave the rest of the proposal as it is. Keep it under ${docBudget(doc)} characters, plain Markdown, written as the owner speaking. Never record a secret.`,
+      system: `You revise a proposed edit to ${doc} (${DOC_PURPOSE[doc]}), one of the brain docs that aug, the owner's work manager, puts into its prompts. Apply the owner's notes that are about ${doc}; leave the rest of the proposal as it is. Keep it under ${docBudget(config, doc)} characters, plain Markdown, written as the owner speaking. Never record a secret.`,
       schema: REDRAFT_SCHEMA,
-      model: loadConfig().brain.assistantModel,
+      model: config.brain.assistantModel,
     });
     const answer = result.structured as { text?: string; reason?: string } | null;
     if (!answer?.text?.trim()) continue;

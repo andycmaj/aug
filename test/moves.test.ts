@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { DEFAULT_CONFIG, loadConfig } from "../src/core/config";
+import { readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { DEFAULT_CONFIG, fileConfig, loadConfig } from "../src/core/config";
 import { paths } from "../src/core/paths";
 import { Engine } from "../src/core/engine";
 import { movesHelp } from "../src/core/assistant";
@@ -12,7 +12,7 @@ import * as store from "../src/core/store";
 import { handleDone } from "../src/core/hooks";
 import { Kind, MoveStatus, SessionKind, TaskStatus } from "../src/core/types";
 import { FakeMux } from "./fake-mux";
-import { fakeBrain, freshHome } from "./helpers";
+import { fakeBrain, freshHome, testConfig, config } from "./helpers";
 
 let engine: Engine;
 let fake: FakeMux;
@@ -24,7 +24,7 @@ beforeEach(() => {
   fakeBrain(() => null);
   fake = new FakeMux();
   setMux(fake);
-  engine = new Engine();
+  engine = new Engine({ config: testConfig() });
 });
 
 function ask(verb: string, args: Record<string, string>) {
@@ -499,12 +499,18 @@ describe("links", () => {
     const task = engine.desk.newTask("Plan the launch", Kind.coding);
     store.addTaskLink(task.id, doc, "the plan", "you");
     expect(taskDetail(task)).toContain(`Link: the plan ${doc}`);
-    expect(codingBrief(task)).toContain(`Link: the plan ${doc}`);
+    expect(codingBrief(config(), task)).toContain(`Link: the plan ${doc}`);
     expect(movesHelp()).toContain("- move link AUG-0000 <url> [--title <what it is, in a few words>]");
   });
 });
 
 describe("the noise move", () => {
+  // Against config.json itself: the move writes it, and what the engine
+  // reads next is the file as it is now.
+  beforeEach(() => {
+    engine = new Engine({ config: fileConfig() });
+  });
+
   test("appends a rule triage reads, and saves it to config", async () => {
     const out = await engine.runMove("noise", {
       reason: "the weekly digest",
@@ -516,7 +522,8 @@ describe("the noise move", () => {
       result:
         "triage files slack titled /^weekly digest/ as FYI: the weekly digest",
     });
-    const noise = loadConfig().triage.noise;
+    const noise = engine.desk.config().triage.noise;
+    expect(loadConfig().triage.noise).toEqual(noise);
     expect(noise).toHaveLength(DEFAULT_CONFIG.triage.noise.length + 1);
     expect(noise.at(-1)).toEqual({
       reason: "the weekly digest",
@@ -546,5 +553,25 @@ describe("the noise move", () => {
     );
     expect(out.ok).toBe(false);
     expect(loadConfig().triage.noise).toEqual(DEFAULT_CONFIG.triage.noise);
+  });
+});
+
+describe("config the engine reads", () => {
+  test("an edit to config.json while aug runs is seen by the next move", async () => {
+    engine = new Engine({ config: fileConfig() });
+    const file = paths.config();
+    writeFileSync(file, JSON.stringify({ autostart: false }));
+    utimesSync(file, 1_000, 1_000);
+    expect(engine.desk.config().autostart).toBe(false);
+    await engine.runMove("noise", { reason: "digests", title: "digest" });
+    // The move kept the owner's edit.
+    expect(loadConfig().autostart).toBe(false);
+    writeFileSync(
+      file,
+      JSON.stringify({ github: { repos: { "acme/web": "/src/web" } } }),
+    );
+    utimesSync(file, 2_000, 2_000);
+    expect(engine.desk.config().github.repos).toEqual({ "acme/web": "/src/web" });
+    expect(engine.desk.config().autostart).toBe(true);
   });
 });

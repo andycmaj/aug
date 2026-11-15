@@ -6,7 +6,7 @@ import { setMux } from "../src/core/mux";
 import * as store from "../src/core/store";
 import { AgentState, Kind, TaskStatus } from "../src/core/types";
 import { FakeMux } from "./fake-mux";
-import { fakeBrain, freshHome } from "./helpers";
+import { fakeBrain, freshHome, testConfig } from "./helpers";
 
 let engine: Engine;
 let fake: FakeMux;
@@ -18,7 +18,7 @@ beforeEach(() => {
   fakeBrain(() => ({ about: "a", did: "b", next: "c", state: "done" }));
   fake = new FakeMux();
   setMux(fake);
-  engine = new Engine();
+  engine = new Engine({ config: testConfig() });
 });
 
 const ref = (id: number) => store.taskRef(id);
@@ -155,7 +155,7 @@ describe("Agents at once (maxActiveAgents)", () => {
     });
     fake = new FakeMux();
     setMux(fake);
-    engine = new Engine();
+    engine = new Engine({ config: testConfig() });
   });
 
   test("Starts pressed back to back never run more coding agents than the limit", async () => {

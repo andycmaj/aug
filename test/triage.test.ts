@@ -17,7 +17,7 @@ import {
   TurnRole,
   type MessageRow,
 } from "../src/core/types";
-import { fakeBrain, freshHome } from "./helpers";
+import { fakeBrain, freshHome, config } from "./helpers";
 
 function slackDm(
   n: number,
@@ -81,7 +81,7 @@ describe("triage", () => {
 
   test("a greeting never becomes a task and asks no model", async () => {
     const calls = fakeBrain(() => verdict("general"));
-    const out = await triage(slackDm(1, "hey!"));
+    const out = await triage(slackDm(1, "hey!"), { config: config() });
     expect(out.verdict).toBe("opener");
     expect(calls).toHaveLength(0);
     expect(store.listTasks()).toHaveLength(0);
@@ -89,7 +89,7 @@ describe("triage", () => {
 
   test("bots are FYI by gate", async () => {
     const calls = fakeBrain(() => verdict("task"));
-    const out = await triage(ghComment(1, "Coverage 91%", "codecov[bot]"));
+    const out = await triage(ghComment(1, "Coverage 91%", "codecov[bot]"), { config: config() });
     expect(out.verdict).toBe("fyi");
     expect(calls).toHaveLength(0);
   });
@@ -97,7 +97,7 @@ describe("triage", () => {
   test("a general verdict makes a task with the message as its first chat line and asks for an agent", async () => {
     fakeBrain(() => verdict("general"));
     const out = await triage(
-      slackDm(1, "Which payroll providers do same-day pay?"),
+      slackDm(1, "Which payroll providers do same-day pay?"), { config: config() }
     );
     expect(out.verdict).toBe("general");
     const task = store.getTask(out.taskId!)!;
@@ -116,7 +116,7 @@ describe("triage", () => {
   test("coding work is held for the owner's Start", async () => {
     fakeBrain(() => verdict("coding", { repo: "acme/api" }));
     const out = await triage(
-      ghComment(1, "@me the export drops inter-company transfers"),
+      ghComment(1, "@me the export drops inter-company transfers"), { config: config() }
     );
     const task = store.getTask(out.taskId!)!;
     expect(task.agent_state).toBe(AgentState.queued);
@@ -126,8 +126,8 @@ describe("triage", () => {
 
   test("a GitHub thread attaches to its open task without a model call", async () => {
     const calls = fakeBrain(() => verdict("task"));
-    const first = await triage(ghComment(1, "please look"));
-    const second = await triage(ghComment(2, "any update?"));
+    const first = await triage(ghComment(1, "please look"), { config: config() });
+    const second = await triage(ghComment(2, "any update?"), { config: config() });
     expect(second.verdict).toBe("attached");
     expect(second.taskId).toBe(first.taskId);
     expect(calls).toHaveLength(1);
@@ -135,9 +135,9 @@ describe("triage", () => {
 
   test("they wrote after the close: the task reopens", async () => {
     fakeBrain(() => verdict("task"));
-    const first = await triage(ghComment(1, "please look"));
+    const first = await triage(ghComment(1, "please look"), { config: config() });
     taskClosed(first.taskId!);
-    const again = await triage(ghComment(2, "it is broken again"));
+    const again = await triage(ghComment(2, "it is broken again"), { config: config() });
     expect(again.taskId).toBe(first.taskId);
     expect(store.getTask(first.taskId!)!.status).toBe(TaskStatus.open);
   });
@@ -148,16 +148,16 @@ describe("triage", () => {
       n++ === 0 ? verdict("general") : verdict("general", { same_ask: true }),
     );
     const first = await triage(
-      slackDm(1, "Which payroll providers do same-day pay?"),
+      slackDm(1, "Which payroll providers do same-day pay?"), { config: config() }
     );
-    const second = await triage(slackDm(2, "and what would it cost us?"));
+    const second = await triage(slackDm(2, "and what would it cost us?"), { config: config() });
     expect(second.verdict).toBe("attached");
     expect(second.taskId).toBe(first.taskId);
   });
 
   test("your own answer on the thread retires the pending draft", async () => {
     fakeBrain(() => verdict("reply"));
-    const first = await triage(ghComment(1, "can you confirm the seat count?"));
+    const first = await triage(ghComment(1, "can you confirm the seat count?"), { config: config() });
     const turn = store.addTurn({
       taskId: first.taskId!,
       role: TurnRole.agent,
@@ -180,7 +180,7 @@ describe("triage", () => {
       receivedAt: new Date().toISOString(),
       fromMe: true,
     })!;
-    const out = await triage(own);
+    const out = await triage(own, { config: config() });
     expect(out.verdict).toBe("own");
     expect(store.pendingAction(first.taskId!)).toBeNull();
   });
@@ -189,7 +189,7 @@ describe("triage", () => {
     fakeBrain(() => {
       throw new Error("offline");
     });
-    const out = await triage(slackDm(1, "Can you send me the Q3 numbers?"));
+    const out = await triage(slackDm(1, "Can you send me the Q3 numbers?"), { config: config() });
     expect(out.verdict).toBe("failed");
     expect(store.listTasks()).toHaveLength(0);
     expect(store.fyiMessages("2000-01-01")[0].reason).toContain(
@@ -251,7 +251,7 @@ describe("triage routing", () => {
   test("your own message comes first, even when it looks like a greeting", async () => {
     const calls = fakeBrain(() => verdict("general"));
     const own = slackDm(1, "hey!", { fromMe: true });
-    const out = await triage(own);
+    const out = await triage(own, { config: config() });
     expect(out).toMatchObject({ verdict: "own", taskId: null, effects: [] });
     expect(message(own.id).read_at).not.toBeNull();
     expect(calls).toHaveLength(0);
@@ -260,7 +260,7 @@ describe("triage routing", () => {
   test("a greeting wins over the bot gate", async () => {
     const calls = fakeBrain(() => verdict("task"));
     const m = ghNotice(1, { author: "renovate[bot]", body: "hi" });
-    const out = await triage(m);
+    const out = await triage(m, { config: config() });
     expect(out.verdict).toBe("opener");
     expect(message(m.id).read_at).not.toBeNull();
     expect(calls).toHaveLength(0);
@@ -275,7 +275,7 @@ describe("triage routing", () => {
   ])("noise by gate: %s / %s", async (author, reason, why) => {
     const calls = fakeBrain(() => verdict("task"));
     const m = ghNotice(1, { author, reason });
-    const out = await triage(m);
+    const out = await triage(m, { config: config() });
     expect(out).toEqual({
       verdict: "fyi",
       taskId: null,
@@ -294,7 +294,7 @@ describe("triage routing", () => {
     const calls = fakeBrain(() =>
       verdict("task", { title: "Review acme/api#40", priority: "urgent" }),
     );
-    const out = await triage(ghNotice(1, { reason: "review_requested" }));
+    const out = await triage(ghNotice(1, { reason: "review_requested" }), { config: config() });
     expect(calls).toHaveLength(1);
     expect(calls[0].system).toContain("GitHub review requests");
     expect(calls[0].prompt).toContain('"reason":"review_requested"');
@@ -313,7 +313,7 @@ describe("triage routing", () => {
       verdict("reply", { priority: "urgent", title: "Answer Priya" }),
     );
     const first = await triage(
-      slackThread(1, "<@UME> can you confirm the cutoff?"),
+      slackThread(1, "<@UME> can you confirm the cutoff?"), { config: config() }
     );
     expect(calls).toHaveLength(1);
     expect(calls[0].system).toContain("Slack mentions of me");
@@ -328,7 +328,7 @@ describe("triage routing", () => {
       },
     ]);
 
-    const second = await triage(slackThread(2, "also the timezone"));
+    const second = await triage(slackThread(2, "also the timezone"), { config: config() });
     expect(calls).toHaveLength(1);
     expect(second).toEqual({
       verdict: "attached",
@@ -346,9 +346,9 @@ describe("triage routing", () => {
 
   test("a message joining a live task's thread is delivered to its agent", async () => {
     fakeBrain(() => verdict("task"));
-    const first = await triage(ghComment(1, "please look"));
+    const first = await triage(ghComment(1, "please look"), { config: config() });
     store.updateTask(first.taskId!, { agent_state: AgentState.working });
-    const second = await triage(ghComment(2, "any update?"));
+    const second = await triage(ghComment(2, "any update?"), { config: config() });
     expect(second.effects).toEqual([
       {
         type: "agent-message",
@@ -361,9 +361,9 @@ describe("triage routing", () => {
   test("autostart off: nothing is woken", async () => {
     freshHome({ autostart: false });
     fakeBrain(() => verdict("general"));
-    const first = await triage(slackThread(1, "what is the cutoff?"));
+    const first = await triage(slackThread(1, "what is the cutoff?"), { config: config() });
     expect(first.effects).toEqual([]);
-    const second = await triage(slackThread(2, "and the timezone?"));
+    const second = await triage(slackThread(2, "and the timezone?"), { config: config() });
     expect(second.verdict).toBe("attached");
     expect(second.effects).toEqual([]);
   });
@@ -371,7 +371,7 @@ describe("triage routing", () => {
   test("an FYI verdict is filed with no task", async () => {
     fakeBrain(() => verdict("fyi", { reason: "release notes" }));
     const m = slackThread(1, "v2.3 is out");
-    const out = await triage(m);
+    const out = await triage(m, { config: config() });
     expect(out).toEqual({
       verdict: "fyi",
       taskId: null,
@@ -384,7 +384,7 @@ describe("triage routing", () => {
 
   test("a watch verdict makes a task that watches", async () => {
     fakeBrain(() => verdict("watch"));
-    const out = await triage(ghComment(1, "deploying the fix now"));
+    const out = await triage(ghComment(1, "deploying the fix now"), { config: config() });
     const task = store.getTask(out.taskId!)!;
     expect(out.verdict).toBe("watch");
     expect(task.kind).toBe("task");
@@ -397,10 +397,10 @@ describe("triage routing", () => {
       n++ === 0 ? verdict("general") : verdict("general", { same_ask: false }),
     );
     const first = await triage(
-      slackDm(1, "Which payroll providers do same-day pay?"),
+      slackDm(1, "Which payroll providers do same-day pay?"), { config: config() }
     );
     const second = await triage(
-      slackDm(2, "Separately, who owns the SOC2 doc?"),
+      slackDm(2, "Separately, who owns the SOC2 doc?"), { config: config() }
     );
     expect(calls[1].prompt).toContain("Candidate open task");
     expect(second.verdict).toBe("general");
@@ -410,10 +410,10 @@ describe("triage routing", () => {
   test("a DM after the close is judged again, not reopened", async () => {
     const calls = fakeBrain(() => verdict("general"));
     const first = await triage(
-      slackDm(1, "Which payroll providers do same-day pay?"),
+      slackDm(1, "Which payroll providers do same-day pay?"), { config: config() }
     );
     taskClosed(first.taskId!);
-    const again = await triage(slackDm(2, "Who owns the SOC2 doc?"));
+    const again = await triage(slackDm(2, "Who owns the SOC2 doc?"), { config: config() });
     expect(calls).toHaveLength(2);
     expect(calls[1].prompt).not.toContain("Candidate open task");
     expect(again.taskId).not.toBe(first.taskId);
@@ -422,7 +422,7 @@ describe("triage routing", () => {
 
   test("your own answer wakes the agent of a task that has a session", async () => {
     fakeBrain(() => verdict("general"));
-    const first = await triage(slackThread(1, "what is the cutoff?"));
+    const first = await triage(slackThread(1, "what is the cutoff?"), { config: config() });
     store.createSession({
       id: "s1",
       taskId: first.taskId!,
@@ -441,7 +441,7 @@ describe("triage routing", () => {
       receivedAt: new Date().toISOString(),
       fromMe: true,
     })!;
-    const out = await triage(own);
+    const out = await triage(own, { config: config() });
     expect(out).toEqual({
       verdict: "own",
       taskId: first.taskId!,
@@ -510,8 +510,8 @@ describe("triage chain", () => {
     const calls = fakeBrain(() =>
       n++ === 0 ? verdict("general") : verdict("fyi", { same_ask: false }),
     );
-    await triage(slackDm(1, "Which payroll providers do same-day pay?"));
-    const out = await triage(slackDm(2, "fyi the vendor emailed"));
+    await triage(slackDm(1, "Which payroll providers do same-day pay?"), { config: config() });
+    const out = await triage(slackDm(2, "fyi the vendor emailed"), { config: config() });
     expect(out.verdict).toBe("fyi");
     expect(calls).toHaveLength(2);
   });
@@ -548,7 +548,7 @@ describe("triage noise from config", () => {
       },
     });
     const calls = fakeBrain(() => verdict("task"));
-    const out = await triage(slackPost(1, "Weekly digest", "12 new posts"));
+    const out = await triage(slackPost(1, "Weekly digest", "12 new posts"), { config: config() });
     expect(out).toEqual({
       verdict: "fyi",
       taskId: null,
@@ -565,7 +565,7 @@ describe("triage noise from config", () => {
       },
     });
     const calls = fakeBrain(() => verdict("fyi"));
-    await triage(slackPost(1, "Weekly digest", "12 new posts"));
+    await triage(slackPost(1, "Weekly digest", "12 new posts"), { config: config() });
     expect(calls).toHaveLength(1);
   });
 
@@ -574,7 +574,7 @@ describe("triage noise from config", () => {
       triage: { noise: [{ reason: "broken", body: "([unclosed" }] },
     });
     const calls = fakeBrain(() => verdict("fyi"));
-    const out = await triage(slackPost(1, "anything", "([unclosed"));
+    const out = await triage(slackPost(1, "anything", "([unclosed"), { config: config() });
     expect(out.reason).not.toBe("broken");
     expect(calls).toHaveLength(1);
   });

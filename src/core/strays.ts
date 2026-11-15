@@ -8,6 +8,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { adoptedTitle, claudeDir, gitInfo, type GitInfo } from "./adopt";
+import type { AugConfig } from "./config";
 import { sessionActivity, sessionEnded, sessionStarted } from "./lifecycle";
 import { logger } from "./log";
 import { mux, type PaneInfo } from "./mux";
@@ -190,7 +191,11 @@ export function matchStray(strays: Stray[], ref: string): Stray {
   throw new Error(`no stray claude ${want}. ${strays.length ? `Strays: ${list}.` : "There are none."}`);
 }
 
-export async function adoptStray(stray: Stray, project: ProjectRow): Promise<TaskRow> {
+export async function adoptStray(
+  config: AugConfig,
+  stray: Stray,
+  project: ProjectRow,
+): Promise<TaskRow> {
   const { claude, pane, git } = stray;
   const task = store.createTask({
     title: adoptedTitle(git, claude.name ?? undefined, pane?.sessionName || basename(claude.cwd)),
@@ -214,7 +219,7 @@ export async function adoptStray(stray: Stray, project: ProjectRow): Promise<Tas
   const ref = { taskId: task.id, sessionId: claude.sessionId };
   if (pane) {
     try {
-      await takeWindow(task.id, pane.windowId);
+      await takeWindow(config, task.id, pane.windowId);
     } catch (err) {
       // No window, no task: it would sit there with nothing behind it.
       store.updateTask(task.id, { status: TaskStatus.dropped });

@@ -4,14 +4,19 @@ import { runApp } from "@andycmaj/opentui-app";
 import { App } from "./app";
 import { CrashGuard } from "./components/crash-guard";
 import { parseCLI } from "./cli";
-import { loadConfig } from "./core/config";
+import { fileConfig } from "./core/config";
 import { Engine } from "./core/engine";
 import { claimHome, releaseHome } from "./core/home-lock";
-import { logCrashes, logger } from "./core/log";
+import { configureLog, logCrashes, logger } from "./core/log";
+import { setMux, TmuxMux } from "./core/mux";
 import { paths } from "./core/paths";
 import { exitCode } from "./core/restart";
 
 const cli = await parseCLI();
+// config.json, read again whenever it changes. Everything below is handed
+// this source; nothing else reads the file.
+const config = fileConfig();
+configureLog(() => config.get().log);
 logCrashes();
 logger("aug").info("start", {
   fixture: cli.fixture ?? null,
@@ -23,7 +28,8 @@ if (cli.fixture) {
   const { installFixture } = await import("./fixtures/demo");
   engine = installFixture(cli.fixture);
 } else {
-  engine = new Engine();
+  setMux(new TmuxMux(config.get().tmuxSocket));
+  engine = new Engine({ config });
 }
 
 // Before the TUI takes the terminal, so the refusal is readable.
@@ -46,7 +52,7 @@ engine.start();
 await runApp(
   () => (
     <CrashGuard>
-      <App engine={engine} theme={loadConfig().theme} />
+      <App engine={engine} theme={engine.desk.config().theme} />
     </CrashGuard>
   ),
   {

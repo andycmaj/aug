@@ -12,7 +12,7 @@ import { pollGithub, type GhNotification } from "../src/core/ingest/github";
 import { triage } from "../src/core/triage";
 import * as store from "../src/core/store";
 import { Kind, SessionKind } from "../src/core/types";
-import { freshHome } from "./helpers";
+import { freshHome, config } from "./helpers";
 
 beforeEach(() => freshHome());
 
@@ -54,7 +54,7 @@ describe("linking a PR to its task", () => {
     expect(linkByBranch(m)).toBe(t.id);
     expect(store.threadsForTask(t.id)).toEqual(["github:acme/ledger#214", "github:acme/ledger#230"]);
     expect(store.openTaskForThread("github:acme/ledger#230")?.id).toBe(t.id);
-    const outcome = await triage(m);
+    const outcome = await triage(m, { config: config() });
     expect(outcome.taskId).toBe(t.id);
     expect(store.listTasks()).toHaveLength(1);
   });

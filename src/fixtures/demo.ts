@@ -8,11 +8,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setBrain, type BrainCall, type BrainResult } from "../core/brain";
-import { DEFAULT_CONFIG, setConfigForTest } from "../core/config";
+import { DEFAULT_CONFIG, fixedConfig } from "../core/config";
 import { openDb, useDb } from "../core/db";
 import { DocName, ensureDocs, readDoc, writeDoc } from "../core/docs";
 import { Engine } from "../core/engine";
 import type { MadeFile } from "../core/files";
+import { setMux, TmuxMux } from "../core/mux";
 import { setSender } from "../core/outbound";
 import { defaultHome, paths } from "../core/paths";
 import * as store from "../core/store";
@@ -688,11 +689,12 @@ export function installFixture(name: string): Engine {
   process.env.AUG_HOME = demoHome();
   useDb(openDb());
   // Coding agents run on a private tmux server, never your own.
-  setConfigForTest({
+  const config = fixedConfig({
     ...DEFAULT_CONFIG,
     autostart: false,
     tmuxSocket: "aug-demo",
   });
+  setMux(new TmuxMux(config.get().tmuxSocket));
   ensureDocs();
   if (store.listTasks().length === 0) seedDemo();
   setBrain(demoBrain);
@@ -702,6 +704,7 @@ export function installFixture(name: string): Engine {
   });
   const fake = fileURLToPath(new URL("./fake-claude.ts", import.meta.url));
   return new Engine({
+    config,
     offline: true,
     noWorktrees: true,
     launchOverride: (task, launch) => ({

@@ -9,7 +9,7 @@
 // seen again in a month goes to the archive (core/doc-pass.ts).
 
 import { think } from "./brain";
-import { loadConfig } from "./config";
+import type { AugConfig } from "./config";
 import { DocName, LEARNED_SECTIONS, readDoc, writeDoc } from "./docs";
 import * as store from "./store";
 import type { CorrectionRow } from "./types";
@@ -123,15 +123,18 @@ export function describeCorrection(c: CorrectionRow): string {
     .join("\n");
 }
 
-export async function learnFrom(c: CorrectionRow): Promise<string | null> {
-  if (!loadConfig().learning) return null;
+export async function learnFrom(
+  config: AugConfig,
+  c: CorrectionRow,
+): Promise<string | null> {
+  if (!config.learning) return null;
   const learned = readDoc(DocName.learned);
   const result = await think({
     prompt: `${describeCorrection(c)}\n\nCurrent LEARNED.md:\n${learned}`,
     system:
       "You maintain LEARNED.md, what aug has learned about how its owner works. Turn one correction into at most one lesson in plain words. Never record a secret. If an existing line already says it, either skip or return a stronger version that replaces it (strength + 1). Lines without an [s:...] tag were written by the owner: never replace them.",
     schema: LESSON_SCHEMA,
-    model: loadConfig().brain.triageModel,
+    model: config.brain.triageModel,
   });
   const lesson = result.structured as Lesson | null;
   if (!lesson || lesson.skip || !lesson.text?.trim()) return null;
@@ -148,11 +151,12 @@ export async function learnFrom(c: CorrectionRow): Promise<string | null> {
 
 // Record and learn in the background: a correction never waits on a model.
 export function correct(
+  config: AugConfig,
   c: Parameters<typeof store.addCorrection>[0],
   onLearned?: (line: string) => void,
 ): void {
   const row = store.addCorrection(c);
-  void learnFrom(row)
+  void learnFrom(config, row)
     .then((line) => {
       if (line) onLearned?.(line);
     })

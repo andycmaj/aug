@@ -2,7 +2,7 @@
 // config), and the repo a task works in. The answers a coding start needs
 // before it can make a worktree live here.
 
-import { loadConfig, saveConfig } from "./config";
+import type { AugConfig, ConfigSource } from "./config";
 import * as store from "./store";
 import type { TaskRow } from "./types";
 
@@ -16,28 +16,26 @@ export function checkRepo(repo: string): string {
   return clean;
 }
 
-export function repoPath(repo: string | null): string | null {
+export function repoPath(config: AugConfig, repo: string | null): string | null {
   if (!repo) return null;
-  return loadConfig().github.repos[repo] ?? null;
+  return config.github.repos[repo] ?? null;
 }
 
-export function mapRepo(repo: string, path: string): void {
-  const config = loadConfig();
-  saveConfig({
-    ...config,
-    github: {
-      ...config.github,
-      repos: { ...config.github.repos, [repo]: path },
-    },
-  });
+// Written through the source, so a start that asked for the path and runs
+// again next reads it.
+export function mapRepo(config: ConfigSource, repo: string, path: string): void {
+  config.update((c) => ({
+    ...c,
+    github: { ...c.github, repos: { ...c.github.repos, [repo]: path } },
+  }));
 }
 
 // A coding task you made yourself has no repo yet: offer its project's repos
 // first, then every mapped one.
-export function repoChoices(task: TaskRow): string[] {
+export function repoChoices(config: AugConfig, task: TaskRow): string[] {
   const project = task.project_id ? store.getProject(task.project_id) : null;
   const ours = project ? store.projectRepos(project) : [];
-  const mapped = Object.keys(loadConfig().github.repos);
+  const mapped = Object.keys(config.github.repos);
   return [...new Set([...ours, ...mapped])];
 }
 
