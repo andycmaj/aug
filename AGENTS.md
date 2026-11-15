@@ -27,6 +27,11 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `libtmux` (alpha, pinned exactly). Identity is the `@aug_project` /
   `@aug_task` user options, never names. Tests use `test/fake-mux.ts`; real
   tmux checks use a private server (`-L`), never the default one.
+- **Where a repo is checked out is `core/repos.ts`**: `github.repos` in
+  config is the owner's one path per repo; `core/checkouts.ts` (behind the
+  Mux) inspects a path and scans `repoRoots` for checkouts. Every coding
+  start checks the path first, and `needs: path` carries what is wrong and
+  what was found. Nothing is mapped unless the owner picks it.
 - **A terminal program an agent opens (a diff viewer) splits its own
   window**: `aug-tools pane [--zoom] [--wait] -- cmd`, so it shows in the
   viewer instead of a window of its own. `tagWindow` also sets `@aug_tools`
