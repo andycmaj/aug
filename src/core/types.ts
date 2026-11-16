@@ -49,13 +49,15 @@ export const Priority = {
 export type Priority = (typeof Priority)[keyof typeof Priority];
 
 // The six states an agent can be in, plus "none" for a task nobody handed to
-// an agent. One word and one mark each, everywhere (see lanes.ts).
+// an agent. One word and one mark each, everywhere (see lanes.ts and
+// docs/rail-status-design.md). Working is a turn running; idle is a turn
+// over with nothing asked; waiting is the agent needing the owner's answer.
 export const AgentState = {
   none: "none",
   queued: "queued",
   working: "working",
-  blocked: "blocked",
-  saved: "saved",
+  idle: "idle",
+  waiting: "waiting",
   stopped: "stopped",
   agentdone: "agentdone",
 } as const;
@@ -269,6 +271,8 @@ export interface SessionRow {
   result: string | null;
   // The tmux window id (@12) for a tmux session.
   tmux_window: string | null;
+  // Why it ended, in a few words ("you stopped it", "its window closed").
+  end_reason: string | null;
 }
 
 export const NoteLabel = {

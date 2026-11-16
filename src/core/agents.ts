@@ -17,6 +17,7 @@ import { docsBlock } from "./prompts";
 import { changedFiles, snapshotDir } from "./files";
 import { actionFor, lastIncoming } from "./outbound";
 import {
+  EndReason,
   queued,
   sessionEnded,
   sessionStarted,
@@ -490,11 +491,11 @@ export class AgentPool {
             store.updateTurn(turn.id, {
               status: "failed",
               body: stopped
-                ? "Stopped and saved."
+                ? "Stopped; s resumes it."
                 : `The agent failed: ${message}`,
               finished_at: now(),
             });
-            sessionEnded(ref, stopped ? AgentState.saved : AgentState.stopped);
+            sessionEnded(ref, stopped ? EndReason.stop : `failed: ${message}`);
           }),
         );
       } catch (writeErr) {

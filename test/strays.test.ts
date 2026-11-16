@@ -170,7 +170,7 @@ describe("adopting a stray", () => {
     expect(session.tmux_window).toBe(claude.pane);
     expect(session.ended_at).toBeNull();
     // It was idle at its prompt when adopted.
-    expect(store.getTask(task.id)!.agent_state).toBe(AgentState.blocked);
+    expect(store.getTask(task.id)!.agent_state).toBe(AgentState.idle);
     expect(await findStrays()).toEqual([]);
   });
 
@@ -199,7 +199,7 @@ describe("adopting a stray", () => {
     const project = await createProject(config(), { name: "Ledger" });
     const task = await engine.desk.adoptStray((await findStrays())[0], project.id);
     expect(task.title).toBe("ledger export");
-    expect(task.agent_state).toBe(AgentState.saved);
+    expect(task.agent_state).toBe(AgentState.stopped);
 
     claudes = [];
     const result = await engine.desk.startAgent(task.id);

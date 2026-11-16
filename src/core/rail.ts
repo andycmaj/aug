@@ -171,7 +171,7 @@ export function buildRail(input: RailInput): RailSection[] {
     if (task.status === TaskStatus.dropped) continue;
     if (task.status === TaskStatus.later) {
       // Unless its agent asks you something: then it is back on you.
-      if (task.agent_state === AgentState.blocked) onYou.push(item);
+      if (task.agent_state === AgentState.waiting) onYou.push(item);
       else sections.later.push({ ...item, at: task.remind_at ?? item.at });
       continue;
     }
@@ -280,13 +280,13 @@ export const RAIL_FILTERS: {
   tone: Tone;
   word: string;
 }[] = [
-  { filter: "asks", lanes: [Lane.blocked], ...pill(Lane.blocked) },
+  { filter: "asks", lanes: [Lane.waiting], ...pill(Lane.waiting) },
   { filter: "send", lanes: [Lane.approve], ...pill(Lane.approve) },
   { filter: "working", lanes: [Lane.working], ...pill(Lane.working) },
   { filter: "queued", lanes: [Lane.queued], ...pill(Lane.queued) },
   {
     filter: "stopped",
-    lanes: [Lane.stopped, Lane.saved],
+    lanes: [Lane.stopped, Lane.idle],
     ...pill(Lane.stopped),
   },
   { filter: "finished", lanes: [Lane.agentdone], ...pill(Lane.agentdone) },

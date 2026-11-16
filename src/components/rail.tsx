@@ -180,7 +180,7 @@ export function Rail(props: { actions: TaskActions }) {
   );
 
   const counts = createMemo(() => {
-    let blocked = 0;
+    let asks = 0;
     let approve = 0;
     let tasks = 0;
     for (const s of aug.rail()) {
@@ -188,11 +188,11 @@ export function Rail(props: { actions: TaskActions }) {
       for (const i of s.items) {
         if (i.type !== "task") continue;
         tasks++;
-        if (i.lane === Lane.blocked) blocked++;
+        if (i.lane === Lane.waiting) asks++;
         if (i.lane === Lane.approve) approve++;
       }
     }
-    return { blocked, approve, tasks };
+    return { asks, approve, tasks };
   });
 
   return (
@@ -204,10 +204,10 @@ export function Rail(props: { actions: TaskActions }) {
     >
       <PaneHeader title="Work">
         <text>
-          <Show when={counts().blocked > 0}>
+          <Show when={counts().asks > 0}>
             <span
               style={{ fg: theme.warning }}
-            >{`${LANE_META.blocked.mark} ${counts().blocked}  `}</span>
+            >{`${LANE_META.waiting.mark} ${counts().asks}  `}</span>
           </Show>
           <Show when={counts().approve > 0}>
             <span
@@ -406,7 +406,7 @@ function RailRow(props: {
         if (folded)
           for (const i of aug.items()) {
             if (i.type !== "task" || i.group !== item.project.id) continue;
-            if (i.lane === Lane.blocked) asks++;
+            if (i.lane === Lane.waiting) asks++;
             if (i.lane === Lane.approve) ready++;
           }
         return {
@@ -420,7 +420,7 @@ function RailRow(props: {
             `${item.open} open`,
             item.working ? `${item.working} working` : "",
             item.goals ? `goals ${item.goalsMet}/${item.goals}` : "",
-            asks ? `${LANE_META.blocked.mark} ${asks}` : "",
+            asks ? `${LANE_META.waiting.mark} ${asks}` : "",
             ready ? `${LANE_META.approve.mark} ${ready}` : "",
             item.repos.join(", ") || "no repo",
           ]

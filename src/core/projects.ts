@@ -5,7 +5,7 @@
 import { homedir } from "node:os";
 import { codingCwd, codingLaunch, type CodingLaunch } from "./agents";
 import type { AugConfig } from "./config";
-import { sessionEnded, sessionStarted, type SessionEnd } from "./lifecycle";
+import { EndReason, sessionEnded, sessionStarted } from "./lifecycle";
 import { logger } from "./log";
 import { mux, VIEWER_PREFIX, viewerMayHang, type MuxSession, type MuxState } from "./mux";
 import { paths } from "./paths";
@@ -327,7 +327,7 @@ export async function stopTask(taskId: number): Promise<void> {
   const state = await mux().state();
   for (const w of state.windows.filter((w) => w.taskId === taskId))
     await mux().killWindow(w.id);
-  endTmuxSessions(taskId, AgentState.saved);
+  endTmuxSessions(taskId, EndReason.stop);
 }
 
 export interface CloseResult {
@@ -353,7 +353,7 @@ export async function closeTask(
       result.warnings.push(`kill window: ${String(err)}`);
     }
   }
-  endTmuxSessions(taskId);
+  endTmuxSessions(taskId, EndReason.closed);
   const path = repoPath(config, task.repo);
   if (task.worktree && task.branch && path) {
     try {
@@ -505,23 +505,20 @@ export async function viewerArgv(taskId: number): Promise<Viewer | null> {
 
 // ── reconcile ────────────────────────────────────────────────────────────
 
-// Stopping (saved) keeps the worktree and the claude session id so s resumes
-// it; a window that simply went (stopped) reads the same, with Continue.
+// However a session ends, the worktree and the claude session id stay so s
+// resumes it; the reason says how it went.
 function endTmuxSessions(
   taskId: number,
-  how: SessionEnd = AgentState.stopped,
+  reason: string = EndReason.window,
 ): void {
   store.batch(() => {
     for (const s of store.sessionsForTask(taskId))
-      if (s.kind === SessionKind.tmux && !s.ended_at) markGone(s, how);
+      if (s.kind === SessionKind.tmux && !s.ended_at) markGone(s, reason);
   });
 }
 
-function markGone(
-  session: SessionRow,
-  how: SessionEnd = AgentState.stopped,
-): void {
-  sessionEnded({ taskId: session.task_id, sessionId: session.id }, how);
+function markGone(session: SessionRow, reason: string = EndReason.window): void {
+  sessionEnded({ taskId: session.task_id, sessionId: session.id }, reason);
 }
 
 // Live reconcile: tmux events, debounced, while aug runs. The watch ends

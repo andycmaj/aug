@@ -289,7 +289,7 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   });
   const says = () => {
     const t = props.task;
-    if (t.agent_state === AgentState.blocked && t.agent_says)
+    if (t.agent_state === AgentState.waiting && t.agent_says)
       return `agent ${t.agent_says}`;
     if (t.agent_state === AgentState.queued && t.queue_reason)
       return `waiting to start: ${t.queue_reason}`;

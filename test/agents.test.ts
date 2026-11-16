@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { AgentPool, codingLaunch, hookSettings } from "../src/core/agents";
 import { actionFor } from "../src/core/outbound";
-import { ARTIFACT_TOOLS, artifactLink, handleDone, handleHook } from "../src/core/hooks";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  ARTIFACT_TOOLS,
+  artifactLink,
+  endedAsking,
+  handleDone,
+  handleHook,
+} from "../src/core/hooks";
 import { applyLesson } from "../src/core/learn";
 import {
   brainEnv,
@@ -113,7 +121,7 @@ describe("general agent turns", () => {
     }));
     await new AgentPool({ config: withLimit(4) }).request(taskId, "x", "owner");
     const task = store.getTask(taskId)!;
-    expect(task.agent_state).toBe(AgentState.blocked);
+    expect(task.agent_state).toBe(AgentState.waiting);
     expect(task.agent_says).toBe("Which licence tier?");
   });
 
@@ -208,7 +216,15 @@ describe("coding agent", () => {
     );
     expect(store.getSession("s1")!.last_tool).toBe("Edit src/export.ts");
     handleHook("stop", {}, env);
-    expect(store.getTask(t.id)!.agent_state).toBe(AgentState.blocked);
+    expect(store.getTask(t.id)!.agent_state).toBe(AgentState.idle);
+    handleHook("prompt", {}, env);
+    handleHook(
+      "stop",
+      { last_assistant_message: "Tests pass.\n\nShall I merge it into main?" },
+      env,
+    );
+    expect(store.getTask(t.id)!.agent_state).toBe(AgentState.waiting);
+    expect(store.getTask(t.id)!.agent_says).toBe("Shall I merge it into main?");
     handleDone(env, { summary: "Export keeps transfers; 14 tests green" });
     const task = store.getTask(t.id)!;
     expect(task.agent_state).toBe(AgentState.agentdone);
@@ -217,6 +233,66 @@ describe("coding agent", () => {
     expect(task.unread_result).toBe(1);
     handleHook("end", {}, env);
     expect(store.getTask(t.id)!.agent_state).toBe(AgentState.agentdone);
+  });
+});
+
+describe("turn signals", () => {
+  beforeEach(() => freshHome());
+
+  function live() {
+    const t = store.createTask({ title: "x", kind: Kind.coding, channel: "owner" });
+    store.createSession({
+      id: "s1",
+      taskId: t.id,
+      kind: SessionKind.tmux,
+      cwd: "/tmp",
+      startedBy: "aug",
+    });
+    return { taskId: t.id, sessionId: "s1" };
+  }
+
+  test("claude's idle notice changes nothing; a permission prompt waits on you", () => {
+    const env = live();
+    handleHook("prompt", {}, env);
+    handleHook("stop", {}, env);
+    handleHook(
+      "notification",
+      { message: "Claude is waiting for your input", notification_type: "idle_prompt" },
+      env,
+    );
+    expect(store.getTask(env.taskId)!.agent_state).toBe(AgentState.idle);
+    handleHook("notification", { message: "Claude is waiting for your input" }, env);
+    expect(store.getTask(env.taskId)!.agent_state).toBe(AgentState.idle);
+    handleHook("notification", { message: "Claude needs your permission to use Bash" }, env);
+    expect(store.getTask(env.taskId)!.agent_state).toBe(AgentState.waiting);
+  });
+
+  test("the question is read from the transcript when the payload has none", () => {
+    const env = live();
+    const path = join(process.env.AUG_HOME!, "t.jsonl");
+    writeFileSync(
+      path,
+      [
+        JSON.stringify({ type: "user", message: { content: "go" } }),
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Which branch, **main** or dev?**" }] } }),
+        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "x" }] } }),
+      ].join("\n"),
+    );
+    handleHook("stop", { transcript_path: path }, env);
+    expect(store.getTask(env.taskId)!.agent_state).toBe(AgentState.waiting);
+  });
+
+  test("only a last line that asks is a question", () => {
+    expect(endedAsking("Done. All green.")).toBeNull();
+    expect(endedAsking("Want me to push?\n")).toBe("Want me to push?");
+    expect(endedAsking(null)).toBeNull();
+  });
+
+  test("a session end says why", () => {
+    const env = live();
+    handleHook("end", { reason: "prompt_input_exit" }, env);
+    expect(store.getTask(env.taskId)!.agent_state).toBe(AgentState.stopped);
+    expect(store.getSession("s1")!.end_reason).toBe("claude exited");
   });
 });
 

@@ -61,7 +61,7 @@ describe("starting", () => {
   test("the same id again revives the saved session instead of making one", () => {
     const t = task();
     const ref = start(t.id);
-    sessionEnded(ref, AgentState.saved);
+    sessionEnded(ref, AgentState.stopped);
     sessionStarted({
       ...ref,
       id: ref.sessionId,
@@ -90,7 +90,7 @@ describe("starting", () => {
     queued(a.id, "waiting its turn");
     expect(store.getTask(a.id)!.queue_reason).toBe("waiting its turn");
     startCancelled(a.id);
-    expect(agentOf(a.id)).toBe(AgentState.saved);
+    expect(agentOf(a.id)).toBe(AgentState.stopped);
     expect(store.getTask(a.id)!.queue_reason).toBeNull();
     // Cancel only undoes a queue; a working agent is not touched.
     const b = task();
@@ -106,11 +106,11 @@ describe("while live", () => {
     const ref = start(t.id);
     sessionActivity(
       ref,
-      AgentState.blocked,
+      AgentState.waiting,
       "asked you something",
       "AskUserQuestion",
     );
-    expect(agentOf(t.id)).toBe(AgentState.blocked);
+    expect(agentOf(t.id)).toBe(AgentState.waiting);
     expect(store.getTask(t.id)!.agent_says).toBe("asked you something");
     expect(store.getSession(ref.sessionId)!.last_tool).toBe("AskUserQuestion");
     sessionActivity(ref, AgentState.working, null);
@@ -122,7 +122,7 @@ describe("while live", () => {
     const t = task(Kind.coding);
     const ref = start(t.id, SessionKind.tmux);
     workFinished(ref, { summary: "shipped", closes: false });
-    sessionActivity(ref, AgentState.blocked, "is waiting at its prompt");
+    sessionActivity(ref, AgentState.waiting, "is waiting at its prompt");
     expect(agentOf(t.id)).toBe(AgentState.agentdone);
     sessionEnded(ref, AgentState.stopped);
     expect(agentOf(t.id)).toBe(AgentState.agentdone);
@@ -138,7 +138,7 @@ describe("ending", () => {
   test("stopped on open work leaves the task stopped and silent", () => {
     const t = task();
     const ref = start(t.id);
-    sessionActivity(ref, AgentState.blocked, "needs you");
+    sessionActivity(ref, AgentState.waiting, "needs you");
     sessionEnded(ref, AgentState.stopped);
     const fresh = store.getTask(t.id)!;
     expect(fresh.agent_state).toBe(AgentState.stopped);
@@ -149,25 +149,25 @@ describe("ending", () => {
   test("saved is the owner's stop, which resumes", () => {
     const t = task(Kind.coding);
     const ref = start(t.id, SessionKind.tmux);
-    sessionEnded(ref, AgentState.saved);
-    expect(agentOf(t.id)).toBe(AgentState.saved);
-    expect(store.getSession(ref.sessionId)!.state).toBe(AgentState.saved);
+    sessionEnded(ref, AgentState.stopped);
+    expect(agentOf(t.id)).toBe(AgentState.stopped);
+    expect(store.getSession(ref.sessionId)!.state).toBe(AgentState.stopped);
   });
 
   test("a session ending on a closed task does not reopen the agent's state", () => {
     const t = task();
     const ref = start(t.id);
     taskClosed(t.id);
-    expect(agentOf(t.id)).toBe(AgentState.saved);
+    expect(agentOf(t.id)).toBe(AgentState.stopped);
     sessionEnded(ref, AgentState.stopped);
-    expect(agentOf(t.id)).toBe(AgentState.saved);
+    expect(agentOf(t.id)).toBe(AgentState.stopped);
   });
 
   test("a chat turn finishes as done, or as asking with the question", () => {
     const t = task();
     const ref = start(t.id);
     turnFinished(ref, { asking: "Which tier?" });
-    expect(agentOf(t.id)).toBe(AgentState.blocked);
+    expect(agentOf(t.id)).toBe(AgentState.waiting);
     expect(store.getTask(t.id)!.agent_says).toBe("Which tier?");
     expect(store.getSession(ref.sessionId)!.ended_at).not.toBeNull();
     const again = start(t.id);
@@ -229,7 +229,7 @@ describe("finishing work", () => {
     turnFinished(ref, { asking: "send it?" });
     draftSent(t.id);
     expect(store.getTask(t.id)!.agent_says).toBeNull();
-    expect(agentOf(t.id)).toBe(AgentState.blocked);
+    expect(agentOf(t.id)).toBe(AgentState.waiting);
   });
 });
 
@@ -250,7 +250,7 @@ describe("closing", () => {
     taskClosed(t.id);
     const fresh = store.getTask(t.id)!;
     expect(fresh.status).toBe(TaskStatus.done);
-    expect(fresh.agent_state).toBe(AgentState.saved);
+    expect(fresh.agent_state).toBe(AgentState.stopped);
     expect(fresh.closed_by).toBe("you");
     expect(store.pendingAction(t.id)).toBeNull();
     expect(store.getSession(ref.sessionId)!.ended_at).not.toBeNull();
@@ -264,7 +264,7 @@ describe("closing", () => {
     const held = task(Kind.coding);
     holdForStart(held.id);
     taskClosed(held.id);
-    expect(agentOf(held.id)).toBe(AgentState.saved);
+    expect(agentOf(held.id)).toBe(AgentState.stopped);
   });
 });
 

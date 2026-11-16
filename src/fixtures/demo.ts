@@ -326,7 +326,7 @@ export function seedDemo(): void {
       ]),
     });
     store.updateTask(erin, {
-      agent_state: AgentState.blocked,
+      agent_state: AgentState.waiting,
       agent_says:
         "asked you: which sites - all five, or only the three still open?",
     });

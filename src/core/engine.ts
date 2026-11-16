@@ -23,6 +23,7 @@ import { drainMoves, runMove, type MoveOutcome } from "./moves";
 import * as projects from "./projects";
 import { setSlackSender } from "./outbound";
 import * as store from "./store";
+import { settleStaleTurns } from "./turn-check";
 import { linkByBranch, triage, type TriageEffect } from "./triage";
 import { SessionKind, TaskStatus, type TaskRow } from "./types";
 
@@ -441,6 +442,12 @@ export class Engine {
     } catch (err) {
       done({ ok: false });
       log.warn("reconcile failed", { err: errorMessage(err) });
+    }
+    try {
+      const settled = settleStaleTurns();
+      if (settled.length) log.info("stale turns settled", { sessions: settled });
+    } catch (err) {
+      log.warn("turn check failed", { err: errorMessage(err) });
     }
   }
 
