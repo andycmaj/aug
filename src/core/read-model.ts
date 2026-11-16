@@ -8,7 +8,7 @@ import { boardColumnOf, type BoardColumn } from "./lanes";
 import { projectProgress, projectSummary, railProjects } from "./lookup";
 import { perfOn, timing } from "./perf";
 import { taskPr, taskPrStatus } from "./pr";
-import { buildRail, SHOW_FYI, type RailSection } from "./rail";
+import { buildRail, localDay, SHOW_FYI, type RailSection } from "./rail";
 import * as store from "./store";
 import { Kind, type TaskRow } from "./types";
 
@@ -41,6 +41,9 @@ function rail(now: Date, pending: Set<number>): RailSection[] {
     fyi: SHOW_FYI ? store.fyiMessages(since) : [],
     lastHeard,
     now,
+    prStates: store.prStates(),
+    blockers: store.allBlockers(),
+    wins: store.winsOn(localDay(now)),
   });
 }
 
@@ -106,7 +109,12 @@ function reads(desk: LiveCheck) {
     knowledge: [[T.knowledge], store.listKnowledge],
     notes: [[T.notes], store.listNotes],
     searchSources: [[T.messages, T.turns], searchSources],
-    rail: [[T.tasks, T.messages, T.projects, T.goals, T.ideas], rail],
+    rail: [
+      [T.tasks, T.messages, T.projects, T.goals, T.ideas, T.prStatus, T.taskBlockers, T.wins],
+      rail,
+    ],
+    blockers: [[T.taskBlockers], store.blockersOf],
+    wins: [[T.wins], store.winsOn],
     board: [[T.tasks], board],
   } as const satisfies Record<string, Read>;
 }

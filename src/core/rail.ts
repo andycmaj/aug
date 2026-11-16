@@ -31,6 +31,7 @@ export const SHOW_FYI = false;
 
 export const Section = {
   home: "home",
+  wins: "wins",
   system: "system",
   tasks: "tasks",
   reviews: "reviews",
@@ -43,6 +44,7 @@ export type Section = (typeof Section)[keyof typeof Section];
 
 export const SECTION_TITLES: Record<Section, string> = {
   home: "Home",
+  wins: "Wins",
   system: "System",
   tasks: "Tasks",
   reviews: "Code Reviews",
@@ -55,6 +57,7 @@ export const SECTION_TITLES: Record<Section, string> = {
 // The walk visits these in order; For later is never offered by Next, nor is
 // a project row.
 export const WALKED: Section[] = [
+  "wins",
   "system",
   "tasks",
   "reviews",
@@ -84,6 +87,17 @@ export interface RailSection {
   items: RailItem[];
   // Tasks in it, folded ones included; project rows are not counted.
   count: number;
+  // Wins only: how many of the day's are done.
+  done?: number;
+}
+
+// The most Wins a day holds: few enough to stay a focus.
+export const MAX_WINS = 5;
+
+// Wins belong to the owner's day, not UTC's.
+export function localDay(now: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 export interface RailInput {
@@ -100,6 +114,12 @@ export interface RailInput {
   // Task id -> when the last message from somebody else arrived, for slipped.
   lastHeard: Map<number, string>;
   now: Date;
+  // Task id -> its PR's last read state.
+  prStates?: Map<number, string>;
+  // Task id -> the open tasks it waits on.
+  blockers?: Map<number, number[]>;
+  // Today's Wins, in the order they were pinned.
+  wins?: number[];
 }
 
 // A thread waiting on somebody else goes quiet past this, and it is slipped.
@@ -109,7 +129,10 @@ export function isSlipped(
   task: TaskRow,
   lastHeard: string | undefined,
   now: Date,
+  blocked = false,
 ): boolean {
+  // A task waiting on another task: that task's own row says how it goes.
+  if (blocked) return false;
   if (!task.waiting_on || task.status !== TaskStatus.open) return false;
   const since = lastHeard ?? task.updated_at;
   return now.getTime() - Date.parse(since) > SLIPPED_AFTER_MS;
@@ -118,6 +141,7 @@ export function isSlipped(
 export function buildRail(input: RailInput): RailSection[] {
   const sections: Record<Section, RailItem[]> = {
     home: [],
+    wins: [],
     system: [],
     tasks: [],
     reviews: [],
@@ -142,10 +166,15 @@ export function buildRail(input: RailInput): RailSection[] {
   const projectIds = new Set((input.projects ?? []).map((p) => p.project.id));
 
   const reviews = input.reviews ?? new Set<number>();
+  const wins = new Map((input.wins ?? []).map((id, i) => [id, i]));
+  const winItems: RailItem[] = [];
   for (const task of input.tasks) {
     const onYou = reviews.has(task.id) ? sections.reviews : sections.tasks;
+    const blockers = input.blockers?.get(task.id)?.length ?? 0;
     const lane = laneOf(task, {
       hasPendingAction: input.pendingActions.has(task.id),
+      prState: input.prStates?.get(task.id) ?? null,
+      blockers,
     });
     const item: RailItem = {
       type: "task",
@@ -153,10 +182,21 @@ export function buildRail(input: RailInput): RailSection[] {
       task,
       lane,
       priority: task.priority,
-      slipped: isSlipped(task, input.lastHeard.get(task.id), input.now),
+      slipped: isSlipped(
+        task,
+        input.lastHeard.get(task.id),
+        input.now,
+        blockers > 0,
+      ),
       at: task.created_at,
       group: null,
     };
+    // A Win sits in Wins alone for the day, done ones too: the box shows
+    // how the day went.
+    if (wins.has(task.id) && task.kind !== Kind.system) {
+      if (task.status !== TaskStatus.dropped) winItems[wins.get(task.id)!] = item;
+      continue;
+    }
     // aug asking about its own docs: on you until answered, never later.
     if (task.kind === Kind.system) {
       if (task.status === TaskStatus.open || task.status === TaskStatus.later)
@@ -230,16 +270,26 @@ export function buildRail(input: RailInput): RailSection[] {
       if (item.type === "task") grouped.push({ ...item, group: p.project.id });
   }
 
+  sections.wins = winItems.filter(Boolean);
   return (Object.keys(sections) as Section[])
-    .map((section) => {
+    .map((section): RailSection => {
       const items =
         section === Section.tasks
           ? [...grouped, ...sorted(loose)]
-          : sorted(sections[section]);
+          : section === Section.wins
+            ? sections.wins
+            : sorted(sections[section]);
       return {
         section,
         items,
         count: items.filter((i) => i.type !== "project").length,
+        ...(section === Section.wins
+          ? {
+              done: items.filter(
+                (i) => i.type === "task" && i.task.status === TaskStatus.done,
+              ).length,
+            }
+          : {}),
       };
     })
     .filter((s) => s.items.length > 0);
@@ -265,8 +315,9 @@ export const RailFilter = {
   asks: "asks",
   send: "send",
   working: "working",
-  queued: "queued",
+  idle: "idle",
   stopped: "stopped",
+  review: "review",
   finished: "finished",
   open: "open",
   waiting: "waiting",
@@ -283,13 +334,22 @@ export const RAIL_FILTERS: {
   { filter: "asks", lanes: [Lane.waiting], ...pill(Lane.waiting) },
   { filter: "send", lanes: [Lane.approve], ...pill(Lane.approve) },
   { filter: "working", lanes: [Lane.working], ...pill(Lane.working) },
-  { filter: "queued", lanes: [Lane.queued], ...pill(Lane.queued) },
+  { filter: "idle", lanes: [Lane.idle], ...pill(Lane.idle) },
+  // Not running either way: Start or Continue gets it going.
   {
     filter: "stopped",
-    lanes: [Lane.stopped, Lane.idle],
+    lanes: [Lane.stopped, Lane.queued],
     ...pill(Lane.stopped),
+    word: "stopped, or waiting to start",
   },
-  { filter: "finished", lanes: [Lane.agentdone], ...pill(Lane.agentdone) },
+  { filter: "review", lanes: [Lane.review], ...pill(Lane.review) },
+  // Ready for you to close: the agent says done, or the branch landed.
+  {
+    filter: "finished",
+    lanes: [Lane.agentdone, Lane.merged],
+    ...pill(Lane.agentdone),
+    word: "agent finished, or merged",
+  },
   {
     filter: "open",
     lanes: [Lane.yours, Lane.asked],
@@ -298,11 +358,15 @@ export const RAIL_FILTERS: {
   },
   {
     filter: "waiting",
-    lanes: [Lane.theirs, Lane.watching, Lane.later],
+    lanes: [Lane.blocked, Lane.theirs, Lane.watching, Lane.later],
     ...pill(Lane.theirs),
-    word: "waiting on them, watching, later",
+    word: "blocked, waiting on them, watching, later",
   },
 ];
+
+// Lanes with no pill, on purpose: done never reaches the rail except as an
+// unread agentdone, which has one.
+export const UNFILTERED_LANES: Lane[] = [Lane.done];
 
 function pill(lane: Lane) {
   const { mark, tone, word } = LANE_META[lane];

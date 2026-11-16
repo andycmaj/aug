@@ -13,6 +13,8 @@ import {
   filterRail,
   filterCounts,
   cycleFilter,
+  localDay,
+  UNFILTERED_LANES,
   type RailFilter,
 } from "../src/core/rail";
 import { railProjects } from "../src/core/lookup";
@@ -377,7 +379,7 @@ describe("the rail's status filter", () => {
       `t${working.id}`,
       `t${saved.id}`,
     ]);
-    expect(keys(["queued"])).toEqual([`t${store.homeTask().id}`]);
+    expect(keys(["review"])).toEqual([`t${store.homeTask().id}`]);
     expect(keys(["asks"])).not.toContain(`p${api.id}`);
     expect(keys(["asks"])).toContain(`p${web.id}`);
   });
@@ -404,8 +406,9 @@ describe("the rail's status filter", () => {
       asks: 1,
       send: 0,
       working: 1,
-      queued: 0,
+      idle: 0,
       stopped: 1,
+      review: 0,
       finished: 0,
       open: 1,
       waiting: 0,
@@ -424,5 +427,79 @@ describe("the rail's status filter", () => {
     expect(seen).toEqual(["asks", "working", "stopped", "open", "all"]);
     // From a mix of pills, f starts over at one.
     expect([...cycleFilter(new Set<RailFilter>(["open", "working"]), counts)]).toEqual(["asks"]);
+  });
+});
+
+describe("status model (docs/rail-status-design.md)", () => {
+  beforeEach(() => freshHome());
+
+  const coding = (title = "t") =>
+    store.createTask({ title, kind: Kind.coding, channel: "owner" });
+
+  test("phase lanes sit under what needs you and what is moving, above an agent at rest", () => {
+    const t = coding();
+    const lane = (facts: Partial<Parameters<typeof laneOf>[1]> = {}) =>
+      laneOf(store.getTask(t.id)!, { hasPendingAction: false, ...facts });
+    store.updateTask(t.id, { agent_state: AgentState.idle });
+    expect(lane()).toBe(Lane.idle);
+    expect(lane({ blockers: 1 })).toBe(Lane.blocked);
+    expect(lane({ blockers: 1, prState: "open" })).toBe(Lane.review);
+    expect(lane({ prState: "draft" })).toBe(Lane.review);
+    expect(lane({ prState: "closed" })).toBe(Lane.idle);
+    store.updateTask(t.id, { merged_at: new Date().toISOString() });
+    expect(lane({ prState: "open" })).toBe(Lane.merged);
+    store.updateTask(t.id, { agent_state: AgentState.working });
+    expect(lane()).toBe(Lane.working);
+    store.updateTask(t.id, { agent_state: AgentState.waiting });
+    expect(lane({ hasPendingAction: true })).toBe(Lane.waiting);
+    store.updateTask(t.id, { agent_state: AgentState.stopped, merged_at: null });
+    expect(lane()).toBe(Lane.stopped);
+  });
+
+  test("every lane has a pill, or is left out on purpose", () => {
+    for (const lane of Object.values(Lane))
+      expect(filterOf(lane) !== null || UNFILTERED_LANES.includes(lane)).toBe(true);
+    expect(RAIL_FILTERS.length).toBeLessThanOrEqual(9);
+  });
+
+  test("a blocked row never slips", () => {
+    const t = coding();
+    store.updateTask(t.id, { waiting_on: "AUG-0001" });
+    const task = store.getTask(t.id)!;
+    expect(isSlipped(task, at(0), new Date())).toBe(true);
+    expect(isSlipped(task, at(0), new Date(), true)).toBe(false);
+  });
+
+  function railWith(wins: number[]) {
+    return buildRail({
+      home: store.homeTask(),
+      tasks: store.listTasks(),
+      pendingActions: new Set(),
+      ideas: [],
+      fyi: [],
+      lastHeard: new Map(),
+      now: new Date(),
+      wins,
+    });
+  }
+
+  test("Wins sit first, alone, in pinned order, done ones kept with the tally", () => {
+    const a = coding("a");
+    const b = coding("b");
+    const c = coding("c");
+    taskClosed(b.id);
+    const rail = railWith([c.id, b.id]);
+    expect(rail.map((s) => s.section).slice(0, 3)).toEqual(["home", "wins", "tasks"]);
+    const wins = rail.find((s) => s.section === "wins")!;
+    expect(wins.items.map((i) => i.key)).toEqual([`t${c.id}`, `t${b.id}`]);
+    expect(wins.count).toBe(2);
+    expect(wins.done).toBe(1);
+    const tasks = rail.find((s) => s.section === "tasks")!;
+    expect(tasks.items.map((i) => i.key)).toEqual([`t${a.id}`]);
+    expect(WALKED[0]).toBe("wins");
+  });
+
+  test("local day is the owner's date", () => {
+    expect(localDay(new Date(2026, 10, 5, 23, 59))).toBe("2026-11-05");
   });
 });

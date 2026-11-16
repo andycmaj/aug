@@ -238,6 +238,25 @@ CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- A task waiting on other tasks. A row goes when its blocker is done or
+-- dropped (lifecycle.blockerResolved).
+CREATE TABLE IF NOT EXISTS task_blockers (
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  blocker_id INTEGER NOT NULL REFERENCES tasks(id),
+  by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (task_id, blocker_id)
+);
+CREATE INDEX IF NOT EXISTS task_blockers_blocker ON task_blockers(blocker_id);
+
+-- The day's Wins: up to five tasks the owner pinned for that (local) day.
+CREATE TABLE IF NOT EXISTS wins (
+  day TEXT NOT NULL,
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  pinned_at TEXT NOT NULL,
+  PRIMARY KEY (day, task_id)
+);
 `;
 
 let shared: Database | undefined;
@@ -273,6 +292,8 @@ export const Table = {
   prStatus: "pr_status",
   proposals: "doc_proposals",
   kv: "kv",
+  taskBlockers: "task_blockers",
+  wins: "wins",
 } as const;
 export type Table = (typeof Table)[keyof typeof Table];
 
@@ -318,6 +339,7 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "projects", column: "brief", ddl: "TEXT NOT NULL DEFAULT ''" },
   { table: "tasks", column: "goal_id", ddl: "INTEGER REFERENCES project_goals(id)" },
   { table: "sessions", column: "end_reason", ddl: "TEXT" },
+  { table: "tasks", column: "merged_at", ddl: "TEXT" },
 ];
 
 // Agent states renamed or merged (docs/rail-status-design.md): blocked is

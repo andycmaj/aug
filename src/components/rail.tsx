@@ -245,7 +245,9 @@ export function Rail(props: { actions: TaskActions }) {
                   flexDirection="row"
                 >
                   <text fg={theme.accent} attributes={1}>
-                    {`${SECTION_TITLES[section().section]} (${section().count})`}
+                    {section().done !== undefined
+                      ? `${SECTION_TITLES[section().section]} (${section().done}/${section().count})`
+                      : `${SECTION_TITLES[section().section]} (${section().count})`}
                   </text>
                 </box>
                 <Index each={section().items}>
@@ -272,7 +274,8 @@ export function Rail(props: { actions: TaskActions }) {
 }
 
 // tilt-tui's filter bar: a pill per status with its count, lit while it
-// filters. Digits 1-8 toggle the pills in this order; f steps through them.
+// filters. Digits 1-9 toggle the pills in this order; f steps through them.
+// Nine pills fit the rail only as mark+count with one space between.
 function FilterBar() {
   const aug = useAug();
   const theme = useTheme();
@@ -295,7 +298,7 @@ function FilterBar() {
               fg={fg()}
               bg={on() ? color() : undefined}
               attributes={on() ? 1 : 0}
-            >{` ${f.mark} ${count()} `}</text>
+            >{`${f.mark}${count()} `}</text>
           );
         }}
       </For>
@@ -333,6 +336,19 @@ function RailRow(props: {
     lit() ? (props.focused ? theme().primary : theme().secondary) : undefined;
 
   const subWidth = () => RAIL_WIDTH - 7 - (props.nested ? NEST : 0);
+  // What its lane says, with the one fact that lane is about: which tasks
+  // block it, why its agent stopped.
+  const laneWord = (item: Extract<RailItem, { type: "task" }>) => {
+    if (item.lane === Lane.blocked) {
+      const by = aug.blockers(item.task.id);
+      if (by.length) return `blocked by ${by.map(taskRef).join(", ")}`;
+    }
+    if (item.lane === Lane.stopped) {
+      const why = aug.latestSession(item.task.id)?.end_reason;
+      if (why) return `stopped: ${why}`;
+    }
+    return LANE_META[item.lane].word;
+  };
   const view = createMemo((): RowView => {
     const item = props.item;
     const now = aug.now();
@@ -354,7 +370,7 @@ function RailRow(props: {
         const working =
           item.task.agent_state === AgentState.working &&
           item.lane === Lane.working;
-        const word = item.slipped ? "slipped" : meta.word;
+        const word = item.slipped ? "slipped" : laneWord(item);
         const age =
           item.lane === Lane.later && item.task.remind_at
             ? ageLabel(item.task.remind_at, now)

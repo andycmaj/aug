@@ -148,6 +148,8 @@ describe("read model", () => {
       searchSources: (r) => r.searchSources([plain.id, withPr.id]),
       rail: (r) => r.rail(new Date(), pending),
       board: (r) => r.board(pending),
+      blockers: (r) => r.blockers(plain.id),
+      wins: (r) => r.wins("2026-11-15"),
     };
     const known = new Set<string>(TABLES);
     for (const [name, call] of Object.entries(calls) as [ReadName, (r: ReadModel) => unknown][]) {

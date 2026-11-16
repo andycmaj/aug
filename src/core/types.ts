@@ -99,6 +99,9 @@ export interface TaskRow {
   from_task_id: number | null;
   // The project goal this task works toward.
   goal_id: number | null;
+  // Its branch landed (a merged PR, or merged into the base by hand): ready
+  // to clean up, not done.
+  merged_at: string | null;
 }
 
 export const ProjectStatus = {

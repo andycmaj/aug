@@ -1034,6 +1034,83 @@ export function kvSet(key: string, value: string): void {
     .run(key, value);
 }
 
+// ── blockers and wins ────────────────────────────────────────────────────
+
+export function addBlocker(taskId: number, blockerId: number, by: string): void {
+  run(
+    "INSERT OR IGNORE INTO task_blockers (task_id, blocker_id, by, created_at) VALUES (?, ?, ?, ?)",
+    taskId,
+    blockerId,
+    by,
+    now(),
+  );
+}
+
+// No blocker: all of them.
+export function removeBlocker(taskId: number, blockerId?: number): void {
+  if (blockerId === undefined)
+    run("DELETE FROM task_blockers WHERE task_id = ?", taskId);
+  else
+    run(
+      "DELETE FROM task_blockers WHERE task_id = ? AND blocker_id = ?",
+      taskId,
+      blockerId,
+    );
+}
+
+export function blockersOf(taskId: number): number[] {
+  return all<{ blocker_id: number }>(
+    "SELECT blocker_id FROM task_blockers WHERE task_id = ? ORDER BY created_at, blocker_id",
+    taskId,
+  ).map((r) => r.blocker_id);
+}
+
+export function dependentsOf(blockerId: number): number[] {
+  return all<{ task_id: number }>(
+    "SELECT task_id FROM task_blockers WHERE blocker_id = ? ORDER BY created_at, task_id",
+    blockerId,
+  ).map((r) => r.task_id);
+}
+
+// Task id -> the tasks it waits on, for every task that waits on one.
+export function allBlockers(): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  for (const r of all<{ task_id: number; blocker_id: number }>(
+    "SELECT task_id, blocker_id FROM task_blockers ORDER BY created_at, blocker_id",
+  ))
+    out.set(r.task_id, [...(out.get(r.task_id) ?? []), r.blocker_id]);
+  return out;
+}
+
+export function winsOn(day: string): number[] {
+  return all<{ task_id: number }>(
+    "SELECT task_id FROM wins WHERE day = ? ORDER BY pinned_at, task_id",
+    day,
+  ).map((r) => r.task_id);
+}
+
+export function addWin(day: string, taskId: number): void {
+  run(
+    "INSERT OR IGNORE INTO wins (day, task_id, pinned_at) VALUES (?, ?, ?)",
+    day,
+    taskId,
+    now(),
+  );
+}
+
+export function removeWin(day: string, taskId: number): void {
+  run("DELETE FROM wins WHERE day = ? AND task_id = ?", day, taskId);
+}
+
+// Task id -> its PR's last read state, for every task with one.
+export function prStates(): Map<number, string> {
+  return new Map(
+    all<{ task_id: number; state: string }>(
+      "SELECT task_id, state FROM pr_status",
+    ).map((r) => [r.task_id, r.state]),
+  );
+}
+
 // ── task status (the row-level half; lifecycle.ts owns the agent's side) ─
 
 // A task made --from another reports back to it when it ends, so whoever

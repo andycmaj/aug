@@ -1,14 +1,19 @@
 // THE vocabulary, once: what a piece of live work is called and how it is
 // marked, on the rail, the task view and the Board alike. Taskuary's
-// lanes.json, cut to what GitHub and Slack work produces.
+// lanes.json, cut to what GitHub and Slack work produces. A lane reads two
+// axes, the task's lifecycle (its phase) and its agent's state; the order in
+// laneOf is the rule (docs/rail-status-design.md).
 
-import { AgentState, Kind, TaskStatus, type TaskRow } from "./types";
+import { AgentState, Kind, PrState, TaskStatus, type TaskRow } from "./types";
 
 export const Lane = {
   waiting: "waiting",
   approve: "approve",
   working: "working",
   queued: "queued",
+  merged: "merged",
+  review: "review",
+  blocked: "blocked",
   idle: "idle",
   stopped: "stopped",
   agentdone: "agentdone",
@@ -31,6 +36,9 @@ export const LANE_META: Record<
   approve: { word: "ready to send", mark: "↑", tone: "success" },
   working: { word: "agent working", mark: "◐", tone: "info" },
   queued: { word: "waiting to start", mark: "◌", tone: "muted" },
+  merged: { word: "merged, clean up", mark: "»", tone: "success" },
+  review: { word: "PR in review", mark: "◎", tone: "secondary" },
+  blocked: { word: "blocked by a task", mark: "⊘", tone: "muted" },
   idle: { word: "agent idle", mark: "◇", tone: "secondary" },
   stopped: { word: "agent stopped", mark: "■", tone: "muted" },
   agentdone: { word: "agent finished", mark: "✓", tone: "success" },
@@ -54,9 +62,37 @@ export type Tone =
 
 export interface LaneFacts {
   hasPendingAction: boolean;
+  // Its PR's last read state, if it has one.
+  prState?: string | null;
+  // How many open tasks it waits on.
+  blockers?: number;
 }
 
-// Which lane a task is in. The first row that holds wins, top to bottom.
+// Where an open task is in its life, from facts already stored: nothing to
+// keep in step, nothing to go stale.
+export const Phase = {
+  open: "open",
+  blocked: "blocked",
+  review: "review",
+  merged: "merged",
+  later: "later",
+  done: "done",
+  dropped: "dropped",
+} as const;
+export type Phase = (typeof Phase)[keyof typeof Phase];
+
+export function phaseOf(task: TaskRow, facts: LaneFacts): Phase {
+  if (task.status !== TaskStatus.open) return task.status;
+  if (task.merged_at) return Phase.merged;
+  if (facts.prState === PrState.open || facts.prState === PrState.draft)
+    return Phase.review;
+  if ((facts.blockers ?? 0) > 0) return Phase.blocked;
+  return Phase.open;
+}
+
+// Which lane a task is in. The first row that holds wins, top to bottom:
+// what needs you now, what is moving, where the work is, the agent at rest,
+// then whose it is.
 export function laneOf(task: TaskRow, facts: LaneFacts): Lane {
   if (task.status === TaskStatus.done) {
     return task.agent_state === AgentState.agentdone && task.unread_result
@@ -68,6 +104,10 @@ export function laneOf(task: TaskRow, facts: LaneFacts): Lane {
   if (facts.hasPendingAction) return Lane.approve;
   if (task.agent_state === AgentState.working) return Lane.working;
   if (task.agent_state === AgentState.queued) return Lane.queued;
+  const phase = phaseOf(task, facts);
+  if (phase === Phase.merged) return Lane.merged;
+  if (phase === Phase.review) return Lane.review;
+  if (phase === Phase.blocked) return Lane.blocked;
   if (task.agent_state === AgentState.idle) return Lane.idle;
   if (task.agent_state === AgentState.stopped) return Lane.stopped;
   if (task.agent_state === AgentState.agentdone) return Lane.agentdone;
