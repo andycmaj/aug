@@ -55,8 +55,10 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   a plain terminal is recorded as saved, so Start resumes it in a window.
 - **Slack goes through a `SlackTransport`** (`core/slack/`): `token`,
   `claude-mcp` (a persistent `claude -p` whose session can only read, plus a
-  one-shot send call), or `mcp` (a stub). claude.ai connectors load only with
-  `--setting-sources user`.
+  one-shot send call), or `mcp` (a stub). claude.ai connectors load even with
+  `--setting-sources ""`, but under `-p` they connect before the first request
+  only with `MCP_CONNECTION_NONBLOCKING=false` (`brainEnv`), and a tool runs
+  only if a granted capability names it (Knowledge #26, claude 2.1.322).
 - **Views read through the read model** (`core/read-model.ts`), never the
   store: `aug.task(id)`, `aug.turns(id)`, `aug.pendingAction(id)` and the
   rest sit on the aug context. Each read names the tables it queries, and
