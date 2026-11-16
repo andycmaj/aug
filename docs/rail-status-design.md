@@ -83,6 +83,14 @@ blocked, open.
   ci, changes, review, ready), so the lane need not repeat it.
 - A closed, unmerged PR is no phase: the task is open again.
 
+### Ready for review vs merged (AUG-0113)
+
+Ready is the agent's state, merged the task's phase. Merged outranks
+ready: once the work landed, review is over and only closing is left
+("merged, ready to close"), whatever the agent said. Ready outranks the
+review and blocked phases: the agent is finished and the PR or blocker
+is yours to look at. The two never show at once, and share one pill.
+
 ### Merged (AUG-0099)
 
 - New column `tasks.merged_at`. One lifecycle transition sets it,
@@ -121,9 +129,17 @@ as today):
 | idle | ◇ | agent idle | turn over, at its prompt, not asking | `stop` hook, no question |
 | waiting | ◆ | waiting on you | needs your answer: a question, a permission, a choice | AskUserQuestion, permission notification, a turn that ends asking |
 | stopped | ■ | agent stopped | not running; `s` resumes it | any session end |
-| agentdone | ✓ | agent finished | it said it is done | `aug-tools done`, a chat turn that answered |
+| ready | ◈ | ready for review | finished; the result waits on you to review, push or close (or, if it closed the task, to read) | `aug-tools done`, a chat turn that answered |
 
 ### Changes
+
+- **agentdone is renamed ready** (AUG-0113, value `ready`, migrated). An
+  agent that ran `done` and left a statement ("committed 5199e4c, not
+  pushed; yours to close") was neither waiting (it asked nothing) nor
+  something to ignore: it is on you. Ready is that state, with its own
+  mark, lane and pill. There is no separate "finished, nothing left"
+  state: an agent that closes its own task leaves it done and ready until
+  you read the result (`unread_result`), then the row leaves the rail.
 
 - **blocked is renamed waiting** (`AgentState.waiting`, value `waiting`,
   migrated). The word "blocked" now means only blocked on another task.
@@ -159,8 +175,12 @@ none ──Start──> queued ──runs──> working <──prompt/tool─�
                stopped <──end──────┤                                     │
                   │   (any session end, from any live state)   answer ───┘─> working
                   └──s (resume)──> working
-working/idle/waiting ──aug-tools done──> agentdone (stays while it winds down)
-agentdone ──new work lands──> none        any live ──task closed──> stopped
+working/idle/waiting ──aug-tools done──> ready (stays while it winds down:
+                                          idle, waiting and the window closing
+                                          leave it ready)
+ready ──prompt (your new input) / s (restart)──> working
+ready ──new work lands (triage)──> none   ready ──task closed (d)──> leaves the rail
+any live ──task closed──> stopped
 ```
 
 ## 3. Rail grouping
@@ -173,25 +193,29 @@ then the agent at rest, then whose it is.
 
 | # | lane | mark | tone | word | when |
 | --- | --- | --- | --- | --- | --- |
-| 1 | agentdone (done) | ✓ | success | agent finished | done, closed by its agent, unread |
+| 1 | ready (done) | ◈ | success | ready: its agent closed it | done, closed by its agent, unread |
 | 2 | later | ◷ | muted | for later | status later |
 | 3 | waiting | ◆ | warning | agent waiting on you | agent waiting |
 | 4 | approve | ↑ | success | ready to send | a draft waits for Send |
 | 5 | working | spinner ◐ | info | agent working | agent working |
 | 6 | queued | ◌ | muted | waiting to start | agent queued |
-| 7 | merged | » | success | merged, clean up | phase merged |
-| 8 | review | ◎ | secondary | PR in review | phase review |
-| 9 | blocked | ⊘ | muted | blocked by a task | phase blocked |
-| 10 | idle | ◇ | secondary | agent idle | agent idle |
-| 11 | stopped | ■ | muted | agent stopped | agent stopped |
-| 12 | agentdone | ✓ | success | agent finished | agent finished, task open |
+| 7 | merged | » | success | merged, ready to close | phase merged |
+| 8 | ready | ◈ | success | ready: yours to close | agent ready, task open |
+| 9 | review | ◎ | secondary | PR in review | phase review |
+| 10 | blocked | ⊘ | muted | blocked by a task | phase blocked |
+| 11 | idle | ◇ | secondary | agent idle | agent idle |
+| 12 | stopped | ■ | muted | agent stopped | agent stopped |
 | 13 | watching | ○ | muted | watching | watching |
 | 14 | theirs | → | muted | waiting on them | `waiting_on` set |
 | 15 | yours / asked | • / ? | text / primary | on you / asked you | the rest |
 
 `saved` and the old `blocked` lane go. The legend reads `LANE_META`, so it
 follows. A blocked row's sub line names its blockers (`blocked by
-AUG-0012`); a stopped row's says why it ended.
+AUG-0012`); a stopped row's says why it ended; a ready row's says
+`yours to close` or `its agent closed it`. The rail header counts ready
+rows (◈) next to asks (◆), and so does a folded project row. The done
+hook's "next" line on the task says "Ready for review: yours to close"
+whenever the task stays open.
 
 ### Sections
 
@@ -206,17 +230,17 @@ one thing share a pill:
 | key | pill | lanes |
 | --- | --- | --- |
 | 1 | asks ◆ | waiting |
-| 2 | send ↑ | approve |
-| 3 | working ◐ | working |
-| 4 | idle ◇ | idle |
-| 5 | stopped ■ | stopped, queued (not running: needs Start or Continue) |
-| 6 | review ◎ | review |
-| 7 | finished ✓ | agentdone, merged (ready for you to close) |
+| 2 | ready ◈ | ready, merged (on you: review it, or close it) |
+| 3 | send ↑ | approve |
+| 4 | working ◐ | working |
+| 5 | idle ◇ | idle |
+| 6 | stopped ■ | stopped, queued (not running: needs Start or Continue) |
+| 7 | review ◎ | review |
 | 8 | open • | yours, asked |
 | 9 | waiting → | blocked, theirs, watching, later |
 
 Omitted on purpose: done (never on the rail, except as an unread
-agentdone, which shares finished). To fit nine pills in the rail's 46
+ready (done), which is under ready). To fit nine pills in the rail's 46
 columns, a pill is `mark+count` with one space between pills.
 
 A filter applies inside every section, Wins included. Project rows stay
