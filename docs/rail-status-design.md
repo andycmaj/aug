@@ -77,8 +77,9 @@ blocked, open.
 ### Pending PR (AUG-0056)
 
 - Derived from `pr_status` (already refreshed on the GitHub clock by
-  `core/pr.ts`). Phase review while the last read of the task's current PR
-  is open or draft. The row keeps its PR chip (what is in the way: conflict,
+  `core/pr.ts`). Phase review while the last read of the task's PR is open
+  or draft. A PR you were asked to review (Code Reviews) is on you, so it
+  has no review phase. The row keeps its PR chip (what is in the way: conflict,
   ci, changes, review, ready), so the lane need not repeat it.
 - A closed, unmerged PR is no phase: the task is open again.
 
@@ -101,10 +102,10 @@ blocked, open.
   either test, or its task now points at a new open PR): `mergeUndone`, the
   task is open (or review) again. A revert in base is not detected: the
   branch is still in base. The owner reopens it with new work.
-- Clean-up is the existing mark done (`x`): for a coding task it already
+- Clean-up is the existing mark done (`d`): for a coding task it already
   kills the window and removes the worktree (`wt` keeps an unmerged branch,
   so a squash-merged one stays; fine). Nothing is cleaned without the
-  owner's key. The footer says "clean up" for x on a merged row.
+  owner's key; the merged turn says so.
 - Done stays the owner's (or the agent's `done`). Merged never closes.
 
 ## 2. Agent state
@@ -140,13 +141,12 @@ as today):
   - waiting: AskUserQuestion, a permission notification. Claude's idle
     notification ("waiting for your input", `notification_type:
     idle_prompt`) changes nothing: it is idle already.
-- **Stale working is checked** (`turnCheck` on the engine's tmux clock):
-  a tmux session working with no hook for 2 minutes reads the tail of its
-  claude transcript (`~/.claude/projects/<cwd>/<session>.jsonl`). An
-  interruption (`[Request interrupted by user`) or an assistant message
-  that ended its turn means idle; a tool call with no result yet (a long
-  test run) stays working. A window that is gone is stopped (reconcile, as
-  today); at boot, `recoverAtBoot` as today.
+- **Stale working is checked** (`core/turn-check.ts`, on the engine's
+  reconcile clock): a tmux session working with no hook for 2 minutes is
+  settled idle when claude's own `~/.claude/sessions/<pid>.json` says
+  `idle` (an Esc interrupt fires no Stop). `busy` (a long test run) stays
+  working. A window that is gone is stopped (reconcile, as today); at boot,
+  `recoverAtBoot` as today.
 - Chat agents (`claude -p`) have no idle: a turn ends finished or waiting.
 
 ### Transitions
@@ -237,8 +237,9 @@ Marks that change neither lifecycle nor agent state:
   - Table `wins(day, task_id, pinned_at)`, primary key `(day, task_id)`;
     `day` is the owner's local date. At most 5 per day, enforced in
     `desk.win`.
-  - Key `W` on a task row toggles it; move `win` (`--off yes` to unpin) for
-    the Assistant. Not an agent move: Wins are the owner's focus.
+  - Key `z` on a task row toggles it (`W` and `w` are taken); move `win`
+    (`--off yes` to unpin) for the Assistant. Not an agent move: Wins are
+    the owner's focus.
   - A Win sits in the Wins section only (one row per key; it leaves Tasks,
     Code Reviews or Watching for the day), not nested under its project,
     with its project chip. It keeps its lane mark. A Win done today stays
@@ -262,4 +263,4 @@ filter bar's contract (every lane has a pill or is listed as omitted).
    local detection through the Mux.
 5. **Blocked on task** (AUG-0018): `task_blockers`, `block_on` / `unblock`,
    `blockerResolved`.
-6. **Wins** (AUG-0050): `wins`, `W`, `win` move, the Wins section.
+6. **Wins** (AUG-0050): `wins`, `z`, `win` move, the Wins section.

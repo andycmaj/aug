@@ -88,3 +88,26 @@ describe("blocked on another task", () => {
     expect(triggers(waits.id).at(-1)).toContain("nothing blocks this now");
   });
 });
+
+describe("Wins", () => {
+  test("five a day, by the owner's day; the sixth is refused; a new day starts empty", async () => {
+    const day = new Date(2026, 10, 15, 9);
+    const ids = Array.from({ length: 6 }, (_, i) => engine.desk.newTask(`t${i}`, Kind.task).id);
+    for (const id of ids.slice(0, 5)) expect(engine.desk.setWin(id, true, day).ok).toBe(true);
+    const sixth = engine.desk.setWin(ids[5], true, day);
+    expect(sixth.ok).toBe(false);
+    expect(sixth.text).toContain("unpin one first");
+    expect(engine.desk.toggleWin(ids[0], day).text).toContain("no longer a Win");
+    expect(engine.desk.setWin(ids[5], true, day).ok).toBe(true);
+    expect(store.winsOn("2026-11-15")).toEqual([...ids.slice(1, 5), ids[5]]);
+    expect(store.winsOn("2026-11-16")).toEqual([]);
+  });
+
+  test("the win move pins and unpins; an agent may not", async () => {
+    const t = engine.desk.newTask("t", Kind.task);
+    const ref = store.taskRef(t.id);
+    expect((await move("win", { task: ref })).result).toContain("is a Win today (1/5)");
+    expect((await move("win", { task: ref, off: "yes" })).result).toContain("no longer");
+    expect((await move("win", { task: ref }, `agent ${ref}`)).result).toContain("the owner's move");
+  });
+});

@@ -307,7 +307,7 @@ export function workMerged(taskId: number, how: string): void {
     store.addTurn({
       taskId,
       role: TurnRole.trigger,
-      body: `Merged ${how}; ready to clean up (x marks it done and removes its worktree)`,
+      body: `Merged ${how}; ready to clean up (d marks it done and removes its worktree)`,
     });
   });
 }

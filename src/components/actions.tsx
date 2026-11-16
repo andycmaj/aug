@@ -382,6 +382,11 @@ export function useActions(dialogs: Dialogs) {
     );
   }
 
+  function win(task: TaskRow) {
+    const said = desk.toggleWin(task.id);
+    showToast(said.text, 3000, said.ok ? undefined : "error");
+  }
+
   function acceptDocs(task: TaskRow) {
     showToast(aug.desk.acceptDocs(task.id), 4000);
   }
@@ -729,6 +734,7 @@ export function useActions(dialogs: Dialogs) {
       [Commands.DONE]: onTask(done),
       [Commands.REMIND]: onTask(remind),
       [Commands.WATCH]: onTask(watch),
+      [Commands.WIN]: onTask(win),
       [Commands.PRIORITY]: onTask(cyclePriority),
       [Commands.KIND]: onTask(changeKind),
       [Commands.WAIT_ON]: onTask(waitOn),
