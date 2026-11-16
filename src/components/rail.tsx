@@ -184,7 +184,11 @@ export function Rail(props: { actions: TaskActions }) {
     let approve = 0;
     let tasks = 0;
     for (const s of aug.rail()) {
-      if (s.section !== "tasks" && s.section !== "reviews" && s.section !== "wins")
+      if (
+        s.section !== "tasks" &&
+        s.section !== "reviews" &&
+        s.section !== "wins"
+      )
         continue;
       for (const i of s.items) {
         if (i.type !== "task") continue;
@@ -274,7 +278,7 @@ export function Rail(props: { actions: TaskActions }) {
   );
 }
 
-// tilt-tui's filter bar: a pill per status with its count, lit while it
+// status filter bar: a pill per status with its count, lit while it
 // filters. Digits 1-9 toggle the pills in this order; f steps through them.
 // Nine pills fit the rail only as mark+count with one space between.
 function FilterBar() {
@@ -282,7 +286,13 @@ function FilterBar() {
   const theme = useTheme();
   const anyOn = () => aug.railFilter().size > 0;
   return (
-    <box flexDirection="row" paddingLeft={2} paddingBottom={1} flexShrink={0}>
+    <box
+      flexDirection="row"
+      paddingLeft={2}
+      paddingBottom={1}
+      flexShrink={0}
+      justifyContent="space-evenly"
+    >
       <For each={RAIL_FILTERS}>
         {(f) => {
           const on = () => aug.railFilter().has(f.filter);
@@ -295,11 +305,13 @@ function FilterBar() {
                 ? (theme.borderSubtle ?? theme.textMuted)
                 : color();
           return (
-            <text
-              fg={fg()}
-              bg={on() ? color() : undefined}
-              attributes={on() ? 1 : 0}
-            >{`${f.mark}${count()} `}</text>
+            <Show when={count() > 0}>
+              <text
+                fg={fg()}
+                bg={on() ? color() : undefined}
+                attributes={on() ? 1 : 0}
+              >{` ${f.mark} ${count()} `}</text>
+            </Show>
           );
         }}
       </For>
@@ -393,7 +405,12 @@ function RailRow(props: {
             ? `${taskRef(item.task.id)} · ${word}`
             : [
                 age,
-                (!props.nested && projectChip(item.task.project_id ? aug.project(item.task.project_id) : null)) ||
+                (!props.nested &&
+                  projectChip(
+                    item.task.project_id
+                      ? aug.project(item.task.project_id)
+                      : null,
+                  )) ||
                   CHANNEL_WORD[item.task.channel],
                 taskRef(item.task.id),
                 word,

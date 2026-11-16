@@ -54,7 +54,14 @@ const TABS: { key: Tab; label: string }[] = [
 // A project, then its goals each with their open tasks, then the open tasks
 // that serve no goal.
 type ProjectLine =
-  | { type: "project"; project: ProjectRow; tasks: number; goalsMet: number; goals: number; docs: number }
+  | {
+      type: "project";
+      project: ProjectRow;
+      tasks: number;
+      goalsMet: number;
+      goals: number;
+      docs: number;
+    }
   | { type: "goal"; project: ProjectRow; progress: GoalProgress }
   | { type: "task"; task: TaskRow; project: ProjectRow; underGoal: boolean };
 
@@ -237,7 +244,9 @@ export function BoardMode() {
       [Commands.BOARD_TAB_3]: () => setTab(Tab.knowledge),
       [Commands.BOARD_TAB_4]: () => setTab(Tab.projects),
       [Commands.PROJECT_ADOPT]: () =>
-        void shell.actions.adopt(tab() === Tab.projects ? projectLine()?.project.id : undefined),
+        void shell.actions.adopt(
+          tab() === Tab.projects ? projectLine()?.project.id : undefined,
+        ),
       [Commands.PROJECT_ARCHIVE]: () => {
         const line = projectLine();
         if (tab() !== Tab.projects || !line) return false;
@@ -450,8 +459,8 @@ function Projects(props: {
       fallback={
         <box paddingLeft={1} flexDirection="column">
           <text fg={theme.textMuted}>
-            No projects yet. c makes one (a tmux session); A adopts a session
-            or a claude you already have.
+            No projects yet. c makes one (a tmux session); A adopts a session or
+            a claude you already have.
           </text>
           <text fg={theme.textMuted}>
             Starting a coding task outside a project makes a project of its own.
@@ -467,7 +476,8 @@ function Projects(props: {
               on() ? contrastingForeground(theme.primary) : color;
             if (line.type === "project") {
               const repos = projectRepos(line.project);
-              const brief = line.project.brief.split("\n").find((l) => l.trim()) ?? "";
+              const brief =
+                line.project.brief.split("\n").find((l) => l.trim()) ?? "";
               return (
                 <box flexDirection="column" marginTop={i() === 0 ? 0 : 1}>
                   <box
@@ -484,8 +494,12 @@ function Projects(props: {
                           `tmux ${line.project.tmux_session}`,
                           repos.length ? repos.join(", ") : null,
                           `${line.tasks} open`,
-                          line.goals ? `goals ${line.goalsMet}/${line.goals} met` : null,
-                          line.docs ? `${line.docs} doc${line.docs === 1 ? "" : "s"}` : null,
+                          line.goals
+                            ? `goals ${line.goalsMet}/${line.goals} met`
+                            : null,
+                          line.docs
+                            ? `${line.docs} doc${line.docs === 1 ? "" : "s"}`
+                            : null,
                           line.project.solo ? "one task" : null,
                         ]
                           .filter(Boolean)
@@ -522,7 +536,9 @@ function Projects(props: {
                   </text>
                   <text fg={fg(theme.textMuted)}>
                     {[
-                      g.tasks.length ? `${meter(g.done, g.tasks.length)} ${g.done}/${g.tasks.length} done` : "no tasks yet",
+                      g.tasks.length
+                        ? `${meter(g.done, g.tasks.length)} ${g.done}/${g.tasks.length} done`
+                        : "no tasks yet",
                       g.working ? `${g.working} working` : null,
                       met ? "met" : null,
                     ]
@@ -545,7 +561,8 @@ function Projects(props: {
                 <text fg={fg(theme.textMuted)}>
                   {truncate(
                     [
-                      t.branch ?? (t.kind === "coding" ? "no worktree" : t.kind),
+                      t.branch ??
+                        (t.kind === "coding" ? "no worktree" : t.kind),
                       t.agent_state === AgentState.none ? null : t.agent_state,
                       live(t) ? "● live" : null,
                     ]
@@ -572,9 +589,9 @@ function Columns(props: {
   const theme = useTheme();
   const aug = useAug();
   const colWidth = () =>
-    Math.max(18, Math.floor((props.width - 6) / props.columns.length) - 1);
+    Math.max(20, Math.floor(props.width / props.columns.length) - 1);
   return (
-    <box flexDirection="row" flexGrow={1} flexBasis={0} gap={1}>
+    <box flexDirection="row" flexGrow={1} flexBasis={0} gap={1} paddingLeft={1}>
       <For each={props.columns}>
         {(column, ci) => (
           <box
@@ -660,7 +677,7 @@ function Card(props: {
         )}
       </text>
       <text fg={fg() ?? theme.text} attributes={1}>
-        {truncate(props.task.title, props.width - 2)}
+        {props.task.title}
       </text>
       <text fg={fg() ?? theme.textMuted}>
         {truncate(line(), props.width - 2)}
@@ -669,7 +686,11 @@ function Card(props: {
   );
 }
 
-function Knowledge(props: { entries: KnowledgeRow[]; selected: number; width: number }) {
+function Knowledge(props: {
+  entries: KnowledgeRow[];
+  selected: number;
+  width: number;
+}) {
   const theme = useTheme();
   const current = () => props.entries[props.selected];
   return (
@@ -678,8 +699,8 @@ function Knowledge(props: { entries: KnowledgeRow[]; selected: number; width: nu
       fallback={
         <box paddingLeft={1}>
           <text fg={theme.textMuted}>
-            Nothing learned yet. Agents add discoveries with aug-tools
-            knowledge add; c writes one.
+            Nothing learned yet. Agents add discoveries with aug-tools knowledge
+            add; c writes one.
           </text>
         </box>
       }

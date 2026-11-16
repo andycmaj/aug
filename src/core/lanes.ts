@@ -130,7 +130,7 @@ export type BoardColumn = (typeof BoardColumn)[keyof typeof BoardColumn];
 
 export const BOARD_COLUMNS: { key: BoardColumn; title: string; tone: Tone }[] =
   [
-    { key: "queued", title: "waiting to start", tone: "muted" },
+    // { key: "queued", title: "waiting to start", tone: "muted" },
     { key: "working", title: "agent working", tone: "info" },
     { key: "waiting", title: "waiting on you", tone: "warning" },
     { key: "idle", title: "agent idle", tone: "secondary" },
