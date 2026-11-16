@@ -173,7 +173,8 @@ export function buildRail(input: RailInput): RailSection[] {
     const blockers = input.blockers?.get(task.id)?.length ?? 0;
     const lane = laneOf(task, {
       hasPendingAction: input.pendingActions.has(task.id),
-      prState: input.prStates?.get(task.id) ?? null,
+      // A PR you were asked to review is on you, not in its review loop.
+      prState: reviews.has(task.id) ? null : (input.prStates?.get(task.id) ?? null),
       blockers,
     });
     const item: RailItem = {

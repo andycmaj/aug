@@ -24,6 +24,7 @@ import {
 import { nudgeText } from "./feedback";
 import { correct } from "./learn";
 import { holdForStart, taskClosed, taskDropped } from "./lifecycle";
+import { localDay, MAX_WINS } from "./rail";
 import type { AugConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
 import * as projects from "./projects";
@@ -397,6 +398,27 @@ export class Desk {
       },
       this.learnedNotice,
     );
+  }
+
+  // Today's Wins: at most MAX_WINS, pinned or unpinned by the owner.
+  setWin(taskId: number, on: boolean, at = new Date()): { ok: boolean; text: string } {
+    const day = localDay(at);
+    const wins = store.winsOn(day);
+    const ref = store.taskRef(taskId);
+    if (!on) {
+      if (!wins.includes(taskId)) return { ok: true, text: `${ref} is not a Win today` };
+      store.removeWin(day, taskId);
+      return { ok: true, text: `${ref} is no longer a Win today` };
+    }
+    if (wins.includes(taskId)) return { ok: true, text: `${ref} is a Win today already` };
+    if (wins.length >= MAX_WINS)
+      return { ok: false, text: `Today has ${MAX_WINS} Wins: unpin one first` };
+    store.addWin(day, taskId);
+    return { ok: true, text: `${ref} is a Win today (${wins.length + 1}/${MAX_WINS})` };
+  }
+
+  toggleWin(taskId: number, at = new Date()): { ok: boolean; text: string } {
+    return this.setWin(taskId, !store.winsOn(localDay(at)).includes(taskId), at);
   }
 
   // A task waits on others; each is told nothing, the waiting one hears

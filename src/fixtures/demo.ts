@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setBrain, type BrainCall, type BrainResult } from "../core/brain";
 import { DEFAULT_CONFIG, fixedConfig } from "../core/config";
+import { localDay } from "../core/rail";
 import { openDb, useDb } from "../core/db";
 import { DocName, ensureDocs, readDoc, writeDoc } from "../core/docs";
 import { Engine } from "../core/engine";
@@ -466,6 +467,34 @@ export function seedDemo(): void {
       createdAt: ago(60 * 24 * 3),
     });
     store.remindAt(later.id, inDays(2));
+
+    // 10. Blocked on the export fix: release notes wait for it.
+    const notes = store.createTask({
+      title: "Ledger 2.4 release notes",
+      kind: Kind.task,
+      channel: "owner",
+      createdAt: ago(90),
+    });
+    store.addBlocker(notes.id, exp, "you");
+
+    // 11. Its branch landed on main: ready to clean up.
+    const bump = store.createTask({
+      title: "Bump pydantic to 2.9",
+      kind: Kind.coding,
+      channel: "owner",
+      repo: "northwind/ledger",
+      branch: "bump-pydantic",
+      createdAt: ago(240),
+    });
+    store.updateTask(bump.id, {
+      agent_state: AgentState.idle,
+      merged_at: ago(15),
+    });
+
+    // Today's Wins: the urgent export fix and Erin's question.
+    const today = localDay(new Date());
+    store.addWin(today, exp);
+    store.addWin(today, erin);
 
     // FYI
     for (const [i, m] of [

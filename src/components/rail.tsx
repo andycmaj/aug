@@ -184,7 +184,8 @@ export function Rail(props: { actions: TaskActions }) {
     let approve = 0;
     let tasks = 0;
     for (const s of aug.rail()) {
-      if (s.section !== "tasks" && s.section !== "reviews") continue;
+      if (s.section !== "tasks" && s.section !== "reviews" && s.section !== "wins")
+        continue;
       for (const i of s.items) {
         if (i.type !== "task") continue;
         tasks++;

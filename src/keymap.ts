@@ -173,6 +173,13 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     desc: "watch it / stop watching",
     relevant: isWork,
   },
+  {
+    key: "z",
+    cmd: Commands.WIN,
+    desc: "pin as one of today's Wins / unpin",
+    help: "win",
+    relevant: isWork,
+  },
   // x clears the row off the rail, and what that means depends on the row:
   // one command per meaning, so the footer and help name the one that applies.
   {

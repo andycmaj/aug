@@ -549,6 +549,16 @@ export const MOVES: Record<string, MoveSpec> = {
       return desk.unblock(task!.id, args.on?.trim() ? taskArg(args.on) : undefined);
     },
   },
+  win: {
+    help: "Pin the task as one of today's Wins (at most 5); --off yes unpins it",
+    task: true,
+    args: { off: { help: "yes: unpin it" } },
+    run(desk, task, args) {
+      const said = desk.setWin(task!.id, args.off?.trim() !== "yes");
+      if (!said.ok) throw new MoveError(said.text);
+      return said.text;
+    },
+  },
   link: {
     help: "Attach a URL to the task (a doc, a Slack thread, a ticket elsewhere)",
     task: true,
