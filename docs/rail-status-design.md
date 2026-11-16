@@ -214,8 +214,13 @@ follows. A lane with a `nerdMark` shows it only where the font is a Nerd
 Font (`laneMeta`, `core/glyphs.ts`: config `nerdFont`, else one installed),
 and its plain `mark` elsewhere. A blocked row's sub line names its blockers (`blocked by
 AUG-0012`); a stopped row's says why it ended; a ready row's says
-`yours to close` or `its agent closed it`. The rail header counts ready
-rows (◈) next to asks (◆), and so does a folded project row. The done
+`yours to close` or `its agent closed it`; a working row whose task is
+already merged says `merged, agent working` (working outranks merged: an
+agent that landed its branch is often still writing its note). The row on
+the table carries its `▸` in the gutter left of the bar, never in place of
+its mark, so the task you are watching shows its lane move (AUG-0123).
+The rail header counts ready rows (◈) next to asks (◆), and so does a
+folded project row. The done
 hook's "next" line on the task says "Ready for review: yours to close"
 whenever the task stays open.
 

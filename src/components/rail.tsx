@@ -338,7 +338,9 @@ function EmptyRail() {
 
 // The highlight is the cursor while the rail has focus, and the row on the
 // table while it does not (tilt-tui's focused/unfocused selection). The row
-// on the table always carries a ▸.
+// on the table carries a ▸ in the gutter, beside its mark rather than in
+// place of it: the task you are watching is the one whose lane you want to
+// see move.
 function RailRow(props: {
   item: RailItem;
   nested: boolean;
@@ -358,7 +360,7 @@ function RailRow(props: {
 
   const subWidth = () => RAIL_WIDTH - 7 - (props.nested ? NEST : 0);
   // What its lane says, with the one fact that lane is about: which tasks
-  // block it, why its agent stopped.
+  // block it, why its agent stopped, that it landed while its agent works.
   const laneWord = (item: Extract<RailItem, { type: "task" }>) => {
     if (item.lane === Lane.blocked) {
       const by = aug.blockers(item.task.id);
@@ -373,6 +375,11 @@ function RailRow(props: {
       return item.task.status === TaskStatus.done
         ? "ready: its agent closed it"
         : "ready: yours to close";
+    // Working outranks merged (an agent that landed its branch is often
+    // still writing its note), so the word carries the merge; first, so a
+    // cut sub line keeps it.
+    if (item.lane === Lane.working && item.task.merged_at)
+      return "merged, agent working";
     return LANE_META[item.lane].word;
   };
   const view = createMemo((): RowView => {
@@ -493,57 +500,53 @@ function RailRow(props: {
 
   return (
     <box
-      flexDirection="column"
-      marginLeft={props.nested ? 1 + NEST : 1}
+      flexDirection="row"
+      marginLeft={props.nested ? NEST : 0}
       marginBottom={1}
-      backgroundColor={bg()}
     >
-      <box flexDirection="row" gap={1}>
-        <text bg={view().bar}> </text>
-        <text
-          fg={
-            lit() ? selFg() : props.onTable ? theme().accent : view().markColor
-          }
-        >
-          {props.onTable ? "▸" : view().mark}
-        </text>
-        <text
-          fg={lit() ? selFg() : view().titleColor}
-          attributes={lit() ? 1 : 0}
-        >
-          {truncate(view().title, RAIL_WIDTH - 9 - (props.nested ? NEST : 0))}
-        </text>
-      </box>
-      <box flexDirection="row" gap={1}>
-        <text bg={view().bar2}> </text>
-        <Show
-          when={view().chip}
-          fallback={
-            <text fg={lit() ? selFg() : theme().textMuted}>
-              {truncate(view().sub, subWidth())}
-            </text>
-          }
-        >
-          {(chip: Accessor<{ text: string; color: ThemeColor }>) => (
-            <text fg={lit() ? selFg() : theme().textMuted}>
-              <span>{view().lead ?? ""}</span>
-              <span style={{ fg: lit() ? selFg() : chip().color }}>
-                {chip().text}
-              </span>
-              <span>
-                {truncate(
-                  ` · ${view().sub}`,
-                  Math.max(
-                    0,
-                    subWidth() -
-                      (view().lead ?? "").length -
-                      chip().text.length,
-                  ),
-                )}
-              </span>
-            </text>
-          )}
-        </Show>
+      <text fg={theme().accent}>{props.onTable ? "▸" : " "}</text>
+      <box flexDirection="column" flexGrow={1} backgroundColor={bg()}>
+        <box flexDirection="row" gap={1}>
+          <text bg={view().bar}> </text>
+          <text fg={lit() ? selFg() : view().markColor}>{view().mark}</text>
+          <text
+            fg={lit() ? selFg() : view().titleColor}
+            attributes={lit() ? 1 : 0}
+          >
+            {truncate(view().title, RAIL_WIDTH - 9 - (props.nested ? NEST : 0))}
+          </text>
+        </box>
+        <box flexDirection="row" gap={1}>
+          <text bg={view().bar2}> </text>
+          <Show
+            when={view().chip}
+            fallback={
+              <text fg={lit() ? selFg() : theme().textMuted}>
+                {truncate(view().sub, subWidth())}
+              </text>
+            }
+          >
+            {(chip: Accessor<{ text: string; color: ThemeColor }>) => (
+              <text fg={lit() ? selFg() : theme().textMuted}>
+                <span>{view().lead ?? ""}</span>
+                <span style={{ fg: lit() ? selFg() : chip().color }}>
+                  {chip().text}
+                </span>
+                <span>
+                  {truncate(
+                    ` · ${view().sub}`,
+                    Math.max(
+                      0,
+                      subWidth() -
+                        (view().lead ?? "").length -
+                        chip().text.length,
+                    ),
+                  )}
+                </span>
+              </text>
+            )}
+          </Show>
+        </box>
       </box>
     </box>
   );
