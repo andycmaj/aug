@@ -64,6 +64,13 @@ function ref(task: TaskRow | null): string {
   return task ? store.taskRef(task.id) : "";
 }
 
+// Another task named in an argument (--on AUG-0012).
+function taskArg(value: string): number {
+  const id = store.parseTaskRef(value);
+  if (!id || !store.getTask(id)) throw new MoveError(`no task ${value}`);
+  return id;
+}
+
 // Kinds a move may make or set; anything else is aug's own.
 const KINDS = [Kind.general, Kind.coding, Kind.reply, Kind.task] as const;
 
@@ -521,6 +528,27 @@ export const MOVES: Record<string, MoveSpec> = {
         : `${ref(task)} waits on nobody`;
     },
   },
+  block_on: {
+    help: "Mark the task blocked by another task; it hears when that one is done",
+    task: true,
+    args: { on: { help: "the task it waits for (AUG-0000)", required: true } },
+    run(desk, task, args, by) {
+      try {
+        return desk.blockOn(task!.id, taskArg(args.on), by);
+      } catch (err) {
+        if (err instanceof MoveError) throw err;
+        throw new MoveError(err instanceof Error ? err.message : String(err));
+      }
+    },
+  },
+  unblock: {
+    help: "No longer blocked by a task (no --on: by any)",
+    task: true,
+    args: { on: { help: "the task it waited for (AUG-0000)" } },
+    run(desk, task, args) {
+      return desk.unblock(task!.id, args.on?.trim() ? taskArg(args.on) : undefined);
+    },
+  },
   link: {
     help: "Attach a URL to the task (a doc, a Slack thread, a ticket elsewhere)",
     task: true,
@@ -839,6 +867,8 @@ export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "retitle",
   "project",
   "wait_on",
+  "block_on",
+  "unblock",
   "priority",
   "remind",
   "link",
