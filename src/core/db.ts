@@ -217,7 +217,8 @@ CREATE TABLE IF NOT EXISTS pr_status (
   checks TEXT NOT NULL,
   review TEXT NOT NULL,
   mergeable TEXT NOT NULL,
-  fetched_at TEXT NOT NULL
+  fetched_at TEXT NOT NULL,
+  error TEXT
 );
 
 CREATE TABLE IF NOT EXISTS doc_proposals (
@@ -340,6 +341,7 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "tasks", column: "goal_id", ddl: "INTEGER REFERENCES project_goals(id)" },
   { table: "sessions", column: "end_reason", ddl: "TEXT" },
   { table: "tasks", column: "merged_at", ddl: "TEXT" },
+  { table: "pr_status", column: "error", ddl: "TEXT" },
 ];
 
 // Agent states renamed or merged (docs/rail-status-design.md): blocked is

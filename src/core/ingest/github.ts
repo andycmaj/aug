@@ -3,7 +3,16 @@
 // assignments, and comments on threads you are part of. Read-only: aug never
 // marks a notification read.
 
+import { ghTrouble, GhTrouble } from "../github-gate";
 import type { NewMessage } from "../store";
+
+// A detail that cannot be read is left out; a rate limit stops the poll,
+// since every call after it fails too and spends what is left.
+function unlessLimited(err: unknown): null {
+  const message = err instanceof Error ? err.message : String(err);
+  if (ghTrouble(message) === GhTrouble.rateLimit) throw err;
+  return null;
+}
 
 export interface GhNotification {
   id: string;
@@ -129,8 +138,8 @@ export async function pollGithub(
         item = (await api(
           detail.replace("https://api.github.com/", ""),
         )) as GhItem;
-      } catch {
-        item = null;
+      } catch (err) {
+        item = unlessLimited(err);
       }
     }
     let head: string | null = null;
@@ -144,8 +153,8 @@ export async function pollGithub(
           n.subject.url.replace("https://api.github.com/", ""),
         )) as { head?: { ref?: string } };
         head = pr.head?.ref ?? null;
-      } catch {
-        head = null;
+      } catch (err) {
+        head = unlessLimited(err);
       }
     }
     const message = toMessage(n, item, me, head);

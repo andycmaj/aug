@@ -68,6 +68,7 @@ describe("merged", () => {
       review: "approved",
       mergeable: "unknown",
       fetched_at: new Date().toISOString(),
+      error: null,
     });
     expect(await checkMerges(config())).toBe(1);
     expect(triggers(id).at(-1)).toContain("(PR #12)");

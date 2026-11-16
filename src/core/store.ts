@@ -312,14 +312,15 @@ export function setPrStatus(row: PrStatusRow): void {
   const had = prStatus(row.task_id);
   const same =
     had !== null &&
-    (["repo", "number", "url", "state", "checks", "review", "mergeable"] as const).every(
+    (["repo", "number", "url", "state", "checks", "review", "mergeable", "error"] as const).every(
       (k) => had[k] === row[k],
     );
-  const sql = `INSERT INTO pr_status (task_id, repo, number, url, state, checks, review, mergeable, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  const sql = `INSERT INTO pr_status (task_id, repo, number, url, state, checks, review, mergeable, fetched_at, error)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (task_id) DO UPDATE SET repo = excluded.repo, number = excluded.number,
        url = excluded.url, state = excluded.state, checks = excluded.checks,
-       review = excluded.review, mergeable = excluded.mergeable, fetched_at = excluded.fetched_at`;
+       review = excluded.review, mergeable = excluded.mergeable, fetched_at = excluded.fetched_at,
+       error = excluded.error`;
   const params = [
     row.task_id,
     row.repo,
@@ -330,9 +331,22 @@ export function setPrStatus(row: PrStatusRow): void {
     row.review,
     row.mergeable,
     row.fetched_at,
+    row.error,
   ];
   if (same) db().query(sql).run(...params);
   else run(sql, ...params);
+}
+
+// The last read failed: what the row says is kept, and marked stale. A row
+// already stale for the same reason is left alone, so a failing PR does not
+// wake the TUI every poll.
+export function markPrStale(taskId: number, error: string): void {
+  run(
+    "UPDATE pr_status SET error = ? WHERE task_id = ? AND error IS NOT ?",
+    error,
+    taskId,
+    error,
+  );
 }
 
 // A PR's head branch finds the task whose worktree pushed it.

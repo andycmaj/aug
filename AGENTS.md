@@ -46,8 +46,14 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 - **A task's PR is `core/pr.ts`**: found from its linked threads (the PR
   its agent or branch opened), its URL, a PR thread it came from, or a PR
   link. The engine reads each one's checks and reviews into `pr_status` on
-  the GitHub clock; the rail and the table's header show it, and `P` opens
+  the GitHub clock, 25 PRs to one GraphQL query; the rail and the table's
+  header show it (marked stale when the last read failed), and `P` opens
   ghdash on it in the table (`components/use-pr-dash.tsx`).
+- **When aug may call GitHub is `core/github-gate.ts`**: a rate limit
+  pauses that budget (REST or GraphQL) until its reset, kept in `kv` across
+  restarts; a failed poll backs off (doubling, jittered, capped); a PR that
+  keeps failing backs off alone; under `GRAPHQL_RESERVE` points PR status
+  waits for the reset. The engine's GitHub status line says each of these.
 - **Claudes started outside aug are `core/strays.ts`**: found through Claude
   Code's own `~/.claude/sessions/<pid>.json` (pid, session id, cwd, tmux
   pane). The `adopt` move and `A` on the Board make one a coding task: one in

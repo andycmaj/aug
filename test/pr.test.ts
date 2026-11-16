@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { linkPr } from "../src/core/feedback";
+import { GithubGate, type GhRemaining } from "../src/core/github-gate";
 import {
+  PR_BATCH,
+  prBatchQuery,
   prChip,
   prLine,
+  readPrBatch,
   readPrView,
   refreshPrStatus,
   refreshPrStatuses,
   taskPr,
   type GhPrView,
+  type PrFetch,
 } from "../src/core/pr";
 import * as store from "../src/core/store";
 import { Kind, type PrStatusRow } from "../src/core/types";
@@ -149,40 +154,72 @@ describe("reading gh pr view", () => {
   });
 });
 
+// A PrFetch from a function per PR, the way a test thinks about it.
+function byUrl(
+  view: (url: string) => Promise<GhPrView>,
+  budget: GhRemaining | null = null,
+  calls: string[][] = [],
+): PrFetch {
+  return async (prs) => {
+    calls.push(prs.map((p) => p.url));
+    const views = new Map<string, GhPrView | Error>();
+    for (const pr of prs) {
+      try {
+        views.set(pr.url, await view(pr.url));
+      } catch (err) {
+        views.set(pr.url, err as Error);
+      }
+    }
+    return { views, budget };
+  };
+}
+
+function prTask(n: number) {
+  const t = issueTask(`github:acme/ledger#${1000 + n}`);
+  linkPr(t.id, `https://github.com/acme/ledger/pull/${n}`);
+  return t;
+}
+
 describe("refreshing", () => {
   test("stores what gh said, and only tasks with a PR ask", async () => {
     const t = issueTask();
     issueTask("github:acme/ledger#300");
     linkPr(t.id, "https://github.com/acme/ledger/pull/230");
     const asked: string[] = [];
-    const n = await refreshPrStatuses(async (url) => {
-      asked.push(url);
-      return {
-        state: "OPEN",
-        reviewDecision: "APPROVED",
-        statusCheckRollup: [],
-      };
+    const r = await refreshPrStatuses({
+      fetch: byUrl(async (url) => {
+        asked.push(url);
+        return {
+          state: "OPEN",
+          reviewDecision: "APPROVED",
+          statusCheckRollup: [],
+        };
+      }),
     });
-    expect(n).toBe(1);
+    expect(r).toMatchObject({ asked: 1, ok: 1, failed: 0 });
     expect(asked).toEqual(["https://github.com/acme/ledger/pull/230"]);
     expect(store.prStatus(t.id)).toMatchObject({
       number: 230,
       state: "open",
       review: "approved",
       checks: "none",
+      error: null,
     });
   });
 
   test("a merged PR is not asked again; a failing one keeps being asked", async () => {
     const t = issueTask();
     linkPr(t.id, "https://github.com/acme/ledger/pull/230");
-    await refreshPrStatus(store.getTask(t.id)!, async () => ({
-      state: "MERGED",
-    }));
+    await refreshPrStatus(
+      store.getTask(t.id)!,
+      byUrl(async () => ({ state: "MERGED" })),
+    );
     let asked = 0;
-    await refreshPrStatuses(async () => {
-      asked++;
-      return { state: "MERGED" };
+    await refreshPrStatuses({
+      fetch: byUrl(async () => {
+        asked++;
+        return { state: "MERGED" };
+      }),
     });
     expect(asked).toBe(0);
   });
@@ -190,30 +227,177 @@ describe("refreshing", () => {
   test("an unchanged read does not wake the TUI", async () => {
     const t = issueTask();
     linkPr(t.id, "https://github.com/acme/ledger/pull/230");
-    const same = async () => ({ state: "OPEN" });
+    const same = byUrl(async () => ({ state: "OPEN" }));
     await refreshPrStatus(store.getTask(t.id)!, same);
     let woke = 0;
     const off = store.onChange(() => woke++);
     await refreshPrStatus(store.getTask(t.id)!, same);
     expect(woke).toBe(0);
-    await refreshPrStatus(store.getTask(t.id)!, async () => ({
-      state: "CLOSED",
-    }));
+    await refreshPrStatus(
+      store.getTask(t.id)!,
+      byUrl(async () => ({ state: "CLOSED" })),
+    );
     expect(woke).toBe(1);
     off();
   });
 
   test("a gh failure on one PR does not stop the rest", async () => {
-    const a = issueTask();
-    const b = issueTask("github:acme/ledger#215");
-    linkPr(a.id, "https://github.com/acme/ledger/pull/1");
-    linkPr(b.id, "https://github.com/acme/ledger/pull/2");
-    const n = await refreshPrStatuses(async (url) => {
-      if (url.endsWith("/1")) throw new Error("no auth");
+    const a = prTask(1);
+    const b = prTask(2);
+    const r = await refreshPrStatuses({
+      fetch: byUrl(async (url) => {
+        if (url.endsWith("/1")) throw new Error("no auth");
+        return { state: "OPEN" };
+      }),
+    });
+    expect(r).toMatchObject({ ok: 1, failed: 1, error: "no auth" });
+    expect(store.prStatus(b.id)?.number).toBe(2);
+    expect(store.prStatus(a.id)).toBeNull();
+  });
+
+  test("all of them in one call, not one call each", async () => {
+    for (let n = 1; n <= 30; n++) prTask(n);
+    const calls: string[][] = [];
+    const r = await refreshPrStatuses({
+      fetch: byUrl(async () => ({ state: "OPEN" }), null, calls),
+    });
+    expect(r.ok).toBe(30);
+    expect(calls.map((c) => c.length)).toEqual([PR_BATCH, 30 - PR_BATCH]);
+  });
+
+  test("a failed read says so, and marks the old read stale", async () => {
+    const t = prTask(7);
+    await refreshPrStatuses({
+      fetch: byUrl(async () => ({ state: "OPEN", reviewDecision: "APPROVED" })),
+    });
+    expect(prChip(store.prStatus(t.id)!).text).toBe("#7 ✓ ready");
+    const r = await refreshPrStatuses({
+      fetch: async () => {
+        throw new Error("HTTP 502: Bad Gateway (https://api.github.com/graphql)");
+      },
+    });
+    expect(r).toMatchObject({ asked: 1, ok: 0, failed: 1, limited: null });
+    expect(r.error).toContain("502");
+    const row = store.prStatus(t.id)!;
+    expect(row.review).toBe("approved");
+    expect(row.error).toContain("502");
+    expect(prChip(row)).toEqual({ text: "#7 ✓ ready · stale", tone: "muted" });
+    expect(prLine(row)).toContain("stale, last read failed: HTTP 502");
+    await refreshPrStatuses({ fetch: byUrl(async () => ({ state: "OPEN" })) });
+    expect(store.prStatus(t.id)!.error).toBeNull();
+  });
+
+  test("a rate limit stops the round: no more calls after it", async () => {
+    for (let n = 1; n <= 30; n++) prTask(n);
+    let calls = 0;
+    const r = await refreshPrStatuses({
+      fetch: async () => {
+        calls++;
+        throw new Error("GraphQL: API rate limit already exceeded for user ID 1.");
+      },
+    });
+    expect(calls).toBe(1);
+    expect(r.limited).toContain("rate limit");
+    expect(r).toMatchObject({ asked: 0, failed: 0, skipped: 30 });
+  });
+
+  test("under the reserve, the round leaves the rest for later", async () => {
+    for (let n = 1; n <= 30; n++) prTask(n);
+    const calls: string[][] = [];
+    const budget = { remaining: 40, resetAt: "2026-11-16T18:00:00Z" };
+    const r = await refreshPrStatuses({
+      fetch: byUrl(async () => ({ state: "OPEN" }), budget, calls),
+      reserve: 100,
+    });
+    expect(calls).toHaveLength(1);
+    expect(r).toMatchObject({ ok: PR_BATCH, skipped: 30 - PR_BATCH, budget });
+  });
+
+  test("a PR that keeps failing backs off on its own", async () => {
+    prTask(1);
+    prTask(2);
+    let t = 0;
+    const gate = new GithubGate(() => 60_000, {
+      now: () => t,
+      random: () => 1,
+    });
+    const asked: string[] = [];
+    const fetch = byUrl(async (url) => {
+      asked.push(url);
+      if (url.endsWith("/1")) throw new Error("Could not resolve to a PullRequest");
       return { state: "OPEN" };
     });
-    expect(n).toBe(1);
-    expect(store.prStatus(b.id)?.number).toBe(2);
+    await refreshPrStatuses({ fetch, gate });
+    asked.length = 0;
+    const r = await refreshPrStatuses({ fetch, gate });
+    expect(asked).toEqual(["https://github.com/acme/ledger/pull/2"]);
+    expect(r.skipped).toBe(1);
+    t += 2 * 60_000 + 1;
+    asked.length = 0;
+    await refreshPrStatuses({ fetch, gate });
+    expect(asked).toHaveLength(2);
+  });
+});
+
+describe("one GraphQL query for a batch", () => {
+  const refs = [
+    { repo: "acme/ledger", number: 1, url: "https://github.com/acme/ledger/pull/1" },
+    { repo: "acme/web", number: 9, url: "https://github.com/acme/web/pull/9" },
+  ];
+
+  test("an alias per PR, and the budget asked for free", () => {
+    const q = prBatchQuery(refs);
+    expect(q).toContain('p0: repository(owner: "acme", name: "ledger") { pullRequest(number: 1)');
+    expect(q).toContain('p1: repository(owner: "acme", name: "web") { pullRequest(number: 9)');
+    expect(q).toContain("rateLimit { remaining resetAt }");
+  });
+
+  test("reads each PR, and names the one GitHub could not find", () => {
+    const batch = readPrBatch(refs, {
+      data: {
+        rateLimit: { remaining: 4800, resetAt: "2026-11-16T18:00:00Z" },
+        p0: {
+          pullRequest: {
+            state: "OPEN",
+            reviewDecision: "APPROVED",
+            commits: {
+              nodes: [
+                {
+                  commit: {
+                    statusCheckRollup: {
+                      contexts: {
+                        nodes: [
+                          { __typename: "CheckRun", status: "COMPLETED", conclusion: "FAILURE" },
+                        ],
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+        p1: { pullRequest: null },
+      },
+      errors: [{ message: "Could not resolve to a PullRequest", path: ["p1", "pullRequest"] }],
+    });
+    expect(batch.budget?.remaining).toBe(4800);
+    expect(readPrView(batch.views.get(refs[0].url) as GhPrView)).toMatchObject({
+      review: "approved",
+      checks: "fail",
+    });
+    expect((batch.views.get(refs[1].url) as Error).message).toBe(
+      "Could not resolve to a PullRequest",
+    );
+  });
+
+  test("an answer with no data is the whole call failing", () => {
+    expect(() =>
+      readPrBatch(refs, {
+        data: null,
+        errors: [{ message: "API rate limit already exceeded for user ID 1." }],
+      }),
+    ).toThrow("rate limit");
   });
 });
 
@@ -228,6 +412,7 @@ describe("words for it", () => {
     review: "none",
     mergeable: "clean",
     fetched_at: "",
+    error: null,
     ...patch,
   });
 

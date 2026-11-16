@@ -347,6 +347,8 @@ export interface PrStatusRow {
   review: PrReview;
   mergeable: PrMergeable;
   fetched_at: string;
+  // Why the last read failed; the rest is from the read before it.
+  error: string | null;
 }
 
 export interface KnowledgeRow {

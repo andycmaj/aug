@@ -287,6 +287,7 @@ export function seedDemo(): void {
       review: "required",
       mergeable: "clean",
       fetched_at: ago(5),
+      error: null,
     });
 
     // 5. An agent asking you something.
@@ -385,6 +386,7 @@ export function seedDemo(): void {
       review: "approved",
       mergeable: "clean",
       fetched_at: ago(5),
+      error: null,
     });
     const csvTurn = agentTurn(csv, 80, 50, {
       about: "CSV import fails on a byte-order mark.",

@@ -4,6 +4,13 @@
 // clock.
 
 import { parsePrUrl } from "./feedback";
+import {
+  ghTrouble,
+  GhTrouble,
+  GRAPHQL_RESERVE,
+  type GhRemaining,
+  type GithubGate,
+} from "./github-gate";
 import type { Tone } from "./lanes";
 import { errorMessage, logger } from "./log";
 import { messageMeta } from "./meta";
@@ -73,7 +80,8 @@ export function taskPr(task: TaskRow): PrRef | null {
   return null;
 }
 
-// What `gh pr view --json` gives for the fields asked.
+// A PR as GitHub's GraphQL describes it, statusCheckRollup flattened to
+// its contexts (what `gh pr view --json` calls it).
 export interface GhPrView {
   state?: string;
   isDraft?: boolean;
@@ -86,9 +94,6 @@ export interface GhPrView {
     state?: string;
   }[];
 }
-
-export const PR_FIELDS =
-  "state,isDraft,reviewDecision,mergeable,statusCheckRollup";
 
 const FAILED = new Set([
   "FAILURE",
@@ -143,76 +148,250 @@ export function readPrView(
   return { state, checks: rollup(view.statusCheckRollup), review, mergeable };
 }
 
-export type PrViewer = (url: string) => Promise<GhPrView>;
+// What one call for several PRs came back with: each PR's view or why it
+// could not be read, and what is left of the GraphQL budget. A fetch that
+// throws failed as a whole (a rate limit, a 502, a dropped connection).
+export interface PrBatch {
+  views: Map<string, GhPrView | Error>;
+  budget: GhRemaining | null;
+}
 
-export async function ghPrView(url: string): Promise<GhPrView> {
-  const proc = Bun.spawn(["gh", "pr", "view", url, "--json", PR_FIELDS], {
-    stdout: "pipe",
-    stderr: "pipe",
+export type PrFetch = (prs: PrRef[]) => Promise<PrBatch>;
+
+// One GraphQL query reads a batch, where `gh pr view` costs a call per PR.
+export const PR_BATCH = 25;
+
+const PR_FRAGMENT = `fragment pr on PullRequest {
+  state isDraft reviewDecision mergeable
+  commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
+    __typename
+    ... on CheckRun { status conclusion }
+    ... on StatusContext { state }
+  } } } } } }
+}`;
+
+export function prBatchQuery(prs: PrRef[]): string {
+  const fields = prs.map((p, i) => {
+    const [owner, name] = p.repo.split("/");
+    return `p${i}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { pullRequest(number: ${p.number}) { ...pr } }`;
   });
+  return `query {\n  rateLimit { remaining resetAt }\n  ${fields.join("\n  ")}\n}\n${PR_FRAGMENT}`;
+}
+
+interface GqlPr extends Omit<GhPrView, "statusCheckRollup"> {
+  commits?: {
+    nodes?: {
+      commit?: {
+        statusCheckRollup?: {
+          contexts?: { nodes?: GhPrView["statusCheckRollup"] };
+        } | null;
+      };
+    }[];
+  };
+}
+
+interface GqlAnswer {
+  data?: Record<string, unknown> | null;
+  errors?: { message?: string; path?: (string | number)[] }[];
+}
+
+export function readPrBatch(prs: PrRef[], answer: GqlAnswer): PrBatch {
+  const errors = answer.errors ?? [];
+  const data = answer.data;
+  if (!data) {
+    const said = errors.map((e) => e.message).filter(Boolean).join("; ");
+    throw new Error(said || "GitHub answered with no data");
+  }
+  const views = new Map<string, GhPrView | Error>();
+  prs.forEach((pr, i) => {
+    const alias = `p${i}`;
+    const repo = data[alias] as { pullRequest?: GqlPr | null } | null;
+    const node = repo?.pullRequest;
+    if (node) {
+      const { commits, ...rest } = node;
+      const rollup =
+        commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
+      views.set(pr.url, { ...rest, statusCheckRollup: rollup });
+      return;
+    }
+    const said = errors.find((e) => e.path?.[0] === alias)?.message;
+    views.set(pr.url, new Error(said ?? "not found"));
+  });
+  const budget = data.rateLimit as GhRemaining | null | undefined;
+  return { views, budget: budget ?? null };
+}
+
+export async function ghPrBatch(prs: PrRef[]): Promise<PrBatch> {
+  const proc = Bun.spawn(
+    ["gh", "api", "graphql", "-f", `query=${prBatchQuery(prs)}`],
+    { stdout: "pipe", stderr: "pipe" },
+  );
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
-  if (code !== 0) throw new Error(err.trim() || `gh pr view exited ${code}`);
-  return JSON.parse(out) as GhPrView;
+  // gh exits 1 when any PR in the batch errs (one deleted, one private) but
+  // still prints the answer; only an answer with no data failed as a whole.
+  let answer: GqlAnswer | null = null;
+  try {
+    answer = JSON.parse(out) as GqlAnswer;
+  } catch {
+    answer = null;
+  }
+  if (answer?.data) return readPrBatch(prs, answer);
+  if (code === 0 && answer) return readPrBatch(prs, answer);
+  throw new Error(err.trim() || `gh api graphql exited ${code}`);
 }
 
-export async function refreshPrStatus(
-  task: TaskRow,
-  view: PrViewer = ghPrView,
-): Promise<PrStatusRow | null> {
-  const pr = taskPr(task);
-  if (!pr) return null;
+function setFromView(task: TaskRow, pr: PrRef, view: GhPrView): PrStatusRow {
   const row: PrStatusRow = {
     task_id: task.id,
     ...pr,
-    ...readPrView(await view(pr.url)),
+    ...readPrView(view),
     fetched_at: new Date().toISOString(),
+    error: null,
   };
   store.setPrStatus(row);
   return row;
 }
 
-// Work still in front of the owner, whose PR can still change. A merged PR
-// is read once more only if the task now points at another PR.
-function wantsRefresh(task: TaskRow): boolean {
-  if (task.status !== TaskStatus.open && task.status !== TaskStatus.later)
-    return false;
+export async function refreshPrStatus(
+  task: TaskRow,
+  fetch: PrFetch = ghPrBatch,
+): Promise<PrStatusRow | null> {
   const pr = taskPr(task);
-  if (!pr) return false;
-  const last = store.prStatus(task.id);
-  return !(last && last.url === pr.url && last.state === PrState.merged);
+  if (!pr) return null;
+  const got = (await fetch([pr])).views.get(pr.url);
+  if (!got) throw new Error("not found");
+  if (got instanceof Error) throw got;
+  return setFromView(task, pr, got);
 }
 
-// One at a time: a dozen PRs is a dozen gh calls, not a burst.
+// A closed PR can be reopened, but rarely: it is read again now and then.
+const CLOSED_EVERY_MS = 30 * 60_000;
+
+// Work still in front of the owner, whose PR can still change. A merged PR
+// is read once more only if the task now points at another PR.
+function wantsRefresh(task: TaskRow): PrRef | null {
+  if (task.status !== TaskStatus.open && task.status !== TaskStatus.later)
+    return null;
+  const pr = taskPr(task);
+  if (!pr) return null;
+  const last = store.prStatus(task.id);
+  if (!last || last.url !== pr.url) return pr;
+  if (last.state === PrState.merged) return null;
+  if (
+    last.state === PrState.closed &&
+    !last.error &&
+    Date.now() - Date.parse(last.fetched_at) < CLOSED_EVERY_MS
+  )
+    return null;
+  return pr;
+}
+
+// How a round of PR reads went, for the GitHub status line.
+export interface PrRefresh {
+  asked: number;
+  ok: number;
+  failed: number;
+  // PRs left for later: backing off one by one, or the round stopped early.
+  skipped: number;
+  error: string | null;
+  // The rate limit that stopped the round.
+  limited: string | null;
+  budget: GhRemaining | null;
+}
+
+export interface PrRefreshOptions {
+  fetch?: PrFetch;
+  gate?: GithubGate;
+  reserve?: number;
+}
+
+// A batch at a time, and each answer says how much budget is left: under
+// the reserve, the round stops, and so does one that hit a rate limit.
 export async function refreshPrStatuses(
-  view: PrViewer = ghPrView,
-): Promise<number> {
-  let n = 0;
+  options: PrRefreshOptions = {},
+): Promise<PrRefresh> {
+  const fetch = options.fetch ?? ghPrBatch;
+  const reserve = options.reserve ?? GRAPHQL_RESERVE;
+  const gate = options.gate;
+  const out: PrRefresh = {
+    asked: 0,
+    ok: 0,
+    failed: 0,
+    skipped: 0,
+    error: null,
+    limited: null,
+    budget: null,
+  };
+  // Two tasks can be about the same PR; it is read once.
+  const byUrl = new Map<string, { pr: PrRef; tasks: TaskRow[] }>();
   for (const task of store.listTasks()) {
-    if (!wantsRefresh(task)) continue;
+    const pr = wantsRefresh(task);
+    if (!pr) continue;
+    if (gate && !gate.prAllowed(pr.url)) {
+      out.skipped++;
+      continue;
+    }
+    const entry = byUrl.get(pr.url) ?? { pr, tasks: [] };
+    entry.tasks.push(task);
+    byUrl.set(pr.url, entry);
+  }
+  const wanted = [...byUrl.values()];
+  for (let i = 0; i < wanted.length; i += PR_BATCH) {
+    const chunk = wanted.slice(i, i + PR_BATCH);
+    if (out.limited || (out.budget && out.budget.remaining < reserve)) {
+      out.skipped += chunk.length;
+      continue;
+    }
+    out.asked += chunk.length;
+    let batch: PrBatch;
     try {
-      await refreshPrStatus(task, view);
-      n++;
+      batch = await fetch(chunk.map((c) => c.pr));
     } catch (err) {
-      log.warn("pr status failed", {
-        task: task.id,
-        error: errorMessage(err),
-      });
+      const message = errorMessage(err);
+      log.warn("pr status failed", { prs: chunk.length, error: message });
+      if (ghTrouble(message) === GhTrouble.rateLimit) {
+        out.limited = message;
+        out.asked -= chunk.length;
+        out.skipped += chunk.length;
+        continue;
+      }
+      out.failed += chunk.length;
+      out.error = message;
+      for (const c of chunk)
+        for (const t of c.tasks) store.markPrStale(t.id, message);
+      continue;
+    }
+    if (batch.budget) out.budget = batch.budget;
+    for (const { pr, tasks } of chunk) {
+      const got = batch.views.get(pr.url) ?? new Error("not in the answer");
+      if (got instanceof Error) {
+        log.warn("pr status failed", { pr: pr.url, error: got.message });
+        out.failed++;
+        out.error = got.message;
+        gate?.prFailed(pr.url);
+        for (const t of tasks) store.markPrStale(t.id, got.message);
+        continue;
+      }
+      gate?.prSucceeded(pr.url);
+      for (const t of tasks) setFromView(t, pr, got);
+      out.ok++;
     }
   }
-  return n;
+  return out;
 }
 
 // The one thing worth knowing at a glance, for a rail row: what is in the
-// way first, then what is pending, then ready.
+// way first, then what is pending, then ready. When the last read failed,
+// what it says is old news, and it says so.
 export function prChip(s: PrStatusRow): { text: string; tone: Tone } {
-  const say = (word: string, tone: Tone) => ({
-    text: `#${s.number} ${word}`,
-    tone,
-  });
+  const say = (word: string, tone: Tone) =>
+    s.error
+      ? { text: `#${s.number} ${word} · stale`, tone: "muted" as const }
+      : { text: `#${s.number} ${word}`, tone };
   if (s.state === PrState.merged) return say("merged", "muted");
   if (s.state === PrState.closed) return say("closed", "muted");
   if (s.mergeable === PrMergeable.conflict) return say("✗ conflict", "error");
@@ -247,6 +426,7 @@ export function prLine(s: PrStatusRow): string {
     open ? CHECK_WORDS[s.checks] : "",
     open ? REVIEW_WORDS[s.review] : "",
     open && s.mergeable === PrMergeable.conflict ? "conflicts" : "",
+    s.error ? `stale, last read failed: ${s.error}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
