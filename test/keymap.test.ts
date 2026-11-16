@@ -5,7 +5,8 @@ import {
   getScopeBindings,
 } from "@andycmaj/opentui-app";
 import { RAIL_FILTERS } from "../src/core/rail";
-import { keymap, type HelpCtx } from "../src/keymap";
+import { Commands } from "../src/commands";
+import { buildKeymap, keymap, type HelpCtx } from "../src/keymap";
 
 const ITEMS: HelpCtx["item"][] = ["task", "fyi", "idea", "project", null];
 const KINDS = ["home", "system", "coding", "task", "chat", null];
@@ -112,4 +113,23 @@ test("each rail filter pill has its digit", () => {
   const digits = getScopeBindings(keymap, "rail").filter((b) => /^[1-9]$/.test(b.keys));
   expect(digits.length).toBe(RAIL_FILTERS.length);
   expect(new Set(digits.map((b) => b.cmd)).size).toBe(RAIL_FILTERS.length);
+});
+
+const keyFor = (table: typeof keymap, scope: string, cmd: string) =>
+  (table[scope] ?? []).filter((b) => b.cmd === cmd).map((b) => b.key);
+
+// The go-to chord must be in the terminal's own table: that is what lets it
+// past an attached agent (useKeyPassthrough lets a scope's keys through).
+test("the go-to chord works anywhere, an attached terminal too", () => {
+  expect(keyFor(keymap, "app", Commands.GO_TO)).toEqual(["ctrl+\\"]);
+  expect(keyFor(keymap, "terminal", Commands.GO_TO)).toEqual(["ctrl+\\"]);
+});
+
+test("config moves the navigation keys in every scope that binds them", () => {
+  const table = buildKeymap({ goTo: "ctrl+o", back: "alt+left" });
+  expect(keyFor(table, "app", Commands.GO_TO)).toEqual(["ctrl+o"]);
+  expect(keyFor(table, "terminal", Commands.GO_TO)).toEqual(["ctrl+o"]);
+  expect(keyFor(table, "app", Commands.HISTORY_BACK)).toEqual(["alt+left"]);
+  expect(keyFor(table, "app", Commands.HISTORY_FORWARD)).toEqual(["]"]);
+  expect(buildKeymap({})).toBe(keymap);
 });

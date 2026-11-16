@@ -9,6 +9,7 @@ import {
   type KeymapTable,
 } from "@andycmaj/opentui-app";
 import { Commands } from "./commands";
+import type { NavKeys } from "./core/config";
 import { RAIL_FILTERS } from "./core/rail";
 
 // What the footer needs to know to show only the moves that apply.
@@ -300,7 +301,19 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   },
 ];
 
-export const keymap: KeymapTable<HelpCtx> = {
+// The navigation keys and the config field that moves each.
+const NAV_DEFAULTS: Required<NavKeys> = {
+  goTo: "ctrl+\\",
+  back: "[",
+  forward: "]",
+};
+const NAV_COMMANDS: Record<keyof NavKeys, string> = {
+  goTo: Commands.GO_TO,
+  back: Commands.HISTORY_BACK,
+  forward: Commands.HISTORY_FORWARD,
+};
+
+const defaultKeymap: KeymapTable<HelpCtx> = {
   app: quietWhileTyping([
     ...(baseAppBindings as BindingSpec<HelpCtx>[]),
     {
@@ -321,12 +334,30 @@ export const keymap: KeymapTable<HelpCtx> = {
       desc: "next (walk the rail)",
       help: "next",
     },
-    { key: "b", cmd: Commands.WALK_BACK, desc: "back" },
+    { key: "b", cmd: Commands.WALK_BACK, desc: "previous (walk the rail backwards)" },
     {
       key: "/",
       cmd: Commands.SEARCH_OPEN,
       desc: "search the rail: words, AUG-23, #412, @someone",
       help: "search",
+    },
+    // The go-to chord works while typing and while attached (see terminal):
+    // it is a control key, so it never reaches the box or the agent.
+    {
+      key: NAV_DEFAULTS.goTo,
+      cmd: Commands.GO_TO,
+      desc: "go to anything: search the rail from anywhere; 1-9 a recent row",
+      help: "go to",
+    },
+    {
+      key: NAV_DEFAULTS.back,
+      cmd: Commands.HISTORY_BACK,
+      desc: "back to where you were (history)",
+    },
+    {
+      key: NAV_DEFAULTS.forward,
+      cmd: Commands.HISTORY_FORWARD,
+      desc: "forward again (history)",
     },
     { key: "shift+n", cmd: Commands.NEW_TASK, desc: "new task" },
     {
@@ -389,6 +420,12 @@ export const keymap: KeymapTable<HelpCtx> = {
       desc: "detach from the terminal",
       help: "detach",
     },
+    {
+      key: NAV_DEFAULTS.goTo,
+      cmd: Commands.GO_TO,
+      desc: "detach and go to anything",
+      help: "go to",
+    },
   ],
   board: [
     ...(listNav as BindingSpec<HelpCtx>[]),
@@ -430,3 +467,26 @@ export const keymap: KeymapTable<HelpCtx> = {
     { key: "shift+p", cmd: Commands.PR_DASH, desc: "its PR in ghdash (in Chat)" },
   ],
 };
+
+// The table with config's navigation keys in place of the defaults, in every
+// scope that binds them (the go-to chord is in the terminal's too, which is
+// what lets it past an attached agent).
+export function buildKeymap(keys: NavKeys = {}): KeymapTable<HelpCtx> {
+  const byCmd = new Map<string, string>();
+  for (const [field, cmd] of Object.entries(NAV_COMMANDS) as [keyof NavKeys, string][]) {
+    const key = keys[field];
+    if (key && key !== NAV_DEFAULTS[field]) byCmd.set(cmd, key);
+  }
+  if (byCmd.size === 0) return defaultKeymap;
+  return Object.fromEntries(
+    Object.entries(defaultKeymap).map(([scope, specs]) => [
+      scope,
+      specs.map((spec) => {
+        const key = byCmd.get(spec.cmd);
+        return key ? { ...spec, key } : spec;
+      }),
+    ]),
+  );
+}
+
+export const keymap = defaultKeymap;

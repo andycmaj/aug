@@ -24,6 +24,15 @@ export interface NoiseRule {
   githubReason?: string[];
 }
 
+export interface NavKeys {
+  // Go to anything (search the rail) from anywhere, an agent's terminal too.
+  // Default ctrl+\ (written "ctrl+\\" in JSON), beside ctrl+] (detach).
+  goTo?: string;
+  // Back and forward through the places you have been. Default [ and ].
+  back?: string;
+  forward?: string;
+}
+
 export interface AugConfig {
   github: {
     enabled: boolean;
@@ -77,6 +86,9 @@ export interface AugConfig {
     noise: NoiseRule[];
   };
   theme: "default" | "terminal" | "mono" | "tokyo-night";
+  // The TUI's navigation keys, in opentui's spelling ("alt+g", "shift+h").
+  // Read at start: a change needs a restart.
+  keys?: NavKeys;
   // Where a coding task with no mapped checkout works.
   scratchRepo?: string;
   // Folders searched for checkouts to offer (repos.ts); default ~/workspace,

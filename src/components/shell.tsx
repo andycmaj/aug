@@ -59,10 +59,16 @@ export function useShell(opts: {
     showToast("Checking GitHub and Slack...");
     void aug.engine.pollNow();
   };
-  // A row found from the Board opens in Chat, where the table is.
+  // A row found from the Board opens in Chat, where the table is. A jump
+  // lands on the rail, never attached: the row it picks may be another
+  // agent's terminal, and keys must not start going to it unasked.
   const openFromSearch = (key: string) => {
-    aug.setMode(ViewMode.chat);
-    aug.select(key);
+    if (focus.isPaneFocused("task")) focus.setActivePane("rail");
+    aug.goTo(key);
+  };
+  const history = (direction: 1 | -1) => {
+    if (!aug.history(direction))
+      showToast(direction < 0 ? "Nowhere further back" : "Nowhere further forward");
   };
   const advisor = () => {
     showToast("The Advisor is reading your work...");
@@ -89,6 +95,10 @@ export function useShell(opts: {
       }),
       [Commands.WALK_BACK]: unlessTyping(() => actions.walk(-1)),
       [Commands.SEARCH_OPEN]: unlessTyping(() => openModal("search")),
+      // A control chord: from the chat box too.
+      [Commands.GO_TO]: () => openModal("search"),
+      [Commands.HISTORY_BACK]: unlessTyping(() => history(-1)),
+      [Commands.HISTORY_FORWARD]: unlessTyping(() => history(1)),
     },
     { target: () => layout },
   );
@@ -104,9 +114,23 @@ export function useShell(opts: {
     {
       id: "search",
       group: "Work",
-      label: "Search the rail",
+      label: "Go to: search the rail, or a recent row",
       hint: "/",
       run: () => openModal("search"),
+    },
+    {
+      id: "history-back",
+      group: "Work",
+      label: "Back to where you were",
+      hint: aug.desk.config().keys?.back ?? "[",
+      run: () => history(-1),
+    },
+    {
+      id: "history-forward",
+      group: "Work",
+      label: "Forward again",
+      hint: aug.desk.config().keys?.forward ?? "]",
+      run: () => history(1),
     },
     {
       id: "new",

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { buildRail, type RailSection } from "../src/core/rail";
-import { search, searchIndex } from "../src/core/search";
+import { goToList, search, searchIndex } from "../src/core/search";
 import * as store from "../src/core/store";
 import { Kind, TaskStatus, TurnRole } from "../src/core/types";
 import { freshHome } from "./helpers";
@@ -283,5 +283,38 @@ describe("search", () => {
       body: "Reminded today",
     });
     expect(find("reminded")).toEqual([]);
+  });
+});
+
+describe("go-to list", () => {
+  beforeEach(() => freshHome());
+
+  function docs() {
+    const sections = rail();
+    return searchIndex(sections, { messages: new Map(), turns: new Map() });
+  }
+
+  test("with nothing typed, recent rows come first, numbered, then the rest", () => {
+    const [a, b, c] = ["Alpha", "Bravo", "Charlie"].map((title) =>
+      store.createTask({ title, kind: Kind.task, channel: "owner" }),
+    );
+    const list = goToList(docs(), "", [`t${c.id}`, "t9999", `t${a.id}`]);
+    expect(list.slice(0, 2).map((h) => [h.recent, h.title])).toEqual([
+      [1, "Charlie"],
+      [2, "Alpha"],
+    ]);
+    const rest = list.slice(2).map((h) => h.title);
+    expect(rest).toContain("Bravo");
+    expect(rest).not.toContain("Alpha");
+    expect(rest).not.toContain("Charlie");
+    expect(list.slice(2).every((h) => h.recent === undefined)).toBe(true);
+    void b;
+  });
+
+  test("typing searches, recent or not", () => {
+    const a = store.createTask({ title: "Alpha", kind: Kind.task, channel: "owner" });
+    store.createTask({ title: "Bravo", kind: Kind.task, channel: "owner" });
+    const list = goToList(docs(), "bravo", [`t${a.id}`]);
+    expect(list.map((h) => [h.recent, h.title])).toEqual([[undefined, "Bravo"]]);
   });
 });

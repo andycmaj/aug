@@ -15,6 +15,9 @@ export const Commands = {
   WALK_NEXT: "walk.next",
   WALK_BACK: "walk.back",
   SEARCH_OPEN: "search.open",
+  GO_TO: "nav.goto",
+  HISTORY_BACK: "nav.history.back",
+  HISTORY_FORWARD: "nav.history.forward",
 
   // On the item at the cursor / on the table
   OPEN: "item.open",

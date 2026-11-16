@@ -23,7 +23,7 @@ import { paths } from "../core/paths";
 import type { InfoSection } from "../core/info";
 import { actionText, describeAction } from "../core/outbound";
 import type { RailItem } from "../core/rail";
-import { search, searchIndex } from "../core/search";
+import { goToList, RECENT_SHOWN, searchIndex, type SearchHit } from "../core/search";
 import { taskRef } from "../core/rows";
 import { Kind, type DraftAction } from "../core/types";
 import { stateColor, stateGlyph } from "./connector-line";
@@ -427,8 +427,19 @@ function searchTag(item: RailItem): string {
   }
 }
 
-// /: every row on the rail, folded and For later ones too. Picking one puts
-// it on the table.
+// With nothing typed, a digit takes the recent row it numbers. Typed after
+// anything else it is part of the search ("aug23" still finds AUG-23).
+const RECENT_BINDINGS: BindingSpec[] = Array.from(
+  { length: RECENT_SHOWN },
+  (_, i) => ({
+    key: `${i + 1}`,
+    cmd: `goto.recent.${i + 1}`,
+    desc: `recent row ${i + 1}`,
+  }),
+);
+
+// / and the go-to chord: every row on the rail, folded and For later ones
+// too, the ones seen lately first. Picking one puts it on the table.
 export function SearchModal(props: {
   onPick: (key: string) => void;
   onClose: () => void;
@@ -449,24 +460,41 @@ export function SearchModal(props: {
     scrollRef: () => scrollRef,
     visibleItems: SEARCH_ROWS,
   });
-  const hits = createMemo(() => search(docs(), nav.filter()));
+  // Read once: what was recent when the list opened.
+  const recentKeys = aug.recent().map((i) => i.key);
+  const hits = createMemo(() => goToList(docs(), nav.filter(), recentKeys));
+  const pick = (hit: SearchHit | undefined) => {
+    if (!hit) return false;
+    props.onClose();
+    props.onPick(hit.item.key);
+  };
+  const recentCommands = Object.fromEntries(
+    RECENT_BINDINGS.map((b, i) => [
+      b.cmd,
+      () =>
+        nav.filter().trim()
+          ? false
+          : pick(hits().find((h) => h.recent === i + 1)),
+    ]),
+  );
   return (
     <Modal
       size="lg"
       onClose={props.onClose}
-      bindings={modalNavBindings}
+      bindings={[...modalNavBindings, ...RECENT_BINDINGS]}
       commands={{
         [ModalCommands.MODAL_DOWN]: () => nav.move(1),
         [ModalCommands.MODAL_UP]: () => nav.move(-1),
         [ModalCommands.MODAL_SELECT]: () => {
-          const hit = hits()[nav.selected()];
-          if (!hit) return;
-          props.onClose();
-          props.onPick(hit.item.key);
+          pick(hits()[nav.selected()]);
         },
+        ...recentCommands,
       }}
     >
-      <ModalHeader title="Search the rail" hint="↵ open · esc" />
+      <ModalHeader
+        title="Go to"
+        hint={recentKeys.length ? "↵ open · 1-9 recent · esc" : "↵ open · esc"}
+      />
       <ModalFilterInput
         onInput={nav.setFilter}
         placeholder="words, AUG-23, #412, @someone (Slack or GitHub)"
@@ -497,6 +525,9 @@ export function SearchModal(props: {
                   paddingRight={1}
                   backgroundColor={on() ? theme.primary : undefined}
                 >
+                  <text width={1} flexShrink={0} fg={fg() ?? theme.warning}>
+                    {hit.recent ? `${hit.recent}` : " "}
+                  </text>
                   <text width={8} flexShrink={0} fg={fg() ?? theme.accent}>
                     {searchTag(hit.item)}
                   </text>
@@ -512,7 +543,11 @@ export function SearchModal(props: {
                   </box>
                   <text flexShrink={0} fg={fg() ?? theme.textMuted}>
                     {truncate(
-                      hit.why ? `${hit.why} · ${hit.section}` : hit.section,
+                      hit.why
+                        ? `${hit.why} · ${hit.section}`
+                        : hit.recent
+                          ? `recent · ${hit.section}`
+                          : hit.section,
                       SEARCH_HINT_MAX,
                     )}
                   </text>

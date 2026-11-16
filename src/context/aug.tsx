@@ -6,6 +6,7 @@
 
 import {
   batch,
+  createEffect,
   createMemo,
   createSignal,
   onCleanup,
@@ -35,6 +36,7 @@ import {
   type RailSection,
 } from "../core/rail";
 import { onChange } from "../core/store";
+import { NavHistory, type Place } from "../core/nav-history";
 import { useRenderPerf } from "./render-perf";
 import { AgentState, type TaskRow } from "../core/types";
 
@@ -68,6 +70,13 @@ interface AugContextValue extends ReadModel {
   cursorItem: Accessor<RailItem | null>;
   moveCursor: (key: string | null) => void;
   walk: (direction: 1 | -1) => string | null;
+  // Puts a row on Chat's table from anywhere (the Board too): a jump.
+  goTo: (key: string) => void;
+  // Back and forward through the places you have been (core/nav-history).
+  // False when there is nowhere to go.
+  history: (direction: 1 | -1) => boolean;
+  // Rows seen lately, most recent first, the one on the table left out.
+  recent: Accessor<RailItem[]>;
   pending: Accessor<Set<number>>;
   facts: (task: TaskRow) => LaneFacts;
   board: Accessor<Record<BoardColumn, TaskRow[]>>;
@@ -286,6 +295,53 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     return key;
   }
 
+  function goTo(key: string) {
+    batch(() => {
+      setMode(ViewMode.chat);
+      select(key);
+    });
+  }
+
+  // Every way to change the table or the view (open, walk, search, Home, v)
+  // is a visit. Recorded after the handler that moved it is done, so a
+  // switch to Chat and a select in one key make one visit, not two.
+  const trail = new NavHistory();
+  const [trailMoved, setTrailMoved] = createSignal(0);
+  let recordQueued = false;
+  const here = (): Place | null => {
+    if (mode() === ViewMode.board) return { view: "board" };
+    const key = selectedKey();
+    return key ? { view: "chat", key } : null;
+  };
+  createEffect(() => {
+    mode();
+    selectedKey();
+    if (recordQueued) return;
+    recordQueued = true;
+    queueMicrotask(() => {
+      recordQueued = false;
+      const place = here();
+      if (!place) return;
+      trail.visit(place);
+      setTrailMoved((n) => n + 1);
+    });
+  });
+  const exists = (place: Place) =>
+    place.view === "board" || items().some((i) => i.key === place.key);
+  function history(direction: 1 | -1): boolean {
+    redraw.flush();
+    const place = direction < 0 ? trail.back(exists) : trail.forward(exists);
+    if (!place) return false;
+    if (place.view === "board") setMode(ViewMode.board);
+    else goTo(place.key);
+    return true;
+  }
+  const recent = createMemo(() => {
+    trailMoved();
+    const byKey = new Map(items().map((i) => [i.key, i]));
+    return trail.recent().flatMap((k) => byKey.get(k) ?? []);
+  });
+
   const anyWorking = createMemo(() =>
     items().some(
       (i) => i.type === "task" && i.task.agent_state === AgentState.working,
@@ -318,6 +374,9 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
         cursorItem,
         moveCursor: setCursorKey,
         walk,
+        goTo,
+        history,
+        recent,
         pending,
         facts: (task) => ({ hasPendingAction: pending().has(task.id) }),
         board,

@@ -176,6 +176,14 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   means one thing for any row. A view's own `KeyHints` use the footer's words.
 - Keymap layers run before a focused `<input>`. Any handler reachable while the
   chat box has focus must decline (`unlessTyping`).
+- A key listed in the `terminal` scope gets past an attached agent (the
+  passthrough lets that scope's keys through): `ctrl+]` detaches, and the
+  go-to chord (`ctrl+\`, `keys.goTo` in config) detaches and opens the
+  search list. `buildKeymap` swaps config's navigation keys in at start.
+- Navigation history is `core/nav-history.ts`, held by the aug context:
+  every change of the table's row or the view is a visit (recorded once per
+  handler, so a switch plus a select is one), `[`/`]` go back and forward,
+  and the go-to list numbers the recent rows 1-9.
 - A `Pane` is `flexShrink=0`, so a growing child (scrollbox, terminal host)
   needs `flexBasis={0}` or it pushes the footer off-screen.
 

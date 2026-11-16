@@ -11,7 +11,7 @@ import {
   type Renderable,
 } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
-import { useKeyPassthrough, useScope, useTheme } from "@andycmaj/opentui-app";
+import { useFocus, useKeyPassthrough, useScope, useTheme } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useTerminals } from "../context/terminals";
 import { encodeKey } from "../terminal/key-encode";
@@ -87,9 +87,19 @@ export function TerminalHost(props: {
   renderer.keyInput.on("paste", onPaste);
   onCleanup(() => renderer.keyInput.off("paste", onPaste));
 
+  // The go-to chord is reserved here like detach, so it gets past the agent:
+  // it detaches first, so closing the list (or picking another agent's row)
+  // never leaves keys going to a terminal.
+  const { openModal } = useFocus();
   useScope(
     "terminal",
-    { [Commands.TERMINAL_DETACH]: () => props.onDetach() },
+    {
+      [Commands.TERMINAL_DETACH]: () => props.onDetach(),
+      [Commands.GO_TO]: () => {
+        props.onDetach();
+        openModal("search");
+      },
+    },
     { target: props.pane },
   );
 

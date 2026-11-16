@@ -16,7 +16,7 @@ import { TerminalsProvider } from "./context/terminals";
 import type { Engine } from "./core/engine";
 import { BoardMode } from "./components/board-mode";
 import { ChatMode } from "./components/chat-mode";
-import { BOARD_PANES, CHAT_PANES, keymap } from "./keymap";
+import { BOARD_PANES, buildKeymap, CHAT_PANES } from "./keymap";
 import type { KeymapTable } from "@andycmaj/opentui-app";
 
 function Modes() {
@@ -38,6 +38,8 @@ function Modes() {
 }
 
 export function App(props: { engine: Engine; theme?: ThemeName }) {
+  // Config's navigation keys are read once: the keymap engine binds at start.
+  const keymap = buildKeymap(props.engine.desk.config().keys);
   return (
     <ThemeProvider name={props.theme}>
       <AugProvider engine={props.engine}>
