@@ -60,6 +60,11 @@ interface TerminalsValue {
   // A host box adopts the session's renderable and sizes it; returns the
   // release function for onCleanup.
   adopt: (id: string, host: BoxRenderable) => () => void;
+  // The terminal whose host passes every key to it, if any: the footer and
+  // help show only its own keys then. A host claims it while attached and
+  // running; the claim returns its release.
+  attached: Accessor<string | null>;
+  claimKeys: (id: string) => () => void;
 }
 
 const [TerminalsContext, useTerminals] =
@@ -76,6 +81,7 @@ export function TerminalsProvider(props: ParentProps) {
   const dims = useTerminalDimensions();
   const terms = new Map<string, Term>();
   const [list, setList] = createSignal<TermState[]>([]);
+  const [attached, setAttached] = createSignal<string | null>(null);
 
   const publish = () =>
     setList(
@@ -225,6 +231,11 @@ export function TerminalsProvider(props: ParentProps) {
         },
         close,
         adopt,
+        attached,
+        claimKeys: (id) => {
+          setAttached(id);
+          return () => setAttached((cur) => (cur === id ? null : cur));
+        },
       }}
     >
       {props.children}

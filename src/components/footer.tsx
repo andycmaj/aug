@@ -1,29 +1,67 @@
-// Context-aware key hints for the active pane, filtered to the moves that
-// apply to the item on the table, plus the view switch on the right.
+// Key hints for the focused pane: the bindings reachable from it that apply
+// to the item under it (`helpBindings`), plus the view switch on the right.
 
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, For, Show, type Accessor } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
-import { useHelpItems, useTheme } from "@andycmaj/opentui-app";
+import {
+  getHelpItems,
+  useReachableBindings,
+  useTheme,
+  type HelpBinding,
+  type HelpItem,
+  type HelpItemOptions,
+} from "@andycmaj/opentui-app";
 import { useAug, ViewMode } from "../context/aug";
-import type { HelpCtx } from "../keymap";
+import { helpBindings, type HelpCtx } from "../keymap";
 
-export function AugFooter(props: { ctx: () => HelpCtx; left?: number }) {
+// "escape" reads better as "esc" in a hint line.
+const KEY_WORDS: Record<string, string> = { escape: "esc" };
+export const keyLabel = (keys: string) => KEY_WORDS[keys] ?? keys;
+
+// The reachable bindings that apply here, recomputed on focus, keymap and
+// context changes. The footer and the ? help both read this.
+export function useFocusBindings(
+  ctx: Accessor<HelpCtx>,
+): Accessor<HelpBinding[]> {
+  const reachable = useReachableBindings();
+  return () =>
+    helpBindings(reachable(), ctx()).map((b) => ({
+      ...b,
+      keys: keyLabel(b.keys),
+    }));
+}
+
+// Drop hints from the end until the line fits, but keep "? help" last: it is
+// how to see the rest.
+export function fitHints(items: HelpItem[], width: number): HelpItem[] {
+  const cost = (item: HelpItem) => item.keys.length + item.text.length + 4;
+  const help = items.find((item) => item.text === "help");
+  let budget = width - (help ? cost(help) : 0);
+  const out: HelpItem[] = [];
+  for (const item of items) {
+    if (item === help) continue;
+    if (budget - cost(item) < 0) break;
+    budget -= cost(item);
+    out.push(item);
+  }
+  return help ? [...out, help] : out;
+}
+
+export function AugFooter(props: {
+  ctx: Accessor<HelpCtx>;
+  left?: number;
+  options?: HelpItemOptions;
+}) {
   const theme = useTheme();
   const aug = useAug();
   const dims = useTerminalDimensions();
-  const items = useHelpItems<HelpCtx>(props.ctx);
-  const visible = createMemo(() => {
-    // Drop hints from the end until the line fits beside the view switch.
-    let budget = dims().width - (props.left ?? 0) - 22;
-    const out = [];
-    for (const item of items()) {
-      const w = item.keys.length + item.text.length + 4;
-      if (budget - w < 0) break;
-      budget -= w;
-      out.push(item);
-    }
-    return out;
-  });
+  const bindings = useFocusBindings(() => props.ctx());
+  const visible = createMemo(() =>
+    fitHints(
+      getHelpItems(bindings(), props.options),
+      dims().width - (props.left ?? 0) - 22,
+    ),
+  );
 
   return (
     <box

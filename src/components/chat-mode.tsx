@@ -98,6 +98,7 @@ export function ChatMode() {
       ...baseCtx(),
       typing: isPaneFocused("input"),
       filtered: aug.railFilter().size > 0,
+      attached: terminals.attached() !== null,
     }),
   );
 
@@ -118,7 +119,7 @@ export function ChatMode() {
           <box height={1} flexShrink={0} />
         </box>
       </box>
-      <shell.Modals />
+      <shell.Modals ctx={ctx} />
       <Show when={dims().width < 80}>
         <text fg={theme.warning}>widen the terminal for the full rail</text>
       </Show>

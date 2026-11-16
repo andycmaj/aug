@@ -174,6 +174,12 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   command per meaning, each `relevant` to its rows and declining the others,
   so the footer names the one that applies; `test/keymap.test.ts` checks a key
   means one thing for any row. A view's own `KeyHints` use the footer's words.
+- The footer and the `?` help (`components/focus-help.tsx`) show the same
+  thing: the bindings reachable from the focused pane, through
+  `helpBindings` in `keymap.ts` (relevant to `HelpCtx` first, then the first
+  binding per key; only the `terminal` scope while one is attached). A
+  binding that applies only sometimes says so with `relevant`, or both will
+  list it where it does nothing. The Board's tab is `HelpCtx.board`.
 - Keymap layers run before a focused `<input>`. Any handler reachable while the
   chat box has focus must decline (`unlessTyping`).
 - A key listed in the `terminal` scope gets past an attached agent (the

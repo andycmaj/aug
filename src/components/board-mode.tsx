@@ -25,25 +25,21 @@ import { goalRef, noteReadBy, projectRepos, taskRef } from "../core/rows";
 import {
   AgentState,
   GoalStatus,
+  Kind,
   NoteLabel,
   TaskStatus,
   type KnowledgeRow,
   type ProjectRow,
   type TaskRow,
 } from "../core/types";
-import type { HelpCtx } from "../keymap";
+import { BOARD_HELP_OPTIONS, BoardTab, type HelpCtx } from "../keymap";
 import { AugFooter } from "./footer";
 import { ChoiceModal, PromptModal } from "./modals";
 import { useShell } from "./shell";
 import { duration, toneColor } from "./ui";
 
-const Tab = {
-  columns: "columns",
-  notes: "notes",
-  knowledge: "knowledge",
-  projects: "projects",
-} as const;
-type Tab = (typeof Tab)[keyof typeof Tab];
+const Tab = BoardTab;
+type Tab = BoardTab;
 const TABS: { key: Tab; label: string }[] = [
   { key: "columns", label: "1 Columns" },
   { key: "notes", label: "2 Live handoffs" },
@@ -140,13 +136,10 @@ export function BoardMode() {
     fn(aug.task(t.id) ?? t);
   };
 
-  function compose() {
-    if (tab() === Tab.projects) {
-      shell.actions.newProject();
-      return;
-    }
-    if (tab() === Tab.knowledge) {
-      shell.dialogs.show(() => (
+  // c means one thing per tab, one command each, so the footer names it.
+  function composeKnowledge() {
+    if (tab() !== Tab.knowledge) return false;
+    shell.dialogs.show(() => (
         <PromptModal
           title="Knowledge: a durable discovery"
           hint="topic: title - what was learned. Short-lived coordination belongs in Live handoffs."
@@ -166,8 +159,10 @@ export function BoardMode() {
           onClose={shell.dialogs.close}
         />
       ));
-      return;
-    }
+  }
+
+  function compose() {
+    if (tab() !== Tab.columns && tab() !== Tab.notes) return false;
     shell.dialogs.show(() => (
       <ChoiceModal
         title="Leave a live handoff for the agents"
@@ -269,6 +264,11 @@ export function BoardMode() {
         if (t) openInChat(t);
       },
       [Commands.BOARD_COMPOSE]: compose,
+      [Commands.BOARD_COMPOSE_KNOWLEDGE]: composeKnowledge,
+      [Commands.PROJECT_NEW]: () => {
+        if (tab() !== Tab.projects) return false;
+        shell.actions.newProject();
+      },
       [Commands.START]: onTask(shell.actions.start),
       [Commands.STOP]: onTask(shell.actions.stop),
       [Commands.JUMP]: () => {
@@ -290,16 +290,23 @@ export function BoardMode() {
     { target: p.target },
   );
 
-  const ctx = (): HelpCtx => ({
-    item: target() ? "task" : null,
-    kind: target()?.kind ?? null,
-    hasDraft: false,
-    live: false,
-    coding: target()?.kind === "coding",
-    watching: false,
-    started: false,
-    pr: Boolean(target() && aug.taskPr(target()!)),
-  });
+  const ctx = (): HelpCtx => {
+    const t = target();
+    const line = tab() === Tab.projects ? projectLine() : null;
+    return {
+      item: t ? "task" : line ? "project" : null,
+      kind: t?.kind ?? null,
+      hasDraft: false,
+      live: Boolean(
+        t && (t.agent_state === AgentState.working || aug.isLive(t)),
+      ),
+      coding: t?.kind === Kind.coding,
+      watching: false,
+      started: false,
+      pr: Boolean(t && aug.taskPr(t)),
+      board: tab(),
+    };
+  };
 
   return (
     <box
@@ -428,10 +435,10 @@ export function BoardMode() {
             </Match>
           </Switch>
         </box>
-        <AugFooter ctx={ctx} />
+        <AugFooter ctx={ctx} options={BOARD_HELP_OPTIONS} />
         <box height={1} flexShrink={0} />
       </box>
-      <shell.Modals />
+      <shell.Modals ctx={ctx} />
     </box>
   );
 }

@@ -1,11 +1,14 @@
 // Declarative keymap: framework base bindings plus aug's own, keyed by scope.
 // "app" applies anywhere in a mode's pane layout; the rest while focus is
-// within that pane. Footer, palette and help all read this table.
+// within that pane. The footer and the ? help both show only what is
+// reachable from the focused pane and `relevant` to what is under it
+// (`helpBindings`), so neither lists a key that would do nothing here.
 
 import {
   baseAppBindings,
   navBindings,
   type BindingSpec,
+  type HelpBinding,
   type KeymapTable,
 } from "@andycmaj/opentui-app";
 import { Commands } from "./commands";
@@ -28,16 +31,73 @@ export interface HelpCtx {
   typing?: boolean;
   // The rail's status filter hides some rows.
   filtered?: boolean;
+  // An embedded terminal owns the keyboard: only its scope's keys reach aug.
+  attached?: boolean;
+  // The Board's tab, while focus is on the Board.
+  board?: BoardTab;
 }
 
-// Hide a binding from the footer while typing (dispatch is unaffected).
+export const BoardTab = {
+  columns: "columns",
+  notes: "notes",
+  knowledge: "knowledge",
+  projects: "projects",
+} as const;
+export type BoardTab = (typeof BoardTab)[keyof typeof BoardTab];
+
+// Section titles for the ? help, one per scope.
+export const SCOPE_LABELS: Record<string, string> = {
+  terminal: "The terminal (every other key goes to it)",
+  input: "The chat box",
+  rail: "The rail",
+  task: "The table",
+  board: "The Board",
+  app: "Anywhere",
+};
+
+// What the footer and help show from the bindings reachable from the focused
+// pane (innermost layer first): only the relevant ones, and only the first for
+// a key, since that is the one that runs. Relevance comes first because a
+// handler that declines a row lets the key fall through to the next binding
+// (x is "read" on an FYI, "archive" on a project). While a terminal is
+// attached, every key but its own goes to it.
+export function helpBindings<B extends HelpBinding<HelpCtx>>(
+  reachable: B[],
+  ctx: HelpCtx,
+): B[] {
+  const claimed = new Set<string>();
+  const out: B[] = [];
+  for (const b of reachable) {
+    if (ctx.attached && b.scope !== "terminal") continue;
+    if (b.relevant && !b.relevant(ctx)) continue;
+    if (claimed.has(b.keys)) continue;
+    claimed.add(b.keys);
+    out.push(b);
+  }
+  return out;
+}
+
+// Keys whose handlers still act while the chat box has focus (shell.tsx
+// wraps the rest in unlessTyping).
+const WORK_WHILE_TYPING = new Set<string>([
+  Commands.FOCUS_NEXT,
+  Commands.SIDEBAR_TOGGLE,
+  Commands.POLL_NOW,
+]);
+
+// Hide a binding from the footer and help while typing: its handler declines
+// then, so the key types instead.
 function quietWhileTyping(
   specs: BindingSpec<HelpCtx>[],
 ): BindingSpec<HelpCtx>[] {
-  return specs.map((spec) => ({
-    ...spec,
-    relevant: (c: HelpCtx) => !c.typing && (spec.relevant?.(c) ?? true),
-  }));
+  return specs.map((spec) =>
+    WORK_WHILE_TYPING.has(spec.cmd)
+      ? spec
+      : {
+          ...spec,
+          relevant: (c: HelpCtx) => !c.typing && (spec.relevant?.(c) ?? true),
+        },
+  );
 }
 
 export const CHAT_PANES = ["rail", "task", "input"];
@@ -75,10 +135,12 @@ const railFilters: BindingSpec<HelpCtx>[] = [
     help: "all",
     relevant: (c) => Boolean(c.filtered),
   },
-  ...RAIL_FILTERS.map((f, i) => ({
+  // One desc for all, so the ? help shows them as one "1-8" row; the rail's
+  // filter bar names each pill beside its digit.
+  ...RAIL_FILTERS.map((_, i) => ({
     key: `${i + 1}`,
     cmd: FILTER_COMMANDS[i],
-    desc: `filter: toggle ${f.mark} ${f.word}`,
+    desc: "filter: toggle that status pill (the bar above the rail)",
   })),
 ];
 
@@ -88,6 +150,8 @@ const isTask = (c: HelpCtx) => c.item === "task";
 const isWork = (c: HelpCtx) =>
   isTask(c) && c.kind !== "home" && c.kind !== "system";
 const isSystem = (c: HelpCtx) => isTask(c) && c.kind === "system";
+const onColumns = (c: HelpCtx) => c.board === BoardTab.columns;
+const onProjects = (c: HelpCtx) => c.board === BoardTab.projects;
 
 // The actions on a row, the same from the rail and from the table.
 const taskActions: BindingSpec<HelpCtx>[] = [
@@ -327,6 +391,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       cmd: Commands.ASK_OPEN,
       desc: "Home: ask the Assistant anything",
       help: "home",
+      relevant: (c) => c.kind !== "home",
     },
     {
       key: "n",
@@ -389,11 +454,13 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     ...railFilters,
     ...taskActions,
   ],
-  task: [
+  // The chat box sits inside the table, so all of these are reachable from
+  // it, and all decline while it has focus.
+  task: quietWhileTyping([
     ...(navBindings() as BindingSpec<HelpCtx>[]),
-    { key: "escape", cmd: Commands.BACK_TO_RAIL, desc: "back to the rail" },
-    ...quietWhileTyping(taskActions),
-  ],
+    { key: "escape", cmd: Commands.BACK_TO_RAIL, desc: "back to the rail", help: "rail" },
+    ...taskActions,
+  ]),
   input: [
     { key: "return", cmd: Commands.INPUT_SUBMIT, desc: "send (or take the @ suggestion)" },
     { key: "tab", cmd: Commands.INPUT_COMPLETE, desc: "@: take the suggestion" },
@@ -429,42 +496,78 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
   ],
   board: [
     ...(listNav as BindingSpec<HelpCtx>[]),
-    { key: "h", cmd: Commands.BOARD_LEFT, desc: "left" },
-    { key: "left", cmd: Commands.BOARD_LEFT, desc: "left" },
-    { key: "l", cmd: Commands.BOARD_RIGHT, desc: "right" },
-    { key: "right", cmd: Commands.BOARD_RIGHT, desc: "right" },
-    { key: "1", cmd: Commands.BOARD_TAB_1, desc: "columns", help: "columns" },
+    { key: "h", cmd: Commands.BOARD_LEFT, desc: "column left", relevant: onColumns },
+    { key: "left", cmd: Commands.BOARD_LEFT, desc: "column left", relevant: onColumns },
+    { key: "l", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
+    { key: "right", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
+    // The footer folds the four into "1-4 tabs" (BOARD_HELP_OPTIONS).
+    { key: "1", cmd: Commands.BOARD_TAB_1, desc: "tab: columns", help: "tabs" },
+    { key: "2", cmd: Commands.BOARD_TAB_2, desc: "tab: live handoffs" },
+    { key: "3", cmd: Commands.BOARD_TAB_3, desc: "tab: knowledge" },
+    { key: "4", cmd: Commands.BOARD_TAB_4, desc: "tab: projects" },
     {
-      key: "2",
-      cmd: Commands.BOARD_TAB_2,
-      desc: "live handoffs",
-      help: "handoffs",
+      key: "return",
+      cmd: Commands.OPEN,
+      desc: "open the task in Chat, or jump to the project's session",
+      help: "open",
+      relevant: (c) => c.item !== null,
     },
-    {
-      key: "3",
-      cmd: Commands.BOARD_TAB_3,
-      desc: "knowledge",
-      help: "knowledge",
-    },
-    { key: "4", cmd: Commands.BOARD_TAB_4, desc: "projects", help: "projects" },
-    { key: "shift+a", cmd: Commands.PROJECT_ADOPT, desc: "projects: adopt a tmux session or a stray claude" },
-    { key: "x", cmd: Commands.PROJECT_ARCHIVE, desc: "projects: archive the project" },
-    { key: "e", cmd: Commands.PROJECT_EDIT, desc: "projects: edit the brief, goals, repos and docs" },
-    { key: "shift+r", cmd: Commands.REPOS, desc: "repos: where each is checked out, and checkouts to add" },
-    { key: "shift+m", cmd: Commands.MOVE_TO_PROJECT, desc: "move the task to a project" },
-    { key: "return", cmd: Commands.OPEN, desc: "open", help: "open" },
     {
       key: "c",
       cmd: Commands.BOARD_COMPOSE,
-      desc: "write a note / knowledge entry",
+      desc: "write a live handoff note",
       help: "write",
+      relevant: (c) => c.board === BoardTab.columns || c.board === BoardTab.notes,
     },
-    { key: "s", cmd: Commands.START, desc: "start / continue the agent" },
-    { key: "shift+s", cmd: Commands.STOP, desc: "stop the agent and save" },
-    { key: "shift+t", cmd: Commands.JUMP, desc: "jump to the agent's tmux window" },
-    { key: "u", cmd: Commands.NUDGE, desc: "nudge the agent about new feedback" },
-    { key: "d", cmd: Commands.DONE, desc: "mark done" },
-    { key: "shift+p", cmd: Commands.PR_DASH, desc: "its PR in ghdash (in Chat)" },
+    {
+      key: "c",
+      cmd: Commands.BOARD_COMPOSE_KNOWLEDGE,
+      desc: "write a knowledge entry",
+      help: "write",
+      relevant: (c) => c.board === BoardTab.knowledge,
+    },
+    {
+      key: "c",
+      cmd: Commands.PROJECT_NEW,
+      desc: "new project",
+      help: "new project",
+      relevant: onProjects,
+    },
+    {
+      key: "e",
+      cmd: Commands.PROJECT_EDIT,
+      desc: "edit the project's brief, goals, repos and docs",
+      help: "brief",
+      relevant: (c) => onProjects(c) && c.item !== null,
+    },
+    {
+      key: "x",
+      cmd: Commands.PROJECT_ARCHIVE,
+      desc: "archive the project",
+      help: "archive",
+      relevant: (c) => onProjects(c) && c.item !== null,
+    },
+    {
+      key: "shift+a",
+      cmd: Commands.PROJECT_ADOPT,
+      desc: "adopt a tmux session or a stray claude as a project",
+      help: "adopt",
+      relevant: onProjects,
+    },
+    { key: "s", cmd: Commands.START, desc: "start / continue the agent", help: "start", relevant: (c) => isWork(c) && !c.live },
+    { key: "shift+s", cmd: Commands.STOP, desc: "stop the agent and save", help: "stop", relevant: (c) => c.live },
+    {
+      key: "shift+t",
+      cmd: Commands.JUMP,
+      desc: "jump your tmux client to the agent's or project's window",
+      help: "jump",
+      relevant: (c) => c.coding || c.item === "project",
+    },
+    { key: "u", cmd: Commands.NUDGE, desc: "nudge the agent about new feedback", relevant: (c) => c.coding },
+    { key: "d", cmd: Commands.DONE, desc: "mark done", help: "done", relevant: isWork },
+    { key: "shift+m", cmd: Commands.MOVE_TO_PROJECT, desc: "move the task to a project", relevant: isTask },
+    { key: "shift+p", cmd: Commands.PR_DASH, desc: "its PR in ghdash (in Chat)", help: "PR", relevant: (c) => c.pr },
+    { key: "shift+r", cmd: Commands.REPOS, desc: "repos: where each is checked out, and checkouts to add" },
   ],
 };
 
@@ -490,3 +593,8 @@ export function buildKeymap(keys: NavKeys = {}): KeymapTable<HelpCtx> {
 }
 
 export const keymap = defaultKeymap;
+
+// Footer folding for the Board's tab digits.
+export const BOARD_HELP_OPTIONS = {
+  combinedKeys: { [Commands.BOARD_TAB_1]: "1-4" },
+};

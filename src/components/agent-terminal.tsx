@@ -72,6 +72,11 @@ export function TerminalHost(props: {
     { target: props.pane, enabled: () => running() && props.attached() },
   );
 
+  createEffect(() => {
+    if (!running() || !props.attached()) return;
+    onCleanup(terminals.claimKeys(props.id));
+  });
+
   // The outer terminal sends a paste bracketed, and opentui hands it over as
   // one paste event, never as keys, so the passthrough above never sees it.
   const renderer = useRenderer();
@@ -112,7 +117,7 @@ export function TerminalHost(props: {
         color: s.exitCode === 0 ? theme.textMuted : theme.error,
       };
     return props.attached()
-      ? { text: "attached · ^] detach", color: theme.success }
+      ? { text: "attached", color: theme.success }
       : { text: "detached · enter attach", color: theme.warning };
   });
 

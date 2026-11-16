@@ -6,7 +6,6 @@ import type { Renderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import {
   CommandPalette,
-  KeyboardHelp,
   useFocus,
   useScope,
   useToast,
@@ -17,7 +16,9 @@ import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
 import { focusNext } from "../core/focus";
+import type { HelpCtx } from "../keymap";
 import { useActions, useDialogs, type Actions, type Dialogs } from "./actions";
+import { FocusHelp } from "./focus-help";
 import { SearchModal, StatusModal } from "./modals";
 import { RailLegend } from "./rail";
 
@@ -26,7 +27,8 @@ export interface ShellApi {
   actions: Actions;
   // Spread onto the mode's layout box: app keys apply while focus is in it.
   layoutRef: (r: Renderable) => void;
-  Modals: () => JSX.Element;
+  // `ctx` is what the focused pane is on, for the ? help.
+  Modals: (props: { ctx: Accessor<HelpCtx> }) => JSX.Element;
 }
 
 export function useShell(opts: {
@@ -185,29 +187,21 @@ export function useShell(opts: {
     { id: "quit", group: "App", label: "Quit", hint: "q", run: quit },
   ];
 
-  function Modals() {
+  function Modals(props: { ctx: Accessor<HelpCtx> }) {
     return (
       <>
         <Show when={activeModal() === "palette"}>
           <CommandPalette actions={paletteActions()} onClose={closeModal} />
         </Show>
         <Show when={activeModal() === "help"}>
-          <KeyboardHelp
+          <FocusHelp
+            ctx={() => props.ctx()}
             onClose={closeModal}
-            width={66}
-            padding={{ y: 1 }}
-            sectionPadding={{ x: 4, y: 1 }}
-            scopeLabels={{
-              app: "Anywhere",
-              rail: "The rail",
-              task: "The table",
-              input: "The chat box",
-              terminal: "An agent's terminal",
-              board: "The Board",
-            }}
             footer={
               <box flexDirection="column">
-                <RailLegend />
+                <Show when={aug.mode() === ViewMode.chat}>
+                  <RailLegend />
+                </Show>
                 <text fg={theme.textMuted} marginTop={1}>
                   Nothing goes out until you press y and confirm.
                 </text>

@@ -48,6 +48,7 @@ export const Commands = {
   PROJECT_ADOPT: "project.adopt",
   PROJECT_ARCHIVE: "project.archive",
   PROJECT_EDIT: "project.edit",
+  PROJECT_NEW: "project.new",
   REPOS: "project.repos",
   SEND: "action.send",
   EDIT_DRAFT: "action.edit",
@@ -88,4 +89,5 @@ export const Commands = {
   BOARD_TAB_3: "board.tab.3",
   BOARD_TAB_4: "board.tab.4",
   BOARD_COMPOSE: "board.compose",
+  BOARD_COMPOSE_KNOWLEDGE: "board.compose.knowledge",
 } as const;
