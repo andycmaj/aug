@@ -6,6 +6,7 @@
 
 import {
   baseAppBindings,
+  dropShadowed,
   navBindings,
   type BindingSpec,
   type HelpBinding,
@@ -56,25 +57,20 @@ export const SCOPE_LABELS: Record<string, string> = {
 };
 
 // What the footer and help show from the bindings reachable from the focused
-// pane (innermost layer first): only the relevant ones, and only the first for
-// a key, since that is the one that runs. Relevance comes first because a
-// handler that declines a row lets the key fall through to the next binding
-// (x is "read" on an FYI, "archive" on a project). While a terminal is
+// pane (innermost layer first): the relevant ones, then the first per key,
+// since that is the one that runs (`dropShadowed`). While a terminal is
 // attached, every key but its own goes to it.
 export function helpBindings<B extends HelpBinding<HelpCtx>>(
   reachable: B[],
   ctx: HelpCtx,
 ): B[] {
-  const claimed = new Set<string>();
-  const out: B[] = [];
-  for (const b of reachable) {
-    if (ctx.attached && b.scope !== "terminal") continue;
-    if (b.relevant && !b.relevant(ctx)) continue;
-    if (claimed.has(b.keys)) continue;
-    claimed.add(b.keys);
-    out.push(b);
-  }
-  return out;
+  const live = reachable.filter(
+    (b) =>
+      (!ctx.attached || b.scope === "terminal") && (b.relevant?.(ctx) ?? true),
+  );
+  // dropShadowed filters without copying; keep the caller's element type.
+  const kept = new Set<HelpBinding<HelpCtx>>(dropShadowed(live));
+  return live.filter((b) => kept.has(b));
 }
 
 // Keys whose handlers still act while the chat box has focus (shell.tsx
