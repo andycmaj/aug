@@ -199,7 +199,7 @@ then the agent at rest, then whose it is.
 | 4 | approve | ↑ | success | ready to send | a draft waits for Send |
 | 5 | working | spinner ◐ | info | agent working | agent working |
 | 6 | queued | ◌ | muted | waiting to start | agent queued |
-| 7 | merged | » | success | merged, ready to close | phase merged |
+| 7 | merged | `U+F419` (nf-oct-git_merge) or » | accent (purple) | merged, ready to close | phase merged |
 | 8 | ready | ◈ | success | ready: yours to close | agent ready, task open |
 | 9 | review | ◎ | secondary | PR in review | phase review |
 | 10 | blocked | ⊘ | muted | blocked by a task | phase blocked |
@@ -210,7 +210,9 @@ then the agent at rest, then whose it is.
 | 15 | yours / asked | • / ? | text / primary | on you / asked you | the rest |
 
 `saved` and the old `blocked` lane go. The legend reads `LANE_META`, so it
-follows. A blocked row's sub line names its blockers (`blocked by
+follows. A lane with a `nerdMark` shows it only where the font is a Nerd
+Font (`laneMeta`, `core/glyphs.ts`: config `nerdFont`, else one installed),
+and its plain `mark` elsewhere. A blocked row's sub line names its blockers (`blocked by
 AUG-0012`); a stopped row's says why it ended; a ready row's says
 `yours to close` or `its agent closed it`. The rail header counts ready
 rows (◈) next to asks (◆), and so does a folded project row. The done

@@ -37,7 +37,7 @@ import {
 import { prChip } from "../core/pr";
 import { taskRef } from "../core/rows";
 import { AgentState, Kind, TaskStatus, type ProjectRow } from "../core/types";
-import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
+import { CHANNEL_WORD, priorityColor, toneColor, useLaneMeta } from "./ui";
 import { ConnectorLine } from "./connector-line";
 import type { TaskActions } from "./task-actions";
 
@@ -348,6 +348,7 @@ function RailRow(props: {
   theme: Theme;
 }) {
   const aug = useAug();
+  const metaOf = useLaneMeta();
   const theme = () => props.theme;
   const lit = () => (props.focused ? props.cursor : props.onTable);
   const selFg = () =>
@@ -391,7 +392,7 @@ function RailRow(props: {
             sub: working ? "the Assistant is working" : "ask the Assistant · a",
           };
         }
-        const meta = LANE_META[item.lane];
+        const meta = metaOf(item.lane);
         const working =
           item.task.agent_state === AgentState.working &&
           item.lane === Lane.working;
@@ -565,9 +566,10 @@ const LEGEND_COLUMN = 28;
 // LANE_META, so a new lane shows here without anyone remembering to add it.
 export function RailLegend() {
   const theme = useTheme();
+  const metaOf = useLaneMeta();
   const entries = (): LegendEntry[] => [
     ...LEGEND_LANES.map((lane) => {
-      const meta = LANE_META[lane];
+      const meta = metaOf(lane);
       const color = toneColor(theme, meta.tone);
       return { bar: color, mark: meta.mark, markColor: color, word: meta.word };
     }),

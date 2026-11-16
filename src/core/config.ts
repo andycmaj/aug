@@ -86,6 +86,9 @@ export interface AugConfig {
     noise: NoiseRule[];
   };
   theme: "default" | "terminal" | "mono" | "tokyo-night";
+  // Whether the terminal's font is a Nerd Font, for marks like merged's
+  // git-merge glyph. Unset: guessed from the fonts installed (core/glyphs.ts).
+  nerdFont?: boolean;
   // The TUI's navigation keys, in opentui's spelling ("alt+g", "shift+h").
   // Read at start: a change needs a restart.
   keys?: NavKeys;

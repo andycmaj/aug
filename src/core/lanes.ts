@@ -27,17 +27,29 @@ export const Lane = {
 export type Lane = (typeof Lane)[keyof typeof Lane];
 
 // Single-cell glyphs only: emoji are two cells wide and drift columns in
-// terminals that disagree about their width.
-export const LANE_META: Record<
-  Lane,
-  { word: string; mark: string; tone: Tone }
-> = {
+// terminals that disagree about their width. A Nerd Font glyph (nerdMark) is
+// one cell too, but only where the font has it (core/glyphs.ts); mark is the
+// plain one every font draws.
+export interface LaneMeta {
+  word: string;
+  mark: string;
+  nerdMark?: string;
+  tone: Tone;
+}
+
+export const LANE_META: Record<Lane, LaneMeta> = {
   waiting: { word: "agent waiting on you", mark: "◆", tone: "warning" },
   ready: { word: "ready for review", mark: "◈", tone: "success" },
   approve: { word: "ready to send", mark: "↑", tone: "success" },
   working: { word: "agent working", mark: "◐", tone: "info" },
   queued: { word: "waiting to start", mark: "◌", tone: "muted" },
-  merged: { word: "merged, ready to close", mark: "»", tone: "success" },
+  // nf-oct-git_merge: the branch has landed.
+  merged: {
+    word: "merged, ready to close",
+    mark: "»",
+    nerdMark: "\uf419",
+    tone: "accent",
+  },
   review: { word: "PR in review", mark: "◎", tone: "secondary" },
   blocked: { word: "blocked by a task", mark: "⊘", tone: "muted" },
   idle: { word: "agent idle", mark: "◇", tone: "secondary" },
@@ -58,7 +70,14 @@ export type Tone =
   | "primary"
   | "text"
   | "error"
-  | "secondary";
+  | "secondary"
+  | "accent";
+
+// A lane's look with the mark this terminal's font can draw.
+export function laneMeta(lane: Lane, nerdFont: boolean): LaneMeta {
+  const meta = LANE_META[lane];
+  return nerdFont && meta.nerdMark ? { ...meta, mark: meta.nerdMark } : meta;
+}
 
 export interface LaneFacts {
   hasPendingAction: boolean;

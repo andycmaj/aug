@@ -34,7 +34,7 @@ import {
 import { Commands } from "../commands";
 import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
-import { LANE_META } from "../core/lanes";
+import type { Lane, LaneMeta } from "../core/lanes";
 import { prChip, prLine } from "../core/pr";
 import {
   type Mention,
@@ -66,6 +66,7 @@ import {
   KeyHints,
   priorityColor,
   toneColor,
+  useLaneMeta,
 } from "./ui";
 
 type Compose = (initial: string, keep: (text: string) => void) => void;
@@ -257,7 +258,8 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
       .find((i) => i.type === "task" && i.task.id === props.task.id);
     return item?.type === "task" ? item.lane : null;
   };
-  const meta = () => (lane() ? LANE_META[lane()!] : null);
+  const metaOf = useLaneMeta();
+  const meta = () => (lane() ? metaOf(lane()!) : null);
   const came = createMemo(() => {
     const first = aug.messages(props.task.id)[0];
     const from = first
@@ -348,7 +350,7 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
               />
             </Show>
             <Show when={meta()}>
-              {(m: Accessor<(typeof LANE_META)[keyof typeof LANE_META]>) => (
+              {(m: Accessor<LaneMeta>) => (
                 <Badge text={m().word} color={toneColor(theme, m().tone)} />
               )}
             </Show>
@@ -743,9 +745,10 @@ function ProjectView(props: {
       .tasksForProject(p().id)
       .filter((t) => t.status === "open" || t.status === "later");
   });
+  const metaOf = useLaneMeta();
   const laneOfTask = (t: TaskRow) => {
     const row = aug.items().find((i) => i.type === "task" && i.task.id === t.id);
-    return row?.type === "task" ? LANE_META[row.lane] : null;
+    return row?.type === "task" ? metaOf(row.lane) : null;
   };
   return (
     <box
@@ -850,6 +853,7 @@ function IdeaView(props: {
 function Opening() {
   const theme = useTheme();
   const aug = useAug();
+  const metaOf = useLaneMeta();
   const hour = () => aug.now().getHours();
   const greeting = () =>
     hour() < 12
@@ -877,7 +881,7 @@ function Opening() {
           fallback={<text fg={theme.textMuted}>Nothing waits on you.</text>}
         >
           {([lane, n]) => {
-            const meta = LANE_META[lane as keyof typeof LANE_META];
+            const meta = metaOf(lane as Lane);
             return (
               <text>
                 <span

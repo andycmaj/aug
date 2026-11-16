@@ -7,7 +7,9 @@ import {
   type Theme,
   type ThemeColor,
 } from "@andycmaj/opentui-app";
-import type { Tone } from "../core/lanes";
+import { useAug } from "../context/aug";
+import { nerdFont } from "../core/glyphs";
+import { laneMeta, type Lane, type LaneMeta, type Tone } from "../core/lanes";
 import type { Channel, Priority } from "../core/types";
 
 export function toneColor(theme: Theme, tone: Tone): ThemeColor {
@@ -26,9 +28,18 @@ export function toneColor(theme: Theme, tone: Tone): ThemeColor {
       return theme.error;
     case "secondary":
       return theme.secondary;
+    case "accent":
+      return theme.accent;
     default:
       return theme.text;
   }
+}
+
+// A lane's look with the marks this terminal's font can draw (nerdFont in
+// config, re-read each call so an edit shows without a restart).
+export function useLaneMeta(): (lane: Lane) => LaneMeta {
+  const aug = useAug();
+  return (lane) => laneMeta(lane, nerdFont(aug.desk.config()));
 }
 
 export function priorityColor(
