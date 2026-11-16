@@ -99,6 +99,13 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `agent_state` or a session's state is one of its named transitions
   (`sessionStarted`, `sessionActivity`, `sessionEnded`, `turnFinished`,
   `workFinished`, `taskClosed`, ...). Nothing else writes those columns.
+- **What a rail row says is `docs/rail-status-design.md`**: four axes,
+  the task's lifecycle (`status` plus a phase derived from `merged_at`,
+  `pr_status` and `task_blockers`: `phaseOf`), the agent's state, rail
+  grouping (`laneOf` in `core/lanes.ts`, whose order is the rule) and tags
+  (priority, watching, Wins). A new lane gets a filter pill in
+  `RAIL_FILTERS` or a place in `UNFILTERED_LANES`; `test/rail.test.ts`
+  fails otherwise.
 - **A task's agent is behind `core/driver.ts`.** `ChatDriver` (the pool's
   `claude -p` turns) and `TmuxDriver` (`projects.ts`) implement `start`,
   `stop`, `close`, `deliver`, `wake` and `isLive`; the desk picks one with
