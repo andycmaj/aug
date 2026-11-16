@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { Database, type SQLQueryBindings } from "bun:sqlite";
+import { db } from "../src/core/db";
 import { readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { DEFAULT_CONFIG, fileConfig, loadConfig } from "../src/core/config";
 import { paths } from "../src/core/paths";
@@ -88,6 +90,95 @@ describe("the moves bus", () => {
     const row = await waitForMove(move.id, { pollMs: 5 });
     expect(row.status).toBe(MoveStatus.done);
     expect(row.result).toStartWith(`${store.taskRef(task.id)} back on `);
+  });
+});
+
+// bun 1.3 reports rows changed by triggers in `.run().changes` (bun 1.4 does
+// not), and every table has a table_versions trigger, so one UPDATE there
+// says 2. Report changes the way bun 1.3 does whatever bun runs the tests.
+describe("the moves bus when changes counts trigger rows (bun 1.3)", () => {
+  // `run` is each statement's own property, and query() caches statements,
+  // so wrap each one once as query() hands it out.
+  const plainQuery = Database.prototype.query;
+  const wrapped = new WeakSet<object>();
+  beforeEach(() => {
+    Database.prototype.query = function (this: Database, sql: string) {
+      const statement = plainQuery.call(this, sql);
+      if (wrapped.has(statement)) return statement;
+      wrapped.add(statement);
+      const plainRun = statement.run.bind(statement);
+      const total = () =>
+        (plainQuery.call(this, "SELECT total_changes() AS n").get() as {
+          n: number;
+        }).n;
+      statement.run = (...params: SQLQueryBindings[]) => {
+        const before = total();
+        const result = plainRun(...params);
+        return { ...result, changes: total() - before };
+      };
+      return statement;
+    } as typeof plainQuery;
+  });
+  afterEach(() => {
+    Database.prototype.query = plainQuery;
+  });
+
+  test("the emulation counts the trigger's row", () => {
+    const move = ask("done", { task: "AUG-0001" });
+    const result = db()
+      .query("UPDATE moves SET result = 'x' WHERE id = ?")
+      .run(move.id);
+    expect(result.changes).toBe(2);
+  });
+
+  test("a pending move still runs once and finishes", async () => {
+    const task = engine.desk.newTask("Fix the build", Kind.general);
+    const move = ask("done", { task: store.taskRef(task.id) });
+    expect(await engine.drainMoves()).toBe(1);
+    expect(store.getMove(move.id)!.status).toBe(MoveStatus.done);
+    expect(store.getTask(task.id)!.status).toBe(TaskStatus.done);
+  });
+
+  test("two drains at once still never run a move twice", async () => {
+    const task = engine.desk.newTask("Ping Sam", Kind.general);
+    ask("tell", { task: store.taskRef(task.id), text: "hello" });
+    const [a, b] = await Promise.all([engine.drainMoves(), engine.drainMoves()]);
+    expect(a + b).toBe(1);
+  });
+
+  test("waiting still gives up on a move nobody picks up", async () => {
+    const task = engine.desk.newTask("Nobody home", Kind.general);
+    const move = ask("done", { task: store.taskRef(task.id) });
+    const row = await waitForMove(move.id, {
+      pickupMs: 20,
+      runMs: 200,
+      pollMs: 5,
+    });
+    expect(row.status).toBe(MoveStatus.failed);
+    expect(row.result).toContain("is aug running");
+  });
+});
+
+describe("waiting on a move another claimer took", () => {
+  test("sleeps between polls instead of spinning", async () => {
+    const task = engine.desk.newTask("Taken", Kind.general);
+    const move = ask("done", { task: store.taskRef(task.id) });
+    // The waiter reads it pending, then loses the race to abandon it.
+    const abandon = spyOn(store, "abandonMove").mockImplementation(() => false);
+    const reads = spyOn(store, "getMove");
+    try {
+      const row = await waitForMove(move.id, {
+        pickupMs: 0,
+        runMs: 50,
+        pollMs: 10,
+      });
+      expect(row.result).toBe("still running: check aug");
+      expect(abandon.mock.calls.length).toBeGreaterThan(0);
+      expect(reads.mock.calls.length).toBeLessThan(20);
+    } finally {
+      abandon.mockRestore();
+      reads.mockRestore();
+    }
   });
 });
 

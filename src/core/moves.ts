@@ -997,10 +997,11 @@ export async function waitForMove(
     if (move.status === MoveStatus.done || move.status === MoveStatus.failed)
       return move;
     const waited = Date.now() - start;
+    // Losing the race to abandon means the engine claimed it just now: keep
+    // waiting, and sleep like any other poll rather than spin.
     if (move.status === MoveStatus.pending && waited > pickupMs) {
       if (store.abandonMove(id, "aug did not pick it up: is aug running?"))
         return store.getMove(id)!;
-      continue;
     }
     if (waited > pickupMs + runMs)
       return { ...move, status: MoveStatus.failed, result: "still running: check aug" };

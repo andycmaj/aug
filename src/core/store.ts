@@ -1192,15 +1192,17 @@ export function pendingMoves(): MoveRow[] {
   );
 }
 
-// Only one claimer wins, so a move never runs twice.
+// Only one claimer wins, so a move never runs twice. Whether this UPDATE won
+// is read from RETURNING, not `.changes`: bun 1.3 counts the rows the
+// table_versions trigger changed there too, so a won claim said 2 (#6).
 export function claimMove(id: number): boolean {
-  const result = db()
+  const won = db()
     .query(
-      "UPDATE moves SET status = 'running' WHERE id = ? AND status = 'pending'",
+      "UPDATE moves SET status = 'running' WHERE id = ? AND status = 'pending' RETURNING id",
     )
-    .run(id);
+    .get(id);
   changed();
-  return result.changes === 1;
+  return won != null;
 }
 
 export function finishMove(id: number, ok: boolean, result: string): void {
@@ -1215,11 +1217,11 @@ export function finishMove(id: number, ok: boolean, result: string): void {
 
 // A move nobody picked up is failed, not left to run whenever aug next starts.
 export function abandonMove(id: number, why: string): boolean {
-  const result = db()
+  const abandoned = db()
     .query(
-      "UPDATE moves SET status = 'failed', result = ?, finished_at = ? WHERE id = ? AND status = 'pending'",
+      "UPDATE moves SET status = 'failed', result = ?, finished_at = ? WHERE id = ? AND status = 'pending' RETURNING id",
     )
-    .run(why, now(), id);
+    .get(why, now(), id);
   changed();
-  return result.changes === 1;
+  return abandoned != null;
 }
