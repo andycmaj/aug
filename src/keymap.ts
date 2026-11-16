@@ -57,6 +57,7 @@ export const FILTER_COMMANDS = [
   Commands.FILTER_6,
   Commands.FILTER_7,
   Commands.FILTER_8,
+  Commands.FILTER_9,
 ] as const;
 
 const railFilters: BindingSpec<HelpCtx>[] = [

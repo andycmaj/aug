@@ -40,6 +40,7 @@ export const Commands = {
   FILTER_6: "rail.filter.6",
   FILTER_7: "rail.filter.7",
   FILTER_8: "rail.filter.8",
+  FILTER_9: "rail.filter.9",
   PROJECT_ADOPT: "project.adopt",
   PROJECT_ARCHIVE: "project.archive",
   PROJECT_EDIT: "project.edit",
