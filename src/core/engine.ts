@@ -15,6 +15,7 @@ import { Drivers } from "./driver";
 import { pollGithub } from "./ingest/github";
 import { refreshPrStatuses } from "./pr";
 import { errorMessage, logger } from "./log";
+import { count, measure, perfStart } from "./perf";
 import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
 import { slackTransport, type SlackTransport } from "./slack/transport";
 import { recoverAtBoot } from "./lifecycle";
@@ -141,13 +142,14 @@ export class Engine {
     void this.reconcile();
     this.timers.push(
       setInterval(() => {
-        void this.reconcile();
+        void this.reconcile("tick");
         this.watchTmux();
       }, 30_000),
     );
     this.watchTmux();
-    store.wakeReminders();
-    this.timers.push(setInterval(() => store.wakeReminders(), 60_000));
+    const wakeReminders = () => measure("engine.reminders", () => store.wakeReminders());
+    wakeReminders();
+    this.timers.push(setInterval(wakeReminders, 60_000));
     this.watchMoves();
     if (this.options.offline) {
       this.setStatus("github", off("fixture mode"));
@@ -223,8 +225,10 @@ export class Engine {
     let seen = -1;
     this.timers.push(
       setInterval(() => {
-        this.pool.drain();
-        const v = dataVersion();
+        const v = measure("engine.moves_tick", () => {
+          this.pool.drain();
+          return dataVersion();
+        });
         if (v === seen || this.draining) return;
         seen = v;
         void this.drainMoves();
@@ -234,9 +238,13 @@ export class Engine {
 
   async drainMoves(): Promise<number> {
     this.draining = true;
+    const done = perfStart("engine.drain_moves");
+    let moves = 0;
     try {
-      return await drainMoves(this.desk);
+      moves = await drainMoves(this.desk);
+      return moves;
     } finally {
+      done({ moves });
       this.draining = false;
     }
   }
@@ -254,11 +262,13 @@ export class Engine {
   private async ingest(messages: store.NewMessage[]): Promise<number> {
     let fresh = 0;
     for (const m of messages) {
-      const row = store.insertMessage(m);
+      const row = measure("engine.insert_message", () => store.insertMessage(m));
       if (!row) continue;
       fresh++;
       linkByBranch(row);
+      const triaged = perfStart("engine.triage", { channel: m.channel });
       const outcome = await triage(row, { config: this.options.config.get() });
+      triaged({ verdict: outcome.verdict });
       log.debug("triaged", {
         message: row.id,
         channel: m.channel,
@@ -413,17 +423,23 @@ export class Engine {
     const abort = new AbortController();
     this.watching = abort;
     projects
-      .watchTmux(() => void this.reconcile(), abort.signal)
+      .watchTmux(() => {
+        count("engine.tmux_event");
+        void this.reconcile("tmux");
+      }, abort.signal)
       .catch((err) => log.debug("tmux watch ended", { err: errorMessage(err) }))
       .finally(() => {
         if (this.watching === abort) this.watching = null;
       });
   }
 
-  async reconcile(): Promise<void> {
+  async reconcile(by = "start"): Promise<void> {
+    const done = perfStart("engine.reconcile", { by });
     try {
       await projects.reconcile();
+      done();
     } catch (err) {
+      done({ ok: false });
       log.warn("reconcile failed", { err: errorMessage(err) });
     }
   }

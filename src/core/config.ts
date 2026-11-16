@@ -94,6 +94,11 @@ export interface AugConfig {
     file?: string;
     // Rolls over to <file>.1 past this; default 10 MB.
     maxBytes?: number;
+    // Perf counters (core/perf.ts, perf.db) ride on the log: on whenever it
+    // is, unless this is false.
+    perf?: boolean;
+    // A timing at or past this many ms keeps an example; default 50.
+    slowMs?: number;
   };
   // Connector tools agents may call, by capability (core/capabilities.ts).
   // Opt-in: nothing is granted until a role lists a capability.

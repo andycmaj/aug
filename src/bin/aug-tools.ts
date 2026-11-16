@@ -26,6 +26,7 @@ import {
 import { MOVES, waitForMove } from "../core/moves";
 import { mux, setMux, socketFromEnv, TmuxMux } from "../core/mux";
 import { runInPane } from "../core/pane";
+import { flushPerf, perfReport, perfText, startPerf, timing } from "../core/perf";
 import * as projects from "../core/projects";
 import { repoReport, reportText } from "../core/repos";
 import * as store from "../core/store";
@@ -34,6 +35,17 @@ import { MoveStatus, NoteLabel } from "../core/types";
 // A hook is one short process: config.json is read when a line is logged,
 // not on every start.
 configureLog(() => loadConfig().log);
+
+// A hook's whole life, process start included, is what it costs the agent
+// that waits on it: aug-tools.<command> (and the verb, for a move).
+startPerf({ proc: "aug-tools" });
+process.on("exit", () => {
+  const [cmd, sub] = process.argv.slice(2);
+  if (!cmd || cmd.startsWith("-")) return;
+  const op = cmd === "move" && sub && !sub.startsWith("-") ? `${cmd}.${sub}` : cmd;
+  timing(`aug-tools.${op}`, performance.now());
+  flushPerf();
+});
 
 // Inside a pane, talk to the tmux server the pane lives on; without $TMUX,
 // the one config names.
@@ -456,6 +468,28 @@ const move = defineCommand({
   ),
 });
 
+const perf = defineCommand({
+  meta: {
+    name: "perf",
+    description: "Timings from real use: p50/p95/max per op and the slowest examples",
+  },
+  args: {
+    hours: { type: "string", description: "Window, in hours back from now (default 24)" },
+    op: { type: "string", description: "Only ops starting with this (mux., read., engine.)" },
+    slowest: { type: "string", description: "How many slow examples to list (default 15)" },
+  },
+  run({ args }) {
+    const hours = Number(args.hours ?? 24) || 24;
+    const until = new Date();
+    const since = new Date(until.getTime() - hours * 3600_000);
+    console.log(
+      perfText(
+        perfReport({ since, until, op: args.op, slowest: Number(args.slowest ?? 15) || 15 }),
+      ),
+    );
+  },
+});
+
 const main = defineCommand({
   meta: { name: "aug-tools", description: "aug's callback tools for agents" },
   subCommands: {
@@ -475,6 +509,7 @@ const main = defineCommand({
     pane,
     move,
     knowledge,
+    perf,
     // The old name: briefs and sessions from before the rename still call it.
     hub: knowledge,
   },

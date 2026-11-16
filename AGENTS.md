@@ -145,6 +145,14 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `AUG_LOG`, `log.enabled` in config, or `AUG_DEV` (set by `bun run dev`)
   turns it on. Log where an error is swallowed into a status line, and use
   `log.time()` for timings.
+- **Perf counters are `core/perf.ts`**, on with the log (off again with
+  `log.perf: false`): per-minute histograms per op plus the slowest examples
+  past `log.slowMs` (default 50), in `perf.db` under `AUG_HOME` (its own
+  file, so a flush never moves aug.db's `data_version`). `log.time()` feeds
+  it; hot paths call `timing`/`measure`/`perfStart` directly (read-model
+  reads, the TUI's refresh fan-out, engine ticks, every real `mux.*` call,
+  frames). Names and numbers only, never content. `aug-tools perf` reports
+  p50/p95/max per op.
 - `src/keymap.ts` is the single binding table. Each mode (Chat, Board) has its
   own `FocusProvider`. `TerminalsProvider` sits above both, so PTYs survive the
   switch. A key that means different things by row (`x`, `e`) gets one

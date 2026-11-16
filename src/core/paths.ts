@@ -26,6 +26,9 @@ export const paths = {
   // a doc's Markdown headings cannot go on a Bash line (see propose_doc).
   docDrafts: () => join(augHome(), "drafts", "docs"),
   log: () => join(augHome(), "aug.log"),
+  // Perf counters (core/perf.ts): its own file, so recording them never
+  // moves aug.db's data_version and wakes the TUI or the engine.
+  perfDb: () => join(augHome(), "perf.db"),
   lock: () => join(augHome(), "aug.pid"),
 };
 

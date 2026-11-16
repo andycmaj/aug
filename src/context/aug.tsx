@@ -20,7 +20,8 @@ import { dataVersion, TABLES, tableVersions, type Table } from "../core/db";
 import type { Desk } from "../core/desk";
 import { Engine, type EngineStatus } from "../core/engine";
 import type { BoardColumn, LaneFacts } from "../core/lanes";
-import { readModel, type ReadModel } from "../core/read-model";
+import { count, perfOn, sample, timing } from "../core/perf";
+import { readModel, readsRun, type ReadModel } from "../core/read-model";
 import {
   cycleFilter as nextFilter,
   filterCounts,
@@ -34,6 +35,7 @@ import {
   type RailSection,
 } from "../core/rail";
 import { onChange } from "../core/store";
+import { useRenderPerf } from "./render-perf";
 import { AgentState, type TaskRow } from "../core/types";
 
 export const ViewMode = { chat: "chat", board: "board" } as const;
@@ -106,12 +108,25 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   const reads = readModel(track, engine.desk);
   let seenTables = tableVersions();
   const refresh = () => {
+    const started = performance.now();
+    const runsBefore = readsRun();
     const next = tableVersions();
+    const bumped: Table[] = [];
     batch(() => {
       for (const t of TABLES)
-        if (next[t] !== seenTables[t]) tableSignals.get(t)![1]((v) => v + 1);
+        if (next[t] !== seenTables[t]) {
+          bumped.push(t);
+          tableSignals.get(t)![1]((v) => v + 1);
+        }
     });
     seenTables = next;
+    // Solid re-runs the reads over the bumped tables when the batch ends,
+    // so this times the whole fan-out a write causes (not the frame).
+    if (!perfOn()) return;
+    for (const t of bumped) count(`bump.${t}`);
+    const reran = readsRun() - runsBefore;
+    timing("tui.refresh", performance.now() - started, { tables: bumped.join(","), reads: reran });
+    sample("tui.refresh_reads", reran, "reads");
   };
   const [status, setStatus] = createSignal(engine.status);
   const [now, setNow] = createSignal(new Date());
@@ -124,6 +139,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   // One redraw per burst keeps that from churning thousands of native text
   // buffers.
   const redraw = coalesce(refresh);
+  useRenderPerf();
   const bump = () => redraw.schedule();
 
   onMount(() => {
@@ -134,6 +150,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
       const v = dataVersion();
       if (v !== seen) {
         seen = v;
+        count("tui.data_version");
         bump();
       }
     }, 400);

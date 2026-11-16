@@ -6,6 +6,7 @@
 // any macOS trouble stay here. Tests swap in a fake with setMux.
 
 import { Server, TmuxServerRestartedError } from "libtmux";
+import { perfOn, perfStart } from "./perf";
 import { inspect, scan, type CheckoutState, type FoundCheckout } from "./checkouts";
 import { logger } from "./log";
 import { shellQuote, toolsCommand } from "./self";
@@ -622,13 +623,45 @@ export class TmuxMux implements Mux {
   }
 }
 
+// Every call to the real tmux is timed while perf is on, as mux.<method>.
+// watch is left alone: it runs until aborted, so its length says nothing.
+export function timedMux(inner: Mux): Mux {
+  const wrapped = new Map<string, unknown>();
+  return new Proxy(inner, {
+    get(target, prop, receiver) {
+      const value: unknown = Reflect.get(target, prop, receiver);
+      if (typeof value !== "function" || typeof prop !== "string" || prop === "watch") return value;
+      const known = wrapped.get(prop);
+      if (known) return known;
+      const fn = value as (...args: unknown[]) => unknown;
+      const op = `mux.${prop}`;
+      const call = (...args: unknown[]): unknown => {
+        if (!perfOn()) return fn.apply(target, args);
+        const done = perfStart(op);
+        try {
+          const out = fn.apply(target, args);
+          if (out instanceof Promise) return out.finally(() => done());
+          done();
+          return out;
+        } catch (err) {
+          done({ ok: false });
+          throw err;
+        }
+      };
+      wrapped.set(prop, call);
+      return call;
+    },
+  });
+}
+
 let current: Mux | undefined;
 
 export function mux(): Mux {
-  current ??= new TmuxMux();
+  current ??= timedMux(new TmuxMux());
   return current;
 }
 
+// The real tmux is timed; a test's fake is used as given.
 export function setMux(next: Mux): void {
-  current = next;
+  current = next instanceof TmuxMux ? timedMux(next) : next;
 }

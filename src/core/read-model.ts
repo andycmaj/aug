@@ -6,6 +6,7 @@
 import { Table } from "./db";
 import { boardColumnOf, type BoardColumn } from "./lanes";
 import { projectProgress, projectSummary, railProjects } from "./lookup";
+import { perfOn, timing } from "./perf";
 import { taskPr, taskPrStatus } from "./pr";
 import { buildRail, SHOW_FYI, type RailSection } from "./rail";
 import * as store from "./store";
@@ -113,13 +114,28 @@ type Reads = ReturnType<typeof reads>;
 export type ReadName = keyof Reads;
 export type ReadModel = { [K in ReadName]: Reads[K][1] };
 
+// Reads run so far, for the TUI's refresh to say how many a bump re-ran
+// (the invalidation fan-out). Counted only while perf is on.
+let runs = 0;
+export function readsRun(): number {
+  return runs;
+}
+
 export function readModel(track: Track, desk: LiveCheck): ReadModel {
   const out: Record<string, unknown> = {};
   for (const [name, [tables, fn]] of Object.entries(reads(desk))) {
     const read = fn as (...args: unknown[]) => unknown;
+    const op = `read.${name}`;
     out[name] = (...args: unknown[]) => {
       track(tables);
-      return read(...args);
+      if (!perfOn()) return read(...args);
+      runs++;
+      const started = performance.now();
+      try {
+        return read(...args);
+      } finally {
+        timing(op, performance.now() - started);
+      }
     };
   }
   return out as ReadModel;

@@ -75,9 +75,18 @@ export function resolveLogSettings(
 let settings: LogSettings | null | undefined;
 let size: number | undefined;
 
+let generation = 0;
+
 export function resetLog(): void {
   settings = undefined;
   size = undefined;
+  generation++;
+}
+
+// Moves on every resetLog(), so what caches the log's settings (perf) knows
+// to read them again.
+export function logGeneration(): number {
+  return generation;
 }
 
 function current(): LogSettings | null {
@@ -89,6 +98,36 @@ function current(): LogSettings | null {
     }
   }
   return settings;
+}
+
+// On at any level: what perf counters ride on.
+export function logOn(): boolean {
+  return current() !== null;
+}
+
+export function logSection(): LogConfig {
+  return logConfig();
+}
+
+// Where log.time() also reports its duration (core/perf.ts sets it), so
+// every timing the log takes is a perf counter too. Numbers and booleans
+// only reach it: a timing's other fields may carry content.
+type TimingSink = (
+  op: string,
+  ms: number,
+  fields: Record<string, number | boolean>,
+) => void;
+let timingSink: TimingSink | null = null;
+
+export function setTimingSink(sink: TimingSink | null): void {
+  timingSink = sink;
+}
+
+function numeric(fields: LogFields): Record<string, number | boolean> {
+  const out: Record<string, number | boolean> = {};
+  for (const [k, v] of Object.entries(fields))
+    if (typeof v === "number" || typeof v === "boolean") out[k] = v;
+  return out;
 }
 
 export function logEnabled(level: LogLevelName = "trace"): boolean {
@@ -173,9 +212,16 @@ export function logger(scope: string): Logger {
     time(msg, fields) {
       const started = performance.now();
       return (end) => {
-        const ms = Math.round(performance.now() - started);
+        const exact = performance.now() - started;
+        const ms = Math.round(exact);
         const level = end?.ok === false ? "warn" : "debug";
-        write(level, scope, msg, { ...fields, ...end, ms });
+        const all = { ...fields, ...end };
+        write(level, scope, msg, { ...all, ms });
+        timingSink?.(
+          `${scope}.${msg.replace(/\s+/g, "_")}`,
+          exact,
+          numeric(all),
+        );
       };
     },
   };

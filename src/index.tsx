@@ -9,6 +9,7 @@ import { Engine } from "./core/engine";
 import { claimHome, releaseHome } from "./core/home-lock";
 import { configureLog, logCrashes, logger } from "./core/log";
 import { setMux, TmuxMux } from "./core/mux";
+import { startPerf, timing } from "./core/perf";
 import { paths } from "./core/paths";
 import { exitCode } from "./core/restart";
 
@@ -18,6 +19,7 @@ const cli = await parseCLI();
 const config = fileConfig();
 configureLog(() => config.get().log);
 logCrashes();
+startPerf({ proc: "aug", sampleProcess: true });
 logger("aug").info("start", {
   fixture: cli.fixture ?? null,
   home: process.env.AUG_HOME ?? null,
@@ -44,6 +46,8 @@ if (!claim.ok) {
 }
 process.on("exit", () => releaseHome());
 engine.start();
+// From process start; startup.first_frame is the screen itself.
+timing("startup.engine", performance.now());
 
 // opentui answers SIGHUP/SIGTERM by tearing the renderer down and nothing
 // more, so the engine's timers kept a closed window's aug running headless
