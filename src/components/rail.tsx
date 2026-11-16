@@ -36,7 +36,7 @@ import {
 } from "../core/rail";
 import { prChip } from "../core/pr";
 import { taskRef } from "../core/rows";
-import { AgentState, Kind, type ProjectRow } from "../core/types";
+import { AgentState, Kind, TaskStatus, type ProjectRow } from "../core/types";
 import { CHANNEL_WORD, priorityColor, toneColor } from "./ui";
 import { ConnectorLine } from "./connector-line";
 import type { TaskActions } from "./task-actions";
@@ -181,6 +181,7 @@ export function Rail(props: { actions: TaskActions }) {
 
   const counts = createMemo(() => {
     let asks = 0;
+    let ready = 0;
     let approve = 0;
     let tasks = 0;
     for (const s of aug.rail()) {
@@ -194,10 +195,11 @@ export function Rail(props: { actions: TaskActions }) {
         if (i.type !== "task") continue;
         tasks++;
         if (i.lane === Lane.waiting) asks++;
+        if (i.lane === Lane.ready) ready++;
         if (i.lane === Lane.approve) approve++;
       }
     }
-    return { asks, approve, tasks };
+    return { asks, ready, approve, tasks };
   });
 
   return (
@@ -213,6 +215,11 @@ export function Rail(props: { actions: TaskActions }) {
             <span
               style={{ fg: theme.warning }}
             >{`${LANE_META.waiting.mark} ${counts().asks}  `}</span>
+          </Show>
+          <Show when={counts().ready > 0}>
+            <span
+              style={{ fg: theme.success }}
+            >{`${LANE_META.ready.mark} ${counts().ready}  `}</span>
           </Show>
           <Show when={counts().approve > 0}>
             <span
@@ -360,6 +367,11 @@ function RailRow(props: {
       const why = aug.latestSession(item.task.id)?.end_reason;
       if (why) return `stopped: ${why}`;
     }
+    // What review means here: read what it closed, or close it yourself.
+    if (item.lane === Lane.ready)
+      return item.task.status === TaskStatus.done
+        ? "ready: its agent closed it"
+        : "ready: yours to close";
     return LANE_META[item.lane].word;
   };
   const view = createMemo((): RowView => {
@@ -436,11 +448,13 @@ function RailRow(props: {
         const folded = aug.folded().has(item.project.id);
         // Folded, what its hidden tasks want from you still shows here.
         let asks = 0;
+        let review = 0;
         let ready = 0;
         if (folded)
           for (const i of aug.items()) {
             if (i.type !== "task" || i.group !== item.project.id) continue;
             if (i.lane === Lane.waiting) asks++;
+            if (i.lane === Lane.ready) review++;
             if (i.lane === Lane.approve) ready++;
           }
         return {
@@ -455,6 +469,7 @@ function RailRow(props: {
             item.working ? `${item.working} working` : "",
             item.goals ? `goals ${item.goalsMet}/${item.goals}` : "",
             asks ? `${LANE_META.waiting.mark} ${asks}` : "",
+            review ? `${LANE_META.ready.mark} ${review}` : "",
             ready ? `${LANE_META.approve.mark} ${ready}` : "",
             item.repos.join(", ") || "no repo",
           ]

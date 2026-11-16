@@ -658,8 +658,8 @@ function Card(props: {
       return `${LANE_META.queued.mark} ${t.queue_reason ?? "waiting to start"}`;
     if (aug.pending().has(t.id))
       return `${LANE_META.approve.mark} ready to send`;
-    if (t.agent_state === AgentState.agentdone)
-      return `${LANE_META.agentdone.mark} ${s?.result ?? "finished"}`;
+    if (t.agent_state === AgentState.ready)
+      return `${LANE_META.ready.mark} ${s?.result ?? LANE_META.ready.word}`;
     return `${t.agent_state}`;
   };
   return (

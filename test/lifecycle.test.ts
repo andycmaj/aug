@@ -123,10 +123,10 @@ describe("while live", () => {
     const ref = start(t.id, SessionKind.tmux);
     workFinished(ref, { summary: "shipped", closes: false });
     sessionActivity(ref, AgentState.waiting, "is waiting at its prompt");
-    expect(agentOf(t.id)).toBe(AgentState.agentdone);
+    expect(agentOf(t.id)).toBe(AgentState.ready);
     sessionEnded(ref, AgentState.stopped);
-    expect(agentOf(t.id)).toBe(AgentState.agentdone);
-    expect(store.getSession(ref.sessionId)!.state).toBe(AgentState.agentdone);
+    expect(agentOf(t.id)).toBe(AgentState.ready);
+    expect(store.getSession(ref.sessionId)!.state).toBe(AgentState.ready);
     expect(store.getSession(ref.sessionId)!.ended_at).not.toBeNull();
     // A new prompt is new work.
     sessionActivity(ref, AgentState.working, null);
@@ -172,7 +172,7 @@ describe("ending", () => {
     expect(store.getSession(ref.sessionId)!.ended_at).not.toBeNull();
     const again = start(t.id);
     turnFinished(again, { asking: null });
-    expect(agentOf(t.id)).toBe(AgentState.agentdone);
+    expect(agentOf(t.id)).toBe(AgentState.ready);
     expect(store.getTask(t.id)!.agent_says).toBeNull();
   });
 });
@@ -186,7 +186,7 @@ describe("finishing work", () => {
     expect(fresh.status).toBe(TaskStatus.done);
     expect(fresh.closed_by).toBe("agent");
     expect(fresh.unread_result).toBe(1);
-    expect(fresh.agent_state).toBe(AgentState.agentdone);
+    expect(fresh.agent_state).toBe(AgentState.ready);
     expect(store.getSession(ref.sessionId)!.result).toBe("merged #12");
     // The window is still up: the session is not ended by the finish.
     expect(store.getSession(ref.sessionId)!.ended_at).toBeNull();
@@ -260,7 +260,7 @@ describe("closing", () => {
     const done = task();
     turnFinished(start(done.id), { asking: null });
     taskClosed(done.id);
-    expect(agentOf(done.id)).toBe(AgentState.agentdone);
+    expect(agentOf(done.id)).toBe(AgentState.ready);
     const held = task(Kind.coding);
     holdForStart(held.id);
     taskClosed(held.id);

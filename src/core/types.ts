@@ -51,7 +51,9 @@ export type Priority = (typeof Priority)[keyof typeof Priority];
 // The six states an agent can be in, plus "none" for a task nobody handed to
 // an agent. One word and one mark each, everywhere (see lanes.ts and
 // docs/rail-status-design.md). Working is a turn running; idle is a turn
-// over with nothing asked; waiting is the agent needing the owner's answer.
+// over with nothing asked; waiting is the agent needing the owner's answer;
+// ready is its work finished and waiting on the owner to review, push or
+// close it (or, on a task it closed itself, to read the result).
 export const AgentState = {
   none: "none",
   queued: "queued",
@@ -59,7 +61,7 @@ export const AgentState = {
   idle: "idle",
   waiting: "waiting",
   stopped: "stopped",
-  agentdone: "agentdone",
+  ready: "ready",
 } as const;
 export type AgentState = (typeof AgentState)[keyof typeof AgentState];
 

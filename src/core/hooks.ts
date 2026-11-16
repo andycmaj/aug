@@ -226,6 +226,7 @@ export function handleDone(env: HookEnv, args: DoneArgs): string {
     ? actionFor(task, { kind, text: args.reply })
     : null;
   const ownerSession = session?.started_by === "owner";
+  const closes = !action && !ownerSession && !lastIncomingNeedsReply(task.id);
 
   store.batch(() => {
     const turn = store.addTurn({
@@ -240,14 +241,16 @@ export function handleDone(env: HookEnv, args: DoneArgs): string {
       did: args.summary,
       next: action
         ? "The reply is set up below; send it when you are happy."
-        : ownerSession
-          ? "Yours to close: you started this session."
-          : "Nothing left to do here.",
+        : closes
+          ? "Nothing left to do here."
+          : ownerSession
+            ? "Ready for review: yours to close (you started this session)."
+            : "Ready for review: yours to close (a reply may be owed).",
     });
     if (action) store.setTurnAction(turn.id, action);
     workFinished(env, {
       summary: args.summary,
-      closes: !action && !ownerSession && !lastIncomingNeedsReply(task.id),
+      closes,
     });
   });
   return action

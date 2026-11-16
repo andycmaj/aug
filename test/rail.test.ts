@@ -38,7 +38,7 @@ describe("lanes", () => {
     expect(laneOf(store.getTask(t.id)!, { hasPendingAction: true })).toBe(
       Lane.waiting,
     );
-    store.updateTask(t.id, { agent_state: AgentState.agentdone });
+    store.updateTask(t.id, { agent_state: AgentState.ready });
     expect(laneOf(store.getTask(t.id)!, { hasPendingAction: true })).toBe(
       Lane.approve,
     );
@@ -121,7 +121,7 @@ describe("rail", () => {
       createdAt: at(6),
     });
     store.updateTask(finished.id, {
-      agent_state: AgentState.agentdone,
+      agent_state: AgentState.ready,
       unread_result: 1,
       status: "done",
     });
@@ -409,7 +409,7 @@ describe("the rail's status filter", () => {
       idle: 0,
       stopped: 1,
       review: 0,
-      finished: 0,
+      ready: 0,
       open: 1,
       waiting: 0,
     });

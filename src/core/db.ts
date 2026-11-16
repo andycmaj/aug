@@ -345,10 +345,11 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
 ];
 
 // Agent states renamed or merged (docs/rail-status-design.md): blocked is
-// waiting, saved is stopped.
+// waiting, saved is stopped, agentdone is ready (for review).
 const RENAMED_STATES: [from: string, to: string][] = [
   ["blocked", "waiting"],
   ["saved", "stopped"],
+  ["agentdone", "ready"],
 ];
 
 function columns(db: Database, table: string): string[] {

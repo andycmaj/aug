@@ -2,7 +2,7 @@
 // session, and both move together through a handful of named transitions.
 // Everything that starts, hears from, ends or finishes an agent calls one of
 // these; nothing else writes agent_state. The rules that used to be scattered
-// live here: a finished agent stays finished while it winds down, closing a
+// live here: an agent ready for review stays so while it winds down, closing a
 // task stops whatever was live on it, and a session that ends for any reason
 // leaves the task stopped with Continue. docs/rail-status-design.md has the
 // states and how they move.
@@ -97,8 +97,8 @@ export function sessionStarted(s: StartedSession): SessionRow {
 }
 
 // A live agent did something: a tool, a question, a notification, its prompt,
-// or its turn ended. Once it has said it is finished, its winding down is
-// not news.
+// or its turn ended. Once it has said it is finished (ready for review), its
+// winding down is not news; only new work (working) takes it out of ready.
 export type LiveState =
   | typeof AgentState.working
   | typeof AgentState.idle
@@ -112,7 +112,7 @@ export function sessionActivity(
 ): void {
   const task = store.getTask(ref.taskId);
   if (!task) return;
-  if (task.agent_state === AgentState.agentdone && state !== AgentState.working)
+  if (task.agent_state === AgentState.ready && state !== AgentState.working)
     return;
   store.batch(() => {
     store.updateSession(ref.sessionId, {
@@ -146,14 +146,14 @@ export const EndReason = {
   adopted: "running outside aug",
 } as const;
 
-// A task whose agent had already finished keeps that; closed work is left
-// as closing left it.
+// A task whose agent had already finished keeps ready: the result still
+// waits on the owner. Closed work is left as closing left it.
 export function sessionEnded(ref: AgentRef, reason: string): void {
   const task = store.getTask(ref.taskId);
-  const finished = task?.agent_state === AgentState.agentdone;
+  const finished = task?.agent_state === AgentState.ready;
   store.batch(() => {
     store.updateSession(ref.sessionId, {
-      state: finished ? AgentState.agentdone : AgentState.stopped,
+      state: finished ? AgentState.ready : AgentState.stopped,
       ended_at: now(),
       end_reason: reason,
     });
@@ -165,7 +165,8 @@ export function sessionEnded(ref: AgentRef, reason: string): void {
   });
 }
 
-// A chat turn came back: the agent is finished, or waiting on an answer.
+// A chat turn came back: the agent's answer is ready for review, or it is
+// waiting on an answer.
 // A chat agent has no idle: its process is gone once the turn is.
 export function turnFinished(
   ref: AgentRef,
@@ -174,20 +175,21 @@ export function turnFinished(
   const at = outcome.at ?? now();
   store.batch(() => {
     store.updateTask(ref.taskId, {
-      agent_state: outcome.asking ? AgentState.waiting : AgentState.agentdone,
+      agent_state: outcome.asking ? AgentState.waiting : AgentState.ready,
       agent_says: outcome.asking,
     });
     store.updateSession(ref.sessionId, {
-      state: AgentState.agentdone,
+      state: AgentState.ready,
       ended_at: at,
     });
   });
 }
 
-// A coding agent said it is done. Its session keeps running until claude
-// exits (sessionEnded then leaves the finish in place). The task is finished
-// and, when nothing waits on the owner, closed by the agent; either way it
-// stays on the rail until the result is read.
+// A coding agent said it is done: ready for review. Its session keeps
+// running until claude exits (sessionEnded then leaves ready in place). When
+// nothing waits on the owner the agent closes the task, and it stays on the
+// rail until the result is read; otherwise it is open and ready until the
+// owner closes it (or new work starts the agent again).
 export function workFinished(
   ref: AgentRef,
   outcome: { summary: string; closes: boolean },
@@ -196,11 +198,11 @@ export function workFinished(
   if (!task) return;
   store.batch(() => {
     store.updateSession(ref.sessionId, {
-      state: AgentState.agentdone,
+      state: AgentState.ready,
       result: outcome.summary,
     });
     store.updateTask(ref.taskId, {
-      agent_state: AgentState.agentdone,
+      agent_state: AgentState.ready,
       agent_says: null,
       unread_result: 1,
       ...(outcome.closes
@@ -268,11 +270,11 @@ export function taskDropped(taskId: number, by = "you"): void {
   });
 }
 
-// New work landed on a task whose agent had finished: that finish is read,
-// and the task is nobody's until an agent picks it up again.
+// New work landed on a task whose agent was ready for review: that result is
+// read, and the task is nobody's until an agent picks it up again.
 export function finishSuperseded(taskId: number): void {
   const task = store.getTask(taskId);
-  if (task?.agent_state === AgentState.agentdone)
+  if (task?.agent_state === AgentState.ready)
     store.updateTask(taskId, {
       agent_state: AgentState.none,
       unread_result: 0,

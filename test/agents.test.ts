@@ -85,7 +85,7 @@ describe("general agent turns", () => {
       to: "Ruth",
       text: "42 seats.",
     });
-    expect(store.getTask(taskId)!.agent_state).toBe(AgentState.agentdone);
+    expect(store.getTask(taskId)!.agent_state).toBe(AgentState.ready);
     // read-only tools, denied without asking
     expect(calls[0].allow).toContain("Bash(gh pr view:*)");
     expect(calls[0].allow).not.toContain("Bash");
@@ -227,12 +227,12 @@ describe("coding agent", () => {
     expect(store.getTask(t.id)!.agent_says).toBe("Shall I merge it into main?");
     handleDone(env, { summary: "Export keeps transfers; 14 tests green" });
     const task = store.getTask(t.id)!;
-    expect(task.agent_state).toBe(AgentState.agentdone);
+    expect(task.agent_state).toBe(AgentState.ready);
     // nobody asked from outside, aug started it: done, and unread until read
     expect(task.status).toBe(TaskStatus.done);
     expect(task.unread_result).toBe(1);
     handleHook("end", {}, env);
-    expect(store.getTask(t.id)!.agent_state).toBe(AgentState.agentdone);
+    expect(store.getTask(t.id)!.agent_state).toBe(AgentState.ready);
   });
 });
 

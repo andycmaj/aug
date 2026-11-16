@@ -55,7 +55,7 @@ function board(pending: Set<number>): Record<BoardColumn, TaskRow[]> {
     waiting: [],
     idle: [],
     left: [],
-    agentdone: [],
+    ready: [],
   };
   for (const task of store.listTasks()) {
     const col = boardColumnOf(task, { hasPendingAction: pending.has(task.id) }, today);

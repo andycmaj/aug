@@ -206,7 +206,7 @@ export function buildRail(input: RailInput): RailSection[] {
     }
     if (task.status === TaskStatus.done) {
       // An agent-closed task stays until you have read its result.
-      if (lane === Lane.agentdone) onYou.push(item);
+      if (lane === Lane.ready) onYou.push(item);
       continue;
     }
     if (task.status === TaskStatus.dropped) continue;
@@ -314,12 +314,12 @@ export function foldRail(
 // rail that a digit toggles. Lanes the owner reads as one thing share a pill.
 export const RailFilter = {
   asks: "asks",
+  ready: "ready",
   send: "send",
   working: "working",
   idle: "idle",
   stopped: "stopped",
   review: "review",
-  finished: "finished",
   open: "open",
   waiting: "waiting",
 } as const;
@@ -333,6 +333,14 @@ export const RAIL_FILTERS: {
   word: string;
 }[] = [
   { filter: "asks", lanes: [Lane.waiting], ...pill(Lane.waiting) },
+  // On you too, next to asks: its agent is finished and the result waits
+  // for your review, or the branch landed and only closing is left.
+  {
+    filter: "ready",
+    lanes: [Lane.ready, Lane.merged],
+    ...pill(Lane.ready),
+    word: "ready for review, or merged and ready to close",
+  },
   { filter: "send", lanes: [Lane.approve], ...pill(Lane.approve) },
   { filter: "working", lanes: [Lane.working], ...pill(Lane.working) },
   { filter: "idle", lanes: [Lane.idle], ...pill(Lane.idle) },
@@ -344,13 +352,6 @@ export const RAIL_FILTERS: {
     word: "stopped, or waiting to start",
   },
   { filter: "review", lanes: [Lane.review], ...pill(Lane.review) },
-  // Ready for you to close: the agent says done, or the branch landed.
-  {
-    filter: "finished",
-    lanes: [Lane.agentdone, Lane.merged],
-    ...pill(Lane.agentdone),
-    word: "agent finished, or merged",
-  },
   {
     filter: "open",
     lanes: [Lane.yours, Lane.asked],
@@ -366,7 +367,7 @@ export const RAIL_FILTERS: {
 ];
 
 // Lanes with no pill, on purpose: done never reaches the rail except as an
-// unread agentdone, which has one.
+// agent-closed task whose result is unread, which is in ready.
 export const UNFILTERED_LANES: Lane[] = [Lane.done];
 
 function pill(lane: Lane) {

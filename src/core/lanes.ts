@@ -8,6 +8,7 @@ import { AgentState, Kind, PrState, TaskStatus, type TaskRow } from "./types";
 
 export const Lane = {
   waiting: "waiting",
+  ready: "ready",
   approve: "approve",
   working: "working",
   queued: "queued",
@@ -16,7 +17,6 @@ export const Lane = {
   blocked: "blocked",
   idle: "idle",
   stopped: "stopped",
-  agentdone: "agentdone",
   asked: "asked",
   yours: "yours",
   theirs: "theirs",
@@ -33,15 +33,15 @@ export const LANE_META: Record<
   { word: string; mark: string; tone: Tone }
 > = {
   waiting: { word: "agent waiting on you", mark: "◆", tone: "warning" },
+  ready: { word: "ready for review", mark: "◈", tone: "success" },
   approve: { word: "ready to send", mark: "↑", tone: "success" },
   working: { word: "agent working", mark: "◐", tone: "info" },
   queued: { word: "waiting to start", mark: "◌", tone: "muted" },
-  merged: { word: "merged, clean up", mark: "»", tone: "success" },
+  merged: { word: "merged, ready to close", mark: "»", tone: "success" },
   review: { word: "PR in review", mark: "◎", tone: "secondary" },
   blocked: { word: "blocked by a task", mark: "⊘", tone: "muted" },
   idle: { word: "agent idle", mark: "◇", tone: "secondary" },
   stopped: { word: "agent stopped", mark: "■", tone: "muted" },
-  agentdone: { word: "agent finished", mark: "✓", tone: "success" },
   asked: { word: "asked you", mark: "?", tone: "primary" },
   yours: { word: "on you", mark: "•", tone: "text" },
   theirs: { word: "waiting on them", mark: "→", tone: "muted" },
@@ -95,8 +95,8 @@ export function phaseOf(task: TaskRow, facts: LaneFacts): Phase {
 // then whose it is.
 export function laneOf(task: TaskRow, facts: LaneFacts): Lane {
   if (task.status === TaskStatus.done) {
-    return task.agent_state === AgentState.agentdone && task.unread_result
-      ? Lane.agentdone
+    return task.agent_state === AgentState.ready && task.unread_result
+      ? Lane.ready
       : Lane.done;
   }
   if (task.status === TaskStatus.later) return Lane.later;
@@ -105,12 +105,14 @@ export function laneOf(task: TaskRow, facts: LaneFacts): Lane {
   if (task.agent_state === AgentState.working) return Lane.working;
   if (task.agent_state === AgentState.queued) return Lane.queued;
   const phase = phaseOf(task, facts);
+  // Landed work is past review: it only waits to be closed.
   if (phase === Phase.merged) return Lane.merged;
+  // Its agent is finished and the result is on you, PR open or not.
+  if (task.agent_state === AgentState.ready) return Lane.ready;
   if (phase === Phase.review) return Lane.review;
   if (phase === Phase.blocked) return Lane.blocked;
   if (task.agent_state === AgentState.idle) return Lane.idle;
   if (task.agent_state === AgentState.stopped) return Lane.stopped;
-  if (task.agent_state === AgentState.agentdone) return Lane.agentdone;
   if (task.watching) return Lane.watching;
   if (task.waiting_on) return Lane.theirs;
   if (task.kind === Kind.task) return Lane.yours;
@@ -124,7 +126,7 @@ export const BoardColumn = {
   waiting: "waiting",
   idle: "idle",
   left: "left",
-  agentdone: "agentdone",
+  ready: "ready",
 } as const;
 export type BoardColumn = (typeof BoardColumn)[keyof typeof BoardColumn];
 
@@ -135,7 +137,7 @@ export const BOARD_COLUMNS: { key: BoardColumn; title: string; tone: Tone }[] =
     { key: "waiting", title: "waiting on you", tone: "warning" },
     { key: "idle", title: "agent idle", tone: "secondary" },
     { key: "left", title: "agent stopped", tone: "muted" },
-    { key: "agentdone", title: "agent finished", tone: "success" },
+    { key: "ready", title: "ready for review", tone: "success" },
   ];
 
 export function boardColumnOf(
@@ -156,15 +158,15 @@ export function boardColumnOf(
       return facts.hasPendingAction ? BoardColumn.waiting : BoardColumn.idle;
     case AgentState.stopped:
       return task.status === TaskStatus.done ? null : BoardColumn.left;
-    case AgentState.agentdone:
+    case AgentState.ready:
       // Done is a today column: yesterday's finished work is history.
       if (task.status !== TaskStatus.done) {
         return facts.hasPendingAction
           ? BoardColumn.waiting
-          : BoardColumn.agentdone;
+          : BoardColumn.ready;
       }
       return (task.closed_at ?? "").slice(0, 10) === today
-        ? BoardColumn.agentdone
+        ? BoardColumn.ready
         : null;
     default:
       return null;

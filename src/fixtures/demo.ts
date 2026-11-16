@@ -107,7 +107,7 @@ function endedSession(id: string, taskId: number): void {
     cwd: "/tmp",
     startedBy: "aug",
   });
-  store.updateSession(id, { state: AgentState.agentdone, ended_at: ago(30) });
+  store.updateSession(id, { state: AgentState.ready, ended_at: ago(30) });
 }
 
 function agentTurn(
@@ -177,7 +177,7 @@ export function seedDemo(): void {
         "Read pricing.md",
       ],
     });
-    store.updateTask(sam, { agent_state: AgentState.agentdone });
+    store.updateTask(sam, { agent_state: AgentState.ready });
 
     // 2. A reply set up for one press.
     const ruth = seedTask(
@@ -214,7 +214,7 @@ export function seedDemo(): void {
       to: "Ruth Okafor",
       text: "42 seats - that's everyone active in the last 90 days. I'd push back on 60.",
     });
-    store.updateTask(ruth, { agent_state: AgentState.agentdone });
+    store.updateTask(ruth, { agent_state: AgentState.ready });
 
     // 3. Coding work, held for your Start.
     const exp = seedTask(
@@ -369,7 +369,7 @@ export function seedDemo(): void {
       startedBy: "aug",
     });
     store.updateSession(`demo-pty-${csv}`, {
-      state: AgentState.agentdone,
+      state: AgentState.ready,
       ended_at: ago(30),
       result:
         "Strip a UTF-8 BOM before parsing; added a regression test. 14 tests green.",
@@ -407,7 +407,7 @@ export function seedDemo(): void {
       close: "issue",
     });
     store.updateTask(csv, {
-      agent_state: AgentState.agentdone,
+      agent_state: AgentState.ready,
       unread_result: 1,
     });
 
