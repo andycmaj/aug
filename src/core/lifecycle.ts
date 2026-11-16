@@ -3,8 +3,9 @@
 // Everything that starts, hears from, ends or finishes an agent calls one of
 // these; nothing else writes agent_state. The rules that used to be scattered
 // live here: a finished agent stays finished while it winds down, closing a
-// task saves whatever was live on it, and a session that vanishes on open
-// work leaves the task stopped with Continue.
+// task stops whatever was live on it, and a session that ends for any reason
+// leaves the task stopped with Continue. docs/rail-status-design.md has the
+// states and how they move.
 
 import { now } from "./db";
 import * as store from "./store";
@@ -44,7 +45,7 @@ export function startCancelled(taskId: number): void {
   const task = store.getTask(taskId);
   if (task?.agent_state === AgentState.queued)
     store.updateTask(taskId, {
-      agent_state: AgentState.saved,
+      agent_state: AgentState.stopped,
       queue_reason: null,
     });
 }
@@ -70,6 +71,7 @@ export function sessionStarted(s: StartedSession): SessionRow {
         kind: s.kind,
         cwd: s.cwd,
         tmux_window: s.tmuxWindow ?? null,
+        end_reason: null,
       });
     } else {
       store.createSession({
@@ -93,11 +95,17 @@ export function sessionStarted(s: StartedSession): SessionRow {
   });
 }
 
-// A live agent did something: a tool, a question, a notification, its prompt.
-// Once it has said it is finished, its winding down is not news.
+// A live agent did something: a tool, a question, a notification, its prompt,
+// or its turn ended. Once it has said it is finished, its winding down is
+// not news.
+export type LiveState =
+  | typeof AgentState.working
+  | typeof AgentState.idle
+  | typeof AgentState.waiting;
+
 export function sessionActivity(
   ref: AgentRef,
-  state: typeof AgentState.working | typeof AgentState.blocked,
+  state: LiveState,
   says: string | null,
   lastTool?: string,
 ): void {
@@ -115,26 +123,49 @@ export function sessionActivity(
   });
 }
 
-// How a session came to an end. "saved" is the owner's Stop: it resumes.
-// "stopped" is anything else: it crashed, its window went, claude exited. A
-// task whose agent had already finished keeps that; closed work is left as
-// closing left it.
-export type SessionEnd = typeof AgentState.saved | typeof AgentState.stopped;
+// A turn is over: the agent asks something (waiting) or rests at its prompt
+// (idle).
+export function turnEnded(ref: AgentRef, asking: string | null): void {
+  sessionActivity(
+    ref,
+    asking ? AgentState.waiting : AgentState.idle,
+    asking,
+  );
+}
 
-export function sessionEnded(ref: AgentRef, how: SessionEnd): void {
+// Why a session came to an end. However it ended, the task is stopped and s
+// resumes it; the reason is what the table and the row say about it.
+export const EndReason = {
+  stop: "you stopped it",
+  closed: "you closed the task",
+  window: "its window closed",
+  exited: "claude exited",
+  restart: "aug restarted",
+  cancelled: "start taken back",
+  adopted: "running outside aug",
+} as const;
+
+// A task whose agent had already finished keeps that; closed work is left
+// as closing left it.
+export function sessionEnded(ref: AgentRef, reason: string): void {
   const task = store.getTask(ref.taskId);
   const finished = task?.agent_state === AgentState.agentdone;
   store.batch(() => {
     store.updateSession(ref.sessionId, {
-      state: finished ? AgentState.agentdone : how,
+      state: finished ? AgentState.agentdone : AgentState.stopped,
       ended_at: now(),
+      end_reason: reason,
     });
     if (!task || finished || task.status === TaskStatus.done) return;
-    store.updateTask(ref.taskId, { agent_state: how, agent_says: null });
+    store.updateTask(ref.taskId, {
+      agent_state: AgentState.stopped,
+      agent_says: null,
+    });
   });
 }
 
 // A chat turn came back: the agent is finished, or waiting on an answer.
+// A chat agent has no idle: its process is gone once the turn is.
 export function turnFinished(
   ref: AgentRef,
   outcome: { asking: string | null; at?: string },
@@ -142,7 +173,7 @@ export function turnFinished(
   const at = outcome.at ?? now();
   store.batch(() => {
     store.updateTask(ref.taskId, {
-      agent_state: outcome.asking ? AgentState.blocked : AgentState.agentdone,
+      agent_state: outcome.asking ? AgentState.waiting : AgentState.agentdone,
       agent_says: outcome.asking,
     });
     store.updateSession(ref.sessionId, {
@@ -185,7 +216,7 @@ export function workFinished(
 }
 
 // Mark done always does the same things: closed, unsent draft retired, any
-// live agent saved (the caller stops its process), off the rail.
+// live agent stopped (the caller stops its process), off the rail.
 export function taskClosed(taskId: number, by = "you"): void {
   store.batch(() => {
     store.retirePendingActions(taskId);
@@ -199,7 +230,8 @@ export function taskClosed(taskId: number, by = "you"): void {
     const agentLive =
       task &&
       (task.agent_state === AgentState.working ||
-        task.agent_state === AgentState.blocked ||
+        task.agent_state === AgentState.idle ||
+        task.agent_state === AgentState.waiting ||
         task.agent_state === AgentState.queued);
     store.updateTask(taskId, {
       status: TaskStatus.done,
@@ -208,14 +240,15 @@ export function taskClosed(taskId: number, by = "you"): void {
       unread_result: 0,
       watching: 0,
       remind_at: null,
-      ...(agentLive ? { agent_state: AgentState.saved } : {}),
+      ...(agentLive ? { agent_state: AgentState.stopped } : {}),
     });
     for (const session of store
       .liveSessions()
       .filter((s) => s.task_id === taskId))
       store.updateSession(session.id, {
         ended_at: now(),
-        state: AgentState.saved,
+        state: AgentState.stopped,
+        end_reason: EndReason.closed,
       });
   });
 }
@@ -234,7 +267,7 @@ export function finishSuperseded(taskId: number): void {
 // The draft an agent was waiting on went out: it is no longer asking.
 export function draftSent(taskId: number): void {
   const task = store.getTask(taskId);
-  if (task?.agent_state === AgentState.blocked)
+  if (task?.agent_state === AgentState.waiting)
     store.updateTask(taskId, { agent_says: null });
 }
 
@@ -248,7 +281,7 @@ export function recoverAtBoot(
   store.batch(() => {
     for (const s of store.liveSessions()) {
       if (survives(s)) continue;
-      sessionEnded({ taskId: s.task_id, sessionId: s.id }, AgentState.stopped);
+      sessionEnded({ taskId: s.task_id, sessionId: s.id }, EndReason.restart);
     }
     for (const task of store.listTasks()) {
       // The queue that held it waiting its turn died with the last aug.

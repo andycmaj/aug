@@ -32,9 +32,9 @@ describe("lanes", () => {
       kind: Kind.general,
       channel: "slack",
     });
-    store.updateTask(t.id, { agent_state: AgentState.blocked });
+    store.updateTask(t.id, { agent_state: AgentState.waiting });
     expect(laneOf(store.getTask(t.id)!, { hasPendingAction: true })).toBe(
-      Lane.blocked,
+      Lane.waiting,
     );
     store.updateTask(t.id, { agent_state: AgentState.agentdone });
     expect(laneOf(store.getTask(t.id)!, { hasPendingAction: true })).toBe(
@@ -348,8 +348,8 @@ describe("the rail's status filter", () => {
     const saved = store.createTask({ title: "saved", kind: Kind.coding, channel: "owner" });
     const mine = store.createTask({ title: "mine", kind: Kind.task, channel: "owner" });
     store.updateTask(working.id, { agent_state: AgentState.working });
-    store.updateTask(asks.id, { agent_state: AgentState.blocked });
-    store.updateTask(saved.id, { agent_state: AgentState.saved });
+    store.updateTask(asks.id, { agent_state: AgentState.waiting });
+    store.updateTask(saved.id, { agent_state: AgentState.stopped });
     return { api, web, working, asks, saved, mine };
   }
 

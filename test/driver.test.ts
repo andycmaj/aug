@@ -58,7 +58,7 @@ describe("a coding task's driver", () => {
       "started",
     );
     await engine.desk.stopAgent(task.id);
-    expect(store.getTask(task.id)!.agent_state).toBe(AgentState.saved);
+    expect(store.getTask(task.id)!.agent_state).toBe(AgentState.stopped);
     expect(fake.windows).toHaveLength(0);
     expect((await engine.desk.startAgent(task.id)).type).toBe("started");
     expect(fake.windows[0].argv).toContain("--resume");
@@ -73,7 +73,7 @@ describe("a coding task's driver", () => {
     const out = await engine.runMove("stop", { task: ref(task.id) });
     expect(out.ok).toBe(true);
     expect(fake.windows).toHaveLength(0);
-    expect(store.getTask(task.id)!.agent_state).toBe(AgentState.saved);
+    expect(store.getTask(task.id)!.agent_state).toBe(AgentState.stopped);
   });
 
   test("close marks it done, then takes the window and worktree", async () => {
@@ -126,7 +126,7 @@ describe("a general task's driver", () => {
     engine.desk.setKind(held.id, Kind.general);
     expect(store.getTask(held.id)!.agent_state).toBe(AgentState.queued);
     await engine.desk.stopAgent(held.id);
-    expect(store.getTask(held.id)!.agent_state).toBe(AgentState.saved);
+    expect(store.getTask(held.id)!.agent_state).toBe(AgentState.stopped);
   });
 
   test("close stops the pool's turn and marks the task done", async () => {
@@ -187,7 +187,7 @@ describe("Agents at once (maxActiveAgents)", () => {
     expect(fake.windows).toHaveLength(2);
 
     // A's claude finishes its turn (its Stop hook): idle, not working.
-    sessionActivity(latestRef(a.id), AgentState.blocked, "which way?");
+    sessionActivity(latestRef(a.id), AgentState.waiting, "which way?");
     engine.pool.drain();
     await Bun.sleep(0);
     await Bun.sleep(0);
@@ -221,7 +221,7 @@ describe("Agents at once (maxActiveAgents)", () => {
     await engine.desk.startAgent(b.id, { branch: "bb" });
     await engine.desk.startAgent(c.id, { branch: "bc" });
     await engine.desk.stopAgent(c.id);
-    expect(store.getTask(c.id)!.agent_state).toBe(AgentState.saved);
+    expect(store.getTask(c.id)!.agent_state).toBe(AgentState.stopped);
     await engine.desk.stopAgent(a.id);
     engine.pool.drain();
     await Bun.sleep(0);

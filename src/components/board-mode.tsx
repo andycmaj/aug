@@ -635,8 +635,8 @@ function Card(props: {
     if (t.agent_state === AgentState.working) {
       return `${props.spinner} ${s?.last_tool ?? "working"} · ${s ? duration(s.started_at, null) : ""}`;
     }
-    if (t.agent_state === AgentState.blocked)
-      return `${LANE_META.blocked.mark} ${t.agent_says ?? "waiting on you"}`;
+    if (t.agent_state === AgentState.waiting)
+      return `${LANE_META.waiting.mark} ${t.agent_says ?? "waiting on you"}`;
     if (t.agent_state === AgentState.queued)
       return `${LANE_META.queued.mark} ${t.queue_reason ?? "waiting to start"}`;
     if (aug.pending().has(t.id))

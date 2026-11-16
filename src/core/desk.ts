@@ -161,7 +161,7 @@ export class Desk {
     return this.drivers.for(task).start(task, opts);
   }
 
-  // The owner's Stop: saved, so Start resumes it.
+  // The owner's Stop: stopped, and Start resumes it.
   async stopAgent(taskId: number): Promise<void> {
     const task = store.getTask(taskId);
     if (task) await this.drivers.for(task).stop(task);

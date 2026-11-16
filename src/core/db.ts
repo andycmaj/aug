@@ -317,6 +317,14 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "turns", column: "pending", ddl: "INTEGER NOT NULL DEFAULT 0" },
   { table: "projects", column: "brief", ddl: "TEXT NOT NULL DEFAULT ''" },
   { table: "tasks", column: "goal_id", ddl: "INTEGER REFERENCES project_goals(id)" },
+  { table: "sessions", column: "end_reason", ddl: "TEXT" },
+];
+
+// Agent states renamed or merged (docs/rail-status-design.md): blocked is
+// waiting, saved is stopped.
+const RENAMED_STATES: [from: string, to: string][] = [
+  ["blocked", "waiting"],
+  ["saved", "stopped"],
 ];
 
 function columns(db: Database, table: string): string[] {
@@ -335,6 +343,12 @@ export function migrate(db: Database): void {
   // Indexes on added columns wait until the columns exist.
   if (columns(db, "tasks").includes("branch"))
     db.exec("CREATE INDEX IF NOT EXISTS tasks_branch ON tasks(repo, branch)");
+  for (const [from, to] of RENAMED_STATES) {
+    if (columns(db, "tasks").length > 0)
+      db.query("UPDATE tasks SET agent_state = ? WHERE agent_state = ?").run(to, from);
+    if (columns(db, "sessions").length > 0)
+      db.query("UPDATE sessions SET state = ? WHERE state = ?").run(to, from);
+  }
 }
 
 export function db(): Database {

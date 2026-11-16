@@ -3,13 +3,13 @@
 // session id, cwd and, inside tmux, its pane), which is how they are found.
 // Adopting one makes it a coding task in a project: a claude in tmux keeps
 // running and its window moves into the project's session; one outside tmux
-// is recorded as saved, so Start resumes it in a window of the project.
+// is recorded as stopped, so Start resumes it in a window of the project.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { adoptedTitle, claudeDir, gitInfo, type GitInfo } from "./adopt";
 import type { AugConfig } from "./config";
-import { sessionActivity, sessionEnded, sessionStarted } from "./lifecycle";
+import { EndReason, sessionEnded, sessionStarted, turnEnded } from "./lifecycle";
 import { logger } from "./log";
 import { mux, type PaneInfo } from "./mux";
 import { takeWindow } from "./projects";
@@ -233,7 +233,7 @@ export async function adoptStray(
       startedBy: "owner",
       tmuxWindow: pane.windowId,
     });
-    if (claude.status === "idle") sessionActivity(ref, AgentState.blocked, "is waiting at its prompt");
+    if (claude.status === "idle") turnEnded(ref, null);
   } else {
     sessionStarted({
       id: claude.sessionId,
@@ -242,7 +242,7 @@ export async function adoptStray(
       cwd: claude.cwd,
       startedBy: "owner",
     });
-    sessionEnded(ref, AgentState.saved);
+    sessionEnded(ref, EndReason.adopted);
   }
   log.info("adopted stray", { task: task.id, project: project.id, pane: claude.pane, tmux: !!pane });
   return store.getTask(task.id)!;

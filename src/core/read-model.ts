@@ -49,7 +49,8 @@ function board(pending: Set<number>): Record<BoardColumn, TaskRow[]> {
   const out: Record<BoardColumn, TaskRow[]> = {
     queued: [],
     working: [],
-    blocked: [],
+    waiting: [],
+    idle: [],
     left: [],
     agentdone: [],
   };

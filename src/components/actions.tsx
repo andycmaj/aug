@@ -327,7 +327,7 @@ export function useActions(dialogs: Dialogs) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
     void desk.stopAgent(task.id).then(
-      () => showToast(`${taskRef(task.id)}: stopped and saved`),
+      () => showToast(`${taskRef(task.id)}: stopped; s resumes it`),
       (err) => showToast(`Could not stop: ${errorMessage(err)}`, 4000, "error"),
     );
   }

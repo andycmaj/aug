@@ -411,7 +411,8 @@ function inbound(message: MessageRow, config: TriageConfig): Inbound {
 function isLive(task: TaskRow): boolean {
   return (
     task.agent_state === AgentState.working ||
-    task.agent_state === AgentState.blocked
+    task.agent_state === AgentState.idle ||
+    task.agent_state === AgentState.waiting
   );
 }
 

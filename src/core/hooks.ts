@@ -1,15 +1,18 @@
 // State for a coding agent running interactively in an embedded terminal.
 // Claude Code fires hooks (configured per session with --settings) that run
 // `aug-tools hook <event>`; each one lands here and moves the session and its
-// task through the agent states. A quiet session at its prompt is an agent
-// waiting on you.
+// task through the agent states. A turn runs from the prompt to Stop: idle
+// after it, unless it ended on a question (waiting on you).
 
+import { readFileSync } from "node:fs";
 import { describeStep } from "./brain";
 import type { TurnAnswer } from "./agents";
 import { actionFor } from "./outbound";
 import {
+  EndReason,
   sessionActivity,
   sessionEnded,
+  turnEnded,
   workFinished,
   type AgentRef,
 } from "./lifecycle";
@@ -28,6 +31,11 @@ export interface HookPayload {
   cwd?: string;
   // PostToolUse carries what the tool gave back.
   tool_response?: unknown;
+  // Notification says what kind it is (permission_prompt, idle_prompt).
+  notification_type?: string;
+  // Stop carries the transcript, and newer claudes its last message too.
+  transcript_path?: string;
+  last_assistant_message?: string;
 }
 
 export type HookEnv = AgentRef;
@@ -47,30 +55,98 @@ export function handleHook(
         payload.tool_input,
       );
       if (payload.tool_name === "AskUserQuestion")
-        sessionActivity(env, AgentState.blocked, "asked you something", step);
+        sessionActivity(env, AgentState.waiting, "asked you something", step);
       else sessionActivity(env, AgentState.working, null, step);
       return;
     }
     case "notification": {
+      // Claude's "waiting for your input" after a quiet minute: the turn
+      // ended already, and Stop said whether it asked anything.
+      if (isIdleNotice(payload)) return;
       const text = payload.message ?? "needs you";
       const approval = /permission|approve|allow/i.test(text);
       sessionActivity(
         env,
-        AgentState.blocked,
+        AgentState.waiting,
         approval ? `needs your approval: ${text}` : text,
       );
       return;
     }
     case "stop":
-      sessionActivity(env, AgentState.blocked, "is waiting at its prompt");
+      turnEnded(env, endedAsking(lastMessage(payload)));
       return;
     case "end":
-      sessionEnded(env, AgentState.stopped);
+      sessionEnded(env, endReason(payload.reason));
       return;
     case "made":
       linkArtifact(payload, env);
       return;
   }
+}
+
+function isIdleNotice(payload: HookPayload): boolean {
+  if (payload.notification_type) return payload.notification_type === "idle_prompt";
+  return /waiting for your input/i.test(payload.message ?? "");
+}
+
+// SessionEnd's reason: "clear", "logout", "prompt_input_exit", "other".
+function endReason(reason: string | undefined): string {
+  return reason === "other" || !reason ? EndReason.window : EndReason.exited;
+}
+
+// The question a turn ended on, if it ended on one: its last line, when
+// that line asks. A turn that ends with a statement left nothing to answer.
+export function endedAsking(message: string | null): string | null {
+  if (!message) return null;
+  const lines = message
+    .split("\n")
+    .map((l) => l.replace(/[*_`\s]+$/g, "").trim())
+    .filter(Boolean);
+  const last = lines.at(-1) ?? "";
+  if (!last.endsWith("?")) return null;
+  return last.length > 200 ? `${last.slice(0, 199)}…` : last;
+}
+
+// The turn's last words: from the payload when claude sends them, else the
+// last assistant text in its transcript.
+function lastMessage(payload: HookPayload): string | null {
+  if (typeof payload.last_assistant_message === "string")
+    return payload.last_assistant_message;
+  if (!payload.transcript_path) return null;
+  try {
+    return lastAssistantText(readFileSync(payload.transcript_path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+export function lastAssistantText(jsonl: string): string | null {
+  const lines = jsonl.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!lines[i].includes('"assistant"')) continue;
+    let entry: { type?: string; message?: { content?: unknown } };
+    try {
+      entry = JSON.parse(lines[i]) as typeof entry;
+    } catch {
+      continue;
+    }
+    if (entry.type !== "assistant") continue;
+    const content = entry.message?.content;
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) continue;
+    const text = content
+      .filter(
+        (c): c is { type: "text"; text: string } =>
+          typeof c === "object" &&
+          c !== null &&
+          (c as { type?: unknown }).type === "text" &&
+          typeof (c as { text?: unknown }).text === "string",
+      )
+      .map((c) => c.text)
+      .join("\n");
+    if (text.trim()) return text;
+  }
+  return null;
 }
 
 // Only the calls that make or change a Claude artifact fire "made": the
