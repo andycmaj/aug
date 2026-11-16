@@ -23,7 +23,7 @@ import {
 } from "./driver";
 import { nudgeText } from "./feedback";
 import { correct } from "./learn";
-import { holdForStart, taskClosed } from "./lifecycle";
+import { holdForStart, taskClosed, taskDropped } from "./lifecycle";
 import type { AugConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
 import * as projects from "./projects";
@@ -357,11 +357,7 @@ export class Desk {
     if (worked) void this.close(taskId);
     else {
       void this.drivers.for(task).stop(task);
-      store.updateTask(taskId, {
-        status: TaskStatus.dropped,
-        closed_at: now(),
-        closed_by: "you",
-      });
+      taskDropped(taskId);
       for (const m of store.messagesForTask(taskId))
         store.fileMessage(m.id, Verdict.fyi, "you said: not a task", null);
     }
@@ -401,6 +397,44 @@ export class Desk {
       },
       this.learnedNotice,
     );
+  }
+
+  // A task waits on others; each is told nothing, the waiting one hears
+  // when they close (lifecycle.blockerResolved).
+  blockOn(taskId: number, blockerId: number, by: string): string {
+    const task = store.getTask(taskId);
+    const blocker = store.getTask(blockerId);
+    if (!task || !blocker) throw new Error(`no task ${store.taskRef(blockerId)}`);
+    if (taskId === blockerId) throw new Error("a task cannot wait on itself");
+    if (blocker.status === TaskStatus.done || blocker.status === TaskStatus.dropped)
+      throw new Error(`${store.taskRef(blockerId)} is ${blocker.status} already`);
+    if (waitsOn(blockerId, taskId))
+      throw new Error(`${store.taskRef(blockerId)} already waits on ${store.taskRef(taskId)}`);
+    store.batch(() => {
+      store.addBlocker(taskId, blockerId, by);
+      store.addTurn({
+        taskId,
+        role: TurnRole.trigger,
+        body: `Blocked by ${store.taskRef(blockerId)}: ${blocker.title}`,
+      });
+    });
+    return `${store.taskRef(taskId)} is blocked by ${store.taskRef(blockerId)}`;
+  }
+
+  // No blocker: all of them.
+  unblock(taskId: number, blockerId?: number): string {
+    const had = store.blockersOf(taskId);
+    const gone = blockerId === undefined ? had : had.filter((id) => id === blockerId);
+    if (gone.length === 0) return `${store.taskRef(taskId)} was not blocked by that`;
+    store.batch(() => {
+      store.removeBlocker(taskId, blockerId);
+      store.addTurn({
+        taskId,
+        role: TurnRole.trigger,
+        body: `No longer blocked by ${gone.map((id) => store.taskRef(id)).join(", ")}`,
+      });
+    });
+    return `${store.taskRef(taskId)} is no longer blocked by ${gone.map((id) => store.taskRef(id)).join(", ")}`;
   }
 
   waitOn(taskId: number, who: string): void {
@@ -573,4 +607,12 @@ export class Desk {
     store.kvSet(HOOKS_OFFERED, "1");
     return true;
   }
+}
+
+// Whether from waits on to, directly or through the tasks it waits on.
+function waitsOn(from: number, to: number, seen = new Set<number>()): boolean {
+  if (from === to) return true;
+  if (seen.has(from)) return false;
+  seen.add(from);
+  return store.blockersOf(from).some((id) => waitsOn(id, to, seen));
 }

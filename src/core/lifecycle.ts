@@ -213,6 +213,7 @@ export function workFinished(
         outcome.closes ? "finished" : "finished; it waits for the owner",
         outcome.summary,
       );
+    if (outcome.closes) blockerResolved(ref.taskId);
   });
 }
 
@@ -251,6 +252,19 @@ export function taskClosed(taskId: number, by = "you"): void {
         state: AgentState.stopped,
         end_reason: EndReason.closed,
       });
+    blockerResolved(taskId);
+  });
+}
+
+// Not a task after all: gone from the rail, and nothing waits on it.
+export function taskDropped(taskId: number, by = "you"): void {
+  store.batch(() => {
+    store.updateTask(taskId, {
+      status: TaskStatus.dropped,
+      closed_at: now(),
+      closed_by: by,
+    });
+    blockerResolved(taskId);
   });
 }
 
@@ -263,6 +277,27 @@ export function finishSuperseded(taskId: number): void {
       agent_state: AgentState.none,
       unread_result: 0,
     });
+}
+
+// A task others wait on is done or dropped: each of them hears it, and is
+// unblocked by it. What still blocks one is named.
+export function blockerResolved(blockerId: number): void {
+  const blocker = store.getTask(blockerId);
+  if (!blocker) return;
+  const how = blocker.status === TaskStatus.dropped ? "dropped" : "done";
+  store.batch(() => {
+    for (const dependent of store.dependentsOf(blockerId)) {
+      store.removeBlocker(dependent, blockerId);
+      const left = store.blockersOf(dependent).map((id) => store.taskRef(id));
+      store.addTurn({
+        taskId: dependent,
+        role: TurnRole.trigger,
+        body: `${store.taskRef(blockerId)} ${how}: ${blocker.title}; ${
+          left.length ? `still blocked by ${left.join(", ")}` : "nothing blocks this now"
+        }`,
+      });
+    }
+  });
 }
 
 // Its branch landed: ready to clean up, and still the owner's to close.
