@@ -6,6 +6,7 @@
 import { createMemo, For, Match, Show, Switch, type Accessor } from "solid-js";
 import { Markdown, useTheme } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
+import { refusalLines } from "../core/capabilities";
 import { actionText, describeAction } from "../core/outbound";
 import {
   formatBytes,
@@ -103,6 +104,7 @@ function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
     () => turnSteps(props.turn),
   );
   const running = () => props.turn.status === "running";
+  const refusals = createMemo(() => refusalLines(steps()));
   const files = createMemo(() => parseFiles(props.turn.files));
   const action = createMemo(() =>
     props.turn.action ? (JSON.parse(props.turn.action) as DraftAction) : null,
@@ -230,6 +232,18 @@ function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
           </box>
         </Match>
       </Switch>
+      {/* Steps fold away when a turn ends; a refused call must not. */}
+      <Show when={!running() && refusals().length > 0}>
+        <box flexDirection="column" paddingLeft={2} marginTop={1}>
+          <For each={refusals()}>
+            {(line) => (
+              <text fg={theme.warning} wrapMode="word">
+                {line}
+              </text>
+            )}
+          </For>
+        </box>
+      </Show>
     </box>
   );
 }

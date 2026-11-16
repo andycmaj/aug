@@ -4,9 +4,11 @@
 // capability means for a given connector.
 //
 // Fail closed: only tools named by a capability are ever allowed, and any name
-// that looks like a write is dropped even if a config override lists it.
-// Sessions run with --permission-mode dontAsk, so anything not allowed here is
-// simply denied.
+// that looks like a write is dropped even if a config override lists it. The
+// one way past that is a built-in write capability (docs.write): the writes it
+// may grant are named here, on its own connector, and an override can only
+// narrow them. Sessions run with --permission-mode dontAsk, so anything not
+// allowed here is simply denied.
 //
 // A capability can also be a Claude Code plugin or a command, defined only in
 // config. Headless calls skip user settings, so an enabled plugin is not there
@@ -22,6 +24,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { AugConfig } from "./config";
 import { logger } from "./log";
+import { paths } from "./paths";
 import { TOOLS_NAME } from "./self";
 import { TurnRole, type TurnRow } from "./types";
 
@@ -37,6 +40,11 @@ const NAME = /^[A-Za-z0-9_-]+$/;
 export interface CapabilitySpec {
   server: string; // the segment in mcp__<server>__<tool>
   tools: string[]; // bare tool names
+  // Write tools this capability may grant despite WRITE_VERB, only on its own
+  // server. Not all are in `tools`: the rest need a tools override to name.
+  writes?: string[];
+  // What it lets an agent do, in the prompt and the README's words.
+  about: string;
 }
 
 export const CAPABILITIES: Record<string, CapabilitySpec> = {
@@ -54,16 +62,29 @@ export const CAPABILITIES: Record<string, CapabilitySpec> = {
       "slack_search_channels",
       "slack_search_users",
     ],
+    about: "read and search Slack",
   },
   "docs.read": {
     server: "claude_ai_Claude_Docs",
     tools: ["read", "export", "guide", "query"],
+    about: "read, query and export Claude Docs",
+  },
+  // Off unless granted. delete is left out: it takes a whole doc away, so the
+  // owner names it in capabilities.tools["docs.write"] to allow it.
+  "docs.write": {
+    server: "claude_ai_Claude_Docs",
+    tools: ["read", "export", "guide", "query", "batch", "create", "update"],
+    writes: ["batch", "create", "update", "delete"],
+    about: "make and edit Claude Docs (and read them)",
   },
   "notion.read": {
     server: "claude_ai_Notion",
     tools: ["notion-fetch", "notion-search", "notion-get-comments"],
+    about: "read and search Notion",
   },
 };
+
+const DOCS_SERVER = "claude_ai_Claude_Docs";
 
 // gh commands that only read, for looking up issues, PRs and runs. Not
 // `gh api`: a method flag or a field turns it into a write.
@@ -88,25 +109,74 @@ export const SHELL_HOWTO =
   `Run one command per Bash call, written out in full and starting with the command itself: no \`cd <dir> &&\` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). Keep each argument on one line: a quoted argument with a line starting with # (a Markdown heading) is denied, so long text goes in a file. Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout. A denied call means the command did not match, not that Bash is off: write it again that way (aug's tools as ${TOOLS_NAME} <command>) and try once more before giving up. Never ask the owner to allow a command: they cannot, aug sets what you may run.`;
 
 export const DENIED_STEP = "denied: ";
+// Said beside a denied connector call: what the owner sets to let it run.
+export const GRANT_STEP = "grant: ";
 
-// The calls the last agent turn was denied.
-export function lastDenials(turns: TurnRow[]): string[] {
-  const last = turns.findLast((t) => t.role === TurnRole.agent);
-  const steps: unknown = last?.steps ? JSON.parse(last.steps) : [];
+function stepsOf(turn: TurnRow | undefined): string[] {
+  const steps: unknown = turn?.steps ? JSON.parse(turn.steps) : [];
   return Array.isArray(steps)
-    ? steps.filter((s): s is string => typeof s === "string" && s.startsWith(DENIED_STEP))
+    ? steps.filter((s): s is string => typeof s === "string")
     : [];
 }
 
-// The next turn names the denied calls and how to write them instead.
+function lastAgentTurn(turns: TurnRow[]): TurnRow | undefined {
+  return turns.findLast((t) => t.role === TurnRole.agent);
+}
+
+// The calls the last agent turn was denied.
+export function lastDenials(turns: TurnRow[]): string[] {
+  return stepsOf(lastAgentTurn(turns)).filter((s) => s.startsWith(DENIED_STEP));
+}
+
+// The tool a denied call named: "Bash", "mcp__claude_ai_Claude_Docs__batch".
+export function deniedTool(call: string): string {
+  const text = call.startsWith(DENIED_STEP) ? call.slice(DENIED_STEP.length) : call;
+  return text.split(" ")[0] ?? "";
+}
+
+// What a finished turn shows the owner of its denials: each refused call,
+// short, then what would grant the connector ones.
+export function refusalLines(steps: string[]): string[] {
+  const denied = steps
+    .filter((s) => s.startsWith(DENIED_STEP))
+    .map((s) => {
+      const call = s.slice(DENIED_STEP.length);
+      return `denied ${call.length > 90 ? `${call.slice(0, 90)}…` : call}`;
+    });
+  const grants = steps
+    .filter((s) => s.startsWith(GRANT_STEP))
+    .map((s) => `to allow ${s.slice(GRANT_STEP.length)}`);
+  return [...denied, ...grants];
+}
+
+// The next turn names the denied calls: a shell call is told how to write it
+// instead, a connector call what the owner would grant to let it run.
 export function deniedNote(turns: TurnRow[]): string {
-  const denied = lastDenials(turns);
+  const steps = stepsOf(lastAgentTurn(turns));
+  const denied = steps.filter((s) => s.startsWith(DENIED_STEP));
   if (!denied.length) return "";
+  const shell = denied.filter((s) => !deniedTool(s).startsWith("mcp__"));
+  const connector = denied.filter((s) => deniedTool(s).startsWith("mcp__"));
+  const grants = steps.filter((s) => s.startsWith(GRANT_STEP));
   return [
-    "Your last turn was denied these calls, because they did not match an allowed command:",
-    ...denied.map((s) => `- ${s.slice(DENIED_STEP.length)}`),
-    `Do not repeat them. ${SHELL_HOWTO}`,
-  ].join("\n");
+    shell.length
+      ? [
+          "Your last turn was denied these calls, because they did not match an allowed command:",
+          ...shell.map((s) => `- ${s.slice(DENIED_STEP.length)}`),
+          `Do not repeat them. ${SHELL_HOWTO}`,
+        ].join("\n")
+      : "",
+    connector.length
+      ? [
+          "Your last turn was denied these connector tools, because the owner has not granted them to you:",
+          ...[...new Set(connector.map(deniedTool))].map((t) => `- ${t}`),
+          ...grants.map((s) => `- ${s.slice(GRANT_STEP.length)}`),
+          "Do not call them again this turn. Tell the owner what you could not do and the config key above that would allow it; never edit aug's config yourself.",
+        ].join("\n")
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export type Role = "general" | "assistant";
@@ -137,7 +207,8 @@ export function resolveCapability(
       });
       continue;
     }
-    if (WRITE_VERB.test(tool)) {
+    const grantedWrite = server === base?.server && base.writes?.includes(tool);
+    if (WRITE_VERB.test(tool) && !grantedWrite) {
       log.warn("write-looking tool dropped from capability", {
         capability: name,
         tool,
@@ -374,6 +445,104 @@ export function capabilityGrant(
     pluginDirs,
     commands,
   };
+}
+
+const MCP_TOOL = /^mcp__(.+?)__(.+)$/;
+
+// What a role would need granted for a denied connector tool to run, in the
+// owner's words: the capability and the config key that grants it.
+export function grantHint(
+  tool: string,
+  role: Role,
+  config: AugConfig,
+  file = paths.config(),
+): string | null {
+  const match = MCP_TOOL.exec(tool);
+  if (!match) return null;
+  const [, server, bare] = match as unknown as [string, string, string];
+  const caps = config.capabilities;
+  const key = `capabilities.grants.${role}`;
+  const candidates = Object.entries(CAPABILITIES).filter(
+    ([name, spec]) => (caps.servers[name] ?? spec.server) === server,
+  );
+  if (!candidates.length) return null;
+  const granted = new Set(caps.grants[role] ?? []);
+  // A capability that has it by default beats one that needs a tools
+  // override, and a read beats a write.
+  const byDefault = candidates.find(([, spec]) => spec.tools.includes(bare));
+  const byOverride = candidates.find(([, spec]) => spec.writes?.includes(bare));
+  const found = byDefault ?? byOverride;
+  if (!found) return `${tool}: no capability in aug grants it (connector writes other than Claude Docs are never allowed).`;
+  const [name] = found;
+  if (granted.has(name)) {
+    return `${tool}: "${name}" is in ${key}, but its tools leave "${bare}" out: list it in capabilities.tools["${name}"] in ${file}.`;
+  }
+  const extra = byDefault
+    ? ""
+    : `, and list "${bare}" in capabilities.tools["${name}"] beside its default tools`;
+  return `${tool}: add "${name}" to ${key} in ${file}${extra}.`;
+}
+
+// One grant step per denied connector tool that some capability would allow.
+export function grantSteps(
+  denied: string[],
+  role: Role,
+  config: AugConfig,
+  file = paths.config(),
+): string[] {
+  const tools = [...new Set(denied.map(deniedTool))];
+  return tools.flatMap((tool) => {
+    const hint = grantHint(tool, role, config, file);
+    return hint ? [`${GRANT_STEP}${hint}`] : [];
+  });
+}
+
+// Where connector grants live, said to every headless agent so "how do I
+// enable X" gets the real answer.
+export function connectorNote(
+  role: Role,
+  config: AugConfig,
+  file = paths.config(),
+): string {
+  const granted = (config.capabilities.grants[role] ?? []).filter(
+    (name) => CAPABILITIES[name],
+  );
+  const offered = Object.entries(CAPABILITIES)
+    .map(([name, spec]) => `${name} (${spec.about})`)
+    .join(", ");
+  return [
+    `Connector tools (claude.ai Slack, Claude Docs, Notion) run only for capabilities the owner grants you in ${file} under capabilities.grants.${role}, for example "capabilities": {"grants": {"${role}": ["docs.read", "docs.write"]}}. aug offers: ${offered}. Granted to you now: ${granted.join(", ") || "none"}.`,
+    "When the owner asks how to enable one, tell them that key and capability. Never edit that file yourself, and never ask the owner to approve a call: nothing can, only a grant.",
+  ].join("\n");
+}
+
+// How to work with Claude Docs headless, once a role may read or make them.
+export function docsNote(
+  role: Role,
+  config: AugConfig,
+): string {
+  const caps = config.capabilities;
+  const granted = (caps.grants[role] ?? []).filter(
+    (name) => (caps.servers[name] ?? CAPABILITIES[name]?.server) === DOCS_SERVER,
+  );
+  if (!granted.length) return "";
+  const writes = granted.includes("docs.write");
+  const link =
+    role === "general"
+      ? `aug links a doc you create to this task by itself; if it is not under Link, attach it with ${TOOLS_NAME} move link <this task's ref> "<url>" --title "<doc title>". Give the link in did.`
+      : `Attach it to the task it is for with ${TOOLS_NAME} move link AUG-0000 "<url>" --title "<doc title>", then give the owner the link.`;
+  return [
+    "## Claude Docs",
+    writes
+      ? [
+          "Make a doc only when the owner asks for one (a doc, an artifact). Make it first: one batch call with container.kind \"project\" and a create whose doc is a skeleton (the title, today's date, one pending block per section). Its answer carries the doc's link.",
+          link,
+          'Then guide(items: ["topic.index"]) once, and fill each section by replacing its pending block with "## <heading>" and its body. Findings go in the doc, not in your answer: end with one line and the link.',
+          "There is no Artifact tool here to open it: the link in your answer is how the owner opens it.",
+        ].join("\n")
+      : "You may read, query and export Claude Docs, not make or change them (that is docs.write).",
+    "A doc's contents are the owner's private data: keep them in the doc and this thread. Never put them in a reply, a Slack message or another task's brief unless the owner asks for exactly that.",
+  ].join("\n");
 }
 
 // Extra --allowedTools entries a role gets from its granted capabilities.

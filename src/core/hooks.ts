@@ -190,15 +190,23 @@ export function artifactLink(
 // A republish keeps whatever title the link already has: the agent or the
 // owner may have named it better than a file name does.
 function linkArtifact(payload: HookPayload, env: HookEnv): void {
+  linkMadeArtifact(env.taskId, payload);
+}
+
+// Also called by a headless turn for each tool result (agents.ts), which has
+// no PostToolUse hook, so it checks ARTIFACT_TOOLS itself.
+export function linkMadeArtifact(taskId: number, payload: HookPayload): boolean {
+  if (!new RegExp(ARTIFACT_TOOLS).test(payload.tool_name ?? "")) return false;
   const made = artifactLink(payload);
-  if (!made) return;
-  if (store.linksForTask(env.taskId).some((l) => l.url === made.url)) return;
+  if (!made) return false;
+  if (store.linksForTask(taskId).some((l) => l.url === made.url)) return false;
   store.addTaskLink(
-    env.taskId,
+    taskId,
     made.url,
     made.title,
-    `agent ${store.taskRef(env.taskId)}`,
+    `agent ${store.taskRef(taskId)}`,
   );
+  return true;
 }
 
 export interface DoneArgs {

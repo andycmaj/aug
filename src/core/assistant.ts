@@ -4,7 +4,16 @@
 // the running engine makes. It never sends: a Send is only ever the owner's
 // press.
 
-import { capabilityAllow, capabilityGrant, deniedNote, GH_READS, grantedNote, SHELL_HOWTO } from "./capabilities";
+import {
+  capabilityAllow,
+  capabilityGrant,
+  connectorNote,
+  deniedNote,
+  docsNote,
+  GH_READS,
+  grantedNote,
+  SHELL_HOWTO,
+} from "./capabilities";
 import type { AugConfig } from "./config";
 import { mentionedProjects, mentionedTasks } from "./mentions";
 import { docsBlock } from "./prompts";
@@ -83,6 +92,8 @@ export function assistantSystem(config: AugConfig): string {
     grantedNote("assistant", config),
     SHELL_HOWTO,
     `Write is allowed only in ${docDraftsDir()}: a doc you hand in with propose_doc goes there first, then --file <path>.`,
+    connectorNote("assistant", config),
+    docsNote("assistant", config),
     "",
     "## How you work",
     "- Look before you move: check a task or project exists rather than guess its ref or name.",

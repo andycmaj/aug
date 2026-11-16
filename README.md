@@ -121,20 +121,44 @@ Home), the capabilities that role may use:
 
 - `slack.read`: read and search Slack through the claude.ai Slack connector
   (threads, channels, canvases, files, lists, profiles, search)
-- `docs.read`: read, export and query Claude Docs
+- `docs.read`: read, export and query Claude Docs (`read`, `query`,
+  `export`, `guide`)
+- `docs.write`: make and edit Claude Docs (`batch`, `create`, `update`, plus
+  the reads above). Off unless you grant it. `delete` is left out; to allow
+  it, list it in `capabilities.tools["docs.write"]` with the other tools.
 - `notion.read`: fetch and search Notion pages and read their comments, through
   the claude.ai Notion connector
 
+So to let task agents make docs (an artifact linked to the task) and the
+Assistant read them:
+
+```json
+"capabilities": {
+  "grants": { "general": ["docs.write"], "assistant": ["docs.read"] }
+}
+```
+
+The change applies on the next turn, no restart. With `docs.write`, an agent
+makes the doc's skeleton first, fills its sections, and the doc is linked to
+the task by itself (the Assistant links one with `move link`). A doc's
+contents stay in the doc and the task's thread.
+
 Sessions run with `--permission-mode dontAsk`, so any tool that isn't granted is
-denied without a prompt. There is no capability for sending, drafting,
-scheduling, reacting, or creating, editing or moving pages. A send is only
-ever your press. `capabilities.servers` (capability to MCP server name, e.g. `"slack.read": "slack"`) and
+denied without a prompt. A denied connector call shows under the turn with the
+grant that would allow it (`to allow mcp__claude_ai_Claude_Docs__batch: add
+"docs.write" to capabilities.grants.general in ~/.aug/config.json`), and every
+agent is told where grants live, so asking it how to enable one gets this
+answer. `docs.write` is the only write capability: there is none for sending,
+drafting, scheduling, reacting, or creating, editing or moving Slack or Notion
+pages. A send is only ever your press. `capabilities.servers` (capability to MCP server name, e.g. `"slack.read": "slack"`) and
 `capabilities.tools` (capability to bare tool names) override the built-in
 mapping, for example to point at a different Slack server. These overrides
 still fail closed: an unknown capability grants nothing, and a tool name that
 looks like a write (send, post, update, delete, add, …) or isn't a plain name
-(a glob, say) is dropped with a warning in the log. The mapping lives in
-`src/core/capabilities.ts`.
+(a glob, say) is dropped with a warning in the log. The one exception is
+`docs.write`'s own Docs writes, and only on the Claude Docs connector: an
+override can narrow them or add `delete`, never add another write. The mapping
+lives in `src/core/capabilities.ts`.
 
 ### Logging
 

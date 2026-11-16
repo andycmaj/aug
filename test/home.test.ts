@@ -179,3 +179,66 @@ test("a denied call is kept on the turn, and the next turn is told not to repeat
   await Bun.sleep(10);
   expect(calls[2].resume).toBe(calls[1].sessionId);
 });
+
+test("a denied Docs call says on the turn what to grant, and the next turn is told it", async () => {
+  const denied = 'mcp__claude_ai_Claude_Docs__batch {"container":{"kind":"project"}}';
+  setBrain(async (call) => {
+    calls.push(call);
+    return {
+      text: "",
+      structured: { about: "a", did: "d", next: "n", state: "done" },
+      sessionId: call.sessionId ?? call.resume ?? null,
+      durationMs: 1,
+      isError: false,
+      denied: calls.length === 1 ? [denied] : [],
+    };
+  });
+  const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
+  const pool = new AgentPool({ config: withLimit(4) });
+  await pool.request(task.id, "go", "owner");
+  await Bun.sleep(10);
+  const first = store.turnsForTask(task.id).findLast((t) => t.role === TurnRole.agent)!;
+  const { paths } = await import("../src/core/paths");
+  const grant = `grant: mcp__claude_ai_Claude_Docs__batch: add "docs.write" to capabilities.grants.general in ${paths.config()}.`;
+  expect(JSON.parse(first.steps)).toEqual([`denied: ${denied}`, grant]);
+
+  await pool.request(task.id, "how do I enable it", "owner");
+  await Bun.sleep(10);
+  expect(calls[1].prompt).toContain('add "docs.write" to capabilities.grants.general');
+  expect(calls[1].system).toContain("capabilities.grants.general");
+});
+
+test("a doc a headless agent makes is linked to its task; Home links nothing by itself", async () => {
+  const url = "https://claude.ai/artifact/doc123";
+  setBrain(async (call) => {
+    calls.push(call);
+    call.onTool?.({
+      name: "mcp__claude_ai_Claude_Docs__batch",
+      input: { container: { kind: "project", create: { name: "Devex 2027" } } },
+      response: [{ type: "text", text: `created ${url}` }],
+    });
+    call.onTool?.({
+      name: "mcp__claude_ai_Claude_Docs__read",
+      input: {},
+      response: "https://claude.ai/artifact/other",
+    });
+    return {
+      text: "",
+      structured: { about: "a", did: "d", next: "n", state: "done" },
+      sessionId: call.sessionId ?? null,
+      durationMs: 1,
+      isError: false,
+    };
+  });
+  const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
+  const pool = new AgentPool({ config: withLimit(4) });
+  await pool.request(task.id, "put it in a doc", "owner");
+  await Bun.sleep(10);
+  expect(store.linksForTask(task.id).map((l) => [l.url, l.title])).toEqual([
+    [url, "Devex 2027"],
+  ]);
+  const home = store.homeTask();
+  await pool.request(home.id, "make a doc", "owner");
+  await Bun.sleep(10);
+  expect(calls.at(-1)?.onTool).toBeUndefined();
+});

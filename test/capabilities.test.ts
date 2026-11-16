@@ -2,10 +2,17 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generalAllow } from "../src/core/agents";
-import { assistantAllow } from "../src/core/assistant";
+import { generalAllow, turnSystem } from "../src/core/agents";
+import { assistantAllow, assistantSystem } from "../src/core/assistant";
 import {
   CAPABILITIES,
+  DENIED_STEP,
+  GRANT_STEP,
+  deniedNote,
+  docsNote,
+  grantHint,
+  grantSteps,
+  refusalLines,
   WRITE_VERB,
   capabilityAllow,
   capabilityGrant,
@@ -20,6 +27,7 @@ import {
   mergeConfig,
   type AugConfig,
 } from "../src/core/config";
+import { TurnRole, type TurnRow } from "../src/core/types";
 
 function withCaps(caps: Partial<AugConfig["capabilities"]>): AugConfig {
   return {
@@ -51,9 +59,16 @@ describe("capabilities", () => {
     expect(tools.length).toBe(CAPABILITIES["slack.read"]!.tools.length);
   });
 
-  test("built-in capabilities hold no write-looking tools", () => {
+  test("built-in capabilities hold no write-looking tools but the writes they name", () => {
     for (const spec of Object.values(CAPABILITIES))
-      for (const tool of spec.tools) expect(WRITE_VERB.test(tool)).toBe(false);
+      for (const tool of spec.tools)
+        expect(WRITE_VERB.test(tool) && !spec.writes?.includes(tool)).toBe(false);
+    // Only Claude Docs has a write capability.
+    expect(
+      Object.entries(CAPABILITIES)
+        .filter(([, spec]) => spec.writes?.length)
+        .map(([name]) => name),
+    ).toEqual(["docs.write"]);
   });
 
   test("grants are per role", () => {
@@ -394,5 +409,153 @@ describe("plugin and command capabilities", () => {
     expect(grantedNote("general", config)).toBe("");
     expect(assistantAllow(config)).toContain("Bash(jq:*)");
     expect(generalAllow(config)).not.toContain("Bash(jq:*)");
+  });
+});
+
+describe("Claude Docs grants", () => {
+  const DOCS = "mcp__claude_ai_Claude_Docs__";
+  const FILE = "/home/me/.aug/config.json";
+
+  test("docs.read reads only; docs.write adds batch, create and update but not delete", () => {
+    expect(
+      capabilityAllow("general", withCaps({ grants: { general: ["docs.read"] } })),
+    ).toEqual(["read", "export", "guide", "query"].map((t) => DOCS + t));
+    const write = capabilityAllow(
+      "general",
+      withCaps({ grants: { general: ["docs.write"] } }),
+    );
+    for (const t of ["read", "guide", "batch", "create", "update"])
+      expect(write).toContain(DOCS + t);
+    expect(write).not.toContain(`${DOCS}delete`);
+  });
+
+  test("the default config grants no Docs tool to either role", () => {
+    for (const role of ["general", "assistant"] as const)
+      expect(
+        capabilityAllow(role, DEFAULT_CONFIG).filter((r) => r.startsWith(DOCS)),
+      ).toEqual([]);
+    expect(generalAllow(DEFAULT_CONFIG).some((r) => r.startsWith(DOCS))).toBe(false);
+    expect(assistantAllow(DEFAULT_CONFIG).some((r) => r.startsWith(DOCS))).toBe(false);
+  });
+
+  test("docs.write reaches task agents and the Assistant, each by its own grant", () => {
+    const config = withCaps({
+      grants: { general: ["docs.write"], assistant: ["docs.read"] },
+    });
+    expect(generalAllow(config)).toContain(`${DOCS}batch`);
+    expect(assistantAllow(config)).toContain(`${DOCS}read`);
+    expect(assistantAllow(config)).not.toContain(`${DOCS}batch`);
+    const both = withCaps({ grants: { assistant: ["docs.write"] } });
+    expect(assistantAllow(both)).toContain(`${DOCS}batch`);
+  });
+
+  test("an override narrows docs.write and may name delete, never another write", () => {
+    const config = withCaps({
+      tools: { "docs.write": ["read", "create", "delete", "send", "*"] },
+      grants: { general: ["docs.write"] },
+    });
+    expect(capabilityAllow("general", config)).toEqual(
+      ["read", "create", "delete"].map((t) => DOCS + t),
+    );
+  });
+
+  test("Docs writes stay with docs.write: not through another capability or a renamed server", () => {
+    const viaRead = withCaps({
+      tools: { "docs.read": ["read", "batch", "update"] },
+      grants: { general: ["docs.read"] },
+    });
+    expect(capabilityAllow("general", viaRead)).toEqual([`${DOCS}read`]);
+    const viaSlack = withCaps({
+      tools: { "slack.read": ["slack_read_thread", "batch", "create"] },
+      grants: { general: ["slack.read"] },
+    });
+    expect(capabilityAllow("general", viaSlack)).toEqual([
+      "mcp__claude_ai_Slack__slack_read_thread",
+    ]);
+    const renamed = withCaps({
+      servers: { "docs.write": "claude_ai_Slack" },
+      grants: { general: ["docs.write"] },
+    });
+    expect(
+      capabilityAllow("general", renamed).map((r) => r.split("__")[2]),
+    ).toEqual(["read", "export", "guide", "query"]);
+  });
+
+  test("a denied Docs call names the capability and the exact config key", () => {
+    const none = withCaps({});
+    expect(grantHint(`${DOCS}batch`, "general", none, FILE)).toBe(
+      `${DOCS}batch: add "docs.write" to capabilities.grants.general in ${FILE}.`,
+    );
+    expect(grantHint(`${DOCS}read`, "assistant", none, FILE)).toBe(
+      `${DOCS}read: add "docs.read" to capabilities.grants.assistant in ${FILE}.`,
+    );
+    expect(grantHint(`${DOCS}delete`, "general", none, FILE)).toContain(
+      `list "delete" in capabilities.tools["docs.write"]`,
+    );
+    const granted = withCaps({ grants: { general: ["docs.write"] } });
+    expect(grantHint(`${DOCS}delete`, "general", granted, FILE)).toContain(
+      `"docs.write" is in capabilities.grants.general, but its tools leave "delete" out`,
+    );
+    expect(
+      grantHint("mcp__claude_ai_Slack__slack_send_message", "general", none, FILE),
+    ).toContain("no capability in aug grants it");
+    expect(grantHint("Bash", "general", none, FILE)).toBeNull();
+    expect(grantHint("mcp__someone_else__thing", "general", none, FILE)).toBeNull();
+  });
+
+  test("grant steps come once per denied tool, none for a shell call", () => {
+    const denied = [
+      `${DOCS}batch {"container":{"kind":"project"}}`,
+      `${DOCS}batch {"container":{"kind":"project","create":{}}}`,
+      "Bash cd /x && ls",
+    ];
+    expect(grantSteps(denied, "general", withCaps({}), FILE)).toEqual([
+      `${GRANT_STEP}${DOCS}batch: add "docs.write" to capabilities.grants.general in ${FILE}.`,
+    ]);
+  });
+
+  test("the next turn hears the connector denial and its grant, apart from shell advice", () => {
+    const steps = [
+      "Read x",
+      `${DENIED_STEP}${DOCS}batch {"container":{}}`,
+      `${GRANT_STEP}${DOCS}batch: add "docs.write" to capabilities.grants.general in ${FILE}.`,
+    ];
+    const turns = [
+      { role: TurnRole.agent, steps: JSON.stringify(steps) },
+    ] as unknown as TurnRow[];
+    const note = deniedNote(turns);
+    expect(note).toContain("the owner has not granted them");
+    expect(note).toContain(`- ${DOCS}batch\n`);
+    expect(note).toContain(`add "docs.write" to capabilities.grants.general in ${FILE}`);
+    expect(note).toContain("never edit aug's config yourself");
+    expect(note).not.toContain("did not match an allowed command");
+    expect(refusalLines(steps)).toEqual([
+      `denied ${DOCS}batch {"container":{}}`,
+      `to allow ${DOCS}batch: add "docs.write" to capabilities.grants.general in ${FILE}.`,
+    ]);
+  });
+
+  test("every headless agent is told where grants live; Docs rules only once granted", () => {
+    const none = withCaps({});
+    for (const system of [turnSystem(none), assistantSystem(none)]) {
+      expect(system).toContain("capabilities.grants.");
+      expect(system).toContain("docs.write (make and edit Claude Docs");
+      expect(system).toContain("Granted to you now: none");
+      expect(system).not.toContain("## Claude Docs");
+    }
+    const writes = withCaps({
+      grants: { general: ["docs.write"], assistant: ["docs.read"] },
+    });
+    const general = turnSystem(writes);
+    expect(general).toContain("Granted to you now: docs.write");
+    expect(general).toContain("## Claude Docs");
+    expect(general).toContain("one pending block per section");
+    expect(general).toContain("move link");
+    expect(general).toContain("private data");
+    const assistant = assistantSystem(writes);
+    expect(assistant).toContain("capabilities.grants.assistant");
+    expect(assistant).toContain("not make or change them");
+    expect(assistant).toContain("private data");
+    expect(docsNote("general", none)).toBe("");
   });
 });

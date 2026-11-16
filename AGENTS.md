@@ -154,7 +154,10 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   with `--plugin-dir` and its hooks off. A skill's `allowed-tools` join the
   allow list once it runs, so a plugin whose skills ask for more than its
   capability grants is not loaded. Coding agents load the user's settings and
-  have every enabled plugin already.
+  have every enabled plugin already. Writes are dropped (`WRITE_VERB`) except
+  `docs.write`'s own Claude Docs writes. A denied connector call gets a
+  `grant:` step naming the config key (`grantHint`), and `connectorNote`
+  tells every headless agent where grants live.
 - **Logging is `core/log.ts`**: `logger(scope)` writes lines to `aug.log`
   under `AUG_HOME`, never to the terminal (the TUI owns it). It is off unless
   `AUG_LOG`, `log.enabled` in config, or `AUG_DEV` (set by `bun run dev`)

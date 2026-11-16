@@ -404,6 +404,59 @@ describe("brain stream", () => {
     expect(acc.sessionId).toBe("s");
   });
 
+  test("a tool call is paired with its result for onTool", () => {
+    const seen: unknown[] = [];
+    const acc = { text: "", result: null, sessionId: null };
+    const onTool = (call: unknown) => seen.push(call);
+    parseStreamLine(
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "tool_use", id: "t1", name: "mcp__x__batch", input: { a: 1 } },
+          ],
+        },
+      }),
+      undefined,
+      acc,
+      onTool,
+    );
+    parseStreamLine(
+      JSON.stringify({ type: "user", message: { content: "plain text" } }),
+      undefined,
+      acc,
+      onTool,
+    );
+    parseStreamLine(
+      JSON.stringify({
+        type: "user",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "t1", content: "done" }],
+        },
+      }),
+      undefined,
+      acc,
+      onTool,
+    );
+    expect(seen).toEqual([
+      { name: "mcp__x__batch", input: { a: 1 }, response: "done" },
+    ]);
+  });
+
+  test("a denied connector call keeps only the start of its input", () => {
+    const [call] = deniedCalls({
+      type: "result",
+      permission_denials: [
+        {
+          tool_name: "mcp__claude_ai_Claude_Docs__batch",
+          tool_input: { body: "x".repeat(5000) },
+        },
+      ],
+    });
+    expect(call!.startsWith("mcp__claude_ai_Claude_Docs__batch {")).toBe(true);
+    expect(call!.length).toBeLessThan(250);
+  });
+
   test("a denial names the whole command dontAsk turned away", () => {
     expect(
       deniedCalls({

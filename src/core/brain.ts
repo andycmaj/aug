@@ -43,7 +43,16 @@ export interface BrainCall {
   // Added to the child's environment (aug-tools reads who is asking here).
   env?: Record<string, string>;
   onStep?: (step: string) => void;
+  // Each finished tool call with what it gave back (a headless call has no
+  // PostToolUse hook; agents.ts links the docs it made from here).
+  onTool?: (call: ToolCall) => void;
   signal?: AbortSignal;
+}
+
+export interface ToolCall {
+  name: string;
+  input: Record<string, unknown>;
+  response: unknown;
 }
 
 export interface BrainResult {
@@ -134,9 +143,12 @@ export function claudeArgs(call: BrainCall): string[] {
 
 interface StreamContent {
   type: string;
+  id?: string;
   name?: string;
   input?: Record<string, unknown>;
   text?: string;
+  tool_use_id?: string;
+  content?: unknown;
 }
 
 export interface StreamEvent {
@@ -152,14 +164,22 @@ export interface StreamEvent {
   permission_denials?: { tool_name?: string; tool_input?: Record<string, unknown> }[];
 }
 
+// A connector call's input can hold a whole document: the tool's name says
+// what to grant, so only the start of it is kept on the turn and in the log.
+const DENIED_INPUT_CHARS = 160;
+
 // What dontAsk turned away, in full: the model's own account of a denial
 // rarely says which command or rule missed.
 export function deniedCalls(event: StreamEvent): string[] {
   return (event.permission_denials ?? []).map((d) => {
     const command = d.tool_input?.command;
-    return typeof command === "string"
-      ? `${d.tool_name ?? "tool"} ${command}`
-      : `${d.tool_name ?? "tool"} ${JSON.stringify(d.tool_input ?? {})}`;
+    if (typeof command === "string") return `${d.tool_name ?? "tool"} ${command}`;
+    const input = JSON.stringify(d.tool_input ?? {});
+    const short =
+      input.length > DENIED_INPUT_CHARS
+        ? `${input.slice(0, DENIED_INPUT_CHARS)}…`
+        : input;
+    return `${d.tool_name ?? "tool"} ${short}`;
   });
 }
 
@@ -189,10 +209,19 @@ export function describeStep(
   return short ? `${name} ${short}` : name;
 }
 
+export interface StreamAcc {
+  text: string;
+  result: StreamEvent | null;
+  sessionId: string | null;
+  // Tool calls waiting for their result, by tool_use id.
+  pending?: Map<string, { name: string; input: Record<string, unknown> }>;
+}
+
 export function parseStreamLine(
   line: string,
   onStep: ((step: string) => void) | undefined,
-  acc: { text: string; result: StreamEvent | null; sessionId: string | null },
+  acc: StreamAcc,
+  onTool?: (call: ToolCall) => void,
 ): void {
   if (!line.trim()) return;
   let event: StreamEvent;
@@ -206,9 +235,24 @@ export function parseStreamLine(
     for (const part of event.message?.content ?? []) {
       if (part.type === "tool_use" && part.name !== "StructuredOutput") {
         onStep?.(describeStep(part.name ?? "tool", part.input));
+        if (onTool && part.id)
+          (acc.pending ??= new Map()).set(part.id, {
+            name: part.name ?? "tool",
+            input: part.input ?? {},
+          });
       } else if (part.type === "text" && part.text) {
         acc.text = part.text;
       }
+    }
+  }
+  if (event.type === "user" && onTool && acc.pending?.size) {
+    const content = event.message?.content;
+    for (const part of Array.isArray(content) ? content : []) {
+      if (part.type !== "tool_result" || !part.tool_use_id) continue;
+      const call = acc.pending.get(part.tool_use_id);
+      if (!call) continue;
+      acc.pending.delete(part.tool_use_id);
+      onTool({ ...call, response: part.content });
     }
   }
   if (event.type === "result") acc.result = event;
@@ -228,23 +272,19 @@ export async function claudeBrain(call: BrainCall): Promise<BrainResult> {
   proc.stdin.write(call.prompt);
   await proc.stdin.end();
 
-  const acc = {
-    text: "",
-    result: null as StreamEvent | null,
-    sessionId: null as string | null,
-  };
+  const acc: StreamAcc = { text: "", result: null, sessionId: null };
   const decoder = new TextDecoder();
   let buffer = "";
   for await (const chunk of proc.stdout) {
     buffer += decoder.decode(chunk, { stream: true });
     let nl = buffer.indexOf("\n");
     while (nl !== -1) {
-      parseStreamLine(buffer.slice(0, nl), call.onStep, acc);
+      parseStreamLine(buffer.slice(0, nl), call.onStep, acc, call.onTool);
       buffer = buffer.slice(nl + 1);
       nl = buffer.indexOf("\n");
     }
   }
-  parseStreamLine(buffer, call.onStep, acc);
+  parseStreamLine(buffer, call.onStep, acc, call.onTool);
   const code = await proc.exited;
   call.signal?.removeEventListener("abort", abort);
 
