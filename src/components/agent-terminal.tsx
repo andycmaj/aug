@@ -1,9 +1,16 @@
 // A coding agent's live terminal on the table. While the task pane has focus
 // and the session runs, every key goes to the agent except the detach chord;
 // detaching moves focus back to the rail and the session keeps running.
+// A paste goes in too, bracketed when the program asked for it.
 
 import { createEffect, createMemo, onCleanup, Show } from "solid-js";
-import type { BoxRenderable, Renderable } from "@opentui/core";
+import {
+  decodePasteBytes,
+  type BoxRenderable,
+  type PasteEvent,
+  type Renderable,
+} from "@opentui/core";
+import { useRenderer } from "@opentui/solid";
 import { useKeyPassthrough, useScope, useTheme } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useTerminals } from "../context/terminals";
@@ -38,6 +45,13 @@ export function TermView(props: {
   );
 }
 
+function within(node: Renderable | null, target: Renderable): boolean {
+  for (let n: Renderable | null = node; n; n = n.parent) {
+    if (n === target) return true;
+  }
+  return false;
+}
+
 export function TerminalHost(props: {
   id: string;
   attached: () => boolean;
@@ -57,6 +71,21 @@ export function TerminalHost(props: {
     },
     { target: props.pane, enabled: () => running() && props.attached() },
   );
+
+  // The outer terminal sends a paste bracketed, and opentui hands it over as
+  // one paste event, never as keys, so the passthrough above never sees it.
+  const renderer = useRenderer();
+  const onPaste = (event: PasteEvent) => {
+    const pane = props.pane();
+    if (!pane || !running() || !props.attached()) return;
+    if (!within(renderer.currentFocusedRenderable, pane)) return;
+    if (event.metadata?.kind === "binary") return;
+    event.preventDefault();
+    event.stopPropagation();
+    terminals.paste(props.id, decodePasteBytes(event.bytes));
+  };
+  renderer.keyInput.on("paste", onPaste);
+  onCleanup(() => renderer.keyInput.off("paste", onPaste));
 
   useScope(
     "terminal",

@@ -43,6 +43,7 @@ interface Term {
   request: TermRequest;
   view: ViewportTerminalRenderable;
   session: PtySession;
+  modes: TerminalModes;
   host: BoxRenderable | null;
   size: { cols: number; rows: number };
 }
@@ -53,6 +54,8 @@ interface TerminalsValue {
   forTask: (taskId: number) => TermState | undefined;
   open: (request: TermRequest) => void;
   write: (id: string, data: string) => void;
+  // Pasted text, wrapped the way the program in the session asked for.
+  paste: (id: string, text: string) => void;
   close: (id: string) => void;
   // A host box adopts the session's renderable and sizes it; returns the
   // release function for onCleanup.
@@ -115,6 +118,7 @@ export function TerminalsProvider(props: ParentProps) {
     const term: Term = {
       request,
       view,
+      modes,
       size: { cols, rows },
       host: null,
       session: null as unknown as PtySession,
@@ -212,6 +216,12 @@ export function TerminalsProvider(props: ParentProps) {
           // Typing returns to the live screen, as in any terminal.
           term.view.followBottom();
           term.session.write(data);
+        },
+        paste: (id, text) => {
+          const term = terms.get(id);
+          if (!term || !text) return;
+          term.view.followBottom();
+          term.session.write(term.modes.paste(text));
         },
         close,
         adopt,

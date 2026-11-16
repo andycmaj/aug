@@ -50,4 +50,27 @@ describe("TerminalModes", () => {
     m.feed("\x1b[?1049h\x1b[?1000h\x1bc");
     expect(m.wheel("up", 0, 0)).toBeNull();
   });
+
+  test("paste goes in raw until the program asks for brackets", () => {
+    const m = new TerminalModes();
+    expect(m.paste("a\nb")).toBe("a\rb");
+    m.feed("\x1b[?2004h");
+    expect(m.paste("a\nb")).toBe("\x1b[200~a\rb\x1b[201~");
+    m.feed("\x1b[?2004l");
+    expect(m.paste("x")).toBe("x");
+  });
+
+  test("a paste cannot close its own brackets early", () => {
+    const m = new TerminalModes();
+    m.feed("\x1b[?2004h");
+    expect(m.paste("a\x1b[201~rm -rf /\r\n")).toBe(
+      "\x1b[200~arm -rf /\r\x1b[201~",
+    );
+  });
+
+  test("reset turns bracketed paste off", () => {
+    const m = new TerminalModes();
+    m.feed("\x1b[?2004h\x1bc");
+    expect(m.paste("x")).toBe("x");
+  });
 });

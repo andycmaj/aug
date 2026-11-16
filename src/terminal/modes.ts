@@ -1,11 +1,15 @@
 // The emulator keeps no mode state we can read back, so follow the private
 // modes that decide where a wheel turn goes: a program that tracks the mouse
 // (Claude Code fullscreen) scrolls itself, an alt-screen program without it
-// gets arrow keys, and anything else scrolls our own scrollback.
+// gets arrow keys, and anything else scrolls our own scrollback. Bracketed
+// paste (2004) decides how a paste is wrapped.
 
 const MOUSE = new Set([9, 1000, 1002, 1003]);
 const ALT = new Set([47, 1047, 1049]);
 const SGR = 1006;
+const BRACKETED_PASTE = 2004;
+const PASTE_START = "\x1b[200~";
+const PASTE_END = "\x1b[201~";
 
 const MODE = /\x1b\[\?([0-9;]+)([hl])|\x1bc/g;
 // Keep a cut-off sequence for the next chunk.
@@ -17,6 +21,7 @@ export class TerminalModes {
   private mouse = new Set<number>();
   sgr = false;
   alt = false;
+  bracketedPaste = false;
   private tail = "";
 
   get mouseTracking(): boolean {
@@ -33,6 +38,7 @@ export class TerminalModes {
         this.mouse.clear();
         this.sgr = false;
         this.alt = false;
+        this.bracketedPaste = false;
         continue;
       }
       const on = m[2] === "h";
@@ -43,8 +49,20 @@ export class TerminalModes {
           else this.mouse.delete(n);
         } else if (n === SGR) this.sgr = on;
         else if (ALT.has(n)) this.alt = on;
+        else if (n === BRACKETED_PASTE) this.bracketedPaste = on;
       }
     }
+  }
+
+  // Bytes for pasted text. Line breaks become CR as a real terminal sends
+  // them; a program that asked for brackets (Claude Code, a shell, tmux's
+  // client) gets them, so it takes the text as one paste instead of keys.
+  // The end marker is stripped from the text so a paste cannot end early
+  // and run the rest as typed keys.
+  paste(text: string): string {
+    const body = text.replace(/\r?\n/g, "\r");
+    if (!this.bracketedPaste) return body;
+    return `${PASTE_START}${body.replaceAll(PASTE_END, "")}${PASTE_END}`;
   }
 
   // Bytes for one wheel step at a 0-based cell, or null to scroll locally.
