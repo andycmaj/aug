@@ -12,6 +12,7 @@ import * as store from "./store";
 import {
   AgentState,
   TaskStatus,
+  TurnRole,
   type SessionKind,
   type SessionRow,
 } from "./types";
@@ -262,6 +263,30 @@ export function finishSuperseded(taskId: number): void {
       agent_state: AgentState.none,
       unread_result: 0,
     });
+}
+
+// Its branch landed: ready to clean up, and still the owner's to close.
+export function workMerged(taskId: number, how: string): void {
+  store.batch(() => {
+    store.updateTask(taskId, { merged_at: now() });
+    store.addTurn({
+      taskId,
+      role: TurnRole.trigger,
+      body: `Merged ${how}; ready to clean up (x marks it done and removes its worktree)`,
+    });
+  });
+}
+
+// New work on a branch that had landed: open again.
+export function mergeUndone(taskId: number): void {
+  store.batch(() => {
+    store.updateTask(taskId, { merged_at: null });
+    store.addTurn({
+      taskId,
+      role: TurnRole.trigger,
+      body: "Its branch has work that is not merged yet",
+    });
+  });
 }
 
 // The draft an agent was waiting on went out: it is no longer asking.

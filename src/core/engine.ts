@@ -14,6 +14,7 @@ import { refreshInstalls } from "./install";
 import { Drivers } from "./driver";
 import { pollGithub } from "./ingest/github";
 import { refreshPrStatuses } from "./pr";
+import { checkMerges } from "./merge";
 import { errorMessage, logger } from "./log";
 import { count, measure, perfStart } from "./perf";
 import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
@@ -196,6 +197,24 @@ export class Engine {
       );
     this.timers.push(setInterval(() => void this.advisorTick(), 10 * 60_000));
     setTimeout(() => void this.advisorTick(), 20_000);
+    // A local merge needs no network, so it has its own clock.
+    void this.checkMerges();
+    this.timers.push(setInterval(() => void this.checkMerges(), 2 * 60_000));
+  }
+
+  private merging = false;
+
+  async checkMerges(): Promise<void> {
+    if (this.merging) return;
+    this.merging = true;
+    try {
+      const changed = await checkMerges(this.options.config.get());
+      if (changed) log.info("merge check", { changed });
+    } catch (err) {
+      log.warn("merge check failed", { err: errorMessage(err) });
+    } finally {
+      this.merging = false;
+    }
   }
 
   stop(): void {
@@ -313,6 +332,7 @@ export class Engine {
       store.kvSet("github.since", startedAt);
       // On the same clock: what the rail says about each task's PR.
       const prs = await refreshPrStatuses();
+      await this.checkMerges();
       done({ fresh, prs });
       this.setStatus("github", {
         state: "ok",

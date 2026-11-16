@@ -24,6 +24,8 @@ export class FakeMux implements Mux {
   removeFails: string | null = null;
   tagFails: string | null = null;
   branches = new Set<string>();
+  // Branch -> the base it landed in, or false; absent: git cannot say.
+  merged = new Map<string, string | false>();
   // Checkouts deleted after they were mapped.
   gone = new Set<string>();
   // What is at a path; any other path is a checkout with no GitHub remote.
@@ -165,6 +167,10 @@ export class FakeMux implements Mux {
 
   async branchExists(_repoPath: string, branch: string): Promise<boolean> {
     return this.branches.has(branch);
+  }
+
+  async branchMerged(_repoPath: string, branch: string): Promise<string | false | null> {
+    return this.merged.get(branch) ?? null;
   }
 
   inspectCheckout(path: string): CheckoutState {

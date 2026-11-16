@@ -123,6 +123,10 @@ export interface Mux {
   watch(onChange: () => void, signal: AbortSignal): Promise<void>;
   // A local or origin branch by that name.
   branchExists(repoPath: string, branch: string): Promise<boolean>;
+  // Whether the branch's work has landed in the repo's base branch: the base
+  // it landed in, false if it has not, null when git cannot say (no such
+  // branch, no reflog to tell where it started).
+  branchMerged(repoPath: string, branch: string): Promise<string | false | null>;
   // What is at a path: gone, a checkout and its GitHub repos, a worktree.
   inspectCheckout(path: string): CheckoutState;
   // Main checkouts under the roots, depth folders down.
@@ -190,6 +194,7 @@ export function parseWorktree(stdout: string): MadeWorktree | null {
 }
 
 const WT_TIMEOUT_MS = 5 * 60_000;
+const GIT_TIMEOUT_MS = 10_000;
 // A big repo over a slow link.
 const CLONE_TIMEOUT_MS = 10 * 60_000;
 
@@ -561,6 +566,41 @@ export class TmuxMux implements Mux {
       if ((await proc.exited) === 0) return true;
     }
     return false;
+  }
+
+  // A branch with work on it (its tip is not where it was created) whose
+  // tip is in base, or whose squash is: the commit-tree of its tree on the
+  // merge base, which git cherry finds already applied (git-delete-squashed).
+  async branchMerged(repoPath: string, branch: string): Promise<string | false | null> {
+    const git = async (...args: string[]) => {
+      const proc = Bun.spawn(["git", "-C", repoPath, ...args], {
+        stdout: "pipe",
+        stderr: "ignore",
+        stdin: "ignore",
+        timeout: GIT_TIMEOUT_MS,
+      });
+      const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+      return code === 0 ? out.trim() : null;
+    };
+    const head = await git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD");
+    const base = head?.replace(/^origin\//, "") || "main";
+    const baseTip = await git("rev-parse", "--verify", "--quiet", `refs/heads/${base}^{commit}`);
+    const tip = await git("rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`);
+    if (!baseTip || !tip) return null;
+    const created = (await git("reflog", "show", "--format=%H", `refs/heads/${branch}`))
+      ?.split("\n")
+      .filter(Boolean)
+      .at(-1);
+    if (!created) return null;
+    if (created === tip) return false;
+    if ((await git("merge-base", "--is-ancestor", tip, baseTip)) !== null) return base;
+    const forkPoint = await git("merge-base", baseTip, tip);
+    const tree = await git("rev-parse", `${tip}^{tree}`);
+    if (!forkPoint || !tree) return false;
+    const squash = await git("commit-tree", tree, "-p", forkPoint, "-m", "aug: squash check");
+    if (!squash) return false;
+    const cherry = await git("cherry", baseTip, squash);
+    return cherry?.startsWith("-") ? base : false;
   }
 
   inspectCheckout(path: string): CheckoutState {
