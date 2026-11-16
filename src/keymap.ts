@@ -346,7 +346,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     {
       key: NAV_DEFAULTS.goTo,
       cmd: Commands.GO_TO,
-      desc: "go to anything: search the rail from anywhere; 1-9 a recent row",
+      desc: "go to anything: search the rail from anywhere, recent rows first",
       help: "go to",
     },
     {

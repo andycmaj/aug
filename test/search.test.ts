@@ -294,14 +294,14 @@ describe("go-to list", () => {
     return searchIndex(sections, { messages: new Map(), turns: new Map() });
   }
 
-  test("with nothing typed, recent rows come first, numbered, then the rest", () => {
+  test("with nothing typed, recent rows come first, then the rest", () => {
     const [a, b, c] = ["Alpha", "Bravo", "Charlie"].map((title) =>
       store.createTask({ title, kind: Kind.task, channel: "owner" }),
     );
     const list = goToList(docs(), "", [`t${c.id}`, "t9999", `t${a.id}`]);
     expect(list.slice(0, 2).map((h) => [h.recent, h.title])).toEqual([
-      [1, "Charlie"],
-      [2, "Alpha"],
+      [true, "Charlie"],
+      [true, "Alpha"],
     ]);
     const rest = list.slice(2).map((h) => h.title);
     expect(rest).toContain("Bravo");

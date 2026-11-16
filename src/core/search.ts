@@ -49,8 +49,8 @@ export interface SearchHit {
   title: string;
   // What matched, when it was not the title (a person, a PR, the summary).
   why: string | null;
-  // In the go-to list with nothing typed: the digit that jumps to it.
-  recent?: number;
+  // In the go-to list with nothing typed: a row seen lately.
+  recent?: boolean;
 }
 
 const GITHUB_THREAD = /^github:([^#:]+)#(\d+)$/;
@@ -362,11 +362,11 @@ export function search(
     }));
 }
 
-// Digits 1-9 in the go-to list.
+// How many recent rows head the go-to list.
 export const RECENT_SHOWN = 9;
 
-// The go-to list: with nothing typed, the rows seen lately come first,
-// numbered, then the rail as it stands without them; typing searches.
+// The go-to list: with nothing typed, the rows seen lately come first, then
+// the rail as it stands without them; typing searches.
 export function goToList(
   docs: SearchDoc[],
   query: string,
@@ -378,12 +378,12 @@ export function goToList(
   const recent: SearchHit[] = recentKeys
     .flatMap((k) => byKey.get(k) ?? [])
     .slice(0, RECENT_SHOWN)
-    .map((doc, i) => ({
+    .map((doc) => ({
       item: doc.item,
       section: doc.section,
       title: doc.title,
       why: null,
-      recent: i + 1,
+      recent: true,
     }));
   const shown = new Set(recent.map((h) => h.item.key));
   return [...recent, ...hits.filter((h) => !shown.has(h.item.key))];

@@ -183,7 +183,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 - Navigation history is `core/nav-history.ts`, held by the aug context:
   every change of the table's row or the view is a visit (recorded once per
   handler, so a switch plus a select is one), `[`/`]` go back and forward,
-  and the go-to list numbers the recent rows 1-9.
+  and the go-to list puts the recent rows first.
 - A `Pane` is `flexShrink=0`, so a growing child (scrollbox, terminal host)
   needs `flexBasis={0}` or it pushes the footer off-screen.
 
