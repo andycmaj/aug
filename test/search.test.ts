@@ -12,8 +12,6 @@ function rail(): RailSection[] {
   return buildRail({
     tasks: store.listTasks(),
     pendingActions: new Set(),
-    ideas: store.openIdeas(),
-    fyi: store.fyiMessages(at(0)),
     lastHeard: new Map(),
     now: NOW,
   });
@@ -191,25 +189,6 @@ describe("search", () => {
     });
     store.updateTask(t.id, { waiting_on: "Sam" });
     expect(find("@sam").map((h) => h.why)).toEqual(["waiting on Sam"]);
-  });
-
-  test("ideas and FYI are on the rail and found", () => {
-    store.addIdea("Batch the Slack polls", "they arrive in bursts", null);
-    const m = store.insertMessage({
-      channel: "slack",
-      externalId: "slack:C2:9",
-      threadKey: "slack:C2:9",
-      author: "U9",
-      authorName: "Lee",
-      title: "#general",
-      body: "lunch is here",
-      receivedAt: at(2),
-    })!;
-    store.fileMessage(m.id, "fyi", "chatter", null);
-    expect(find("bursts").map((h) => [h.section, h.why])).toEqual([
-      ["Advisor", "idea"],
-    ]);
-    expect(find("@lee").map((h) => h.section)).toEqual(["FYI"]);
   });
 
   test("content is found below the title, with what matched", () => {

@@ -4,17 +4,16 @@
 // never import the store.
 
 import { Table } from "./db";
+import { inboxCount, inboxRows, inboxRuns } from "./inbox";
 import { boardColumnOf, type BoardColumn } from "./lanes";
 import { projectProgress, projectSummary, railProjects } from "./lookup";
 import { perfOn, timing } from "./perf";
 import { taskPr, taskPrStatus } from "./pr";
-import { buildRail, localDay, SHOW_FYI, type RailSection } from "./rail";
+import { buildRail, localDay, type RailSection } from "./rail";
 import * as store from "./store";
 import { Kind, type TaskRow } from "./types";
 
 export type Track = (tables: readonly Table[]) => void;
-
-const FYI_DAYS = 14;
 
 // A task's brief can be edited until an agent has started from it.
 export function briefEditable(taskId: number): boolean {
@@ -30,15 +29,12 @@ function rail(now: Date, pending: Set<number>): RailSection[] {
     const heard = [...store.messagesForTask(t.id)].reverse().find((m) => !m.from_me);
     if (heard) lastHeard.set(t.id, heard.received_at);
   }
-  const since = new Date(now.getTime() - FYI_DAYS * 86400000).toISOString();
   return buildRail({
     home: store.homeTask(),
     projects: railProjects(),
     tasks,
     pendingActions: pending,
     reviews: store.tasksFromReviewRequests(),
-    ideas: store.openIdeas(),
-    fyi: SHOW_FYI ? store.fyiMessages(since) : [],
     lastHeard,
     now,
     prStates: store.prStates(),
@@ -110,12 +106,15 @@ function reads(desk: LiveCheck) {
     notes: [[T.notes], store.listNotes],
     searchSources: [[T.messages, T.turns], searchSources],
     rail: [
-      [T.tasks, T.messages, T.projects, T.goals, T.ideas, T.prStatus, T.taskBlockers, T.wins],
+      [T.tasks, T.messages, T.projects, T.goals, T.prStatus, T.taskBlockers, T.wins],
       rail,
     ],
     blockers: [[T.taskBlockers], store.blockersOf],
     wins: [[T.wins], store.winsOn],
     board: [[T.tasks], board],
+    inbox: [[T.messages, T.ideas], inboxRows],
+    inboxCount: [[T.messages, T.ideas], inboxCount],
+    inboxRuns: [[T.triageRuns, T.triageSteps], inboxRuns],
   } as const satisfies Record<string, Read>;
 }
 

@@ -18,7 +18,8 @@ import { RAIL_FILTERS } from "./core/rail";
 
 // What the footer needs to know to show only the moves that apply.
 export interface HelpCtx {
-  item: "task" | "fyi" | "idea" | "project" | null;
+  // message, fyi and idea are Inbox rows (the Board's tab), never the rail's.
+  item: "task" | "message" | "fyi" | "idea" | "project" | null;
   kind: string | null;
   hasDraft: boolean;
   live: boolean;
@@ -36,6 +37,13 @@ export interface HelpCtx {
   attached?: boolean;
   // The Board's tab, while focus is on the Board.
   board?: BoardTab;
+  // An Inbox row: it made or joined a task (an idea: it is about one).
+  inboxTask?: boolean;
+  // An Inbox idea already approved or dismissed.
+  handled?: boolean;
+  // An Inbox row's task Start and Move act on: the one a message made or
+  // joined, or the one an approved idea made.
+  inboxWork?: boolean;
 }
 
 export const BoardTab = {
@@ -43,6 +51,7 @@ export const BoardTab = {
   notes: "notes",
   knowledge: "knowledge",
   projects: "projects",
+  inbox: "inbox",
 } as const;
 export type BoardTab = (typeof BoardTab)[keyof typeof BoardTab];
 
@@ -148,6 +157,10 @@ const isWork = (c: HelpCtx) =>
 const isSystem = (c: HelpCtx) => isTask(c) && c.kind === "system";
 const onColumns = (c: HelpCtx) => c.board === BoardTab.columns;
 const onProjects = (c: HelpCtx) => c.board === BoardTab.projects;
+const onInbox = (c: HelpCtx) => c.board === BoardTab.inbox;
+// An Inbox message (an FYI or not), not an idea.
+const inboxMessage = (c: HelpCtx) =>
+  onInbox(c) && (c.item === "message" || c.item === "fyi");
 
 // The actions on a row, the same from the rail and from the table.
 const taskActions: BindingSpec<HelpCtx>[] = [
@@ -252,20 +265,6 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   },
   {
     key: "x",
-    cmd: Commands.READ_FYI,
-    desc: "FYI: mark it read",
-    help: "read",
-    relevant: (c) => c.item === "fyi",
-  },
-  {
-    key: "x",
-    cmd: Commands.DISMISS_IDEA,
-    desc: "Advisor idea: dismiss it",
-    help: "dismiss",
-    relevant: (c) => c.item === "idea",
-  },
-  {
-    key: "x",
     cmd: Commands.PROJECT_ARCHIVE,
     desc: "archive the project",
     help: "archive",
@@ -301,13 +300,6 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     desc: "edit the project's brief, goals, repos and docs in $EDITOR",
     help: "brief",
     relevant: (c) => c.item === "project",
-  },
-  {
-    key: "m",
-    cmd: Commands.MAKE_TASK,
-    desc: "FYI or Advisor idea: make it a task",
-    help: "make task",
-    relevant: (c) => c.item === "fyi" || c.item === "idea",
   },
   {
     key: "p",
@@ -401,6 +393,8 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       cmd: Commands.SEARCH_OPEN,
       desc: "search the rail: words, AUG-23, #412, @someone",
       help: "search",
+      // The Inbox's / searches the Inbox.
+      relevant: (c) => c.board !== BoardTab.inbox,
     },
     // The go-to chord works while typing and while attached (see terminal):
     // it is a control key, so it never reaches the box or the agent.
@@ -496,17 +490,93 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     { key: "left", cmd: Commands.BOARD_LEFT, desc: "column left", relevant: onColumns },
     { key: "l", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
     { key: "right", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
-    // The footer folds the four into "1-4 tabs" (BOARD_HELP_OPTIONS).
+    // The footer folds the five into "1-5 tabs" (BOARD_HELP_OPTIONS).
     { key: "1", cmd: Commands.BOARD_TAB_1, desc: "tab: columns", help: "tabs" },
     { key: "2", cmd: Commands.BOARD_TAB_2, desc: "tab: live handoffs" },
     { key: "3", cmd: Commands.BOARD_TAB_3, desc: "tab: knowledge" },
     { key: "4", cmd: Commands.BOARD_TAB_4, desc: "tab: projects" },
+    { key: "5", cmd: Commands.BOARD_TAB_5, desc: "tab: inbox" },
     {
       key: "return",
       cmd: Commands.OPEN,
       desc: "open the task in Chat, or jump to the project's session",
       help: "open",
-      relevant: (c) => c.item !== null,
+      relevant: (c) => c.item !== null && !onInbox(c),
+    },
+    // The Inbox: every message triage saw and every Advisor idea.
+    {
+      key: "return",
+      cmd: Commands.INBOX_EXPAND,
+      desc: "Inbox: show or hide how triage routed it",
+      help: "chain",
+      relevant: (c) => onInbox(c) && c.item !== null,
+    },
+    { key: "f", cmd: Commands.INBOX_FILTER, desc: "Inbox: next filter", help: "filter", relevant: onInbox },
+    { key: "/", cmd: Commands.INBOX_SEARCH, desc: "Inbox: search subject, sender and source", help: "search", relevant: onInbox },
+    {
+      key: "t",
+      cmd: Commands.INBOX_GO,
+      desc: "Inbox: go to the task it made or joined (an open idea: the task it is about)",
+      help: "go to task",
+      relevant: (c) => onInbox(c) && Boolean(c.inboxTask),
+    },
+    {
+      key: "m",
+      cmd: Commands.MAKE_TASK,
+      desc: "Inbox: make it a task (an idea: approve it)",
+      help: "make task",
+      relevant: (c) =>
+        onInbox(c) &&
+        ((c.item === "idea" && !c.handled) || (inboxMessage(c) && !c.inboxTask)),
+    },
+    {
+      key: "x",
+      cmd: Commands.DISMISS_IDEA,
+      desc: "Inbox: dismiss the Advisor idea",
+      help: "dismiss",
+      relevant: (c) => onInbox(c) && c.item === "idea" && !c.handled,
+    },
+    {
+      key: "x",
+      cmd: Commands.READ_FYI,
+      desc: "Inbox: mark the FYI read",
+      help: "read",
+      relevant: (c) => onInbox(c) && c.item === "fyi",
+    },
+    {
+      key: "x",
+      cmd: Commands.NOT_TASK,
+      desc: "Inbox: not a task (drops the task it made; triage learns)",
+      help: "not a task",
+      relevant: (c) => onInbox(c) && c.item === "message" && Boolean(c.inboxTask),
+    },
+    {
+      key: "o",
+      cmd: Commands.OPEN_URL,
+      desc: "Inbox: open the message's link",
+      help: "open link",
+      relevant: inboxMessage,
+    },
+    {
+      key: "shift+f",
+      cmd: Commands.INBOX_NOISE,
+      desc: "Inbox: create noise filter (triage files its like as FYI)",
+      help: "noise filter",
+      relevant: (c) => inboxMessage(c) && !c.inboxTask,
+    },
+    {
+      key: "shift+u",
+      cmd: Commands.INBOX_RETRIAGE,
+      desc: "Inbox: re-run triage on it",
+      help: "re-triage",
+      relevant: (c) => inboxMessage(c) && !c.inboxTask,
+    },
+    {
+      key: "shift+b",
+      cmd: Commands.INBOX_BODY,
+      desc: "Inbox: show the whole message, or cap it again",
+      help: "body",
+      relevant: inboxMessage,
     },
     {
       key: "c",
@@ -550,7 +620,14 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       help: "adopt",
       relevant: onProjects,
     },
-    { key: "s", cmd: Commands.START, desc: "start / continue the agent", help: "start", relevant: (c) => isWork(c) && !c.live },
+    {
+      key: "s",
+      cmd: Commands.START,
+      desc: "start / continue the agent",
+      help: "start",
+      relevant: (c) =>
+        !c.live && (isWork(c) || (onInbox(c) && Boolean(c.inboxWork))),
+    },
     { key: "shift+s", cmd: Commands.STOP, desc: "stop the agent and save", help: "stop", relevant: (c) => c.live },
     {
       key: "shift+t",
@@ -561,7 +638,12 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     },
     { key: "u", cmd: Commands.NUDGE, desc: "nudge the agent about new feedback", relevant: (c) => c.coding },
     { key: "d", cmd: Commands.DONE, desc: "mark done", help: "done", relevant: isWork },
-    { key: "shift+m", cmd: Commands.MOVE_TO_PROJECT, desc: "move the task to a project", relevant: isTask },
+    {
+      key: "shift+m",
+      cmd: Commands.MOVE_TO_PROJECT,
+      desc: "move the task to a project",
+      relevant: (c) => isTask(c) || (onInbox(c) && Boolean(c.inboxWork)),
+    },
     { key: "shift+p", cmd: Commands.PR_DASH, desc: "its PR in ghdash (in Chat)", help: "PR", relevant: (c) => c.pr },
     { key: "shift+r", cmd: Commands.REPOS, desc: "repos: where each is checked out, and checkouts to add" },
   ],
@@ -592,5 +674,5 @@ export const keymap = defaultKeymap;
 
 // Footer folding for the Board's tab digits.
 export const BOARD_HELP_OPTIONS = {
-  combinedKeys: { [Commands.BOARD_TAB_1]: "1-4" },
+  combinedKeys: { [Commands.BOARD_TAB_1]: "1-5" },
 };

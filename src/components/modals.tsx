@@ -24,10 +24,11 @@ import type { InfoSection } from "../core/info";
 import { actionText, describeAction } from "../core/outbound";
 import type { RailItem } from "../core/rail";
 import { goToList, searchIndex, type SearchHit } from "../core/search";
+import { INBOX_KEY } from "./board-tab";
 import { taskRef } from "../core/rows";
 import { Kind, type DraftAction } from "../core/types";
 import { stateColor, stateGlyph } from "./connector-line";
-import { CHANNEL_WORD, dayClock } from "./ui";
+import { dayClock } from "./ui";
 
 export function PromptModal(props: {
   title: string;
@@ -420,10 +421,6 @@ function searchTag(item: RailItem): string {
       return item.task.kind === Kind.home ? "home" : taskRef(item.task.id);
     case "project":
       return "project";
-    case "idea":
-      return "idea";
-    case "fyi":
-      return CHANNEL_WORD[item.message.channel];
   }
 }
 
@@ -451,11 +448,17 @@ export function SearchModal(props: {
   });
   // Read once: what was recent when the list opened.
   const recentKeys = aug.recent().map((i) => i.key);
-  const hits = createMemo(() => goToList(docs(), nav.filter(), recentKeys));
-  const pick = (hit: SearchHit | undefined) => {
-    if (!hit) return false;
+  // The Inbox is no rail row, but the go-to list reaches it too: first when
+  // nothing is typed, or when what is typed starts its name.
+  const showInbox = () => "inbox".startsWith(nav.filter().trim().toLowerCase());
+  const hits = createMemo((): (SearchHit | null)[] => [
+    ...(showInbox() ? [null] : []),
+    ...goToList(docs(), nav.filter(), recentKeys),
+  ]);
+  const pick = (hit: SearchHit | null | undefined) => {
+    if (hit === undefined) return false;
     props.onClose();
-    props.onPick(hit.item.key);
+    props.onPick(hit ? hit.item.key : INBOX_KEY);
   };
   return (
     <Modal
@@ -493,6 +496,28 @@ export function SearchModal(props: {
               const on = () => i() === nav.selected();
               const fg = () =>
                 on() ? contrastingForeground(theme.primary) : undefined;
+              if (!hit)
+                return (
+                  <box
+                    flexDirection="row"
+                    gap={1}
+                    paddingLeft={1}
+                    paddingRight={1}
+                    backgroundColor={on() ? theme.primary : undefined}
+                  >
+                    <text width={8} flexShrink={0} fg={fg() ?? theme.accent}>
+                      board
+                    </text>
+                    <box flexGrow={1} flexShrink={1} overflow="hidden">
+                      <text wrapMode="none" fg={fg() ?? theme.text} attributes={on() ? 1 : 0}>
+                        Inbox
+                      </text>
+                    </box>
+                    <text flexShrink={0} fg={fg() ?? theme.textMuted}>
+                      {aug.inboxCount() ? `${aug.inboxCount()} need you` : "messages and ideas"}
+                    </text>
+                  </box>
+                );
               return (
                 <box
                   flexDirection="row"

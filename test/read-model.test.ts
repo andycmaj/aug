@@ -150,6 +150,9 @@ describe("read model", () => {
       board: (r) => r.board(pending),
       blockers: (r) => r.blockers(plain.id),
       wins: (r) => r.wins("2026-11-15"),
+      inbox: (r) => r.inbox(),
+      inboxCount: (r) => r.inboxCount(),
+      inboxRuns: (r) => r.inboxRuns(message.id),
     };
     const known = new Set<string>(TABLES);
     for (const [name, call] of Object.entries(calls) as [ReadName, (r: ReadModel) => unknown][]) {

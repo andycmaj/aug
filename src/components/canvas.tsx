@@ -23,7 +23,6 @@ import type {
 import { useTerminalDimensions } from "@opentui/solid";
 import {
   contrastingForeground,
-  Markdown,
   Pane,
   truncate,
   useFocus,
@@ -220,26 +219,10 @@ export function Canvas(props: {
             </>
           )}
         </Match>
-        <Match when={item()?.type === "fyi" && item()}>
-          {(i: Accessor<RailItem>) => (
-            <FyiView
-              item={i() as Extract<RailItem, { type: "fyi" }>}
-              width={width()}
-            />
-          )}
-        </Match>
         <Match when={item()?.type === "project" && item()}>
           {(i: Accessor<RailItem>) => (
             <ProjectView
               item={i() as Extract<RailItem, { type: "project" }>}
-              width={width()}
-            />
-          )}
-        </Match>
-        <Match when={item()?.type === "idea" && item()}>
-          {(i: Accessor<RailItem>) => (
-            <IdeaView
-              item={i() as Extract<RailItem, { type: "idea" }>}
               width={width()}
             />
           )}
@@ -689,50 +672,6 @@ function ChatInput(props: {
   );
 }
 
-function FyiView(props: {
-  item: Extract<RailItem, { type: "fyi" }>;
-  width: number;
-}) {
-  const theme = useTheme();
-  const aug = useAug();
-  const m = () => props.item.message;
-  return (
-    <box
-      flexDirection="column"
-      paddingLeft={2}
-      paddingRight={2}
-      paddingTop={1}
-      flexGrow={1}
-    >
-      <text fg={theme.primary} attributes={1}>
-        {`FYI · ${m().author_name}`}
-      </text>
-      <text
-        fg={theme.textMuted}
-        wrapMode="word"
-      >{`${CHANNEL_WORD[m().channel]} · ${m().title} · ${dayClock(m().received_at, aug.now())}`}</text>
-      <text
-        fg={theme.textMuted}
-        wrapMode="word"
-      >{`triage: ${m().reason ?? "fyi"}`}</text>
-      <scrollbox flexGrow={1} flexBasis={0} marginTop={1}>
-        <text fg={theme.text} wrapMode="word">
-          {m().body}
-        </text>
-      </scrollbox>
-      <KeyHints
-        hints={[
-          ["x", "read"],
-          ["n", "read, next"],
-          ["m", "it was work: make it a task"],
-          ["o", "open"],
-        ]}
-      />
-    </box>
-  );
-}
-
-// A project on the table: its tasks, newest work last, each with its lane.
 function ProjectView(props: {
   item: Extract<RailItem, { type: "project" }>;
   width: number;
@@ -812,44 +751,6 @@ function ProjectView(props: {
   );
 }
 
-function IdeaView(props: {
-  item: Extract<RailItem, { type: "idea" }>;
-  width: number;
-}) {
-  const theme = useTheme();
-  const idea = () => props.item.idea;
-  return (
-    <box
-      flexDirection="column"
-      paddingLeft={2}
-      paddingRight={2}
-      paddingTop={1}
-      flexGrow={1}
-      flexBasis={0}
-    >
-      <text fg={theme.accent} attributes={1}>
-        {`Advisor · ${idea().title}`}
-      </text>
-      <Show when={idea().task_id}>
-        <text
-          fg={theme.textMuted}
-        >{`about ${taskRef(idea().task_id!)}`}</text>
-      </Show>
-      <box marginTop={1} flexGrow={1}>
-        <Markdown text={idea().body} width={Math.max(20, props.width)} />
-      </box>
-      <KeyHints
-        hints={[
-          ["m", "make it a task"],
-          ["x", "dismiss"],
-          ["n", "dismiss, next"],
-        ]}
-      />
-    </box>
-  );
-}
-
-// Nothing on the table: what waits, in each section, and how to begin.
 function Opening() {
   const theme = useTheme();
   const aug = useAug();

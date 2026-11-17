@@ -370,12 +370,25 @@ export const IdeaStatus = {
 } as const;
 export type IdeaStatus = (typeof IdeaStatus)[keyof typeof IdeaStatus];
 
+// The correction a move of a triaged task records; triage reads the recent
+// ones back as examples of where such work goes.
+export const PROJECT_MOVE = "Triage project: filed it under another project";
+
+export interface ProjectMove {
+  title: string;
+  before: string;
+  after: string;
+}
+
 export interface IdeaRow {
   id: number;
   title: string;
   body: string;
+  // The task the idea is about.
   task_id: number | null;
   status: IdeaStatus;
+  // The task approving it made.
+  made_task_id: number | null;
   created_at: string;
 }
 
@@ -412,6 +425,42 @@ export interface DocProposalRow {
   status: ProposalStatus;
   created_at: string;
   updated_at: string;
+}
+
+// A rule in the triage chain either claims the message or passes it on.
+export const StepDecision = {
+  pass: "pass",
+  claim: "claim",
+} as const;
+export type StepDecision = (typeof StepDecision)[keyof typeof StepDecision];
+
+// What a triage run ended in: a verdict, or how a gate routed it.
+export type TriageVerdict = Verdict | "attached" | "own" | "opener" | "failed";
+
+export interface TriageRunRow {
+  id: number;
+  message_id: number;
+  // JSON: what every rule saw (DM or not, the thread's open and last task).
+  input: string;
+  // JSON of the model's verdict, null when no rule asked for it.
+  verdict: string | null;
+  // The rule that claimed it.
+  rule: string;
+  outcome: TriageVerdict | null;
+  task_id: number | null;
+  project_id: number | null;
+  reason: string;
+  at: string;
+}
+
+export interface TriageStepRow {
+  id: number;
+  run_id: number;
+  seq: number;
+  rule: string;
+  decision: StepDecision;
+  reason: string;
+  at: string;
 }
 
 export interface CorrectionRow {

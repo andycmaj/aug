@@ -17,6 +17,8 @@ import {
   type Channel,
   type IdeaStatus,
   type CorrectionRow,
+  type ProjectMove,
+  PROJECT_MOVE,
   type DocProposalRow,
   type ProposalSource,
   type ProposalStatus,
@@ -36,7 +38,11 @@ import {
   type SessionKind,
   type SessionRow,
   type TaskLinkRow,
+  type StepDecision,
   type TaskRow,
+  type TriageRunRow,
+  type TriageStepRow,
+  type TriageVerdict,
   type TurnRow,
   type Verdict,
 } from "./types";
@@ -591,6 +597,27 @@ export function fyiMessages(sinceIso: string): MessageRow[] {
   );
 }
 
+// The Inbox's messages, newest first.
+export function recentMessages(limit: number): MessageRow[] {
+  return all<MessageRow>(
+    "SELECT * FROM messages ORDER BY received_at DESC, id DESC LIMIT ?",
+    limit,
+  );
+}
+
+// Messages triage could not place (failed, or never triaged): on the owner.
+// Keep in step with inbox.ts messageResult.
+export function unplacedMessages(): number {
+  return (
+    one<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM messages
+       WHERE from_me = 0 AND task_id IS NULL
+         AND NOT (COALESCE(verdict, '') = 'fyi' AND COALESCE(reason, '') NOT LIKE 'awaiting AI triage%')
+         AND COALESCE(reason, '') NOT LIKE 'a greeting%'`,
+    )?.n ?? 0
+  );
+}
+
 export function fileMessage(
   id: number,
   verdict: Verdict | null,
@@ -903,10 +930,18 @@ export function addIdea(
   return one<IdeaRow>("SELECT * FROM ideas WHERE id = ?", id)!;
 }
 
+export function allIdeas(): IdeaRow[] {
+  return all<IdeaRow>("SELECT * FROM ideas ORDER BY created_at, id");
+}
+
 export function openIdeas(): IdeaRow[] {
   return all<IdeaRow>(
     "SELECT * FROM ideas WHERE status = 'open' ORDER BY created_at, id",
   );
+}
+
+export function ideaTasked(id: number, taskId: number): void {
+  run("UPDATE ideas SET status = 'tasked', made_task_id = ? WHERE id = ?", taskId, id);
 }
 
 export function setIdeaStatus(id: number, status: IdeaStatus): void {
@@ -994,6 +1029,65 @@ export function setProposalStatus(id: number, status: ProposalStatus): void {
   );
 }
 
+// ── triage runs (the chain, as it ran on each message) ───────────────────
+
+export interface NewTriageRun {
+  messageId: number;
+  input: Record<string, unknown>;
+  verdict: unknown;
+  rule: string;
+  outcome: TriageVerdict | null;
+  taskId: number | null;
+  projectId: number | null;
+  reason: string;
+  steps: { rule: string; decision: StepDecision; reason: string; at: string }[];
+}
+
+export function addTriageRun(r: NewTriageRun): TriageRunRow {
+  return batch(() => {
+    const at = now();
+    const id = run(
+      "INSERT INTO triage_runs (message_id, input, verdict, rule, outcome, task_id, project_id, reason, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      r.messageId,
+      JSON.stringify(r.input),
+      r.verdict === null || r.verdict === undefined ? null : JSON.stringify(r.verdict),
+      r.rule,
+      r.outcome,
+      r.taskId,
+      r.projectId,
+      r.reason,
+      at,
+    );
+    r.steps.forEach((step, seq) =>
+      run(
+        "INSERT INTO triage_steps (run_id, seq, rule, decision, reason, at) VALUES (?, ?, ?, ?, ?, ?)",
+        id,
+        seq,
+        step.rule,
+        step.decision,
+        step.reason,
+        step.at,
+      ),
+    );
+    return one<TriageRunRow>("SELECT * FROM triage_runs WHERE id = ?", id)!;
+  });
+}
+
+// Newest run first.
+export function triageRunsFor(messageId: number): TriageRunRow[] {
+  return all<TriageRunRow>(
+    "SELECT * FROM triage_runs WHERE message_id = ? ORDER BY id DESC",
+    messageId,
+  );
+}
+
+export function triageSteps(runId: number): TriageStepRow[] {
+  return all<TriageStepRow>(
+    "SELECT * FROM triage_steps WHERE run_id = ? ORDER BY seq",
+    runId,
+  );
+}
+
 // ── corrections (what LEARNED.md is taught from) ─────────────────────────
 
 export function addCorrection(c: {
@@ -1020,6 +1114,18 @@ export function addCorrection(c: {
 export function recentCorrections(limit = 40): CorrectionRow[] {
   return all<CorrectionRow>(
     "SELECT * FROM corrections ORDER BY id DESC LIMIT ?",
+    limit,
+  );
+}
+
+// The owner's latest move of each triaged task, newest first.
+export function recentProjectMoves(limit = 8): ProjectMove[] {
+  return all<ProjectMove>(
+    `SELECT t.title AS title, COALESCE(c.before, 'no project') AS before, COALESCE(c.after, '') AS after
+     FROM corrections c JOIN tasks t ON t.id = c.task_id
+     WHERE c.id IN (SELECT MAX(id) FROM corrections WHERE what = ? GROUP BY task_id)
+     ORDER BY c.id DESC LIMIT ?`,
+    PROJECT_MOVE,
     limit,
   );
 }

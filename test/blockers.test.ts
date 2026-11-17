@@ -33,8 +33,6 @@ function laneOfTask(id: number) {
     buildRail({
       tasks: store.listTasks(),
       pendingActions: new Set(),
-      ideas: [],
-      fyi: [],
       lastHeard: new Map(),
       now: new Date(),
       blockers: store.allBlockers(),

@@ -16,9 +16,10 @@ import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
 import { focusNext } from "../core/focus";
-import type { HelpCtx } from "../keymap";
+import { BoardTab, type HelpCtx } from "../keymap";
 import { useActions, useDialogs, type Actions, type Dialogs } from "./actions";
 import { FocusHelp } from "./focus-help";
+import { INBOX_KEY, setBoardTab } from "./board-tab";
 import { SearchModal, StatusModal } from "./modals";
 import { RailLegend } from "./rail";
 
@@ -65,6 +66,11 @@ export function useShell(opts: {
   // lands on the rail, never attached: the row it picks may be another
   // agent's terminal, and keys must not start going to it unasked.
   const openFromSearch = (key: string) => {
+    if (key === INBOX_KEY) {
+      setBoardTab(BoardTab.inbox);
+      aug.setMode(ViewMode.board);
+      return;
+    }
     if (focus.isPaneFocused("task")) focus.setActivePane("rail");
     aug.goTo(key);
   };

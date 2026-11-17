@@ -14,7 +14,7 @@ import {
   type HelpCtx,
 } from "../src/keymap";
 
-const ITEMS: HelpCtx["item"][] = ["task", "fyi", "idea", "project", null];
+const ITEMS: HelpCtx["item"][] = ["task", "message", "fyi", "idea", "project", null];
 const KINDS = ["home", "system", "coding", "task", "chat", null];
 const FLAGS = [
   "hasDraft",
@@ -34,7 +34,8 @@ function* contexts(): Generator<HelpCtx> {
         bits < (item === "task" ? 1 << FLAGS.length : 1);
         bits++
       )
-        for (const board of [undefined, ...Object.values(BoardTab)]) {
+        for (const board of [undefined, ...Object.values(BoardTab)])
+        for (const inbox of [0, 1, 2, 3, 4, 5, 6, 7]) {
           const ctx: HelpCtx = {
             item,
             kind,
@@ -45,6 +46,9 @@ function* contexts(): Generator<HelpCtx> {
             started: false,
             pr: false,
             board,
+            inboxTask: (inbox & 1) !== 0,
+            handled: (inbox & 2) !== 0,
+            inboxWork: (inbox & 4) !== 0,
           };
           FLAGS.forEach((flag, i) => {
             ctx[flag] = (bits & (1 << i)) !== 0;
@@ -92,7 +96,7 @@ test("in each pane, a key means one thing for any item", () => {
   expect([...clashes]).toEqual([]);
 });
 
-// The table's own hint words for FYIs and Advisor ideas say the same thing.
+// The table's own hint words say the same thing as the footer.
 test("the footer names what x and m do to the row on the table", () => {
   const base: HelpCtx = {
     item: null,
@@ -109,8 +113,6 @@ test("the footer names what x and m do to the row on the table", () => {
     return { x: f.get("x"), m: f.get("m") };
   };
   expect(words("task", "task")).toEqual({ x: "not a task", m: undefined });
-  expect(words("fyi")).toEqual({ x: "read", m: "make task" });
-  expect(words("idea")).toEqual({ x: "dismiss", m: "make task" });
   expect(words("project")).toEqual({ x: "archive", m: undefined });
   expect(words("task", "home").x).toBeUndefined();
 });
@@ -194,9 +196,9 @@ test("typing in the chat box lists the box's keys, not the table's", () => {
 });
 
 test("a key's relevant binding wins over one that declines this row", () => {
-  const fyi: HelpCtx = { ...quiet, item: "fyi", kind: null, coding: false };
-  expect(shown(["rail", "app"], fyi).get("x")).toBe(Commands.READ_FYI);
-  const project: HelpCtx = { ...fyi, item: "project" };
+  const work: HelpCtx = { ...quiet, item: "task", kind: "task", coding: false };
+  expect(shown(["rail", "app"], work).get("x")).toBe(Commands.NOT_TASK);
+  const project: HelpCtx = { ...work, item: "project", kind: null };
   expect(shown(["rail", "app"], project).get("x")).toBe(
     Commands.PROJECT_ARCHIVE,
   );
@@ -234,3 +236,53 @@ test("Home's row does not offer the key that goes Home", () => {
     Commands.ASK_OPEN,
   );
 });
+
+test("the Inbox's keys say what they do to each row", () => {
+  const inbox = (item: HelpCtx["item"], extra: Partial<HelpCtx> = {}) =>
+    footer("board", {
+      ...base(),
+      item,
+      board: BoardTab.inbox,
+      ...extra,
+    });
+  const idea = inbox("idea");
+  expect([idea.get("x"), idea.get("m"), idea.get("Enter")]).toEqual(["dismiss", "make task", "chain"]);
+  expect(inbox("idea", { handled: true }).has("x")).toBe(false);
+  const fyi = inbox("fyi");
+  expect([fyi.get("x"), fyi.get("m"), fyi.get("F"), fyi.get("U")]).toEqual([
+    "read",
+    "make task",
+    "noise filter",
+    "re-triage",
+  ]);
+  const made = inbox("message", { inboxTask: true, inboxWork: true });
+  expect([made.get("x"), made.get("t"), made.get("s"), made.get("m"), made.get("U")]).toEqual([
+    "not a task",
+    "go to task",
+    "start",
+    undefined,
+    undefined,
+  ]);
+  // An approved idea's task starts and moves; an open idea's only goes to.
+  const approved = inbox("idea", { handled: true, inboxTask: true, inboxWork: true });
+  expect([approved.get("t"), approved.get("s"), approved.get("x")]).toEqual(["go to task", "start", undefined]);
+  const about = inbox("idea", { inboxTask: true });
+  expect([about.get("t"), about.get("s")]).toEqual(["go to task", undefined]);
+  expect(inbox(null).get("/")).toBe("search");
+  expect(inbox(null).get("f")).toBe("filter");
+  // Off the Inbox, / is the rail search and Enter opens.
+  expect(footer("board", { ...base(), item: "task", kind: "task", board: BoardTab.columns }).get("Enter")).toBe("open");
+});
+
+function base(): HelpCtx {
+  return {
+    item: null,
+    kind: null,
+    hasDraft: false,
+    live: false,
+    coding: false,
+    watching: false,
+    started: false,
+    pr: false,
+  };
+}

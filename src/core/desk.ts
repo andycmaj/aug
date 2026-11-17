@@ -34,10 +34,12 @@ import * as repos from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
+import { triage, type TriageEffect, type TriageOutcome } from "./triage";
 import {
   AgentState,
   IdeaStatus,
   Kind,
+  PROJECT_MOVE,
   Priority,
   TaskStatus,
   TurnRole,
@@ -45,6 +47,10 @@ import {
   type NoteLabel,
   type TaskRow,
 } from "./types";
+
+export type RetriageResult =
+  | { ok: true; outcome: TriageOutcome }
+  | { ok: false; why: string };
 
 // How the owner signs what they write on the Board.
 const OWNER = "you";
@@ -85,6 +91,31 @@ export class Desk {
       ...c,
       triage: { ...c.triage, noise: [...c.triage.noise, rule] },
     }));
+  }
+
+  // A noise filter made from an Inbox message: saved for the next message,
+  // and this one filed as FYI under it. A pattern that does not compile is
+  // answered now, not skipped at triage time.
+  noiseFromMessage(messageId: number, rule: NoiseRule): string | null {
+    if (!rule.reason.trim()) return "a noise filter needs a reason";
+    if (!rule.author && !rule.title && !rule.body && !rule.githubReason)
+      return "a noise filter needs a pattern";
+    for (const field of ["author", "title", "body"] as const) {
+      const pattern = rule[field];
+      if (pattern === undefined) continue;
+      try {
+        new RegExp(pattern, "i");
+      } catch {
+        return `${field} is not a regex: ${pattern}`;
+      }
+    }
+    this.addNoise(rule);
+    const m = store.getMessage(messageId);
+    if (m && m.task_id === null) {
+      store.fileMessage(m.id, Verdict.fyi, rule.reason, null);
+      store.markMessageRead(m.id);
+    }
+    return null;
   }
 
   // ── tasks ─────────────────────────────────────────────────────────────
@@ -262,7 +293,23 @@ export class Desk {
     store.removeProjectRepo(projectId, repo);
   }
 
+  // A task triage made, moved to another project, teaches triage where
+  // such work goes.
   moveTask(taskId: number, projectId: number) {
+    const task = store.getTask(taskId);
+    if (task && task.triage_reason && task.channel !== "owner" && task.project_id !== projectId) {
+      const before = task.project_id ? store.getProject(task.project_id)?.name : null;
+      correct(
+        this.config(),
+        {
+          taskId,
+          what: PROJECT_MOVE,
+          before: before ?? "no project",
+          after: store.getProject(projectId)?.name ?? String(projectId),
+        },
+        this.learnedNotice,
+      );
+    }
     return projects.moveTask(this.config(), taskId, projectId);
   }
 
@@ -477,6 +524,37 @@ export class Desk {
 
   // ── FYIs and ideas ────────────────────────────────────────────────────
 
+  // What triage asked for: wake the agents of the tasks it routed to.
+  runEffects(effects: TriageEffect[]): void {
+    for (const effect of effects) {
+      const task = store.getTask(effect.taskId);
+      if (!task) continue;
+      void this.drivers
+        .for(task)
+        .wake(
+          task,
+          effect.type === "agent-turn"
+            ? effect.reason
+            : "a new message joined the thread",
+        );
+    }
+  }
+
+  // Triage again, as a new run. A message on a task is refused: a second
+  // pass could make a duplicate, and "not a task" is the way back.
+  async retriage(messageId: number): Promise<RetriageResult> {
+    const message = store.getMessage(messageId);
+    if (!message) return { ok: false, why: "no such message" };
+    if (message.task_id !== null)
+      return {
+        ok: false,
+        why: `it is on ${store.taskRef(message.task_id)}: use not a task instead`,
+      };
+    const outcome = await triage(message, { config: this.config() });
+    this.runEffects(outcome.effects);
+    return { ok: true, outcome };
+  }
+
   readFyi(messageId: number): void {
     store.markMessageRead(messageId);
   }
@@ -519,7 +597,7 @@ export class Desk {
         messageId,
         taskId: task.id,
         what: "FYI was work: made it a task",
-        before: "fyi",
+        before: m.verdict ?? "not triaged",
         after: "general",
       },
       this.learnedNotice,
@@ -534,8 +612,9 @@ export class Desk {
   ideaToTask(ideaId: number): TaskRow | null {
     const idea = store.openIdeas().find((i) => i.id === ideaId);
     if (!idea) return null;
-    store.setIdeaStatus(ideaId, IdeaStatus.tasked);
-    return this.newTask(idea.title, Kind.task, idea.body);
+    const task = this.newTask(idea.title, Kind.task, idea.body);
+    store.ideaTasked(ideaId, task.id);
+    return task;
   }
 
   // ── brain docs (System tasks) ─────────────────────────────────────────

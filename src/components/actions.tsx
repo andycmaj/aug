@@ -32,7 +32,10 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
-import { Kind, Priority, type TaskRow } from "../core/types";
+import type { NoiseRule } from "../core/config";
+import { clip as inboxClip, type InboxRow } from "../core/inbox";
+import { messageMeta } from "../core/meta";
+import { Kind, Priority, type MessageRow, type TaskRow } from "../core/types";
 import {
   ChoiceModal,
   ConfirmSendModal,
@@ -488,35 +491,127 @@ export function useActions(dialogs: Dialogs) {
     });
   }
 
-  // ── on an FYI / an idea ───────────────────────────────────────────────
+  // ── on an Inbox row ───────────────────────────────────────────────────
 
-  function makeTask(item: RailItem) {
-    if (item.type === "fyi") {
-      const task = desk.fyiToTask(item.message.id);
-      if (task) {
-        aug.selectTask(task.id);
-        showToast(`${taskRef(task.id)}: it was work; triage will learn`);
-      }
-    } else if (item.type === "idea") {
-      const task = desk.ideaToTask(item.idea.id);
-      if (task) {
-        aug.selectTask(task.id);
-        showToast(`${taskRef(task.id)} on your list`);
-      }
+  function goToTask(taskId: number) {
+    aug.setMode(ViewMode.chat);
+    aug.selectTask(taskId);
+  }
+
+  // m: a message triage did not make work becomes a task; an idea is
+  // approved. Either way you stay on the Inbox.
+  function inboxMakeTask(row: InboxRow) {
+    if (row.type === "idea") {
+      const task = desk.ideaToTask(row.idea.id);
+      if (task) showToast(`${taskRef(task.id)} on your list`);
+      return;
+    }
+    const task = desk.fyiToTask(row.message.id);
+    if (task) showToast(`${taskRef(task.id)}: it was work; triage will learn`);
+  }
+
+  function inboxDismiss(row: InboxRow) {
+    if (row.type === "idea") desk.dismissIdea(row.idea.id);
+    else desk.readFyi(row.message.id);
+  }
+
+  function inboxNotATask(row: InboxRow) {
+    if (row.type !== "message" || row.taskId === null) return false;
+    const task = aug.task(row.taskId);
+    if (!task) return false;
+    desk.notATask(task.id);
+    showToast("Not a task: triage will learn from it");
+  }
+
+  async function retriage(message: MessageRow) {
+    showToast("Triaging it again…", 2000);
+    try {
+      const result = await desk.retriage(message.id);
+      if (!result.ok) showToast(result.why, 4000, "error");
+      else
+        showToast(
+          `Triage: ${result.outcome.verdict}${result.outcome.taskId ? ` · ${taskRef(result.outcome.taskId)}` : ""} (${result.outcome.reason})`,
+          5000,
+        );
+    } catch (err) {
+      log.error("retriage failed", { message: message.id, err });
+      showToast(`Triage failed: ${errorMessage(err)}`, 5000, "error");
     }
   }
 
-  function dismiss(item: RailItem) {
-    advanceFrom(item.key);
-    if (item.type === "fyi") desk.readFyi(item.message.id);
-    if (item.type === "idea") desk.dismissIdea(item.idea.id);
+  function openMessage(message: MessageRow) {
+    if (message.url) open(message.url);
+    else showToast("No link on this one");
+  }
+
+  // Shift+F: what to match (the sender, the title, GitHub's reason), the
+  // pattern as a regex you can loosen, then the reason you will read.
+  function noiseFilter(message: MessageRow) {
+    const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const meta = messageMeta(message);
+    const githubReason = meta.channel === "github" ? meta.reason : null;
+    const channel = message.channel === "github" || message.channel === "slack" ? message.channel : undefined;
+    const save = (rule: NoiseRule) => {
+      const error = desk.noiseFromMessage(message.id, { ...rule, channel });
+      if (error) showToast(error, 5000, "error");
+      else showToast(`Noise filter saved: ${rule.reason}`);
+    };
+    const askReason = (rule: Omit<NoiseRule, "reason">) =>
+      dialogs.show(() => (
+        <PromptModal
+          title="Create noise filter: the reason"
+          hint="What you will read on the messages it files as FYI."
+          initial={`noise from ${message.author_name}`}
+          onSubmit={(reason) => save({ ...rule, reason })}
+          onClose={dialogs.close}
+        />
+      ));
+    const askPattern = (field: "author" | "title", initial: string) =>
+      dialogs.show(() => (
+        <PromptModal
+          title={`Create noise filter: ${field === "author" ? "sender" : "title"} pattern`}
+          hint="A regex, matched without case. Loosen it to catch its like."
+          initial={initial}
+          onSubmit={(pattern) => askReason({ [field]: pattern })}
+          onClose={dialogs.close}
+        />
+      ));
+    dialogs.show(() => (
+      <ChoiceModal
+        title="Create noise filter"
+        hint={`Messages like this one on ${message.channel} are filed as FYI, with no model call.`}
+        choices={[
+          {
+            label: `Sender is ${message.author_name}`,
+            hint: message.author,
+            run: () => askPattern("author", `^${escape(message.author)}$`),
+          },
+          ...(message.title
+            ? [
+                {
+                  label: "Title is like this one",
+                  hint: inboxClip(message.title, 40),
+                  run: () => askPattern("title", escape(message.title)),
+                },
+              ]
+            : []),
+          ...(githubReason
+            ? [
+                {
+                  label: `GitHub's reason is ${githubReason}`,
+                  run: () => askReason({ githubReason: [githubReason] }),
+                },
+              ]
+            : []),
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
   }
 
   function walk(direction: 1 | -1) {
     const current = aug.selected();
     if (direction === 1 && current) {
-      if (current.type === "fyi") desk.readFyi(current.message.id);
-      if (current.type === "idea") desk.dismissIdea(current.idea.id);
       if (current.type === "task" && current.task.unread_result)
         desk.readResult(current.task.id);
     }
@@ -615,12 +710,7 @@ export function useActions(dialogs: Dialogs) {
   // o: the link, or a pick of the thread, the links attached to the task,
   // and what the agent made.
   function openLink(item: RailItem) {
-    const url =
-      item.type === "task"
-        ? item.task.url
-        : item.type === "fyi"
-          ? item.message.url
-          : null;
+    const url = item.type === "task" ? item.task.url : null;
     const links = item.type === "task" ? aug.taskLinks(item.task.id) : [];
     const short = (u: string) => u.replace(/^https?:\/\//, "").slice(0, 30);
     const choices = [
@@ -756,16 +846,6 @@ export function useActions(dialogs: Dialogs) {
           return false;
         notATask(item.task);
       },
-      [Commands.READ_FYI]: () => {
-        const item = get();
-        if (item?.type !== "fyi") return false;
-        dismiss(item);
-      },
-      [Commands.DISMISS_IDEA]: () => {
-        const item = get();
-        if (item?.type !== "idea") return false;
-        dismiss(item);
-      },
       [Commands.PROJECT_ARCHIVE]: () => {
         const item = get();
         if (item?.type !== "project") return false;
@@ -775,10 +855,6 @@ export function useActions(dialogs: Dialogs) {
         const item = get();
         if (item?.type !== "project") return false;
         return editor.editProject(item.project.id);
-      },
-      [Commands.MAKE_TASK]: () => {
-        const item = get();
-        if (item && item.type !== "task") makeTask(item);
       },
       [Commands.EDIT_FILE]: () => {
         const item = get();
@@ -817,6 +893,13 @@ export function useActions(dialogs: Dialogs) {
     compose: editor.compose,
     walk,
     newTask,
+    goToTask,
+    inboxMakeTask,
+    inboxDismiss,
+    inboxNotATask,
+    retriage,
+    openMessage,
+    noiseFilter,
     docs,
     taskActions,
     togglePrDash,
