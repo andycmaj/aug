@@ -370,12 +370,25 @@ export const IdeaStatus = {
 } as const;
 export type IdeaStatus = (typeof IdeaStatus)[keyof typeof IdeaStatus];
 
+// The correction a move of a triaged task records; triage reads the recent
+// ones back as examples of where such work goes.
+export const PROJECT_MOVE = "Triage project: filed it under another project";
+
+export interface ProjectMove {
+  title: string;
+  before: string;
+  after: string;
+}
+
 export interface IdeaRow {
   id: number;
   title: string;
   body: string;
+  // The task the idea is about.
   task_id: number | null;
   status: IdeaStatus;
+  // The task approving it made.
+  made_task_id: number | null;
   created_at: string;
 }
 

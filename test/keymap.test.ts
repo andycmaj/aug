@@ -35,7 +35,7 @@ function* contexts(): Generator<HelpCtx> {
         bits++
       )
         for (const board of [undefined, ...Object.values(BoardTab)])
-        for (const inbox of [0, 1, 2, 3]) {
+        for (const inbox of [0, 1, 2, 3, 4, 5, 6, 7]) {
           const ctx: HelpCtx = {
             item,
             kind,
@@ -48,6 +48,7 @@ function* contexts(): Generator<HelpCtx> {
             board,
             inboxTask: (inbox & 1) !== 0,
             handled: (inbox & 2) !== 0,
+            inboxWork: (inbox & 4) !== 0,
           };
           FLAGS.forEach((flag, i) => {
             ctx[flag] = (bits & (1 << i)) !== 0;
@@ -254,7 +255,7 @@ test("the Inbox's keys say what they do to each row", () => {
     "noise filter",
     "re-triage",
   ]);
-  const made = inbox("message", { inboxTask: true });
+  const made = inbox("message", { inboxTask: true, inboxWork: true });
   expect([made.get("x"), made.get("t"), made.get("s"), made.get("m"), made.get("U")]).toEqual([
     "not a task",
     "go to task",
@@ -262,6 +263,11 @@ test("the Inbox's keys say what they do to each row", () => {
     undefined,
     undefined,
   ]);
+  // An approved idea's task starts and moves; an open idea's only goes to.
+  const approved = inbox("idea", { handled: true, inboxTask: true, inboxWork: true });
+  expect([approved.get("t"), approved.get("s"), approved.get("x")]).toEqual(["go to task", "start", undefined]);
+  const about = inbox("idea", { inboxTask: true });
+  expect([about.get("t"), about.get("s")]).toEqual(["go to task", undefined]);
   expect(inbox(null).get("/")).toBe("search");
   expect(inbox(null).get("f")).toBe("filter");
   // Off the Inbox, / is the rail search and Enter opens.

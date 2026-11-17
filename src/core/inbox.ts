@@ -85,7 +85,7 @@ export type InboxRow =
       from: "Advisor";
       subject: string;
       result: InboxResult;
-      // The task the idea is about.
+      // The task approving it made, else the task it is about.
       taskId: number | null;
       read: boolean;
       idea: IdeaRow;
@@ -153,7 +153,7 @@ export function ideaRow(idea: IdeaRow): InboxRow {
     from: "Advisor",
     subject: clip(idea.title, SUBJECT_CHARS),
     result: ideaResult(idea),
-    taskId: idea.task_id,
+    taskId: idea.made_task_id ?? idea.task_id,
     read: idea.status !== IdeaStatus.open,
     idea,
   };

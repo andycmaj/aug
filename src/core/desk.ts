@@ -39,6 +39,7 @@ import {
   AgentState,
   IdeaStatus,
   Kind,
+  PROJECT_MOVE,
   Priority,
   TaskStatus,
   TurnRole,
@@ -302,7 +303,7 @@ export class Desk {
         this.config(),
         {
           taskId,
-          what: "Triage project: filed it under another project",
+          what: PROJECT_MOVE,
           before: before ?? "no project",
           after: store.getProject(projectId)?.name ?? String(projectId),
         },
@@ -611,8 +612,9 @@ export class Desk {
   ideaToTask(ideaId: number): TaskRow | null {
     const idea = store.openIdeas().find((i) => i.id === ideaId);
     if (!idea) return null;
-    store.setIdeaStatus(ideaId, IdeaStatus.tasked);
-    return this.newTask(idea.title, Kind.task, idea.body);
+    const task = this.newTask(idea.title, Kind.task, idea.body);
+    store.ideaTasked(ideaId, task.id);
+    return task;
   }
 
   // ── brain docs (System tasks) ─────────────────────────────────────────

@@ -41,6 +41,9 @@ export interface HelpCtx {
   inboxTask?: boolean;
   // An Inbox idea already approved or dismissed.
   handled?: boolean;
+  // An Inbox row's task Start and Move act on: the one a message made or
+  // joined, or the one an approved idea made.
+  inboxWork?: boolean;
 }
 
 export const BoardTab = {
@@ -513,7 +516,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     {
       key: "t",
       cmd: Commands.INBOX_GO,
-      desc: "Inbox: go to the task it made or joined (an idea: the task it is about)",
+      desc: "Inbox: go to the task it made or joined (an open idea: the task it is about)",
       help: "go to task",
       relevant: (c) => onInbox(c) && Boolean(c.inboxTask),
     },
@@ -623,7 +626,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "start / continue the agent",
       help: "start",
       relevant: (c) =>
-        !c.live && (isWork(c) || (inboxMessage(c) && Boolean(c.inboxTask))),
+        !c.live && (isWork(c) || (onInbox(c) && Boolean(c.inboxWork))),
     },
     { key: "shift+s", cmd: Commands.STOP, desc: "stop the agent and save", help: "stop", relevant: (c) => c.live },
     {
@@ -639,7 +642,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       key: "shift+m",
       cmd: Commands.MOVE_TO_PROJECT,
       desc: "move the task to a project",
-      relevant: (c) => isTask(c) || (inboxMessage(c) && Boolean(c.inboxTask)),
+      relevant: (c) => isTask(c) || (onInbox(c) && Boolean(c.inboxWork)),
     },
     { key: "shift+p", cmd: Commands.PR_DASH, desc: "its PR in ghdash (in Chat)", help: "PR", relevant: (c) => c.pr },
     { key: "shift+r", cmd: Commands.REPOS, desc: "repos: where each is checked out, and checkouts to add" },

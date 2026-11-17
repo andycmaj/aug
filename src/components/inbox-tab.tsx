@@ -75,12 +75,13 @@ export function useInboxTab(opts: {
   const onMessage = (fn: (r: Extract<InboxRow, { type: "message" }>) => false | void) =>
     onRow((r) => (r.type === "message" ? fn(r) : false));
 
-  // The task an Inbox row points at: what Start and Move act on.
+  // The task an Inbox row points at: what Start and Move act on. An open
+  // idea's task is only what it is about, so it is not one.
   const task = () => {
     const r = row();
-    return opts.active() && r?.type === "message" && r.taskId !== null
-      ? aug.task(r.taskId)
-      : null;
+    if (!opts.active() || !r) return null;
+    const id = r.type === "message" ? r.taskId : r.idea.made_task_id;
+    return id === null ? null : aug.task(id);
   };
 
   const commands: Record<string, Handler> = {
@@ -152,6 +153,7 @@ export function useInboxTab(opts: {
       item: r.type === "idea" ? "idea" : r.result === InboxResult.fyi ? "fyi" : "message",
       inboxTask: r.taskId !== null,
       handled: r.type === "idea" && r.result !== InboxResult.idea,
+      inboxWork: task() !== null,
       live: Boolean(task() && aug.isLive(task()!)),
     };
   };
@@ -367,8 +369,10 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
                 <text fg={theme.textMuted}>
                   {[
                     idea().idea.task_id ? `about ${taskRef(idea().idea.task_id!)}` : null,
-                    RESULT_WORDS[idea().result],
-                    `m approve · x dismiss`,
+                    idea().idea.made_task_id
+                      ? `${RESULT_WORDS[idea().result]}: ${taskRef(idea().idea.made_task_id!)}`
+                      : RESULT_WORDS[idea().result],
+                    idea().result === InboxResult.idea ? "m approve · x dismiss" : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}

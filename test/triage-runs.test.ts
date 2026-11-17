@@ -5,7 +5,8 @@ import { Engine } from "../src/core/engine";
 import { setMux } from "../src/core/mux";
 import * as store from "../src/core/store";
 import { PROJECT_STEP, triage } from "../src/core/triage";
-import { type MessageRow } from "../src/core/types";
+import { ideaRow } from "../src/core/inbox";
+import { Kind, type MessageRow } from "../src/core/types";
 import { FakeMux } from "./fake-mux";
 import { config, fakeBrain, freshHome, testConfig } from "./helpers";
 
@@ -198,6 +199,35 @@ describe("re-running triage", () => {
       "Triage project: filed it under another project",
       "Web",
     ]);
+  });
+
+  test("the next verdict reads where the owner last moved such work", async () => {
+    fakeBrain(() => verdict("task"));
+    const web = store.createProject({ name: "Web", tmuxSession: "web" });
+    const payroll = store.createProject({ name: "Payroll", tmuxSession: "payroll" });
+    const out = await triage(slackDm(1, "Which payroll providers do same-day pay?"), {
+      config: config(),
+    });
+    await engine.desk.moveTask(out.taskId!, web.id);
+    await engine.desk.moveTask(out.taskId!, payroll.id);
+    expect(store.recentProjectMoves()).toEqual([
+      { title: "Same-day pay providers", before: "Web", after: "Payroll" },
+    ]);
+    const calls = fakeBrain(() => verdict("fyi"));
+    await triage(slackDm(2, "And what about Deel?"), { config: config() });
+    const prompt = calls.find((c) => c.prompt.includes("A message arrived"))!.prompt;
+    expect(prompt).toContain('- "Same-day pay providers": Web -> Payroll');
+    expect(prompt).not.toContain("-> Web");
+  });
+
+  test("an approved idea keeps the task it made", () => {
+    const about = engine.desk.newTask("payroll", Kind.task);
+    const idea = store.addIdea("Follow up with Sam", "body", about.id);
+    const task = engine.desk.ideaToTask(idea.id)!;
+    const row = store.allIdeas().find((i) => i.id === idea.id)!;
+    expect(row).toMatchObject({ status: "tasked", made_task_id: task.id, task_id: about.id });
+    expect(ideaRow(row).taskId).toBe(task.id);
+    expect(ideaRow(store.addIdea("open", "body", about.id)).taskId).toBe(about.id);
   });
 });
 

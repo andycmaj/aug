@@ -17,6 +17,8 @@ import {
   type Channel,
   type IdeaStatus,
   type CorrectionRow,
+  type ProjectMove,
+  PROJECT_MOVE,
   type DocProposalRow,
   type ProposalSource,
   type ProposalStatus,
@@ -938,6 +940,10 @@ export function openIdeas(): IdeaRow[] {
   );
 }
 
+export function ideaTasked(id: number, taskId: number): void {
+  run("UPDATE ideas SET status = 'tasked', made_task_id = ? WHERE id = ?", taskId, id);
+}
+
 export function setIdeaStatus(id: number, status: IdeaStatus): void {
   run("UPDATE ideas SET status = ? WHERE id = ?", status, id);
 }
@@ -1108,6 +1114,18 @@ export function addCorrection(c: {
 export function recentCorrections(limit = 40): CorrectionRow[] {
   return all<CorrectionRow>(
     "SELECT * FROM corrections ORDER BY id DESC LIMIT ?",
+    limit,
+  );
+}
+
+// The owner's latest move of each triaged task, newest first.
+export function recentProjectMoves(limit = 8): ProjectMove[] {
+  return all<ProjectMove>(
+    `SELECT t.title AS title, COALESCE(c.before, 'no project') AS before, COALESCE(c.after, '') AS after
+     FROM corrections c JOIN tasks t ON t.id = c.task_id
+     WHERE c.id IN (SELECT MAX(id) FROM corrections WHERE what = ? GROUP BY task_id)
+     ORDER BY c.id DESC LIMIT ?`,
+    PROJECT_MOVE,
     limit,
   );
 }

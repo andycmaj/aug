@@ -366,6 +366,8 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "tasks", column: "worktree", ddl: "TEXT" },
   { table: "sessions", column: "tmux_window", ddl: "TEXT" },
   { table: "tasks", column: "from_task_id", ddl: "INTEGER REFERENCES tasks(id)" },
+  // The task an approved idea became.
+  { table: "ideas", column: "made_task_id", ddl: "INTEGER REFERENCES tasks(id)" },
   { table: "turns", column: "pending", ddl: "INTEGER NOT NULL DEFAULT 0" },
   { table: "projects", column: "brief", ddl: "TEXT NOT NULL DEFAULT ''" },
   { table: "tasks", column: "goal_id", ddl: "INTEGER REFERENCES project_goals(id)" },
