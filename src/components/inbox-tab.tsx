@@ -291,7 +291,10 @@ function InboxView(props: {
                 if (row.taskId === null) return "";
                 const t = aug.task(row.taskId);
                 const project = t?.project_id ? aug.project(t.project_id)?.name : null;
-                return `${taskRef(row.taskId)}${project ? ` ${project}` : ""}`;
+                // An idea's task is only what it is about until approving it
+                // makes one; a bare ref read as "the Advisor made a task".
+                const about = row.type === "idea" && row.idea.made_task_id === null;
+                return `${about ? "about " : ""}${taskRef(row.taskId)}${project ? ` ${project}` : ""}`;
               };
               return (
                 <box flexDirection="column">

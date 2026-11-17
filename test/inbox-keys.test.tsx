@@ -89,6 +89,13 @@ test("x dismisses a message that joined a task, and the task stays", async () =>
   expect(frame()).toContain("Nothing matches");
 });
 
+// The demo's first idea is about AUG-0002; it made nothing.
+test("an idea's task column says it is only about that task", async () => {
+  const { find, frame } = await boot();
+  await find("seat count");
+  expect(frame()).toContain("about AUG-0002");
+});
+
 test("x dismisses a message triage could not place", async () => {
   const { press, find, frame } = await boot();
   await find("payroll export is short");
