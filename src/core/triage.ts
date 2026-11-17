@@ -383,16 +383,17 @@ const afterClose: TriageRule = {
         ),
 };
 
-// A review asked of you, or of a team you watch (github.reviewTeams), is
-// always a review task. Who was asked is read at ingest, so the claim needs
-// no model; the model's verdict, when there is one, only gives its words.
-const reviewRequest: TriageRule = {
-  name: "review request",
+// A pull request that asks a review of you, or of a team you watch
+// (github.reviewTeams), or tags either, is always a review task. Who was
+// asked is read at ingest and a tagged team from the comment, so the claim
+// needs no model; the model's verdict, when there is one, only gives its
+// words.
+const reviewAsk: TriageRule = {
+  name: "review ask",
   handle: async (i) => {
-    const pr = requestedPr(i.message);
-    if (!pr) return pass("not a pull request review request");
-    const meta = messageMeta(i.message) as GithubMeta;
-    const yours = reviewIsYours(meta, i.config.github.reviewTeams);
+    const pr = prOf(i.message);
+    if (!pr) return pass("not a pull request");
+    const yours = reviewIsYours(i.message, i.config.github.reviewTeams);
     if (!yours.ok) return pass(yours.error);
     const j = await i.judged();
     return ok(createReview(i.message, pr, j.ok ? j.value : null, yours.value, i.config));
@@ -452,7 +453,7 @@ export const TRIAGE_RULES: readonly TriageRule[] = [
   noise,
   sameThread,
   afterClose,
-  reviewRequest,
+  reviewAsk,
   unjudged,
   sameAsk,
   judgedFyi,
@@ -753,16 +754,10 @@ export function prFromUrl(url: string | null | undefined): ReviewPr | null {
   return pr && { ...pr, url: `https://github.com/${pr.repo}/pull/${pr.number}` };
 }
 
-// The pull request a GitHub review request is about.
-export function requestedPr(message: MessageRow): ReviewPr | null {
+// The pull request a GitHub notification is about.
+function prOf(message: MessageRow): ReviewPr | null {
   const meta = messageMeta(message);
-  if (
-    meta.channel !== "github" ||
-    meta.type !== "PullRequest" ||
-    meta.reason !== "review_requested" ||
-    !meta.repo ||
-    !meta.number
-  )
+  if (meta.channel !== "github" || meta.type !== "PullRequest" || !meta.repo || !meta.number)
     return null;
   return (
     prFromUrl(message.url) ?? {
@@ -773,22 +768,53 @@ export function requestedPr(message: MessageRow): ReviewPr | null {
   );
 }
 
-// Asked of you, or of a team you watch: "org/slug" names one team, a bare
-// slug that team in any org.
+// The pull request a GitHub review request is about.
+export function requestedPr(message: MessageRow): ReviewPr | null {
+  const meta = messageMeta(message);
+  return meta.channel === "github" && meta.reason === "review_requested" ? prOf(message) : null;
+}
+
+// "org/slug" names one team, a bare slug that team in any org.
+function watchedTeam(team: string, watched: readonly string[]): boolean {
+  const have = team.toLowerCase();
+  return watched.some((w) => {
+    const want = w.trim().toLowerCase();
+    return want.includes("/") ? want === have : have.endsWith(`/${want}`);
+  });
+}
+
+// @org/team in what was written; an email's @ is not one.
+const TEAM_TAG = /(?:^|[^\w@])@([\w-]+\/[\w.-]*\w)/g;
+
+export function taggedTeams(body: string): string[] {
+  return [...new Set([...body.matchAll(TEAM_TAG)].map((m) => m[1]!))];
+}
+
+// A PR's ask is yours when it requests a review of you or a team you
+// watch, or tags either: GitHub says you were tagged (mention), or which
+// team was is read from the comment (team_mention names none).
 export function reviewIsYours(
-  meta: GithubMeta,
+  message: MessageRow,
   watched: readonly string[],
 ): Result<string, string> {
+  const meta = messageMeta(message) as GithubMeta;
+  if (meta.reason === "mention") return ok("you were tagged on the PR");
+  if (meta.reason === "team_mention") {
+    const tagged = taggedTeams(message.body);
+    const team = tagged.find((t) => watchedTeam(t, watched));
+    if (team) return ok(`${team} was tagged on the PR, a team you watch`);
+    return err(
+      tagged.length
+        ? `tagged ${tagged.join(", ")}, not a team you watch`
+        : "a team was tagged, but not in this comment",
+    );
+  }
+  if (meta.reason !== "review_requested")
+    return err(`${meta.reason ?? "no reason"}: not a review ask or a tag`);
   const asked = meta.requested;
   if (!asked) return err("who was asked is not known");
   if (asked.me) return ok("a review requested from you");
-  const team = asked.teams.find((t) =>
-    watched.some((w) => {
-      const want = w.trim().toLowerCase();
-      const have = t.toLowerCase();
-      return want.includes("/") ? want === have : have.endsWith(`/${want}`);
-    }),
-  );
+  const team = asked.teams.find((t) => watchedTeam(t, watched));
   if (team) return ok(`a review requested from ${team}, a team you watch`);
   return err(
     asked.teams.length

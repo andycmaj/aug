@@ -479,7 +479,7 @@ describe("triage chain", () => {
       "noise",
       "same thread",
       "after close",
-      "review request",
+      "review ask",
       "unjudged",
       "same ask",
       "judged fyi",
@@ -627,7 +627,7 @@ describe("review requests become coding tasks", () => {
     const out = await triage(m, { config: config() });
     expect(calls).toHaveLength(1);
     expect(out).toMatchObject({ verdict: "coding", reason: "a review requested from you", effects: [] });
-    expect(lastRule(m.id)).toBe("review request");
+    expect(lastRule(m.id)).toBe("review ask");
     const task = store.getTask(out.taskId!)!;
     expect(task).toMatchObject({
       kind: "coding",
@@ -675,7 +675,7 @@ describe("review requests become coding tasks", () => {
     const out = await triage(m, { config: config() });
     expect(out).toMatchObject({ verdict: "fyi", taskId: null });
     const steps = store.triageSteps(lastRun(m.id).id);
-    expect(steps.find((s) => s.rule === "review request")?.reason).toBe(
+    expect(steps.find((s) => s.rule === "review ask")?.reason).toBe(
       "asked of acme/everyone, not a team you watch",
     );
   });
@@ -735,6 +735,81 @@ describe("review requests become coding tasks", () => {
     expect(store.linksForTask(task.id).map((l) => l.url)).toEqual([
       "https://acme.slack.com/archives/C9/p100",
     ]);
+  });
+
+  function prComment(reason: string, body: string, n = 1): MessageRow {
+    return store.insertMessage({
+      channel: "github",
+      externalId: `gh:c${n}`,
+      threadKey: "github:acme/api#40",
+      author: "erin",
+      authorName: "erin",
+      title: "acme/api#40 PR: speed up export (mentioned you)",
+      body,
+      url: "https://github.com/acme/api/pull/40#issuecomment-9",
+      receivedAt: new Date(Date.UTC(2026, 10, 5, 11, n)).toISOString(),
+      meta: { repo: "acme/api", number: 40, type: "PullRequest", reason },
+    })!;
+  }
+
+  test("tagged on a PR: always a review task", async () => {
+    fakeBrain(() => verdict("fyi"));
+    const m = prComment("mention", "@me can you sanity check the migration?");
+    const out = await triage(m, { config: config() });
+    expect(out).toMatchObject({ verdict: "coding", reason: "you were tagged on the PR" });
+    expect(lastRule(m.id)).toBe("review ask");
+    expect(store.getTask(out.taskId!)).toMatchObject({
+      kind: "coding",
+      branch: "pr:40",
+      url: "https://github.com/acme/api/pull/40",
+    });
+  });
+
+  test.each([["acme/payments"], ["payments"]])(
+    "a watched team (%s) tagged on a PR: always a review task",
+    async (watched) => {
+      testConfig().update((c) => ({ ...c, github: { ...c.github, reviewTeams: [watched] } }));
+      fakeBrain(() => verdict("fyi"));
+      const out = await triage(
+        prComment("team_mention", "cc @acme/Payments, does this touch payouts?"),
+        { config: config() },
+      );
+      expect(out).toMatchObject({
+        verdict: "coding",
+        reason: "acme/Payments was tagged on the PR, a team you watch",
+      });
+    },
+  );
+
+  test("a team you do not watch tagged on a PR: the model judges it", async () => {
+    testConfig().update((c) => ({ ...c, github: { ...c.github, reviewTeams: ["acme/payments"] } }));
+    fakeBrain(() => verdict("fyi"));
+    const m = prComment("team_mention", "@acme/everyone heads up, mail me at ops@acme.com/x");
+    const out = await triage(m, { config: config() });
+    expect(out.verdict).toBe("fyi");
+    const steps = store.triageSteps(lastRun(m.id).id);
+    expect(steps.find((s) => s.rule === "review ask")?.reason).toBe(
+      "tagged acme/everyone, not a team you watch",
+    );
+  });
+
+  test("tagged on an issue is not a review", async () => {
+    fakeBrain(() => verdict("fyi"));
+    const out = await triage(
+      store.insertMessage({
+        channel: "github",
+        externalId: "gh:i1",
+        threadKey: "github:acme/api#12",
+        author: "erin",
+        authorName: "erin",
+        title: "acme/api#12 issue: export drops transfers (mentioned you)",
+        body: "@me thoughts?",
+        receivedAt: new Date(Date.UTC(2026, 10, 5, 9, 0)).toISOString(),
+        meta: { repo: "acme/api", number: 12, type: "Issue", reason: "mention" },
+      })!,
+      { config: config() },
+    );
+    expect(out.verdict).toBe("fyi");
   });
 
   test("watching a review someone else does stays a watch", async () => {

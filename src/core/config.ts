@@ -41,9 +41,10 @@ export interface AugConfig {
     repos: Record<string, string>;
     // Merge method for "Approve and close" on a pull request.
     mergeMethod: "merge" | "squash" | "rebase";
-    // GitHub teams whose review requests are yours, as org/team-slug (or a
-    // bare slug for any org). A review requested from one of them, or from
-    // you, always becomes a review task (core/triage.ts).
+    // GitHub teams whose review asks are yours, as org/team-slug (or a bare
+    // slug for any org). A PR that requests a review of one of them or of
+    // you, or tags one of them or you, always becomes a review task
+    // (core/triage.ts).
     reviewTeams: string[];
   };
   slack: {

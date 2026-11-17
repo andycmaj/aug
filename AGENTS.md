@@ -105,9 +105,10 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   a `project` step when a new task is filed under a project: its repo's
   one project, else the one the model named). A pull request review is
   coding, on the PR's repo and `pr:N`, with a guided Plannotator review as
-  its brief: the `review request` rule always makes one when it was asked
-  of the owner or a team in `github.reviewTeams` (who was asked is read at
-  ingest), and a review the model finds elsewhere becomes one too. An
+  its brief: the `review ask` rule always makes one when a PR requests a
+  review of, or tags, the owner or a team in `github.reviewTeams` (who was
+  asked is read at ingest, a tagged team from the comment), and a review
+  the model finds elsewhere becomes one too. An
   unmapped repo is said on the task, never guessed; Start asks.
 - **The Inbox is the Board's tab 5** (`core/inbox.ts`,
   `components/inbox-tab.tsx`): every message triage saw and every Advisor

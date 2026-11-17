@@ -71,7 +71,7 @@ describe("the triage chain is recorded", () => {
       ["noise", "pass"],
       ["same thread", "pass"],
       ["after close", "pass"],
-      ["review request", "pass"],
+      ["review ask", "pass"],
       ["unjudged", "pass"],
       ["same ask", "pass"],
       ["judged fyi", "pass"],
