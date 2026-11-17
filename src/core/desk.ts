@@ -92,6 +92,31 @@ export class Desk {
     }));
   }
 
+  // A noise filter made from an Inbox message: saved for the next message,
+  // and this one filed as FYI under it. A pattern that does not compile is
+  // answered now, not skipped at triage time.
+  noiseFromMessage(messageId: number, rule: NoiseRule): string | null {
+    if (!rule.reason.trim()) return "a noise filter needs a reason";
+    if (!rule.author && !rule.title && !rule.body && !rule.githubReason)
+      return "a noise filter needs a pattern";
+    for (const field of ["author", "title", "body"] as const) {
+      const pattern = rule[field];
+      if (pattern === undefined) continue;
+      try {
+        new RegExp(pattern, "i");
+      } catch {
+        return `${field} is not a regex: ${pattern}`;
+      }
+    }
+    this.addNoise(rule);
+    const m = store.getMessage(messageId);
+    if (m && m.task_id === null) {
+      store.fileMessage(m.id, Verdict.fyi, rule.reason, null);
+      store.markMessageRead(m.id);
+    }
+    return null;
+  }
+
   // ── tasks ─────────────────────────────────────────────────────────────
 
   newTask(
@@ -571,7 +596,7 @@ export class Desk {
         messageId,
         taskId: task.id,
         what: "FYI was work: made it a task",
-        before: "fyi",
+        before: m.verdict ?? "not triaged",
         after: "general",
       },
       this.learnedNotice,

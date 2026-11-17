@@ -32,7 +32,10 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
-import { Kind, Priority, type TaskRow } from "../core/types";
+import type { NoiseRule } from "../core/config";
+import { clip as inboxClip, type InboxRow } from "../core/inbox";
+import { messageMeta } from "../core/meta";
+import { Kind, Priority, type MessageRow, type TaskRow } from "../core/types";
 import {
   ChoiceModal,
   ConfirmSendModal,
@@ -512,6 +515,124 @@ export function useActions(dialogs: Dialogs) {
     if (item.type === "idea") desk.dismissIdea(item.idea.id);
   }
 
+  // ── on an Inbox row ───────────────────────────────────────────────────
+
+  function goToTask(taskId: number) {
+    aug.setMode(ViewMode.chat);
+    aug.selectTask(taskId);
+  }
+
+  // m: a message triage did not make work becomes a task; an idea is
+  // approved. Either way you stay on the Inbox.
+  function inboxMakeTask(row: InboxRow) {
+    if (row.type === "idea") {
+      const task = desk.ideaToTask(row.idea.id);
+      if (task) showToast(`${taskRef(task.id)} on your list`);
+      return;
+    }
+    const task = desk.fyiToTask(row.message.id);
+    if (task) showToast(`${taskRef(task.id)}: it was work; triage will learn`);
+  }
+
+  function inboxDismiss(row: InboxRow) {
+    if (row.type === "idea") desk.dismissIdea(row.idea.id);
+    else desk.readFyi(row.message.id);
+  }
+
+  function inboxNotATask(row: InboxRow) {
+    if (row.type !== "message" || row.taskId === null) return false;
+    const task = aug.task(row.taskId);
+    if (!task) return false;
+    desk.notATask(task.id);
+    showToast("Not a task: triage will learn from it");
+  }
+
+  async function retriage(message: MessageRow) {
+    showToast("Triaging it again…", 2000);
+    try {
+      const result = await desk.retriage(message.id);
+      if (!result.ok) showToast(result.why, 4000, "error");
+      else
+        showToast(
+          `Triage: ${result.outcome.verdict}${result.outcome.taskId ? ` · ${taskRef(result.outcome.taskId)}` : ""} (${result.outcome.reason})`,
+          5000,
+        );
+    } catch (err) {
+      log.error("retriage failed", { message: message.id, err });
+      showToast(`Triage failed: ${errorMessage(err)}`, 5000, "error");
+    }
+  }
+
+  function openMessage(message: MessageRow) {
+    if (message.url) open(message.url);
+    else showToast("No link on this one");
+  }
+
+  // Shift+F: what to match (the sender, the title, GitHub's reason), the
+  // pattern as a regex you can loosen, then the reason you will read.
+  function noiseFilter(message: MessageRow) {
+    const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const meta = messageMeta(message);
+    const githubReason = meta.channel === "github" ? meta.reason : null;
+    const channel = message.channel === "github" || message.channel === "slack" ? message.channel : undefined;
+    const save = (rule: NoiseRule) => {
+      const error = desk.noiseFromMessage(message.id, { ...rule, channel });
+      if (error) showToast(error, 5000, "error");
+      else showToast(`Noise filter saved: ${rule.reason}`);
+    };
+    const askReason = (rule: Omit<NoiseRule, "reason">) =>
+      dialogs.show(() => (
+        <PromptModal
+          title="Create noise filter: the reason"
+          hint="What you will read on the messages it files as FYI."
+          initial={`noise from ${message.author_name}`}
+          onSubmit={(reason) => save({ ...rule, reason })}
+          onClose={dialogs.close}
+        />
+      ));
+    const askPattern = (field: "author" | "title", initial: string) =>
+      dialogs.show(() => (
+        <PromptModal
+          title={`Create noise filter: ${field === "author" ? "sender" : "title"} pattern`}
+          hint="A regex, matched without case. Loosen it to catch its like."
+          initial={initial}
+          onSubmit={(pattern) => askReason({ [field]: pattern })}
+          onClose={dialogs.close}
+        />
+      ));
+    dialogs.show(() => (
+      <ChoiceModal
+        title="Create noise filter"
+        hint={`Messages like this one on ${message.channel} are filed as FYI, with no model call.`}
+        choices={[
+          {
+            label: `Sender is ${message.author_name}`,
+            hint: message.author,
+            run: () => askPattern("author", `^${escape(message.author)}$`),
+          },
+          ...(message.title
+            ? [
+                {
+                  label: "Title is like this one",
+                  hint: inboxClip(message.title, 40),
+                  run: () => askPattern("title", escape(message.title)),
+                },
+              ]
+            : []),
+          ...(githubReason
+            ? [
+                {
+                  label: `GitHub's reason is ${githubReason}`,
+                  run: () => askReason({ githubReason: [githubReason] }),
+                },
+              ]
+            : []),
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
   function walk(direction: 1 | -1) {
     const current = aug.selected();
     if (direction === 1 && current) {
@@ -817,6 +938,13 @@ export function useActions(dialogs: Dialogs) {
     compose: editor.compose,
     walk,
     newTask,
+    goToTask,
+    inboxMakeTask,
+    inboxDismiss,
+    inboxNotATask,
+    retriage,
+    openMessage,
+    noiseFilter,
     docs,
     taskActions,
     togglePrDash,

@@ -34,6 +34,7 @@ import {
 } from "../core/types";
 import { BOARD_HELP_OPTIONS, BoardTab, type HelpCtx } from "../keymap";
 import { AugFooter } from "./footer";
+import { useInboxTab } from "./inbox-tab";
 import { ChoiceModal, PromptModal } from "./modals";
 import { useShell } from "./shell";
 import { duration, toneColor } from "./ui";
@@ -45,6 +46,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "notes", label: "2 Live handoffs" },
   { key: "knowledge", label: "3 Knowledge" },
   { key: "projects", label: "4 Projects" },
+  { key: "inbox", label: "5 Inbox" },
 ];
 
 // A project, then its goals each with their open tasks, then the open tasks
@@ -116,12 +118,19 @@ export function BoardMode() {
   const projectLine = (): ProjectLine | null =>
     projectLines()[Math.min(projAt(), projectLines().length - 1)] ?? null;
 
+  const inbox = useInboxTab({
+    active: () => tab() === Tab.inbox,
+    actions: shell.actions,
+    dialogs: shell.dialogs,
+  });
+
   const target = (): TaskRow | null => {
     if (tab() === Tab.columns) return cardTask();
     if (tab() === Tab.projects) {
       const line = projectLine();
       return line?.type === "task" ? line.task : null;
     }
+    if (tab() === Tab.inbox) return inbox.task();
     return null;
   };
 
@@ -207,6 +216,9 @@ export function BoardMode() {
           Math.max(0, Math.min(projectLines().length - 1, i + d)),
         );
         break;
+      case Tab.inbox:
+        inbox.move(d);
+        break;
     }
   };
   const horizontal = (d: number) => {
@@ -227,7 +239,9 @@ export function BoardMode() {
             ? setKnowledgeAt(0)
             : tab() === Tab.projects
               ? setProjAt(0)
-              : notesScroll?.scrollTo(0),
+              : tab() === Tab.inbox
+                ? inbox.move(-Infinity)
+                : notesScroll?.scrollTo(0),
       [Commands.NAV_BOTTOM]: () => vertical(999),
       [Commands.BOARD_LEFT]: () => horizontal(-1),
       [Commands.BOARD_RIGHT]: () => horizontal(1),
@@ -238,6 +252,8 @@ export function BoardMode() {
       },
       [Commands.BOARD_TAB_3]: () => setTab(Tab.knowledge),
       [Commands.BOARD_TAB_4]: () => setTab(Tab.projects),
+      [Commands.BOARD_TAB_5]: () => setTab(Tab.inbox),
+      ...inbox.commands,
       [Commands.PROJECT_ADOPT]: () =>
         void shell.actions.adopt(
           tab() === Tab.projects ? projectLine()?.project.id : undefined,
@@ -255,6 +271,8 @@ export function BoardMode() {
       [Commands.REPOS]: () => void shell.actions.showRepos(),
       [Commands.MOVE_TO_PROJECT]: onTask(shell.actions.moveToProject),
       [Commands.OPEN]: () => {
+        // Enter on the Inbox opens the row in place (INBOX_EXPAND).
+        if (tab() === Tab.inbox) return false;
         const line = tab() === Tab.projects ? projectLine() : null;
         if (line?.type === "project" || line?.type === "goal") {
           void shell.actions.jumpToProject(line.project.id);
@@ -305,6 +323,7 @@ export function BoardMode() {
       started: false,
       pr: Boolean(t && aug.taskPr(t)),
       board: tab(),
+      ...(tab() === Tab.inbox ? inbox.ctx() : {}),
     };
   };
 
@@ -425,6 +444,9 @@ export function BoardMode() {
                 selected={knowledgeAt()}
                 width={dims().width}
               />
+            </Match>
+            <Match when={tab() === Tab.inbox}>
+              <inbox.View width={dims().width} />
             </Match>
             <Match when={tab() === Tab.projects}>
               <Projects

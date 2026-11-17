@@ -595,6 +595,27 @@ export function fyiMessages(sinceIso: string): MessageRow[] {
   );
 }
 
+// The Inbox's messages, newest first.
+export function recentMessages(limit: number): MessageRow[] {
+  return all<MessageRow>(
+    "SELECT * FROM messages ORDER BY received_at DESC, id DESC LIMIT ?",
+    limit,
+  );
+}
+
+// Messages triage could not place (failed, or never triaged): on the owner.
+// Keep in step with inbox.ts messageResult.
+export function unplacedMessages(): number {
+  return (
+    one<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM messages
+       WHERE from_me = 0 AND task_id IS NULL
+         AND NOT (COALESCE(verdict, '') = 'fyi' AND COALESCE(reason, '') NOT LIKE 'awaiting AI triage%')
+         AND COALESCE(reason, '') NOT LIKE 'a greeting%'`,
+    )?.n ?? 0
+  );
+}
+
 export function fileMessage(
   id: number,
   verdict: Verdict | null,
@@ -905,6 +926,10 @@ export function addIdea(
     now(),
   );
   return one<IdeaRow>("SELECT * FROM ideas WHERE id = ?", id)!;
+}
+
+export function allIdeas(): IdeaRow[] {
+  return all<IdeaRow>("SELECT * FROM ideas ORDER BY created_at, id");
 }
 
 export function openIdeas(): IdeaRow[] {

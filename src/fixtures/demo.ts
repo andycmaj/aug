@@ -541,6 +541,31 @@ export function seedDemo(): void {
       store.fileMessage(row.id, "fyi", m.reason, null);
     }
 
+    // The Inbox's other rows: one triage could not place, one it never
+    // reached, one a greeting.
+    for (const [i, m] of [
+      { body: "Can you check why the March payroll export is short?", reason: "awaiting AI triage (claude timed out)", verdict: "fyi" as const, minutes: 40 },
+      { body: "Is the vendor call still on for Thursday?", reason: null, verdict: null, minutes: 25 },
+      { body: "hey!", reason: "a greeting; waits for the ask", verdict: null, minutes: 22 },
+    ].entries()) {
+      const row = store.insertMessage({
+        channel: "slack",
+        externalId: `inbox:${i}`,
+        threadKey: `slack:D9:${i}`,
+        author: "U9",
+        authorName: "Priya Shah",
+        title: "DM with Priya Shah",
+        body: m.body,
+        receivedAt: ago(m.minutes),
+      })!;
+      if (m.reason) store.fileMessage(row.id, m.verdict, m.reason, null);
+    }
+    store.addIdea(
+      "Nobody has answered Priya about the payroll export",
+      "She asked twice this week. A short reply saying you are on it buys a day.",
+      null,
+    );
+
     store.addIdea(
       "Ruth's renewal is waiting on your seat count",
       "The copier renewal signs this week and the reply is drafted. Sending it today keeps Ruth from signing for 60.",

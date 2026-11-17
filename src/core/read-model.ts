@@ -4,6 +4,7 @@
 // never import the store.
 
 import { Table } from "./db";
+import { inboxCount, inboxRows, inboxRuns } from "./inbox";
 import { boardColumnOf, type BoardColumn } from "./lanes";
 import { projectProgress, projectSummary, railProjects } from "./lookup";
 import { perfOn, timing } from "./perf";
@@ -116,6 +117,9 @@ function reads(desk: LiveCheck) {
     blockers: [[T.taskBlockers], store.blockersOf],
     wins: [[T.wins], store.winsOn],
     board: [[T.tasks], board],
+    inbox: [[T.messages, T.ideas], inboxRows],
+    inboxCount: [[T.messages, T.ideas], inboxCount],
+    inboxRuns: [[T.triageRuns, T.triageSteps], inboxRuns],
   } as const satisfies Record<string, Read>;
 }
 
