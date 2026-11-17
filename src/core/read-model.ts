@@ -48,7 +48,6 @@ function rail(now: Date, pending: Set<number>): RailSection[] {
 function board(pending: Set<number>): Record<BoardColumn, TaskRow[]> {
   const today = new Date().toISOString().slice(0, 10);
   const out: Record<BoardColumn, TaskRow[]> = {
-    queued: [],
     working: [],
     waiting: [],
     idle: [],

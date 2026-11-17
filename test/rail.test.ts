@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { Lane, laneOf, boardColumnOf } from "../src/core/lanes";
+import {
+  Lane,
+  laneOf,
+  boardColumnOf,
+  BoardColumn,
+  BOARD_COLUMNS,
+} from "../src/core/lanes";
 import {
   buildRail,
   flattenRail,
@@ -20,7 +26,7 @@ import {
 import { railProjects } from "../src/core/lookup";
 import { taskClosed } from "../src/core/lifecycle";
 import * as store from "../src/core/store";
-import { AgentState, Kind, TurnRole } from "../src/core/types";
+import { AgentState, Kind, TaskStatus, TurnRole } from "../src/core/types";
 import { freshHome } from "./helpers";
 
 const at = (h: number) => new Date(Date.UTC(2026, 10, 5, h)).toISOString();
@@ -80,7 +86,32 @@ describe("lanes", () => {
         { hasPendingAction: false },
         "2026-11-05",
       ),
-    ).toBe("queued");
+    ).toBe(BoardColumn.left);
+  });
+
+  test("every column a task can land in is shown on the Board", () => {
+    const shown = new Set(BOARD_COLUMNS.map((c) => c.key));
+    const today = "2026-11-05";
+    for (const kind of [Kind.coding, Kind.general]) {
+      for (const status of Object.values(TaskStatus)) {
+        for (const agent_state of Object.values(AgentState)) {
+          for (const hasPendingAction of [false, true]) {
+            const t = store.createTask({ title: "t", kind, channel: "github" });
+            store.updateTask(t.id, {
+              status,
+              agent_state,
+              closed_at: `${today}T10:00:00Z`,
+            });
+            const col = boardColumnOf(
+              store.getTask(t.id)!,
+              { hasPendingAction },
+              today,
+            );
+            if (col) expect(shown.has(col)).toBe(true);
+          }
+        }
+      }
+    }
   });
 });
 

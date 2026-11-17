@@ -138,9 +138,10 @@ export function laneOf(task: TaskRow, facts: LaneFacts): Lane {
   return task.channel === "owner" ? Lane.yours : Lane.asked;
 }
 
-// The Board's columns are the agent's states.
+// The Board's columns are the agent's states. A queued agent sits with the
+// stopped ones: both are not running and wait on Start or Continue, as the
+// rail's stopped pill groups them (docs/rail-status-design.md).
 export const BoardColumn = {
-  queued: "queued",
   working: "working",
   waiting: "waiting",
   idle: "idle",
@@ -151,11 +152,10 @@ export type BoardColumn = (typeof BoardColumn)[keyof typeof BoardColumn];
 
 export const BOARD_COLUMNS: { key: BoardColumn; title: string; tone: Tone }[] =
   [
-    // { key: "queued", title: "waiting to start", tone: "muted" },
     { key: "working", title: "agent working", tone: "info" },
     { key: "waiting", title: "waiting on you", tone: "warning" },
     { key: "idle", title: "agent idle", tone: "secondary" },
-    { key: "left", title: "agent stopped", tone: "muted" },
+    { key: "left", title: "not running", tone: "muted" },
     { key: "ready", title: "ready for review", tone: "success" },
   ];
 
@@ -168,7 +168,7 @@ export function boardColumnOf(
   if (task.status === TaskStatus.dropped) return null;
   switch (task.agent_state) {
     case AgentState.queued:
-      return BoardColumn.queued;
+      return BoardColumn.left;
     case AgentState.working:
       return facts.hasPendingAction ? BoardColumn.waiting : BoardColumn.working;
     case AgentState.waiting:

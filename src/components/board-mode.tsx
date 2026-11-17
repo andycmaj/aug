@@ -1,7 +1,16 @@
 // The Board: the day's Wins first, then every agent by state (Columns),
 // Knowledge (what agents learned, by topic), the Inbox and Cost.
 
-import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  on,
+  Show,
+  Switch,
+} from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import {
@@ -316,6 +325,31 @@ function Columns(props: {
   const aug = useAug();
   const colWidth = () =>
     Math.max(20, Math.floor(props.width / props.columns.length) - 1);
+  const scrolls: (ScrollBoxRenderable | undefined)[] = [];
+  const selectedIn = (ci: number) =>
+    Math.min(props.row, (props.columns[ci]?.tasks.length ?? 1) - 1);
+
+  // A column taller than the screen follows the selected card. Cards differ
+  // in height (titles wrap), so this measures the card itself.
+  // scrollChildIntoView is not used: it leaves a card exactly as tall as the
+  // column where it is, off the top.
+  createEffect(
+    on(
+      () => [props.col, props.row, props.columns] as const,
+      ([ci]) => {
+        const box = scrolls[ci];
+        const task = props.columns[ci]?.tasks[selectedIn(ci)];
+        const card = task && box?.content.findDescendantById(cardId(task.id));
+        if (!box || !card) return;
+        const view = box.viewport.height;
+        const top = card.y - box.viewport.y + box.scrollTop;
+        const bottom = top + card.height;
+        if (top < box.scrollTop || card.height >= view) box.scrollTo(top);
+        else if (bottom > box.scrollTop + view) box.scrollTo(bottom - view);
+      },
+    ),
+  );
+
   return (
     <box flexDirection="row" flexGrow={1} flexBasis={0} gap={1} paddingLeft={1}>
       <For each={props.columns}>
@@ -332,21 +366,28 @@ function Columns(props: {
               attributes={1}
               paddingTop={1}
             >
-              {`${column.title} (${column.tasks.length})`}
+              {ci() === props.col && column.tasks.length > 1
+                ? `${column.title} (${selectedIn(ci()) + 1}/${column.tasks.length})`
+                : `${column.title} (${column.tasks.length})`}
             </text>
-            <scrollbox flexGrow={1} flexBasis={0} marginTop={1}>
+            <scrollbox
+              ref={(r: ScrollBoxRenderable) => (scrolls[ci()] = r)}
+              flexGrow={1}
+              flexBasis={0}
+              marginTop={1}
+              stickyScroll={false}
+            >
               <For
                 each={column.tasks}
                 fallback={<text fg={theme.textMuted}>—</text>}
               >
                 {(task, ri) => {
-                  const on = () =>
-                    ci() === props.col &&
-                    ri() === Math.min(props.row, column.tasks.length - 1);
+                  const selected = () =>
+                    ci() === props.col && ri() === selectedIn(ci());
                   return (
                     <Card
                       task={task}
-                      on={on()}
+                      on={selected()}
                       width={colWidth() - 2}
                       spinner={aug.spinner()}
                     />
@@ -360,6 +401,8 @@ function Columns(props: {
     </box>
   );
 }
+
+const cardId = (taskId: number) => `board-card-${taskId}`;
 
 function Card(props: {
   task: TaskRow;
@@ -390,6 +433,7 @@ function Card(props: {
   };
   return (
     <box
+      id={cardId(props.task.id)}
       flexDirection="column"
       marginBottom={1}
       backgroundColor={props.on ? theme.primary : theme.background}
