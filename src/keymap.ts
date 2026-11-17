@@ -41,6 +41,10 @@ export interface HelpCtx {
   inboxTask?: boolean;
   // An Inbox idea already approved or dismissed.
   handled?: boolean;
+  // An Inbox message already read (dismissed): it has left "actionable".
+  inboxRead?: boolean;
+  // An Inbox message that made its task (not one that joined a task).
+  inboxMade?: boolean;
   // An Inbox row's task Start and Move act on: the one a message made or
   // joined, or the one an approved idea made.
   inboxWork?: boolean;
@@ -536,19 +540,22 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       help: "dismiss",
       relevant: (c) => onInbox(c) && c.item === "idea" && !c.handled,
     },
+    // x on any message clears it off "actionable" and changes nothing else:
+    // the task it made or joined stays. Undoing that task is X, and only on
+    // the message that made it, never one that joined someone else's.
     {
       key: "x",
-      cmd: Commands.READ_FYI,
-      desc: "Inbox: mark the FYI read",
-      help: "read",
-      relevant: (c) => onInbox(c) && c.item === "fyi",
+      cmd: Commands.INBOX_READ,
+      desc: "Inbox: dismiss it (marked read, it leaves actionable; its task stays)",
+      help: "dismiss",
+      relevant: (c) => inboxMessage(c) && !c.inboxRead,
     },
     {
-      key: "x",
+      key: "shift+x",
       cmd: Commands.NOT_TASK,
       desc: "Inbox: not a task (drops the task it made; triage learns)",
       help: "not a task",
-      relevant: (c) => onInbox(c) && c.item === "message" && Boolean(c.inboxTask),
+      relevant: (c) => onInbox(c) && c.item === "message" && Boolean(c.inboxMade),
     },
     {
       key: "o",

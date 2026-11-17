@@ -111,6 +111,26 @@ describe("filters", () => {
     expect(rows.filter((r) => inFilter(r, InboxFilter.all))).toHaveLength(rows.length);
   });
 
+  // AUG-0140: x reads any message, and a read one asks nothing more of you,
+  // whatever triage did with it. Its task is untouched.
+  test("a dismissed message leaves actionable, needs-you and the badge", () => {
+    const made = filed(Verdict.task, "a direct ask", true);
+    const joined = filed(null, "joined AUG-0001", true);
+    const failed = filed(Verdict.fyi, "awaiting AI triage (timeout)");
+    const untriaged = message();
+    expect(inboxCount()).toBe(2);
+    for (const m of [made, joined, failed, untriaged]) store.markMessageRead(m.id);
+    const rows = inboxRows();
+    expect(rows.filter((r) => inFilter(r, InboxFilter.actionable))).toHaveLength(0);
+    expect(rows.filter((r) => inFilter(r, InboxFilter.attention))).toHaveLength(0);
+    expect(inboxCount()).toBe(0);
+    // Still under all, and what it made is still made.
+    expect(rows.filter((r) => inFilter(r, InboxFilter.all))).toHaveLength(4);
+    expect(rows.filter((r) => inFilter(r, InboxFilter.task))).toHaveLength(1);
+    expect(store.getTask(made.task_id!)!.status).toBe("open");
+    expect(store.getTask(joined.task_id!)!.status).toBe("open");
+  });
+
   test("f cycles every filter and comes back", () => {
     let f: InboxFilter = InboxFilter.actionable;
     const seen = new Set<InboxFilter>();

@@ -512,7 +512,7 @@ export function useActions(dialogs: Dialogs) {
 
   function inboxDismiss(row: InboxRow) {
     if (row.type === "idea") desk.dismissIdea(row.idea.id);
-    else desk.readFyi(row.message.id);
+    else desk.readMessage(row.message.id);
   }
 
   function inboxNotATask(row: InboxRow) {

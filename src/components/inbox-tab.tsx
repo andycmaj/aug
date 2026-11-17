@@ -126,11 +126,14 @@ export function useInboxTab(opts: {
       if (r.type !== "idea" || r.result !== InboxResult.idea) return false;
       opts.actions.inboxDismiss(r);
     }),
-    [Commands.READ_FYI]: onRow((r) => {
-      if (r.result !== InboxResult.fyi) return false;
+    [Commands.INBOX_READ]: onMessage((r) => {
+      if (r.read) return false;
       opts.actions.inboxDismiss(r);
     }),
-    [Commands.NOT_TASK]: onRow((r) => opts.actions.inboxNotATask(r)),
+    [Commands.NOT_TASK]: onMessage((r) => {
+      if (r.result !== InboxResult.task) return false;
+      return opts.actions.inboxNotATask(r);
+    }),
     [Commands.OPEN_URL]: onMessage((r) => opts.actions.openMessage(r.message)),
     [Commands.INBOX_NOISE]: onMessage((r) => {
       if (r.taskId !== null) return false;
@@ -153,6 +156,8 @@ export function useInboxTab(opts: {
       item: r.type === "idea" ? "idea" : r.result === InboxResult.fyi ? "fyi" : "message",
       inboxTask: r.taskId !== null,
       handled: r.type === "idea" && r.result !== InboxResult.idea,
+      inboxRead: r.type === "message" && r.read,
+      inboxMade: r.type === "message" && r.result === InboxResult.task,
       inboxWork: task() !== null,
       live: Boolean(task() && aug.isLive(task()!)),
     };

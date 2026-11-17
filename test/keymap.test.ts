@@ -35,7 +35,7 @@ function* contexts(): Generator<HelpCtx> {
         bits++
       )
         for (const board of [undefined, ...Object.values(BoardTab)])
-        for (const inbox of [0, 1, 2, 3, 4, 5, 6, 7]) {
+        for (let inbox = 0; inbox < 32; inbox++) {
           const ctx: HelpCtx = {
             item,
             kind,
@@ -49,6 +49,8 @@ function* contexts(): Generator<HelpCtx> {
             inboxTask: (inbox & 1) !== 0,
             handled: (inbox & 2) !== 0,
             inboxWork: (inbox & 4) !== 0,
+            inboxRead: (inbox & 8) !== 0,
+            inboxMade: (inbox & 16) !== 0,
           };
           FLAGS.forEach((flag, i) => {
             ctx[flag] = (bits & (1 << i)) !== 0;
@@ -250,19 +252,23 @@ test("the Inbox's keys say what they do to each row", () => {
   expect(inbox("idea", { handled: true }).has("x")).toBe(false);
   const fyi = inbox("fyi");
   expect([fyi.get("x"), fyi.get("m"), fyi.get("F"), fyi.get("U")]).toEqual([
-    "read",
+    "dismiss",
     "make task",
     "noise filter",
     "re-triage",
   ]);
-  const made = inbox("message", { inboxTask: true, inboxWork: true });
-  expect([made.get("x"), made.get("t"), made.get("s"), made.get("m"), made.get("U")]).toEqual([
-    "not a task",
-    "go to task",
-    "start",
-    undefined,
-    undefined,
-  ]);
+  // AUG-0140: x dismisses every message, and drops no task; X undoes the
+  // task a message made, never one it only joined.
+  const made = inbox("message", { inboxTask: true, inboxWork: true, inboxMade: true });
+  expect(
+    [made.get("x"), made.get("X"), made.get("t"), made.get("s"), made.get("m"), made.get("U")],
+  ).toEqual(["dismiss", "not a task", "go to task", "start", undefined, undefined]);
+  const joined = inbox("message", { inboxTask: true, inboxWork: true });
+  expect([joined.get("x"), joined.get("X"), joined.get("t")]).toEqual(["dismiss", undefined, "go to task"]);
+  const unplaced = inbox("message");
+  expect([unplaced.get("x"), unplaced.get("m")]).toEqual(["dismiss", "make task"]);
+  expect(inbox("message", { inboxRead: true }).has("x")).toBe(false);
+  expect(inbox("fyi", { inboxRead: true }).has("x")).toBe(false);
   // An approved idea's task starts and moves; an open idea's only goes to.
   const approved = inbox("idea", { handled: true, inboxTask: true, inboxWork: true });
   expect([approved.get("t"), approved.get("s"), approved.get("x")]).toEqual(["go to task", "start", undefined]);

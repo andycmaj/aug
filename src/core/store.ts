@@ -611,7 +611,7 @@ export function unplacedMessages(): number {
   return (
     one<{ n: number }>(
       `SELECT COUNT(*) AS n FROM messages
-       WHERE from_me = 0 AND task_id IS NULL
+       WHERE from_me = 0 AND task_id IS NULL AND read_at IS NULL
          AND NOT (COALESCE(verdict, '') = 'fyi' AND COALESCE(reason, '') NOT LIKE 'awaiting AI triage%')
          AND COALESCE(reason, '') NOT LIKE 'a greeting%'`,
     )?.n ?? 0

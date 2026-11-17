@@ -26,7 +26,7 @@ export const Commands = {
   WATCH: "task.watch",
   WIN: "task.win",
   NOT_TASK: "task.not",
-  READ_FYI: "fyi.read",
+  INBOX_READ: "inbox.read",
   DISMISS_IDEA: "idea.dismiss",
   START: "agent.start",
   STOP: "agent.stop",

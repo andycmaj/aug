@@ -160,8 +160,9 @@ export function ideaRow(idea: IdeaRow): InboxRow {
 }
 
 // On the owner until they act: an open idea, or a message triage could not
-// place. What the rail's badge counts.
+// place and they have not dismissed. What the rail's badge counts.
 export function needsAttention(row: InboxRow): boolean {
+  if (row.read) return false;
   return (
     row.result === InboxResult.idea ||
     row.result === InboxResult.failed ||
@@ -180,13 +181,15 @@ export function inFilter(row: InboxRow, filter: InboxFilter): boolean {
     case InboxFilter.fyi:
       return row.result === InboxResult.fyi;
     case InboxFilter.actionable:
-      // Your own messages, greetings, read FYIs and handled ideas are kept
-      // for "all": none asks anything more of you.
+      // Your own messages, greetings, handled ideas and whatever you have
+      // dismissed (x marks it read) are kept for "all": none asks anything
+      // more of you.
       return (
         needsAttention(row) ||
-        row.result === InboxResult.task ||
-        row.result === InboxResult.attached ||
-        (row.result === InboxResult.fyi && !row.read)
+        (!row.read &&
+          (row.result === InboxResult.task ||
+            row.result === InboxResult.attached ||
+            row.result === InboxResult.fyi))
       );
   }
 }

@@ -557,7 +557,8 @@ export class Desk {
     return { ok: true, outcome };
   }
 
-  readFyi(messageId: number): void {
+  // x on an Inbox message: read, so it leaves "actionable"; nothing else moves.
+  readMessage(messageId: number): void {
     store.markMessageRead(messageId);
   }
 

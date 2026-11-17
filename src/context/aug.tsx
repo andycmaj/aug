@@ -20,7 +20,7 @@ import { coalesce } from "../core/coalesce";
 import { dataVersion, TABLES, tableVersions, type Table } from "../core/db";
 import type { Desk } from "../core/desk";
 import { Engine, type EngineStatus } from "../core/engine";
-import type { BoardColumn, LaneFacts } from "../core/lanes";
+import { laneOf, type BoardColumn, type LaneFacts } from "../core/lanes";
 import { count, perfOn, sample, timing } from "../core/perf";
 import { readModel, readsRun, type ReadModel } from "../core/read-model";
 import {
@@ -221,9 +221,29 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     return keys;
   });
 
-  const selected = createMemo(() => {
+  // A task the rail leaves out (done, dropped) that was gone to on purpose,
+  // from the Inbox or the Board: the table shows it all the same. Only the
+  // one asked for, so a row that leaves the rail while on the table (marked
+  // done) still clears it.
+  const [offRail, setOffRail] = createSignal<string | null>(null);
+
+  const selected = createMemo((): RailItem | null => {
     const key = selectedKey();
-    return items().find((i) => i.key === key) ?? null;
+    const item = items().find((i) => i.key === key);
+    if (item) return item;
+    if (!key || key !== offRail()) return null;
+    const task = reads.task(Number(key.slice(1)));
+    if (!task) return null;
+    return {
+      type: "task",
+      key,
+      task,
+      lane: laneOf(task, { hasPendingAction: pending().has(task.id) }),
+      priority: task.priority,
+      slipped: false,
+      at: task.created_at,
+      group: null,
+    };
   });
 
   // A task put on the table from anywhere (Next, an @ link) unfolds its
@@ -242,6 +262,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
       !flattenRail(filtered()).some((i) => i.key === key)
     )
       setRailFilter(new Set<RailFilter>());
+    setOffRail(!item && key?.startsWith("t") ? key : null);
     setSelectedKey(key);
     setCursorKey(key);
   }
