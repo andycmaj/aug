@@ -99,10 +99,14 @@ export class TokenRemoteLink implements RemoteLink {
     return { channel, me, members, messages };
   }
 
-  async post(channel: string, threadTs: string, text: string): Promise<string | null> {
+  async post(
+    channel: string,
+    threadTs: string | undefined,
+    text: string,
+  ): Promise<string | null> {
     const res = await this.write("chat.postMessage", {
       channel,
-      thread_ts: threadTs,
+      ...(threadTs ? { thread_ts: threadTs } : {}),
       text,
     });
     return typeof res.ts === "string" ? res.ts : null;
@@ -225,14 +229,18 @@ export class ClaudeMcpRemoteLink implements RemoteLink {
     };
   }
 
-  async post(channel: string, threadTs: string, text: string): Promise<string | null> {
-    await this.transport.send({
+  async post(
+    channel: string,
+    threadTs: string | undefined,
+    text: string,
+  ): Promise<string | null> {
+    const { ts } = await this.transport.post({
       type: "slack_reply",
       channel,
-      thread_ts: threadTs,
+      ...(threadTs ? { thread_ts: threadTs } : {}),
       text,
     });
-    return null;
+    return ts;
   }
 
   stop(): void {

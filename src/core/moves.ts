@@ -15,6 +15,7 @@ import { findProject, projectLine } from "./lookup";
 import { mux } from "./mux";
 import { docDraftsDir } from "./paths";
 import * as repos from "./repos";
+import { CONFIRM_MOVES, holdForYes, SLACK_ASKER } from "./slack/confirm";
 import * as store from "./store";
 import { matchStray, strayLabel, strayRef, type Stray } from "./strays";
 import {
@@ -937,6 +938,9 @@ export async function runMove(
     .map(([name]) => `--${name}`);
   if (missing.length)
     return { ok: false, result: `${verb} needs ${missing.join(", ")}` };
+  // From Slack, work is started or ended only on the owner's own yes there.
+  if (by === SLACK_ASKER && CONFIRM_MOVES.has(verb))
+    return { ok: true, result: holdForYes(verb, args) };
   try {
     return { ok: true, result: await spec.run(desk, task, args, by) };
   } catch (err) {

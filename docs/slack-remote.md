@@ -79,28 +79,53 @@ an hour gets a short "no answer" note.
 
 ## Confirmations
 
-Today: the Assistant already asks before anything that ends work or cannot be
-undone, and only starts or stops agents when asked. In Slack that ask is its
-answer in the thread, and the owner's "yes" in the same thread is the next
-line it hears, inside the same conversation. Since only the owner can write
-in the conversation, a yes there is the owner's.
+Code: `src/core/slack/confirm.ts`, the gate in `runMove` (`core/moves.ts`).
 
-Next, if that is not enough: a hard gate for moves made in a turn that
-answers a Slack line (`AUG_ASKED_BY=assistant-slack`). `stop`, `start`,
-`done` and archive answer `needs confirm <code>` instead of running; the
-Assistant posts "Reply yes to stop AUG-0012", and the owner's next line in that
-thread, if it is a yes within 10 minutes, runs the stored move. A
-confirmation older than 10 minutes, or answered with anything else, is
-dropped and says so.
+An Assistant turn that answers a Slack line asks for moves as
+`assistant via Slack` (`AUG_ASKED_BY`), not `assistant`. From that asker,
+`start`, `stop`, `done`, `not_a_task` and `project_archive` do not run: the
+move answers "held for the owner's yes in Slack", and the hold is kept (kv
+`slack.remote.confirm`) with the turn that asked for it. Every other move
+runs as from the terminal.
 
-## Notifications (not built)
+When that turn's answer is posted, its holds are tied to the thread, and the
+answer ends with "Reply *yes* in this thread to stop the agent on AUG-0012
+(fix the flaky test). It lapses in 10 minutes."
 
-Optional, `remote.notify: ["finished", "waiting"]`: a top-level `[aug]` post
-in the same conversation when a coding agent finishes (`workFinished`) or is
-waiting for the owner (AUG-0101's waiting-for-you state). One line each, the
-task's ref and title; replying in its thread talks to the Assistant about
-that task (the post names the ref, so the Assistant reads it in). At most one
-post per task per state change.
+The owner's next line in that thread answers it:
+
+- **yes** (y, yes, ok, sure, do it, go ahead, the whole line): the move
+  runs as the owner's (`you via Slack`), its result is posted in the thread,
+  and Home gets a note. The Assistant does not get a turn.
+- **no** (n, no, cancel, never mind): nothing runs; "Left as is" is posted.
+- **anything else**: the hold is dropped, and the line goes to the Assistant
+  as usual.
+
+A top-level yes or no counts when exactly one hold waits, since threads are
+easy to miss on a phone. A hold lapses 10 minutes after it was asked for; a
+yes after that is an ordinary line. The model cannot confirm for the owner:
+only a line the remote hears from the owner's own id in their own
+conversation runs a held move.
+
+## Notifications
+
+`remote.notify` (none by default): `"finished"`, `"waiting"`, or both. Each
+tick compares every task's agent state with the last look (the first look
+only takes stock) and posts, top-level in the same conversation:
+
+- **finished**: a coding agent's work is ready for review, or an agent
+  closed its task. A chat task is ready after every turn, which is no news
+  when the owner is the one talking to it, so it is not posted.
+- **waiting**: any agent is waiting for the owner, with what it asked.
+
+Work the owner closed is never posted. A reply in a notification's thread
+reaches Home as `(About AUG-0012) <line>`, so the Assistant reads that task
+in. Notification threads are read for replies like answer threads (24 hours,
+at most 10 live threads); under claude-mcp that needs the send call to
+report the posted ts.
+
+Posts that must go out (confirmation results, notifications) sit in an
+outbox in the remote's state until Slack takes them.
 
 ## Setup
 
@@ -108,7 +133,11 @@ post per task per state change.
 
 ```json
 {
-  "remote": { "enabled": true, "channel": "D0123ABCD" }
+  "remote": {
+    "enabled": true,
+    "channel": "D0123ABCD",
+    "notify": ["finished", "waiting"]
+  }
 }
 ```
 
@@ -116,6 +145,7 @@ post per task per state change.
   it off takes effect on the next tick.
 - `channel`: the self-DM or private channel. Optional with a token.
 - `pollSeconds`: 15 with a token, 60 under claude-mcp.
+- `notify`: which notifications to post; none by default.
 
 It is separate from `slack.enabled`: the triage poller can stay off (the
 owner's JOB doc keeps it off for now) while the remote runs. When both run,

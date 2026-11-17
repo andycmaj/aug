@@ -570,6 +570,8 @@ export class Engine {
         if (home)
           this.drivers.for(home).wake(home, "the owner wrote from Slack");
       },
+      // The owner's own yes in Slack: the move runs as theirs.
+      runMove: (verb, args) => this.runMove(verb, args, "you via Slack"),
     });
     void this.pollRemote();
     this.timers.push(

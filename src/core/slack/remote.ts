@@ -9,12 +9,24 @@
 // owner talking to the Assistant, with the Assistant's limits, nothing more.
 
 import type { ConfigSource } from "../config";
+import {
+  answerKind,
+  bindToThread,
+  CONFIRM_MINUTES,
+  pendingConfirms,
+  takeForThread,
+  type Pending,
+} from "./confirm";
 import { errorMessage, logger } from "../log";
 import * as store from "../store";
 import {
+  AgentState,
+  Kind,
   SLACK_AUTHOR,
+  TaskStatus,
   TurnRole,
   TurnStatus,
+  type TaskRow,
   type TurnRow,
 } from "../types";
 
@@ -56,8 +68,13 @@ export interface RemoteQuery {
 export interface RemoteLink {
   readonly kind: "token" | "claude-mcp";
   read(query: RemoteQuery): Promise<RemoteRead>;
-  // Returns the posted message's ts when the link knows it.
-  post(channel: string, threadTs: string, text: string): Promise<string | null>;
+  // In a thread, or top-level without threadTs. Returns the posted
+  // message's ts when the link knows it.
+  post(
+    channel: string,
+    threadTs: string | undefined,
+    text: string,
+  ): Promise<string | null>;
   stop(): void;
 }
 
@@ -85,6 +102,14 @@ interface Waiting {
   at: string;
 }
 
+// A post that must go out: a confirmation's result, a notification.
+interface Outgoing {
+  threadTs?: string;
+  text: string;
+  // The task a top-level post is about: replies in its thread name it.
+  about?: string;
+}
+
 interface RemoteState {
   // The conversation last read, so the triage poller can leave it alone.
   channel?: string;
@@ -94,6 +119,11 @@ interface RemoteState {
   waiting: Waiting[];
   // ts of what aug posted, newest last.
   posted: string[];
+  outbox: Outgoing[];
+  // task id -> its agent state when last looked; unset until the first look.
+  seen?: Record<string, string>;
+  // thread ts -> the task ref a notification was about.
+  about: Record<string, string>;
 }
 
 function loadState(): RemoteState {
@@ -107,12 +137,15 @@ function loadState(): RemoteState {
         threads: parsed.threads ?? {},
         waiting: parsed.waiting ?? [],
         posted: parsed.posted ?? [],
+        outbox: parsed.outbox ?? [],
+        seen: parsed.seen,
+        about: parsed.about ?? {},
       };
     }
   } catch (err) {
     log.warn("state unreadable, starting fresh", { err: errorMessage(err) });
   }
-  return { threads: {}, waiting: [], posted: [] };
+  return { threads: {}, waiting: [], posted: [], outbox: [], about: {} };
 }
 
 function saveState(state: RemoteState): void {
@@ -181,12 +214,54 @@ export interface RemoteDeps {
   say: (taskId: number, text: string, author: string) => Promise<boolean>;
   // Runs Home's agent again: a line that came while it was mid-turn.
   wake: (taskId: number) => void;
+  // Makes a move the owner said yes to in Slack.
+  runMove: (
+    verb: string,
+    args: Record<string, string>,
+  ) => Promise<{ ok: boolean; result: string }>;
 }
 
 export interface TickResult {
   heard: number;
   answered: number;
   channel: string;
+}
+
+// The line under an answer that asked for a held move.
+export function askYes(holds: Pending[]): string {
+  const what = holds.map((h) => h.says);
+  return what.length === 1
+    ? `Reply *yes* in this thread to ${what[0]}. It lapses in ${CONFIRM_MINUTES} minutes.`
+    : `Reply *yes* in this thread to all of these (lapses in ${CONFIRM_MINUTES} minutes):\n${what.map((w) => `• ${w}`).join("\n")}`;
+}
+
+// Notifications the owner turned on: a task's agent finished, or waits on them.
+export type NotifyWhen = "finished" | "waiting";
+
+// The notification for a task whose agent just moved to `state`, or null
+// when this change is not one the owner asked to hear about. Finished means
+// a coding agent's work, or work an agent closed: a chat task is ready after
+// every turn, which is no news when the owner is the one talking to it.
+export function notification(
+  task: TaskRow,
+  state: string,
+  when: readonly NotifyWhen[],
+): string | null {
+  const ref = store.taskRef(task.id);
+  const agentClosed =
+    task.status === TaskStatus.done && task.closed_by === "agent";
+  if (task.status !== TaskStatus.open && !agentClosed) return null;
+  if (state === AgentState.waiting && when.includes("waiting")) {
+    const says = (task.agent_says ?? "").trim().slice(0, 500);
+    return `${REPLY_MARK} ${ref} is waiting for you: ${task.title}${says ? `\n> ${says.replace(/\n/g, "\n> ")}` : ""}`;
+  }
+  if (
+    state === AgentState.ready &&
+    when.includes("finished") &&
+    (task.kind === Kind.coding || agentClosed)
+  )
+    return `${REPLY_MARK} ${ref} finished${agentClosed ? " and closed itself" : ""}: ${task.title}`;
+  return null;
 }
 
 export class Remote {
@@ -198,9 +273,10 @@ export class Remote {
     return this.deps.link.kind;
   }
 
-  // One look: hear what is new, then post what has been answered. Throws
-  // when Slack cannot be reached or the conversation is not the owner's
-  // alone; nothing is lost, the next tick tries again.
+  // One look: hear what is new, post what is owed (confirmation results,
+  // answers, notifications). Throws when Slack cannot be reached or the
+  // conversation is not the owner's alone; nothing is lost, the next tick
+  // tries again.
   async tick(): Promise<TickResult | null> {
     if (this.busy) return null;
     this.busy = true;
@@ -221,6 +297,9 @@ export class Remote {
       state.channel = read.channel;
       const heard = await this.hear(state, read);
       saveState(state);
+      this.notice(state);
+      saveState(state);
+      await this.flush(state);
       const answered = await this.answer(state);
       return { heard, answered, channel: read.channel };
     } finally {
@@ -231,7 +310,10 @@ export class Remote {
   private liveThreads(state: RemoteState): string[] {
     const cutoff = Date.now() - THREAD_HOURS * 3600_000;
     for (const [ts, at] of Object.entries(state.threads))
-      if (Date.parse(at) < cutoff) delete state.threads[ts];
+      if (Date.parse(at) < cutoff) {
+        delete state.threads[ts];
+        delete state.about[ts];
+      }
     return Object.entries(state.threads)
       .sort((a, b) => b[1].localeCompare(a[1]))
       .slice(0, MAX_THREADS)
@@ -258,14 +340,21 @@ export class Remote {
       const threadTs =
         msg.threadTs && msg.threadTs !== msg.ts ? msg.threadTs : msg.ts;
       const text = msg.text.trim();
-      await this.deps.say(home.id, text, SLACK_AUTHOR);
+      state.threads[threadTs] = new Date().toISOString();
+      if (await this.confirm(state, msg, threadTs, text)) {
+        heard++;
+        continue;
+      }
+      const about = state.about[threadTs];
+      await this.deps.say(
+        home.id,
+        about && !text.includes(about) ? `(About ${about}) ${text}` : text,
+        SLACK_AUTHOR,
+      );
       const turn = store
         .turnsForTask(home.id)
         .findLast(
-          (t) =>
-            t.role === TurnRole.you &&
-            t.author === SLACK_AUTHOR &&
-            t.body === text,
+          (t) => t.role === TurnRole.you && t.author === SLACK_AUTHOR,
         );
       if (turn)
         state.waiting.push({
@@ -274,13 +363,110 @@ export class Remote {
           threadTs,
           at: new Date().toISOString(),
         });
-      state.threads[threadTs] = new Date().toISOString();
       heard++;
       log.info("heard", { ts: msg.ts, thread: threadTs, turn: turn?.id });
     }
     for (const msg of fresh)
       if (newer(msg.ts, state.since ?? "0")) state.since = msg.ts;
     return heard;
+  }
+
+  // An owner line that answers held moves. Yes runs them, no drops them;
+  // both are the whole line, and the Assistant never hears it. Anything
+  // else drops them too, and goes on to the Assistant. A top-level yes
+  // counts when exactly one hold waits, since a phone makes threads easy
+  // to miss. True when the line was only an answer.
+  private async confirm(
+    state: RemoteState,
+    msg: RemoteMessage,
+    threadTs: string,
+    text: string,
+  ): Promise<boolean> {
+    const kind = answerKind(text);
+    let holds = takeForThread(threadTs);
+    if (!holds.length && kind !== "other" && threadTs === msg.ts) {
+      const bound = pendingConfirms().filter((p) => p.threadTs);
+      if (bound.length === 1 && bound[0]?.threadTs)
+        holds = takeForThread(bound[0].threadTs);
+    }
+    if (!holds.length) return false;
+    const home = store.homeTask();
+    const replyIn = holds[0]?.threadTs ?? threadTs;
+    if (kind === "yes") {
+      const lines: string[] = [];
+      for (const h of holds) {
+        const outcome = await this.deps.runMove(h.verb, h.args);
+        lines.push(outcome.ok ? outcome.result : `could not ${h.says}: ${outcome.result}`);
+        store.addTurn({
+          taskId: home.id,
+          role: TurnRole.trigger,
+          author: "aug",
+          body: `In Slack the owner said yes to ${h.says}: ${outcome.result}`,
+        });
+      }
+      state.outbox.push({
+        threadTs: replyIn,
+        text: `${REPLY_MARK} ${lines.join("\n")}`,
+      });
+      log.info("confirmed", { moves: holds.map((h) => h.verb).join(",") });
+      return true;
+    }
+    const says = holds.map((h) => h.says).join("; ");
+    store.addTurn({
+      taskId: home.id,
+      role: TurnRole.trigger,
+      author: "aug",
+      body: `In Slack the owner did not say yes, so nothing was done: ${says}`,
+    });
+    if (kind === "no") {
+      state.outbox.push({
+        threadTs: replyIn,
+        text: `${REPLY_MARK} Left as is: ${says}.`,
+      });
+      return true;
+    }
+    return false;
+  }
+
+  // Tasks whose agent moved to finished or waiting since the last look,
+  // as top-level posts. The first look only takes stock.
+  private notice(state: RemoteState): void {
+    const when = this.deps.config.get().remote.notify ?? [];
+    if (!when.length) {
+      state.seen = undefined;
+      return;
+    }
+    const tasks = store.listTasks();
+    const before = state.seen;
+    state.seen = Object.fromEntries(
+      tasks.map((t) => [String(t.id), t.agent_state]),
+    );
+    if (!before) return;
+    for (const task of tasks) {
+      if (before[String(task.id)] === task.agent_state) continue;
+      const text = notification(task, task.agent_state, when);
+      if (text)
+        state.outbox.push({ text, about: store.taskRef(task.id) });
+    }
+  }
+
+  private async flush(state: RemoteState): Promise<void> {
+    if (!state.channel) return;
+    while (state.outbox.length) {
+      const next = state.outbox[0];
+      if (!next) break;
+      // A failed post throws with it still first: the next tick posts it.
+      const ts = await this.deps.link.post(state.channel, next.threadTs, next.text);
+      if (ts) {
+        state.posted = [...state.posted, ts].slice(-50);
+        if (next.about) {
+          state.about[ts] = next.about;
+          state.threads[ts] = new Date().toISOString();
+        }
+      }
+      state.outbox.shift();
+      saveState(state);
+    }
   }
 
   // The first finished Assistant turn after each waiting line is its answer.
@@ -306,9 +492,16 @@ export class Remote {
       if (!turn && !stale) continue;
       const key = `${w.threadTs}:${turn?.id ?? "none"}`;
       if (!done.has(key)) {
-        const text = turn
+        let text = turn
           ? toSlack(answerText(turn))
           : `${REPLY_MARK} No answer: the Assistant did not run. Try again, or look in aug.`;
+        if (turn) {
+          bindToThread(turn.id, w.threadTs);
+          const holds = pendingConfirms().filter(
+            (p) => p.threadTs === w.threadTs,
+          );
+          if (holds.length) text = `${text}\n\n${askYes(holds)}`;
+        }
         // A failed post throws with w still waiting: the next tick posts it.
         const ts = await this.deps.link.post(w.channel, w.threadTs, text);
         if (ts) state.posted = [...state.posted, ts].slice(-50);

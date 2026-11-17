@@ -71,6 +71,9 @@ export interface AugConfig {
     channel?: string;
     // Default 15 with a token, 60 under claude-mcp (each read is a turn).
     pollSeconds: number;
+    // Posts to the same conversation when a task's agent finished (coding
+    // work, or work it closed) or is waiting for you. None by default.
+    notify: ("finished" | "waiting")[];
   };
   brain: {
     triageModel: string;
@@ -147,7 +150,7 @@ export interface AugConfig {
 export const DEFAULT_CONFIG: AugConfig = {
   github: { enabled: true, pollSeconds: 120, repos: {}, mergeMethod: "squash" },
   slack: { enabled: true, transport: "token", pollSeconds: 60, channels: [] },
-  remote: { enabled: false, pollSeconds: 15 },
+  remote: { enabled: false, pollSeconds: 15, notify: [] },
   brain: {
     triageModel: "haiku",
     agentModel: "sonnet",

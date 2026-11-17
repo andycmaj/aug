@@ -69,7 +69,9 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   opt-in (`remote.enabled`), separate from the triage poller. It reads one
   conversation only the owner is in (self-DM or a private channel), hears
   the owner's own plain lines into Home (author `SLACK_AUTHOR`) and posts
-  the Assistant's answer in the thread, marked `[aug]`.
+  the Assistant's answer in the thread, marked `[aug]`. A turn answering
+  Slack asks as `SLACK_ASKER`; `runMove` holds the moves in `CONFIRM_MOVES`
+  for the owner's yes in that thread (`core/slack/confirm.ts`).
 - **Views read through the read model** (`core/read-model.ts`), never the
   store: `aug.task(id)`, `aug.turns(id)`, `aug.pendingAction(id)` and the
   rest sit on the aug context. Each read names the tables it queries, and
