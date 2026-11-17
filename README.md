@@ -77,7 +77,8 @@ the Advisor proposes a shorter one; past twice it, prompts cut it with a note.
   "github": {
     "pollSeconds": 120,
     "mergeMethod": "squash",
-    "repos": { "northwind/ledger": "/Users/me/src/ledger" }
+    "repos": { "northwind/ledger": "/Users/me/src/ledger" },
+    "reviewTeams": ["northwind/payments"]
   },
   "slack": {
     "transport": "token",
@@ -105,6 +106,10 @@ the Advisor proposes a shorter one; past twice it, prompts cut it with a note.
 
 `github.repos` maps a repository to its local checkout; a coding task gets a
 worktree of it (aug asks for the path the first time a repo is unmapped).
+A pull request review asked of you, or of a team in `github.reviewTeams`
+(`org/team-slug`, or a bare slug for any org), always becomes a coding task on
+the PR's branch (`pr:N`) whose brief is a guided Plannotator review; other
+review asks the triage model finds are coding tasks too.
 `worktreeCommand` makes that worktree: `{repo_path}`, `{create}` (`-c` for a new
 branch) and `{branch}` are filled in, and it must print wt's JSON or a path on
 its last line. Swap in your own alias, or add `--no-hooks`. `tmuxSocket` puts

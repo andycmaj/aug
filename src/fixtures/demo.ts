@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { setBrain, type BrainCall, type BrainResult } from "../core/brain";
 import { DEFAULT_CONFIG, fixedConfig } from "../core/config";
 import { localDay } from "../core/rail";
+import { reviewBrief } from "../core/triage";
 import { openDb, useDb } from "../core/db";
 import { DocName, ensureDocs, readDoc, writeDoc } from "../core/docs";
 import { Engine } from "../core/engine";
@@ -70,6 +71,7 @@ function seedTask(
     priority?: Priority;
     reason: string;
     repo?: string;
+    branch?: string;
     watching?: boolean;
   },
 ): number {
@@ -81,6 +83,7 @@ function seedTask(
     priority: t.priority,
     watching: t.watching,
     repo: t.repo,
+    branch: t.branch ?? null,
     threadKey: m.thread,
     channel: m.channel,
     url: m.url ?? null,
@@ -272,11 +275,20 @@ export function seedDemo(): void {
       },
       {
         title: "Review: Add dark mode toggle (web#88)",
-        summary: "Priya wants a review before Friday's release.",
-        kind: Kind.task,
-        reason: "a review requested from you is yours to do",
+        summary: reviewBrief(
+          { repo: "northwind/web", number: 88, url: "https://github.com/northwind/web/pull/88" },
+          "Priya wants a review before Friday's release.",
+        ),
+        kind: Kind.coding,
+        repo: "northwind/web",
+        branch: "pr:88",
+        reason: "a review requested from you",
       },
     );
+    store.updateTask(review, {
+      agent_state: AgentState.queued,
+      queue_reason: "held for you: press Start",
+    });
     store.setPrStatus({
       task_id: review,
       repo: "northwind/web",

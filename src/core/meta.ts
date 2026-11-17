@@ -14,6 +14,15 @@ export interface GithubMeta {
   reason: string | null;
   // The PR's head branch, when it was worth a call to fetch.
   head: string | null;
+  // A review request: who the PR still asks, read when it arrived. Null
+  // when it was not read (another reason, or the call failed).
+  requested: ReviewRequested | null;
+}
+
+export interface ReviewRequested {
+  me: boolean;
+  // org/team-slug
+  teams: string[];
 }
 
 export interface SlackMeta {
@@ -33,6 +42,17 @@ export type MessageMeta = GithubMeta | SlackMeta | OwnerMeta;
 const str = (v: unknown): string | null =>
   typeof v === "string" && v ? v : null;
 
+function requestedOf(v: unknown): ReviewRequested | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  return {
+    me: r.me === true,
+    teams: Array.isArray(r.teams)
+      ? r.teams.filter((t): t is string => typeof t === "string")
+      : [],
+  };
+}
+
 export function messageMeta(message: MessageRow): MessageMeta {
   let raw: Record<string, unknown> = {};
   try {
@@ -49,6 +69,7 @@ export function messageMeta(message: MessageRow): MessageMeta {
         type: str(raw.type),
         reason: str(raw.reason),
         head: str(raw.head),
+        requested: requestedOf(raw.requested),
       };
     case "slack":
       return {

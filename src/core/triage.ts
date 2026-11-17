@@ -12,7 +12,8 @@ import { think } from "./brain";
 import type { AugConfig, NoiseRule } from "./config";
 import { logger } from "./log";
 import { DocName, forPrompt, head } from "./docs";
-import { messageMeta } from "./meta";
+import { parsePrUrl } from "./feedback";
+import { messageMeta, type GithubMeta } from "./meta";
 import { docsBlock } from "./prompts";
 import { finishSuperseded, holdForStart } from "./lifecycle";
 import { err, ok, type Result } from "./result";
@@ -82,6 +83,11 @@ const VERDICT_SCHEMA = {
       description:
         "the name of the owner's project this work belongs to, exactly as listed, or empty",
     },
+    review_pr: {
+      type: "string",
+      description:
+        "only when the ask is for the owner to review a GitHub pull request: its URL, else empty",
+    },
   },
   required: ["verdict", "title", "summary", "priority", "reason"],
 } as const;
@@ -95,6 +101,7 @@ export interface VerdictAnswer {
   repo?: string;
   same_ask?: boolean;
   project?: string;
+  review_pr?: string;
 }
 
 export function verdictPrompt(
@@ -284,7 +291,7 @@ export function linkByBranch(message: MessageRow): number | null {
 // for the global itself.
 export type TriageConfig = Pick<
   AugConfig,
-  "autostart" | "brain" | "triage" | "docBudgets"
+  "autostart" | "brain" | "triage" | "docBudgets" | "github"
 >;
 
 // The model's verdict, or why there is none.
@@ -376,6 +383,22 @@ const afterClose: TriageRule = {
         ),
 };
 
+// A review asked of you, or of a team you watch (github.reviewTeams), is
+// always a review task. Who was asked is read at ingest, so the claim needs
+// no model; the model's verdict, when there is one, only gives its words.
+const reviewRequest: TriageRule = {
+  name: "review request",
+  handle: async (i) => {
+    const pr = requestedPr(i.message);
+    if (!pr) return pass("not a pull request review request");
+    const meta = messageMeta(i.message) as GithubMeta;
+    const yours = reviewIsYours(meta, i.config.github.reviewTeams);
+    if (!yours.ok) return pass(yours.error);
+    const j = await i.judged();
+    return ok(createReview(i.message, pr, j.ok ? j.value : null, yours.value, i.config));
+  },
+};
+
 // Triage breaking is quiet and safe: filed for you to read, never assumed to
 // be work.
 const unjudged: TriageRule = {
@@ -429,6 +452,7 @@ export const TRIAGE_RULES: readonly TriageRule[] = [
   noise,
   sameThread,
   afterClose,
+  reviewRequest,
   unjudged,
   sameAsk,
   judgedFyi,
@@ -658,6 +682,13 @@ function createFromVerdict(
   answer: VerdictAnswer,
   config: TriageConfig,
 ): TriageOutcome {
+  // A review the owner is asked for is coding, wherever it was asked: a
+  // review request the gate left to the model, or a PR named in a thread.
+  const pr =
+    answer.verdict === Verdict.watch
+      ? null
+      : (requestedPr(message) ?? prFromUrl(answer.review_pr));
+  if (pr) return createReview(message, pr, answer, answer.reason, config);
   const kind: Kind =
     answer.verdict === Verdict.watch ? Kind.task : (answer.verdict as Kind);
   const meta = messageMeta(message);
@@ -705,6 +736,137 @@ function createFromVerdict(
     taskId: task.id,
     reason: answer.reason,
     effects,
+    project,
+  };
+}
+
+// ── pull request reviews ─────────────────────────────────────────────────
+
+export interface ReviewPr {
+  repo: string;
+  number: number;
+  url: string;
+}
+
+export function prFromUrl(url: string | null | undefined): ReviewPr | null {
+  const pr = url ? parsePrUrl(url) : null;
+  return pr && { ...pr, url: `https://github.com/${pr.repo}/pull/${pr.number}` };
+}
+
+// The pull request a GitHub review request is about.
+export function requestedPr(message: MessageRow): ReviewPr | null {
+  const meta = messageMeta(message);
+  if (
+    meta.channel !== "github" ||
+    meta.type !== "PullRequest" ||
+    meta.reason !== "review_requested" ||
+    !meta.repo ||
+    !meta.number
+  )
+    return null;
+  return (
+    prFromUrl(message.url) ?? {
+      repo: meta.repo,
+      number: meta.number,
+      url: `https://github.com/${meta.repo}/pull/${meta.number}`,
+    }
+  );
+}
+
+// Asked of you, or of a team you watch: "org/slug" names one team, a bare
+// slug that team in any org.
+export function reviewIsYours(
+  meta: GithubMeta,
+  watched: readonly string[],
+): Result<string, string> {
+  const asked = meta.requested;
+  if (!asked) return err("who was asked is not known");
+  if (asked.me) return ok("a review requested from you");
+  const team = asked.teams.find((t) =>
+    watched.some((w) => {
+      const want = w.trim().toLowerCase();
+      const have = t.toLowerCase();
+      return want.includes("/") ? want === have : have.endsWith(`/${want}`);
+    }),
+  );
+  if (team) return ok(`a review requested from ${team}, a team you watch`);
+  return err(
+    asked.teams.length
+      ? `asked of ${asked.teams.join(", ")}, not a team you watch`
+      : "not asked of you or a team",
+  );
+}
+
+// What a review task's agent starts from: the review itself, with the
+// context JOB.md's review flow gathers first.
+export function reviewBrief(pr: ReviewPr, summary = ""): string {
+  return [
+    `Do a guided Plannotator review of ${pr.url} (/plannotator-review ${pr.url}). The worktree is on the PR's branch (pr:${pr.number}).`,
+    "Before you open it, gather what the review needs: the PR's description and discussion, its linked ticket (Notion or elsewhere) and related threads. Link each one to this task.",
+    summary.trim(),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+// A review is a coding task on the PR's repo and branch, held for the
+// owner's Start like any coding task. Its repo's checkout is never guessed:
+// when none is mapped, the task says so, and Start asks.
+function createReview(
+  message: MessageRow,
+  pr: ReviewPr,
+  answer: VerdictAnswer | null,
+  reason: string,
+  config: TriageConfig,
+): TriageOutcome {
+  const project = pickProject(pr.repo, answer?.project);
+  const prThread = `github:${pr.repo}#${pr.number}`;
+  const task = store.batch(() => {
+    const created = store.createTask({
+      title: (answer?.title || `Review ${pr.repo}#${pr.number}`).slice(0, 120),
+      summary: reviewBrief(pr, answer?.summary),
+      kind: Kind.coding,
+      priority: answer?.priority ?? Priority.important,
+      repo: pr.repo,
+      branch: `pr:${pr.number}`,
+      projectId: project.projectId,
+      threadKey: message.thread_key,
+      channel: message.channel,
+      url: pr.url,
+      triageReason: reason,
+      createdAt: message.received_at,
+    });
+    // Asked for in Slack: the PR's own thread is the task's too, so its
+    // reviews and CI come back here, and the ask stays a link.
+    if (message.thread_key !== prThread) {
+      store.linkThread(created.id, prThread);
+      if (message.url)
+        store.addTaskLink(created.id, message.url, "where the review was asked", "triage");
+    }
+    store.fileMessage(message.id, Verdict.coding, reason, created.id);
+    store.addTurn({
+      taskId: created.id,
+      role: TurnRole.incoming,
+      author: message.author_name,
+      body: message.body,
+      messageId: message.id,
+      startedAt: message.received_at,
+    });
+    if (!config.github.repos[pr.repo])
+      store.addTurn({
+        taskId: created.id,
+        role: TurnRole.trigger,
+        body: `${pr.repo} has no checkout mapped. Start asks where it is (one found on disk, or a fresh clone); or map it first with \`move repo ${pr.repo} --path <dir>\` or \`--clone yes\`.`,
+        startedAt: message.received_at,
+      });
+    holdForStart(created.id);
+    return created;
+  });
+  return {
+    verdict: Verdict.coding,
+    taskId: task.id,
+    reason,
+    effects: [],
     project,
   };
 }

@@ -41,6 +41,10 @@ export interface AugConfig {
     repos: Record<string, string>;
     // Merge method for "Approve and close" on a pull request.
     mergeMethod: "merge" | "squash" | "rebase";
+    // GitHub teams whose review requests are yours, as org/team-slug (or a
+    // bare slug for any org). A review requested from one of them, or from
+    // you, always becomes a review task (core/triage.ts).
+    reviewTeams: string[];
   };
   slack: {
     enabled: boolean;
@@ -148,7 +152,7 @@ export interface AugConfig {
 }
 
 export const DEFAULT_CONFIG: AugConfig = {
-  github: { enabled: true, pollSeconds: 120, repos: {}, mergeMethod: "squash" },
+  github: { enabled: true, pollSeconds: 120, repos: {}, mergeMethod: "squash", reviewTeams: [] },
   slack: { enabled: true, transport: "token", pollSeconds: 60, channels: [] },
   remote: { enabled: false, pollSeconds: 15, notify: [] },
   brain: {

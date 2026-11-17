@@ -17,7 +17,8 @@ import {
   TurnRole,
   type MessageRow,
 } from "../src/core/types";
-import { fakeBrain, freshHome, config } from "./helpers";
+import { setBrain } from "../src/core/brain";
+import { fakeBrain, freshHome, config, testConfig } from "./helpers";
 
 function slackDm(
   n: number,
@@ -211,6 +212,7 @@ describe("triage routing", () => {
       author?: string;
       thread?: string;
       body?: string;
+      requested?: { me: boolean; teams: string[] };
     } = {},
   ): MessageRow {
     return store.insertMessage({
@@ -228,6 +230,7 @@ describe("triage routing", () => {
         number: 40,
         type: opts.type ?? "PullRequest",
         reason: opts.reason ?? "review_requested",
+        ...(opts.requested ? { requested: opts.requested } : {}),
       },
     })!;
   }
@@ -300,13 +303,18 @@ describe("triage routing", () => {
     expect(calls[0].prompt).toContain('"reason":"review_requested"');
     const task = store.getTask(out.taskId!)!;
     expect(task.priority).toBe("urgent");
-    expect(task.kind).toBe("task");
-    // Repo falls back to the notification's own.
+    // Who was asked is not known, so the model judged it; a review it
+    // calls work is still coding, on the PR's repo and branch.
+    expect(out.verdict).toBe("coding");
+    expect(task.kind).toBe("coding");
     expect(task.repo).toBe("acme/api");
+    expect(task.branch).toBe("pr:40");
     expect(task.url).toBe("https://github.com/acme/api/pull/40");
+    expect(task.summary).toContain("guided Plannotator review of https://github.com/acme/api/pull/40");
+    expect(task.summary).toContain("linked ticket");
+    expect(task.agent_state).toBe(AgentState.queued);
     expect(out.effects).toEqual([]);
   });
-
   test("a Slack mention in a channel thread is judged once, then the thread attaches", async () => {
     writeDoc(DocName.job, "# JOB\n\nHigh priority:\n- Slack mentions of me.\n");
     const calls = fakeBrain(() =>
@@ -471,6 +479,7 @@ describe("triage chain", () => {
       "noise",
       "same thread",
       "after close",
+      "review request",
       "unjudged",
       "same ask",
       "judged fyi",
@@ -577,5 +586,162 @@ describe("triage noise from config", () => {
     const out = await triage(slackPost(1, "anything", "([unclosed"), { config: config() });
     expect(out.reason).not.toBe("broken");
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("review requests become coding tasks", () => {
+  beforeEach(() => freshHome());
+
+  function reviewAsk(
+    requested: { me: boolean; teams: string[] } | null,
+    n = 1,
+  ): MessageRow {
+    return store.insertMessage({
+      channel: "github",
+      externalId: `gh:r${n}`,
+      threadKey: "github:acme/api#40",
+      author: "erin",
+      authorName: "erin",
+      title: "acme/api#40 PR: speed up export (review requested)",
+      body: "Please take a look at this change.",
+      url: "https://github.com/acme/api/pull/40",
+      receivedAt: new Date(Date.UTC(2026, 10, 5, 11, n)).toISOString(),
+      meta: {
+        repo: "acme/api",
+        number: 40,
+        type: "PullRequest",
+        reason: "review_requested",
+        ...(requested ? { requested } : {}),
+      },
+    })!;
+  }
+
+  const lastRun = (messageId: number) => store.triageRunsFor(messageId)[0]!;
+  const lastRule = (messageId: number) => lastRun(messageId).rule;
+
+  test("asked of you: always a coding task on pr:N, even when the model says fyi", async () => {
+    const calls = fakeBrain(() =>
+      verdict("fyi", { title: "Review the export speedup", priority: "urgent" }),
+    );
+    const m = reviewAsk({ me: true, teams: [] });
+    const out = await triage(m, { config: config() });
+    expect(calls).toHaveLength(1);
+    expect(out).toMatchObject({ verdict: "coding", reason: "a review requested from you", effects: [] });
+    expect(lastRule(m.id)).toBe("review request");
+    const task = store.getTask(out.taskId!)!;
+    expect(task).toMatchObject({
+      kind: "coding",
+      title: "Review the export speedup",
+      priority: "urgent",
+      repo: "acme/api",
+      branch: "pr:40",
+      url: "https://github.com/acme/api/pull/40",
+      agent_state: AgentState.queued,
+    });
+    expect(task.summary.split("\n")[0]).toBe(
+      "Do a guided Plannotator review of https://github.com/acme/api/pull/40 (/plannotator-review https://github.com/acme/api/pull/40). The worktree is on the PR's branch (pr:40).",
+    );
+    expect(store.getMessage(m.id)!.verdict).toBe("coding");
+  });
+
+  test("the model failing never loses a review asked of you", async () => {
+    setBrain(async () => {
+      throw new Error("brain down");
+    });
+    const out = await triage(reviewAsk({ me: true, teams: [] }), { config: config() });
+    const task = store.getTask(out.taskId!)!;
+    expect(task.kind).toBe("coding");
+    expect(task.title).toBe("Review acme/api#40");
+    expect(task.priority).toBe("important");
+  });
+
+  test.each([["acme/payments"], ["payments"], ["ACME/Payments"]])(
+    "asked of a watched team (%s)",
+    async (watched) => {
+      testConfig().update((c) => ({ ...c, github: { ...c.github, reviewTeams: [watched] } }));
+      fakeBrain(() => verdict("fyi"));
+      const out = await triage(reviewAsk({ me: false, teams: ["acme/payments"] }), {
+        config: config(),
+      });
+      expect(out.verdict).toBe("coding");
+      expect(out.reason).toBe("a review requested from acme/payments, a team you watch");
+    },
+  );
+
+  test("asked of a team you do not watch: the model judges it", async () => {
+    testConfig().update((c) => ({ ...c, github: { ...c.github, reviewTeams: ["acme/payments"] } }));
+    fakeBrain(() => verdict("fyi", { reason: "a big team; someone else has it" }));
+    const m = reviewAsk({ me: false, teams: ["acme/everyone"] });
+    const out = await triage(m, { config: config() });
+    expect(out).toMatchObject({ verdict: "fyi", taskId: null });
+    const steps = store.triageSteps(lastRun(m.id).id);
+    expect(steps.find((s) => s.rule === "review request")?.reason).toBe(
+      "asked of acme/everyone, not a team you watch",
+    );
+  });
+
+  test("a repo with no checkout mapped says so, and Start will ask; a mapped one does not", async () => {
+    fakeBrain(() => verdict("task"));
+    const unmapped = await triage(reviewAsk({ me: true, teams: [] }, 1), { config: config() });
+    const said = store.turnsForTask(unmapped.taskId!).filter((t) => t.role === TurnRole.trigger);
+    expect(said.map((t) => t.body).join("\n")).toContain("acme/api has no checkout mapped");
+    // Nothing is guessed into config.
+    expect(config().github.repos["acme/api"]).toBeUndefined();
+
+    taskClosed(unmapped.taskId!, "reviewed");
+    testConfig().update((c) => ({ ...c, github: { ...c.github, repos: { "acme/api": "/src/api" } } }));
+    const m = store.insertMessage({
+      ...{
+        channel: "github" as const,
+        externalId: "gh:other",
+        threadKey: "github:acme/api#41",
+        author: "erin",
+        authorName: "erin",
+        title: "acme/api#41 PR: other (review requested)",
+        body: "and this one",
+        url: "https://github.com/acme/api/pull/41",
+        receivedAt: new Date(Date.UTC(2026, 10, 5, 12, 0)).toISOString(),
+      },
+      meta: { repo: "acme/api", number: 41, type: "PullRequest", reason: "review_requested", requested: { me: true, teams: [] } },
+    })!;
+    const mapped = await triage(m, { config: config() });
+    expect(store.getTask(mapped.taskId!)!.branch).toBe("pr:41");
+    expect(
+      store.turnsForTask(mapped.taskId!).some((t) => t.body.includes("no checkout mapped")),
+    ).toBe(false);
+  });
+
+  test("a review asked for in Slack is coding too, and the PR's thread is the task's", async () => {
+    fakeBrain(() =>
+      verdict("task", { review_pr: "https://github.com/acme/api/pull/40/files" }),
+    );
+    const m = store.insertMessage({
+      channel: "slack",
+      externalId: "slack:C9:1",
+      threadKey: "slack:C9:100.0",
+      author: "U3",
+      authorName: "Priya",
+      title: "#payments thread",
+      body: "<@UME> can you review https://github.com/acme/api/pull/40 today?",
+      url: "https://acme.slack.com/archives/C9/p100",
+      receivedAt: new Date(Date.UTC(2026, 10, 5, 12, 1)).toISOString(),
+      meta: { channel: "C9", ts: "100.0" },
+    })!;
+    const out = await triage(m, { config: config() });
+    const task = store.getTask(out.taskId!)!;
+    expect(task).toMatchObject({ kind: "coding", repo: "acme/api", branch: "pr:40" });
+    expect(task.url).toBe("https://github.com/acme/api/pull/40");
+    expect(store.threadsForTask(task.id)).toContain("github:acme/api#40");
+    expect(store.linksForTask(task.id).map((l) => l.url)).toEqual([
+      "https://acme.slack.com/archives/C9/p100",
+    ]);
+  });
+
+  test("watching a review someone else does stays a watch", async () => {
+    fakeBrain(() => verdict("watch"));
+    const out = await triage(reviewAsk(null), { config: config() });
+    const task = store.getTask(out.taskId!)!;
+    expect(task.kind).toBe("task");
+    expect(task.watching).toBe(1);
   });
 });

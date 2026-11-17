@@ -7,5 +7,5 @@
 - task: mine to do in the world - decide, attend, review by hand.
 - watch: a thread I care about that somebody else will handle.
 
-A pull request review requested from me is a task unless JOB.md says otherwise.
+A pull request review asked of me is coding (a review on its branch) unless JOB.md says otherwise.
 A question in a DM is usually reply.

@@ -37,6 +37,32 @@ export interface GhItem {
   state?: string;
 }
 
+// The pull request itself: its head, and who it still asks for a review.
+export interface GhPull extends GhItem {
+  head?: { ref?: string };
+  requested_reviewers?: { login?: string }[];
+  requested_teams?: { slug?: string }[];
+}
+
+// What a review request names, read off the PR: you, and the teams (as
+// org/slug, a PR's teams being its repo owner's).
+export function reviewRequested(
+  pull: GhPull,
+  repo: string,
+  me: string,
+): { me: boolean; teams: string[] } {
+  const org = repo.split("/")[0] ?? "";
+  return {
+    me: (pull.requested_reviewers ?? []).some(
+      (u) => u.login?.toLowerCase() === me.toLowerCase(),
+    ),
+    teams: (pull.requested_teams ?? [])
+      .map((t) => t.slug)
+      .filter((slug): slug is string => Boolean(slug))
+      .map((slug) => `${org}/${slug}`),
+  };
+}
+
 export type GhApi = (path: string) => Promise<unknown>;
 
 export async function ghApi(path: string): Promise<unknown> {
@@ -77,6 +103,7 @@ export function toMessage(
   item: GhItem | null,
   me: string,
   head: string | null = null,
+  requested: { me: boolean; teams: string[] } | null = null,
 ): NewMessage | null {
   const repo = n.repository.full_name;
   const number = numberFromUrl(n.subject.url);
@@ -107,6 +134,7 @@ export function toMessage(
       type: n.subject.type,
       reason: n.reason,
       ...(head ? { head } : {}),
+      ...(requested ? { requested } : {}),
     },
   };
 }
@@ -142,22 +170,30 @@ export async function pollGithub(
         item = unlessLimited(err);
       }
     }
+    // A PR is one more call: for its head where a task could own the
+    // branch, and for who a review request asks. The detail already read
+    // may be the PR itself.
     let head: string | null = null;
+    let requested: { me: boolean; teams: string[] } | null = null;
+    const review = n.reason === "review_requested";
     if (
       n.subject.type === "PullRequest" &&
       n.subject.url &&
-      wantsHead(n.repository.full_name)
+      (review || wantsHead(n.repository.full_name))
     ) {
       try {
-        const pr = (await api(
-          n.subject.url.replace("https://api.github.com/", ""),
-        )) as { head?: { ref?: string } };
-        head = pr.head?.ref ?? null;
+        const pull = (
+          detail === n.subject.url && item
+            ? item
+            : await api(n.subject.url.replace("https://api.github.com/", ""))
+        ) as GhPull;
+        head = pull.head?.ref ?? null;
+        if (review) requested = reviewRequested(pull, n.repository.full_name, me);
       } catch (err) {
         head = unlessLimited(err);
       }
     }
-    const message = toMessage(n, item, me, head);
+    const message = toMessage(n, item, me, head, requested);
     if (message) out.push(message);
   }
   return out;
