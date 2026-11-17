@@ -259,8 +259,6 @@ describe("proposals", () => {
     const sections = buildRail({
       tasks: store.listTasks(),
       pendingActions: new Set(),
-      ideas: [],
-      fyi: [],
       lastHeard: new Map(),
       now: new Date(),
     });

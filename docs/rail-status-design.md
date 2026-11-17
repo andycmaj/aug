@@ -226,8 +226,11 @@ whenever the task stays open.
 
 ### Sections
 
-Home, **Wins**, System, Tasks, Code Reviews, Watching, For later,
-Advisor, FYI. Wins is walked first (`WALKED`).
+Home, **Wins**, System, Tasks, Code Reviews, Watching, For later. Wins
+is walked first (`WALKED`). The rail holds tasks and projects only:
+messages and Advisor ideas are on the Board's Inbox tab (5), and the
+header's `inbox N` (open ideas plus messages triage could not place)
+says when one needs you.
 
 ### Filters
 

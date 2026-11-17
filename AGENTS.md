@@ -87,13 +87,20 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   tmux watch; it owns a desk. Triage returns effects and does not start
   agents itself.
 - **Triage is a chain of rules** (`TRIAGE_RULES` in `core/triage.ts`): each
-  returns `ok(outcome)` to claim a message or `pass()` to hand it on
+  returns `ok(outcome)` to claim a message or `pass(why)` to hand it on
   (`core/result.ts`), in the order listed, and `runChain` runs them. Gates
   come first; the rules after them read the model's verdict, asked at most
   once. A new rule is one entry in that list. Rules get config as a value
   (`TriageDeps`, from the engine per message). Noise patterns live in
   `config.triage.noise`; the `noise` move (the owner's and the Assistant's)
-  appends one through the desk, and the next message reads it.
+  appends one through the desk, and the next message reads it. Every run
+  is recorded (`triage_runs`, one `triage_steps` row per rule tried, and
+  a `project` step when a new task is filed under a project: its repo's
+  one project, else the one the model named).
+- **The Inbox is the Board's tab 5** (`core/inbox.ts`,
+  `components/inbox-tab.tsx`): every message triage saw and every Advisor
+  idea, newest first, with the chain that routed it. Every inbox and
+  triage action lives there; the rail holds tasks and projects only.
 - **Config is handed down, never reached for** (`core/config.ts`). An entry
   point makes the `ConfigSource`: `index.tsx` a `fileConfig()` (config.json,
   re-read when its mtime changes), tests (`freshHome()`, `testConfig()`) and

@@ -1,14 +1,14 @@
 // The work rail: what still wants something from you, never a history. Rows
 // sit oldest first inside each heading and never move; urgency shades a row
-// in its place rather than lifting it.
+// in its place rather than lifting it. Tasks and projects only: messages
+// and Advisor ideas live on the Board's Inbox, and the header's badge says
+// when one needs you.
 
 import { Lane, LANE_META, laneOf, type Tone } from "./lanes";
 import {
   AgentState,
   Kind,
   TaskStatus,
-  type IdeaRow,
-  type MessageRow,
   type Priority,
   type ProjectRow,
   type TaskRow,
@@ -25,10 +25,6 @@ export interface RailProject {
   goals: number;
 }
 
-// FYIs are still filed and kept; the rail just does not show them until
-// they earn a place there.
-export const SHOW_FYI = false;
-
 export const Section = {
   home: "home",
   wins: "wins",
@@ -37,8 +33,6 @@ export const Section = {
   reviews: "reviews",
   watching: "watching",
   later: "later",
-  advisor: "advisor",
-  fyi: "fyi",
 } as const;
 export type Section = (typeof Section)[keyof typeof Section];
 
@@ -50,8 +44,6 @@ export const SECTION_TITLES: Record<Section, string> = {
   reviews: "Code Reviews",
   watching: "Watching",
   later: "For later",
-  advisor: "Advisor",
-  fyi: "FYI",
 };
 
 // The walk visits these in order; For later is never offered by Next, nor is
@@ -62,8 +54,6 @@ export const WALKED: Section[] = [
   "tasks",
   "reviews",
   "watching",
-  "advisor",
-  "fyi",
 ];
 
 export type RailItem =
@@ -78,9 +68,7 @@ export type RailItem =
       // The project whose row it sits under in Tasks, folding with it.
       group: number | null;
     }
-  | ({ type: "project"; key: string; at: string } & RailProject)
-  | { type: "idea"; key: string; idea: IdeaRow; at: string }
-  | { type: "fyi"; key: string; message: MessageRow; at: string };
+  | ({ type: "project"; key: string; at: string } & RailProject);
 
 export interface RailSection {
   section: Section;
@@ -109,8 +97,6 @@ export interface RailInput {
   pendingActions: Set<number>;
   // Tasks a review request filed; they sit under Code Reviews, not Tasks.
   reviews?: Set<number>;
-  ideas: IdeaRow[];
-  fyi: MessageRow[];
   // Task id -> when the last message from somebody else arrived, for slipped.
   lastHeard: Map<number, string>;
   now: Date;
@@ -147,8 +133,6 @@ export function buildRail(input: RailInput): RailSection[] {
     reviews: [],
     watching: [],
     later: [],
-    advisor: [],
-    fyi: [],
   };
 
   if (input.home)
@@ -218,23 +202,6 @@ export function buildRail(input: RailInput): RailSection[] {
     }
     if (task.watching) sections.watching.push(item);
     else onYou.push(item);
-  }
-
-  for (const idea of input.ideas) {
-    sections.advisor.push({
-      type: "idea",
-      key: `i${idea.id}`,
-      idea,
-      at: idea.created_at,
-    });
-  }
-  for (const message of input.fyi) {
-    sections.fyi.push({
-      type: "fyi",
-      key: `m${message.id}`,
-      message,
-      at: message.received_at,
-    });
   }
 
   const byAt = (a: RailItem, b: RailItem) =>

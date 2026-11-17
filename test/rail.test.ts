@@ -136,8 +136,6 @@ describe("rail", () => {
     const rail = buildRail({
       tasks: store.listTasks(),
       pendingActions: new Set(),
-      ideas: [],
-      fyi: [],
       lastHeard: new Map(),
       now: new Date(at(12)),
     });
@@ -195,8 +193,6 @@ describe("rail", () => {
       tasks: store.listTasks(),
       pendingActions: new Set(),
       reviews: store.tasksFromReviewRequests(),
-      ideas: [],
-      fyi: [],
       lastHeard: new Map(),
       now: new Date(at(12)),
     });
@@ -260,8 +256,6 @@ describe("projects on the rail", () => {
       projects: railProjects(),
       tasks: store.listTasks(),
       pendingActions: new Set(),
-      ideas: [],
-      fyi: [],
       lastHeard: new Map(),
       now: new Date(),
     });
@@ -329,14 +323,12 @@ describe("projects on the rail", () => {
 describe("the rail's status filter", () => {
   beforeEach(() => freshHome());
 
-  function railNow(ideas = store.openIdeas()) {
+  function railNow() {
     return buildRail({
       home: store.homeTask(),
       projects: railProjects(),
       tasks: store.listTasks(),
       pendingActions: new Set(),
-      ideas,
-      fyi: [],
       lastHeard: new Map(),
       now: new Date(),
     });
@@ -384,13 +376,22 @@ describe("the rail's status filter", () => {
     expect(keys(["asks"])).toContain(`p${web.id}`);
   });
 
-  test("Advisor ideas have no status, so any filter hides them", () => {
+  test("the rail is tasks and projects: ideas and messages are on the Inbox", () => {
     setup();
     store.addIdea("idea", "body", null);
-    const sections = (active: RailFilter[]) =>
-      filterRail(railNow(), new Set(active)).map((s) => s.section);
-    expect(sections([])).toContain("advisor");
-    expect(sections(["open"])).not.toContain("advisor");
+    const m = store.insertMessage({
+      channel: "slack",
+      externalId: "slack:C2:1",
+      threadKey: "slack:C2:1",
+      author: "U9",
+      authorName: "Lee",
+      title: "#general",
+      body: "lunch is here",
+      receivedAt: new Date().toISOString(),
+    })!;
+    store.fileMessage(m.id, "fyi", "chatter", null);
+    const types = new Set(railNow().flatMap((s) => s.items.map((i) => i.type)));
+    expect([...types].sort()).toEqual(["project", "task"]);
   });
 
   test("a section's count is what the filter left in it", () => {
@@ -475,8 +476,6 @@ describe("status model (docs/rail-status-design.md)", () => {
       home: store.homeTask(),
       tasks: store.listTasks(),
       pendingActions: new Set(),
-      ideas: [],
-      fyi: [],
       lastHeard: new Map(),
       now: new Date(),
       wins,

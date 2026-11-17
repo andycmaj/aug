@@ -91,10 +91,6 @@ export function titleOf(item: RailItem): string {
       return item.task.kind === Kind.home ? "Home" : item.task.title;
     case "project":
       return item.project.name;
-    case "idea":
-      return item.idea.title;
-    case "fyi":
-      return `${item.message.author_name}: ${item.message.body.replace(/\s+/g, " ")}`;
   }
 }
 
@@ -186,30 +182,6 @@ export function searchIndex(
           });
           break;
         }
-        case "fyi": {
-          const m = item.message;
-          const who = personOf(m);
-          const n = githubNumber(m.thread_key, m.url);
-          docs.push({
-            ...base,
-            taskId: null,
-            numbers: n ? [n] : [],
-            people: who ? [who] : [],
-            content: [
-              { text: `${m.title} ${m.body}`, why: `${m.channel} message` },
-            ],
-          });
-          break;
-        }
-        case "idea":
-          docs.push({
-            ...base,
-            taskId: item.idea.task_id,
-            numbers: [],
-            people: [],
-            content: [{ text: item.idea.body, why: "idea" }],
-          });
-          break;
         case "project":
           docs.push({
             ...base,

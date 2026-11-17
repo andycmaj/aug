@@ -31,7 +31,6 @@ import {
   ageLabel,
   RAIL_FILTERS,
   SECTION_TITLES,
-  SHOW_FYI,
   type RailItem,
 } from "../core/rail";
 import { prChip } from "../core/pr";
@@ -229,6 +228,10 @@ export function Rail(props: { actions: TaskActions }) {
           <span
             style={{ fg: theme.textMuted }}
           >{`${counts().tasks} open`}</span>
+          {/* Ideas and messages that need you live on the Board's Inbox. */}
+          <Show when={aug.inboxCount() > 0}>
+            <span style={{ fg: theme.warning }}>{`  inbox ${aug.inboxCount()}`}</span>
+          </Show>
         </text>
       </PaneHeader>
 
@@ -442,16 +445,6 @@ function RailRow(props: {
           },
         };
       }
-      case "fyi":
-        return {
-          bar: theme().textMuted,
-          bar2: theme().borderSubtle ?? theme().textMuted,
-          mark: "·",
-          markColor: theme().textMuted,
-          title: `${item.message.author_name}: ${item.message.body.replace(/\s+/g, " ")}`,
-          titleColor: theme().textMuted,
-          sub: `${ageLabel(item.at, now)} · ${CHANNEL_WORD[item.message.channel]} · ${item.message.reason ?? "fyi"}`,
-        };
       case "project": {
         const folded = aug.folded().has(item.project.id);
         // Folded, what its hidden tasks want from you still shows here.
@@ -485,16 +478,6 @@ function RailRow(props: {
             .join(" · "),
         };
       }
-      case "idea":
-        return {
-          bar: theme().accent,
-          bar2: theme().borderSubtle ?? theme().textMuted,
-          mark: "*",
-          markColor: theme().accent,
-          title: item.idea.title,
-          titleColor: theme().text,
-          sub: `${ageLabel(item.at, now)} · advisor idea`,
-        };
     }
   });
 
@@ -600,22 +583,6 @@ export function RailLegend() {
       markColor: theme.info,
       word: "project, agents working",
     },
-    {
-      bar: theme.accent,
-      mark: "*",
-      markColor: theme.accent,
-      word: "advisor idea",
-    },
-    ...(SHOW_FYI
-      ? [
-          {
-            bar: theme.textMuted,
-            mark: "·",
-            markColor: theme.textMuted,
-            word: "fyi",
-          },
-        ]
-      : []),
   ];
   const columns = () => {
     const all = entries();

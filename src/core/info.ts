@@ -8,7 +8,7 @@ import { paths } from "./paths";
 import { ageLabel, type RailItem } from "./rail";
 import { projectProgress } from "./lookup";
 import * as store from "./store";
-import { GoalStatus, type MessageRow, type TaskRow } from "./types";
+import { GoalStatus, type TaskRow } from "./types";
 
 export interface InfoRow {
   label: string;
@@ -49,22 +49,6 @@ function section(
           : { label, value: String(v) },
       ),
   };
-}
-
-function messageRows(m: MessageRow, now: Date): InfoSection {
-  return section("Message", [
-    ["from", m.from_me ? `${m.author_name} (you)` : m.author_name],
-    ["channel", m.channel],
-    ["title", m.title],
-    ["received", when(m.received_at, now)],
-    ["verdict", m.verdict],
-    ["why", m.reason],
-    ["read", when(m.read_at, now)],
-    ["url", m.url],
-    ["thread", m.thread_key],
-    ["external id", m.external_id],
-    ["meta", m.meta === "{}" ? null : m.meta],
-  ]);
 }
 
 function taskSections(
@@ -137,18 +121,6 @@ export function itemInfo(item: RailItem, now = new Date()): InfoSection[] {
       const fresh = store.getTask(item.task.id) ?? item.task;
       return taskSections(fresh, item.lane, now);
     }
-    case "fyi":
-      return [messageRows(item.message, now)];
-    case "idea":
-      return [
-        section("Advisor idea", [
-          ["title", item.idea.title],
-          ["status", item.idea.status],
-          ["about", item.idea.task_id ? store.taskRef(item.idea.task_id) : null],
-          ["created", when(item.idea.created_at, now)],
-          ["body", item.idea.body],
-        ]),
-      ];
     case "project": {
       const fresh = store.getProject(item.project.id) ?? item.project;
       const progress = projectProgress(fresh);
@@ -187,7 +159,5 @@ export function itemInfo(item: RailItem, now = new Date()): InfoSection[] {
 
 export function infoTitle(item: RailItem): string {
   if (item.type === "task") return `${store.taskRef(item.task.id)} · ${item.task.title}`;
-  if (item.type === "fyi") return `FYI from ${item.message.author_name}`;
-  if (item.type === "project") return `Project ${item.project.name}`;
-  return item.idea.title;
+  return `Project ${item.project.name}`;
 }

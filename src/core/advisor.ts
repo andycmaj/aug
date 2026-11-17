@@ -1,7 +1,7 @@
 // The Advisor: the brain on the clock. It reads your open work and what you
-// have been doing and leaves at most a few ideas on the rail - what is late,
-// what was not followed up. It never acts; an idea becomes work only when you
-// make it a task.
+// have been doing and leaves at most a few ideas in the Inbox (the Board's
+// tab) - what is late, what was not followed up. It never acts; an idea
+// becomes work only when you approve it there.
 
 import { think } from "./brain";
 import type { AugConfig } from "./config";
@@ -19,7 +19,7 @@ const IDEAS_SCHEMA = {
       items: {
         type: "object",
         properties: {
-          title: { type: "string", description: "short, like a rail row" },
+          title: { type: "string", description: "short, like a task title" },
           body: {
             type: "string",
             description:
@@ -87,9 +87,9 @@ export async function runAdvisor(
 ): Promise<number> {
   const existing = store.openIdeas().map((i) => i.title.toLowerCase());
   const result = await think({
-    prompt: `${workPicture(at)}\n\nIdeas already on the rail:\n${existing.join("\n") || "(none)"}\n\nToday is ${at.toISOString().slice(0, 10)}.`,
+    prompt: `${workPicture(at)}\n\nIdeas already in the Inbox:\n${existing.join("\n") || "(none)"}\n\nToday is ${at.toISOString().slice(0, 10)}.`,
     system: [
-      "You are the Advisor in aug, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas, none repeating one already on the rail. Fewer is better; zero is fine.",
+      "You are the Advisor in aug, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas, none repeating one already in the Inbox. Fewer is better; zero is fine.",
       docsBlock(config, { persona: true, job: true, learned: true }),
     ].join("\n\n"),
     schema: IDEAS_SCHEMA,

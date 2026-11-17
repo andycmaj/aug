@@ -43,8 +43,6 @@ describe("Home", () => {
       home,
       tasks: [work],
       pendingActions: new Set(),
-      ideas: [],
-      fyi: [],
       lastHeard: new Map(),
       now: new Date(),
     });

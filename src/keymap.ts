@@ -18,6 +18,7 @@ import { RAIL_FILTERS } from "./core/rail";
 
 // What the footer needs to know to show only the moves that apply.
 export interface HelpCtx {
+  // message, fyi and idea are Inbox rows (the Board's tab), never the rail's.
   item: "task" | "message" | "fyi" | "idea" | "project" | null;
   kind: string | null;
   hasDraft: boolean;
@@ -261,20 +262,6 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   },
   {
     key: "x",
-    cmd: Commands.READ_FYI,
-    desc: "FYI: mark it read",
-    help: "read",
-    relevant: (c) => c.item === "fyi",
-  },
-  {
-    key: "x",
-    cmd: Commands.DISMISS_IDEA,
-    desc: "Advisor idea: dismiss it",
-    help: "dismiss",
-    relevant: (c) => c.item === "idea",
-  },
-  {
-    key: "x",
     cmd: Commands.PROJECT_ARCHIVE,
     desc: "archive the project",
     help: "archive",
@@ -310,13 +297,6 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     desc: "edit the project's brief, goals, repos and docs in $EDITOR",
     help: "brief",
     relevant: (c) => c.item === "project",
-  },
-  {
-    key: "m",
-    cmd: Commands.MAKE_TASK,
-    desc: "FYI or Advisor idea: make it a task",
-    help: "make task",
-    relevant: (c) => c.item === "fyi" || c.item === "idea",
   },
   {
     key: "p",

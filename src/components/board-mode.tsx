@@ -34,6 +34,7 @@ import {
 } from "../core/types";
 import { BOARD_HELP_OPTIONS, BoardTab, type HelpCtx } from "../keymap";
 import { AugFooter } from "./footer";
+import { boardTab, setBoardTab } from "./board-tab";
 import { useInboxTab } from "./inbox-tab";
 import { ChoiceModal, PromptModal } from "./modals";
 import { useShell } from "./shell";
@@ -63,7 +64,8 @@ type ProjectLine =
   | { type: "goal"; project: ProjectRow; progress: GoalProgress }
   | { type: "task"; task: TaskRow; project: ProjectRow; underGoal: boolean };
 
-const [tab, setTab] = createSignal<Tab>(Tab.columns);
+const tab = boardTab;
+const setTab = setBoardTab;
 
 export function BoardMode() {
   const aug = useAug();

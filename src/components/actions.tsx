@@ -491,30 +491,6 @@ export function useActions(dialogs: Dialogs) {
     });
   }
 
-  // ── on an FYI / an idea ───────────────────────────────────────────────
-
-  function makeTask(item: RailItem) {
-    if (item.type === "fyi") {
-      const task = desk.fyiToTask(item.message.id);
-      if (task) {
-        aug.selectTask(task.id);
-        showToast(`${taskRef(task.id)}: it was work; triage will learn`);
-      }
-    } else if (item.type === "idea") {
-      const task = desk.ideaToTask(item.idea.id);
-      if (task) {
-        aug.selectTask(task.id);
-        showToast(`${taskRef(task.id)} on your list`);
-      }
-    }
-  }
-
-  function dismiss(item: RailItem) {
-    advanceFrom(item.key);
-    if (item.type === "fyi") desk.readFyi(item.message.id);
-    if (item.type === "idea") desk.dismissIdea(item.idea.id);
-  }
-
   // ── on an Inbox row ───────────────────────────────────────────────────
 
   function goToTask(taskId: number) {
@@ -636,8 +612,6 @@ export function useActions(dialogs: Dialogs) {
   function walk(direction: 1 | -1) {
     const current = aug.selected();
     if (direction === 1 && current) {
-      if (current.type === "fyi") desk.readFyi(current.message.id);
-      if (current.type === "idea") desk.dismissIdea(current.idea.id);
       if (current.type === "task" && current.task.unread_result)
         desk.readResult(current.task.id);
     }
@@ -736,12 +710,7 @@ export function useActions(dialogs: Dialogs) {
   // o: the link, or a pick of the thread, the links attached to the task,
   // and what the agent made.
   function openLink(item: RailItem) {
-    const url =
-      item.type === "task"
-        ? item.task.url
-        : item.type === "fyi"
-          ? item.message.url
-          : null;
+    const url = item.type === "task" ? item.task.url : null;
     const links = item.type === "task" ? aug.taskLinks(item.task.id) : [];
     const short = (u: string) => u.replace(/^https?:\/\//, "").slice(0, 30);
     const choices = [
@@ -877,16 +846,6 @@ export function useActions(dialogs: Dialogs) {
           return false;
         notATask(item.task);
       },
-      [Commands.READ_FYI]: () => {
-        const item = get();
-        if (item?.type !== "fyi") return false;
-        dismiss(item);
-      },
-      [Commands.DISMISS_IDEA]: () => {
-        const item = get();
-        if (item?.type !== "idea") return false;
-        dismiss(item);
-      },
       [Commands.PROJECT_ARCHIVE]: () => {
         const item = get();
         if (item?.type !== "project") return false;
@@ -896,10 +855,6 @@ export function useActions(dialogs: Dialogs) {
         const item = get();
         if (item?.type !== "project") return false;
         return editor.editProject(item.project.id);
-      },
-      [Commands.MAKE_TASK]: () => {
-        const item = get();
-        if (item && item.type !== "task") makeTask(item);
       },
       [Commands.EDIT_FILE]: () => {
         const item = get();

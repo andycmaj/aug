@@ -95,7 +95,7 @@ test("in each pane, a key means one thing for any item", () => {
   expect([...clashes]).toEqual([]);
 });
 
-// The table's own hint words for FYIs and Advisor ideas say the same thing.
+// The table's own hint words say the same thing as the footer.
 test("the footer names what x and m do to the row on the table", () => {
   const base: HelpCtx = {
     item: null,
@@ -112,8 +112,6 @@ test("the footer names what x and m do to the row on the table", () => {
     return { x: f.get("x"), m: f.get("m") };
   };
   expect(words("task", "task")).toEqual({ x: "not a task", m: undefined });
-  expect(words("fyi")).toEqual({ x: "read", m: "make task" });
-  expect(words("idea")).toEqual({ x: "dismiss", m: "make task" });
   expect(words("project")).toEqual({ x: "archive", m: undefined });
   expect(words("task", "home").x).toBeUndefined();
 });
@@ -197,9 +195,9 @@ test("typing in the chat box lists the box's keys, not the table's", () => {
 });
 
 test("a key's relevant binding wins over one that declines this row", () => {
-  const fyi: HelpCtx = { ...quiet, item: "fyi", kind: null, coding: false };
-  expect(shown(["rail", "app"], fyi).get("x")).toBe(Commands.READ_FYI);
-  const project: HelpCtx = { ...fyi, item: "project" };
+  const work: HelpCtx = { ...quiet, item: "task", kind: "task", coding: false };
+  expect(shown(["rail", "app"], work).get("x")).toBe(Commands.NOT_TASK);
+  const project: HelpCtx = { ...work, item: "project", kind: null };
   expect(shown(["rail", "app"], project).get("x")).toBe(
     Commands.PROJECT_ARCHIVE,
   );
