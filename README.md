@@ -113,6 +113,68 @@ Anywhere else, only DMs and mentions of you are triaged. `opener` opens links
 and files the agent made: a command or an argv array, with the target appended.
 It defaults to `open` on macOS, `wslview` on WSL and `xdg-open` on Linux.
 
+### Talk to the Assistant from Slack
+
+Write to aug from your phone, or from any Slack client: your messages in one
+Slack conversation go to Home as if you typed them there, and the Assistant
+answers in the message's thread. It is off until you turn it on, and it is
+separate from the Slack inbox (`slack.enabled` can stay off).
+
+1. **Pick the conversation.** It must have only you in it. Either one works:
+   - your self-DM (the DM with yourself), or
+   - a private channel you make and leave with one member. It is easier to
+     find on a phone, and it keeps aug apart from your notes to self.
+
+   aug checks the members on every read. If anyone joins, or the channel is
+   public, it hears nothing and the status line says why.
+2. **Get its id.** In Slack, right-click the conversation in the sidebar,
+   then *Copy link*. The id is the last part of the link (`D…` for the
+   self-DM, `C…` for a channel). With a token you can skip this for the
+   self-DM, because aug finds it.
+3. **Make sure aug can reach Slack** the way `slack.transport` says:
+   - `claude-mcp`: the Slack connector on claude.ai works in `claude`. The
+     id from step 2 is required. Each read is a short model turn, so aug
+     checks every 60s.
+   - `token`: `SLACK_TOKEN` also needs `im:write` (to find the self-DM) and
+     `groups:read` (for a private channel). aug checks every 15s.
+4. **Turn it on** in `~/.aug/config.json`, then restart aug:
+
+   ```json
+   {
+     "remote": {
+       "enabled": true,
+       "channel": "D0123ABCD",
+       "notify": ["finished", "waiting"]
+     }
+   }
+   ```
+
+   `notify` is optional. `finished` posts when a coding agent's work is ready
+   or an agent closed its task. `waiting` posts when an agent waits on you,
+   with its question. A reply under a notification is about that task.
+   `pollSeconds` overrides how often aug checks.
+5. **Check it:** `remote` shows on the connector line, and in `C`
+   (connections). Write "what is running?" in the conversation. The answer
+   comes back in its thread within a check or two, starting with `[aug]`.
+
+What to expect:
+
+- The Assistant has the same tools and limits as in Home, and it never
+  sends anything to anyone. Its answers are short, and a long one is cut,
+  with the rest in Home.
+- `start`, `stop`, `done`, `not_a_task` and `project_archive` wait for you.
+  The answer ends with "Reply *yes* in this thread to …". `yes` runs it,
+  `no` leaves it, and anything else drops it and goes to the Assistant. The
+  request lapses after 10 minutes.
+- aug hears only messages written after it was turned on, only your own,
+  and never bots or its own `[aug]` answers. Message text is never logged.
+- When Slack is unreachable, nothing is lost: answers wait and go out on a
+  later check.
+- To turn it off, set `"enabled": false`. That takes effect on the next
+  check.
+
+The design and its limits are in [`docs/slack-remote.md`](docs/slack-remote.md).
+
 ### Capabilities
 
 Agents and the Home assistant get no connector tools unless you grant them.
