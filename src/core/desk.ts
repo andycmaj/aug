@@ -34,6 +34,7 @@ import * as repos from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
+import { triage, type TriageEffect, type TriageOutcome } from "./triage";
 import {
   AgentState,
   IdeaStatus,
@@ -45,6 +46,10 @@ import {
   type NoteLabel,
   type TaskRow,
 } from "./types";
+
+export type RetriageResult =
+  | { ok: true; outcome: TriageOutcome }
+  | { ok: false; why: string };
 
 // How the owner signs what they write on the Board.
 const OWNER = "you";
@@ -262,7 +267,23 @@ export class Desk {
     store.removeProjectRepo(projectId, repo);
   }
 
+  // A task triage made, moved to another project, teaches triage where
+  // such work goes.
   moveTask(taskId: number, projectId: number) {
+    const task = store.getTask(taskId);
+    if (task && task.triage_reason && task.channel !== "owner" && task.project_id !== projectId) {
+      const before = task.project_id ? store.getProject(task.project_id)?.name : null;
+      correct(
+        this.config(),
+        {
+          taskId,
+          what: "Triage project: filed it under another project",
+          before: before ?? "no project",
+          after: store.getProject(projectId)?.name ?? String(projectId),
+        },
+        this.learnedNotice,
+      );
+    }
     return projects.moveTask(this.config(), taskId, projectId);
   }
 
@@ -476,6 +497,37 @@ export class Desk {
   }
 
   // ── FYIs and ideas ────────────────────────────────────────────────────
+
+  // What triage asked for: wake the agents of the tasks it routed to.
+  runEffects(effects: TriageEffect[]): void {
+    for (const effect of effects) {
+      const task = store.getTask(effect.taskId);
+      if (!task) continue;
+      void this.drivers
+        .for(task)
+        .wake(
+          task,
+          effect.type === "agent-turn"
+            ? effect.reason
+            : "a new message joined the thread",
+        );
+    }
+  }
+
+  // Triage again, as a new run. A message on a task is refused: a second
+  // pass could make a duplicate, and "not a task" is the way back.
+  async retriage(messageId: number): Promise<RetriageResult> {
+    const message = store.getMessage(messageId);
+    if (!message) return { ok: false, why: "no such message" };
+    if (message.task_id !== null)
+      return {
+        ok: false,
+        why: `it is on ${store.taskRef(message.task_id)}: use not a task instead`,
+      };
+    const outcome = await triage(message, { config: this.config() });
+    this.runEffects(outcome.effects);
+    return { ok: true, outcome };
+  }
 
   readFyi(messageId: number): void {
     store.markMessageRead(messageId);

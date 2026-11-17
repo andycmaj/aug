@@ -36,7 +36,11 @@ import {
   type SessionKind,
   type SessionRow,
   type TaskLinkRow,
+  type StepDecision,
   type TaskRow,
+  type TriageRunRow,
+  type TriageStepRow,
+  type TriageVerdict,
   type TurnRow,
   type Verdict,
 } from "./types";
@@ -991,6 +995,65 @@ export function setProposalStatus(id: number, status: ProposalStatus): void {
     status,
     now(),
     id,
+  );
+}
+
+// ── triage runs (the chain, as it ran on each message) ───────────────────
+
+export interface NewTriageRun {
+  messageId: number;
+  input: Record<string, unknown>;
+  verdict: unknown;
+  rule: string;
+  outcome: TriageVerdict | null;
+  taskId: number | null;
+  projectId: number | null;
+  reason: string;
+  steps: { rule: string; decision: StepDecision; reason: string; at: string }[];
+}
+
+export function addTriageRun(r: NewTriageRun): TriageRunRow {
+  return batch(() => {
+    const at = now();
+    const id = run(
+      "INSERT INTO triage_runs (message_id, input, verdict, rule, outcome, task_id, project_id, reason, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      r.messageId,
+      JSON.stringify(r.input),
+      r.verdict === null || r.verdict === undefined ? null : JSON.stringify(r.verdict),
+      r.rule,
+      r.outcome,
+      r.taskId,
+      r.projectId,
+      r.reason,
+      at,
+    );
+    r.steps.forEach((step, seq) =>
+      run(
+        "INSERT INTO triage_steps (run_id, seq, rule, decision, reason, at) VALUES (?, ?, ?, ?, ?, ?)",
+        id,
+        seq,
+        step.rule,
+        step.decision,
+        step.reason,
+        step.at,
+      ),
+    );
+    return one<TriageRunRow>("SELECT * FROM triage_runs WHERE id = ?", id)!;
+  });
+}
+
+// Newest run first.
+export function triageRunsFor(messageId: number): TriageRunRow[] {
+  return all<TriageRunRow>(
+    "SELECT * FROM triage_runs WHERE message_id = ? ORDER BY id DESC",
+    messageId,
+  );
+}
+
+export function triageSteps(runId: number): TriageStepRow[] {
+  return all<TriageStepRow>(
+    "SELECT * FROM triage_steps WHERE run_id = ? ORDER BY seq",
+    runId,
   );
 }
 

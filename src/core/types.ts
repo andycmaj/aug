@@ -414,6 +414,42 @@ export interface DocProposalRow {
   updated_at: string;
 }
 
+// A rule in the triage chain either claims the message or passes it on.
+export const StepDecision = {
+  pass: "pass",
+  claim: "claim",
+} as const;
+export type StepDecision = (typeof StepDecision)[keyof typeof StepDecision];
+
+// What a triage run ended in: a verdict, or how a gate routed it.
+export type TriageVerdict = Verdict | "attached" | "own" | "opener" | "failed";
+
+export interface TriageRunRow {
+  id: number;
+  message_id: number;
+  // JSON: what every rule saw (DM or not, the thread's open and last task).
+  input: string;
+  // JSON of the model's verdict, null when no rule asked for it.
+  verdict: string | null;
+  // The rule that claimed it.
+  rule: string;
+  outcome: TriageVerdict | null;
+  task_id: number | null;
+  project_id: number | null;
+  reason: string;
+  at: string;
+}
+
+export interface TriageStepRow {
+  id: number;
+  run_id: number;
+  seq: number;
+  rule: string;
+  decision: StepDecision;
+  reason: string;
+  at: string;
+}
+
 export interface CorrectionRow {
   id: number;
   task_id: number | null;

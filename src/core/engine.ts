@@ -332,18 +332,7 @@ export class Engine {
   }
 
   runEffects(effects: TriageEffect[]): void {
-    for (const effect of effects) {
-      const task = store.getTask(effect.taskId);
-      if (!task) continue;
-      this.drivers
-        .for(task)
-        .wake(
-          task,
-          effect.type === "agent-turn"
-            ? effect.reason
-            : "a new message joined the thread",
-        );
-    }
+    this.desk.runEffects(effects);
   }
 
   // The gate outlives a restart only for a rate limit: GitHub's reset time
