@@ -34,6 +34,7 @@ import { Commands } from "../commands";
 import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
 import type { Lane, LaneMeta } from "../core/lanes";
+import { toRail } from "../core/focus";
 import { prChip, prLine } from "../core/pr";
 import {
   type Mention,
@@ -77,7 +78,9 @@ export function Canvas(props: {
 }) {
   const aug = useAug();
   const terminals = useTerminals();
-  const { isPaneFocused, setActivePane, sidebarVisible } = useFocus();
+  const focus = useFocus();
+  const { isPaneFocused, sidebarVisible } = focus;
+  const leave = () => toRail(focus);
   const dims = useTerminalDimensions();
   let pane: Renderable | undefined;
   let scrollRef: ScrollBoxRenderable | undefined;
@@ -121,7 +124,7 @@ export function Canvas(props: {
           scrollRef?.scrollTo(scrollRef.scrollHeight),
         [Commands.SCROLL_PAGEDOWN]: () => scrollRef?.scrollBy(0.8, "viewport"),
         [Commands.SCROLL_PAGEUP]: () => scrollRef?.scrollBy(-0.8, "viewport"),
-        [Commands.BACK_TO_RAIL]: () => setActivePane("rail"),
+        [Commands.BACK_TO_RAIL]: leave,
         ...props.actions,
       },
       () => isPaneFocused("input"),
@@ -161,7 +164,7 @@ export function Canvas(props: {
               id={ed().id}
               attached={() => isPaneFocused("task")}
               pane={() => pane}
-              onDetach={() => setActivePane("rail")}
+              onDetach={leave}
             />
           </>
         )}
@@ -185,7 +188,7 @@ export function Canvas(props: {
                     id={dash()?.id ?? prDashId(t().id)}
                     attached={attached}
                     pane={() => pane}
-                    onDetach={() => setActivePane("rail")}
+                    onDetach={leave}
                   />
                 }
               >
@@ -204,7 +207,7 @@ export function Canvas(props: {
                       id={tm().id}
                       attached={attached}
                       pane={() => pane}
-                      onDetach={() => setActivePane("rail")}
+                      onDetach={leave}
                     />
                   )}
                 </Show>

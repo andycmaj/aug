@@ -15,7 +15,7 @@ import {
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
-import { focusNext } from "../core/focus";
+import { focusNext, toRail } from "../core/focus";
 import { BoardTab, type HelpCtx } from "../keymap";
 import { useActions, useDialogs, type Actions, type Dialogs } from "./actions";
 import { FocusHelp } from "./focus-help";
@@ -71,7 +71,7 @@ export function useShell(opts: {
       aug.setMode(ViewMode.board);
       return;
     }
-    if (focus.isPaneFocused("task")) focus.setActivePane("rail");
+    if (focus.isPaneFocused("task")) toRail(focus);
     aug.goTo(key);
   };
   const history = (direction: 1 | -1) => {

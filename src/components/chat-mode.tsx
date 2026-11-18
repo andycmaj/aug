@@ -6,6 +6,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { useFocus, useTheme } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
 import { useTerminals } from "../context/terminals";
+import { focusLost, toRail } from "../core/focus";
 import { AgentState, Kind } from "../core/types";
 import type { HelpCtx } from "../keymap";
 import { Canvas } from "./canvas";
@@ -18,8 +19,18 @@ export function ChatMode() {
   const theme = useTheme();
   const terminals = useTerminals();
   const dims = useTerminalDimensions();
-  const { sidebarVisible, isPaneFocused, setActivePane } = useFocus();
+  const focus = useFocus();
+  const { sidebarVisible, isPaneFocused, setActivePane } = focus;
   const shell = useShell({ typing: () => isPaneFocused("input") });
+
+  // A pane that unmounts while focused leaves no binding able to fire. Wait a
+  // tick (a pane asked for before it mounts registers by then), then recover.
+  createEffect(() => {
+    if (!focusLost(focus)) return;
+    setTimeout(() => {
+      if (focusLost(focus)) toRail(focus);
+    }, 0);
+  });
 
   // `a` from anywhere (the Board too) lands in Home's box.
   createEffect(() => {
