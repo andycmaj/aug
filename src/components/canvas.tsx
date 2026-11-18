@@ -34,7 +34,6 @@ import { Commands } from "../commands";
 import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
 import type { Lane, LaneMeta } from "../core/lanes";
-import { toRail } from "../core/focus";
 import { prChip, prLine } from "../core/pr";
 import {
   type Mention,
@@ -78,9 +77,8 @@ export function Canvas(props: {
 }) {
   const aug = useAug();
   const terminals = useTerminals();
-  const focus = useFocus();
-  const { isPaneFocused, sidebarVisible } = focus;
-  const leave = () => toRail(focus);
+  const { isPaneFocused, setActivePane, sidebarVisible } = useFocus();
+  const leave = () => setActivePane("rail");
   const dims = useTerminalDimensions();
   let pane: Renderable | undefined;
   let scrollRef: ScrollBoxRenderable | undefined;

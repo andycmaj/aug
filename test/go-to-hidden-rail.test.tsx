@@ -63,6 +63,7 @@ test("go to from the table with the rail hidden keeps a pane focused", async () 
 });
 
 // A project has no chat box, so a jump to one from the box unmounts it.
+// opentui-app moves focus to the table and leaves the rail as it was.
 for (const hidden of [false, true]) {
   const rail = hidden ? "hidden" : "shown";
   test(`go to a project from the chat box keeps a pane focused (rail ${rail})`, async () => {
@@ -73,6 +74,10 @@ for (const hidden of [false, true]) {
     await goTo("ledger fixes");
     expect(frame()).toContain("Project · ledger fixes");
     expect(renderer.currentFocusedRenderable).not.toBeNull();
-    expect(railShown(frame())).toBe(true);
+    expect(railShown(frame())).toBe(!hidden);
+    // The keys still work: ctrl+e toggles the rail.
+    await press("e", { ctrl: true });
+    expect(railShown(frame())).toBe(hidden);
+    expect(renderer.currentFocusedRenderable).not.toBeNull();
   });
 }
