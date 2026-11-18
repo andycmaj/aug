@@ -29,6 +29,7 @@ import { runInPane } from "../core/pane";
 import { flushPerf, perfReport, perfText, startPerf, timing } from "../core/perf";
 import * as projects from "../core/projects";
 import { repoReport, reportText } from "../core/repos";
+import { reportLines, spendReport } from "../core/spend";
 import * as store from "../core/store";
 import { MoveStatus, NoteLabel } from "../core/types";
 
@@ -490,6 +491,16 @@ const perf = defineCommand({
   },
 });
 
+const spend = defineCommand({
+  meta: {
+    name: "spend",
+    description: "What aug's model calls cost: today by role and task, the last week, the daily cap",
+  },
+  run() {
+    console.log(reportLines(spendReport(loadConfig())).join("\n"));
+  },
+});
+
 const main = defineCommand({
   meta: { name: "aug-tools", description: "aug's callback tools for agents" },
   subCommands: {
@@ -510,6 +521,7 @@ const main = defineCommand({
     move,
     knowledge,
     perf,
+    spend,
     // The old name: briefs and sessions from before the rename still call it.
     hub: knowledge,
   },

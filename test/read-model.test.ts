@@ -10,10 +10,13 @@ import {
   NoteLabel,
   ProposalSource,
   SessionKind,
+  SpendRole,
   TurnRole,
   Verdict,
   type TaskRow,
 } from "../src/core/types";
+import { DEFAULT_CONFIG } from "../src/core/config";
+import { localDay } from "../src/core/rail";
 import { freshHome } from "./helpers";
 
 beforeEach(() => freshHome());
@@ -111,6 +114,7 @@ describe("read model", () => {
     store.addIdea("idea", "body", plain.id);
     store.addNote("you", NoteLabel.note, "hi");
     store.addKnowledge("t", "t", "b", "you");
+    store.addSpend({ day: localDay(new Date()), taskId: plain.id, role: SpendRole.general, model: "sonnet", costUsd: 0.1, input: 1, output: 1, cacheRead: 0, cacheWrite: 0 });
 
     const queried: string[] = [];
     const d = db();
@@ -153,6 +157,9 @@ describe("read model", () => {
       inbox: (r) => r.inbox(),
       inboxCount: (r) => r.inboxCount(),
       inboxRuns: (r) => r.inboxRuns(message.id),
+      spendOn: (r) => r.spendOn("2026-11-15"),
+      taskSpend: (r) => r.taskSpend(plain.id),
+      spendReport: (r) => r.spendReport(DEFAULT_CONFIG, new Date()),
     };
     const known = new Set<string>(TABLES);
     for (const [name, call] of Object.entries(calls) as [ReadName, (r: ReadModel) => unknown][]) {

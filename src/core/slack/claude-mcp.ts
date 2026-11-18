@@ -8,9 +8,11 @@
 // Sending is a separate one-shot call per Send press, whose only tool is the
 // send tool and whose only input is the owner's approved words.
 
-import { think } from "../brain";
+import { think, tokenUsage, type StreamEvent as BrainEvent } from "../brain";
 import { logger } from "../log";
 import { claudeEnv } from "../self";
+import { recordSpend } from "../spend";
+import { SpendRole } from "../types";
 import {
   rawToNewMessage,
   type PollContext,
@@ -126,6 +128,8 @@ interface StreamEvent {
   structured_output?: unknown;
   result?: string;
   is_error?: boolean;
+  total_cost_usd?: number;
+  usage?: BrainEvent["usage"];
 }
 
 export interface TurnResult {
@@ -154,10 +158,13 @@ export class PersistentClaude {
   init: StreamEvent | null = null;
   // Restarts so far: the context is dropped every maxTurns.
   spawns = 0;
+  // The process's cost so far: each result reports the running total, so a
+  // turn's own cost is what it added (checked against claude 2.1, haiku).
+  private costSoFar = 0;
 
   constructor(
     private argv: () => string[],
-    private opts: { maxTurns: number; spawn?: SpawnFn },
+    private opts: { maxTurns: number; spawn?: SpawnFn; model?: string },
   ) {}
 
   // One turn at a time: polls never interleave in one conversation.
@@ -192,6 +199,7 @@ export class PersistentClaude {
     const proc = (this.opts.spawn ?? realSpawn)(this.argv());
     this.proc = proc;
     this.turns = 0;
+    this.costSoFar = 0;
     this.spawns++;
     log.info("session spawn", { spawns: this.spawns });
     void (async () => {
@@ -208,6 +216,7 @@ export class PersistentClaude {
             log.debug("session init", { tools: event.tools?.length ?? 0 });
           }
           if (event.type === "result") {
+            if (this.proc === proc) this.record(event);
             log.trace("turn result", {
               isError: event.is_error === true,
               text: (event.result ?? "").slice(0, 500),
@@ -231,6 +240,17 @@ export class PersistentClaude {
       }
     })();
     return proc;
+  }
+
+  private record(event: StreamEvent): void {
+    const total = event.total_cost_usd;
+    const turnCost =
+      total === undefined ? undefined : Math.max(0, total - this.costSoFar);
+    if (total !== undefined) this.costSoFar = total;
+    recordSpend({ role: SpendRole.slack }, this.opts.model, {
+      costUsd: turnCost,
+      usage: tokenUsage(event),
+    });
   }
 
   stop(): void {
@@ -437,6 +457,10 @@ export class ClaudeMcpTransport implements SlackTransport {
 
   constructor(private options: ClaudeMcpOptions) {}
 
+  get model(): string {
+    return this.options.model;
+  }
+
   available(): { ok: boolean; detail: string } {
     return { ok: true, detail: "Claude with a Slack MCP" };
   }
@@ -512,6 +536,7 @@ export class ClaudeMcpTransport implements SlackTransport {
     this.session ??= new PersistentClaude(() => this.readArgv(tools), {
       maxTurns: this.options.maxTurns ?? 30,
       spawn: this.options.spawn,
+      model: this.options.model,
     });
     const since =
       ctx.cursor.since ??
@@ -573,6 +598,7 @@ export class ClaudeMcpTransport implements SlackTransport {
       schema: SEND_SCHEMA,
       allow,
       disallow,
+      spend: { role: SpendRole.slack },
     });
     const answer = result.structured as {
       ok?: boolean;

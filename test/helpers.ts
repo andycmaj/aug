@@ -35,7 +35,11 @@ export function config(): AugConfig {
   return current.get();
 }
 
-export function fakeBrain(answer: (call: BrainCall) => unknown): BrainCall[] {
+// costUsd: what each call reports it cost (none by default, so no spend row).
+export function fakeBrain(
+  answer: (call: BrainCall) => unknown,
+  opts: { costUsd?: number } = {},
+): BrainCall[] {
   const calls: BrainCall[] = [];
   setBrain(async (call): Promise<BrainResult> => {
     calls.push(call);
@@ -46,6 +50,12 @@ export function fakeBrain(answer: (call: BrainCall) => unknown): BrainCall[] {
       sessionId: call.sessionId ?? call.resume ?? null,
       durationMs: 1,
       isError: false,
+      ...(opts.costUsd === undefined
+        ? {}
+        : {
+            costUsd: opts.costUsd,
+            usage: { input: 10, output: 5, cacheRead: 100, cacheWrite: 0 },
+          }),
     };
   });
   return calls;

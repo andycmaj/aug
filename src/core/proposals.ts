@@ -31,6 +31,7 @@ import {
   Kind,
   ProposalSource,
   ProposalStatus,
+  SpendRole,
   TaskStatus,
   TurnRole,
   type DocProposalRow,
@@ -297,6 +298,7 @@ export async function redraftProposals(
       system: `You revise a proposed edit to ${doc} (${DOC_PURPOSE[doc]}), one of the brain docs that aug, the owner's work manager, puts into its prompts. Apply the owner's notes that are about ${doc}; leave the rest of the proposal as it is. Keep it under ${docBudget(config, doc)} characters, plain Markdown, written as the owner speaking. Never record a secret.`,
       schema: REDRAFT_SCHEMA,
       model: config.brain.assistantModel,
+      spend: { role: SpendRole.redraft, taskId },
     });
     const answer = result.structured as { text?: string; reason?: string } | null;
     if (!answer?.text?.trim()) continue;

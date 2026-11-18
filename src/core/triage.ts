@@ -23,6 +23,7 @@ import {
   AgentState,
   Kind,
   Priority,
+  SpendRole,
   TaskStatus,
   StepDecision,
   TurnRole,
@@ -184,6 +185,7 @@ export async function askVerdict(
     system: verdictSystem(config),
     schema: VERDICT_SCHEMA,
     model: config.brain.triageModel,
+    spend: { role: SpendRole.triage },
   });
   const answer = result.structured as VerdictAnswer | null;
   if (!answer || !Object.values(Verdict).includes(answer.verdict)) {

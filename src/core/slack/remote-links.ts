@@ -206,7 +206,11 @@ export class ClaudeMcpRemoteLink implements RemoteLink {
           schema: REMOTE_SCHEMA,
           system: REMOTE_SYSTEM,
         }),
-      { maxTurns: this.opts.maxTurns ?? 30, spawn: this.opts.spawn },
+      {
+        maxTurns: this.opts.maxTurns ?? 30,
+        spawn: this.opts.spawn,
+        model: this.transport.model,
+      },
     );
     const turn = await this.session.ask(remotePrompt(channel, query));
     if (turn.isError)

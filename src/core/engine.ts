@@ -619,11 +619,19 @@ export class Engine {
     this.setStatus("advisor", { ...this.status.advisor, state: "polling" });
     const done = log.time("advisor run", { force });
     try {
-      const added = await runAdvisor(this.options.config.get());
-      done({ added });
+      const { added, skipped } = await runAdvisor(
+        this.options.config.get(),
+        new Date(),
+        force,
+      );
+      done({ added, skipped: skipped ?? null });
       this.setStatus("advisor", {
         state: "ok",
-        detail: added ? `${added} new ideas` : "nothing new",
+        detail: skipped
+          ? `skipped: ${skipped}`
+          : added
+            ? `${added} new ideas`
+            : "nothing new",
         at: now(),
       });
     } catch (err) {

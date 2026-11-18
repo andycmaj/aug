@@ -56,6 +56,7 @@ export const BoardTab = {
   knowledge: "knowledge",
   projects: "projects",
   inbox: "inbox",
+  cost: "cost",
 } as const;
 export type BoardTab = (typeof BoardTab)[keyof typeof BoardTab];
 
@@ -504,12 +505,13 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     { key: "left", cmd: Commands.BOARD_LEFT, desc: "column left", relevant: onColumns },
     { key: "l", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
     { key: "right", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
-    // The footer folds the five into "1-5 tabs" (BOARD_HELP_OPTIONS).
+    // The footer folds the six into "1-6 tabs" (BOARD_HELP_OPTIONS).
     { key: "1", cmd: Commands.BOARD_TAB_1, desc: "tab: columns", help: "tabs" },
     { key: "2", cmd: Commands.BOARD_TAB_2, desc: "tab: live handoffs" },
     { key: "3", cmd: Commands.BOARD_TAB_3, desc: "tab: knowledge" },
     { key: "4", cmd: Commands.BOARD_TAB_4, desc: "tab: projects" },
     { key: "5", cmd: Commands.BOARD_TAB_5, desc: "tab: inbox" },
+    { key: "6", cmd: Commands.BOARD_TAB_6, desc: "tab: cost" },
     {
       key: "return",
       cmd: Commands.OPEN,
@@ -691,5 +693,5 @@ export const keymap = defaultKeymap;
 
 // Footer folding for the Board's tab digits.
 export const BOARD_HELP_OPTIONS = {
-  combinedKeys: { [Commands.BOARD_TAB_1]: "1-5" },
+  combinedKeys: { [Commands.BOARD_TAB_1]: "1-6" },
 };

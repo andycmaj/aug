@@ -35,6 +35,7 @@ import {
 import { BOARD_HELP_OPTIONS, BoardTab, type HelpCtx } from "../keymap";
 import { AugFooter } from "./footer";
 import { boardTab, setBoardTab } from "./board-tab";
+import { CostTab } from "./cost-tab";
 import { useInboxTab } from "./inbox-tab";
 import { ChoiceModal, PromptModal } from "./modals";
 import { useShell } from "./shell";
@@ -48,6 +49,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "knowledge", label: "3 Knowledge" },
   { key: "projects", label: "4 Projects" },
   { key: "inbox", label: "5 Inbox" },
+  { key: "cost", label: "6 Cost" },
 ];
 
 // A project, then its goals each with their open tasks, then the open tasks
@@ -81,6 +83,7 @@ export function BoardMode() {
   const [knowledgeAt, setKnowledgeAt] = createSignal(0);
   const [projAt, setProjAt] = createSignal(0);
   let notesScroll: ScrollBoxRenderable | undefined;
+  let costScroll: ScrollBoxRenderable | undefined;
 
   const columns = createMemo(() =>
     BOARD_COLUMNS.map((c) => ({ ...c, tasks: aug.board()[c.key] })),
@@ -221,6 +224,9 @@ export function BoardMode() {
       case Tab.inbox:
         inbox.move(d);
         break;
+      case Tab.cost:
+        costScroll?.scrollBy(d * 2);
+        break;
     }
   };
   const horizontal = (d: number) => {
@@ -243,7 +249,9 @@ export function BoardMode() {
               ? setProjAt(0)
               : tab() === Tab.inbox
                 ? inbox.move(-Infinity)
-                : notesScroll?.scrollTo(0),
+                : tab() === Tab.cost
+                  ? costScroll?.scrollTo(0)
+                  : notesScroll?.scrollTo(0),
       [Commands.NAV_BOTTOM]: () => vertical(999),
       [Commands.BOARD_LEFT]: () => horizontal(-1),
       [Commands.BOARD_RIGHT]: () => horizontal(1),
@@ -255,6 +263,7 @@ export function BoardMode() {
       [Commands.BOARD_TAB_3]: () => setTab(Tab.knowledge),
       [Commands.BOARD_TAB_4]: () => setTab(Tab.projects),
       [Commands.BOARD_TAB_5]: () => setTab(Tab.inbox),
+      [Commands.BOARD_TAB_6]: () => setTab(Tab.cost),
       ...inbox.commands,
       [Commands.PROJECT_ADOPT]: () =>
         void shell.actions.adopt(
@@ -449,6 +458,12 @@ export function BoardMode() {
             </Match>
             <Match when={tab() === Tab.inbox}>
               <inbox.View width={dims().width} />
+            </Match>
+            <Match when={tab() === Tab.cost}>
+              <CostTab
+                width={dims().width}
+                scrollRef={(r) => (costScroll = r)}
+              />
             </Match>
             <Match when={tab() === Tab.projects}>
               <Projects

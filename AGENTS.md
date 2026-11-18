@@ -192,6 +192,17 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `AUG_LOG`, `log.enabled` in config, or `AUG_DEV` (set by `bun run dev`)
   turns it on. Log where an error is swallowed into a status line, and use
   `log.time()` for timings.
+- **What model calls cost is `core/spend.ts`**: `think()` records each
+  call's `total_cost_usd` and tokens in `spend` (local day, task, role from
+  the call's `spend` tag); the Slack reader's persistent session reports a
+  running total, so it records the difference per turn. `config.spend` caps
+  the day: past it the pool queues `by: "aug"` turns with the reason and the
+  Advisor and doc pass skip; the owner's turns and coding Starts still run.
+  The sidebar's status line, the table header, the Board's Cost tab and
+  `aug-tools spend` show it. A resumed general turn sends only the turns
+  since its last finished answer (`unheard`), and the coding brief only the
+  last `CODING_BRIEF_TURNS`; the Advisor asks only when `workPicture()`'s
+  hash moved.
 - **Perf counters are `core/perf.ts`**, on with the log (off again with
   `log.perf: false`): per-minute histograms per op plus the slowest examples
   past `log.slowMs` (default 50), in `perf.db` under `AUG_HOME` (its own

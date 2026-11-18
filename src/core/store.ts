@@ -16,6 +16,11 @@ import {
   TurnStatus,
   type Channel,
   type IdeaStatus,
+  type SpendByDay,
+  type SpendByRole,
+  type SpendByTask,
+  type SpendRole,
+  type SpendTotal,
   type CorrectionRow,
   type ProjectMove,
   PROJECT_MOVE,
@@ -1152,6 +1157,79 @@ export function kvSet(key: string, value: string): void {
       "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
     )
     .run(key, value);
+}
+
+// ── spend (core/spend.ts decides; this keeps the rows) ───────────────────
+
+export interface SpendInput {
+  day: string;
+  taskId: number | null;
+  role: SpendRole;
+  model: string | null;
+  costUsd: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+export function addSpend(row: SpendInput): void {
+  run(
+    "INSERT INTO spend (day, task_id, role, model, cost_usd, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    row.day,
+    row.taskId,
+    row.role,
+    row.model,
+    row.costUsd,
+    row.input,
+    row.output,
+    row.cacheRead,
+    row.cacheWrite,
+    now(),
+  );
+}
+
+const SPEND_SUMS =
+  "COALESCE(SUM(cost_usd), 0) AS cost, COUNT(*) AS calls, COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens), 0) AS tokens";
+
+export function spendOn(day: string): SpendTotal {
+  return one<SpendTotal>(`SELECT ${SPEND_SUMS} FROM spend WHERE day = ?`, day) ?? {
+    cost: 0,
+    calls: 0,
+    tokens: 0,
+  };
+}
+
+export function spendByRole(day: string): SpendByRole[] {
+  return all<SpendByRole>(
+    `SELECT role, ${SPEND_SUMS} FROM spend WHERE day = ? GROUP BY role ORDER BY cost DESC, role`,
+    day,
+  );
+}
+
+// Days on or after `from`, newest first.
+export function spendByDay(from: string): SpendByDay[] {
+  return all<SpendByDay>(
+    `SELECT day, ${SPEND_SUMS} FROM spend WHERE day >= ? GROUP BY day ORDER BY day DESC`,
+    from,
+  );
+}
+
+// The tasks that cost most on or after `from`.
+export function spendByTask(from: string, limit = 10): SpendByTask[] {
+  return all<SpendByTask>(
+    `SELECT task_id, ${SPEND_SUMS} FROM spend WHERE day >= ? AND task_id IS NOT NULL GROUP BY task_id ORDER BY cost DESC LIMIT ?`,
+    from,
+    limit,
+  );
+}
+
+export function taskSpend(taskId: number): SpendTotal {
+  return one<SpendTotal>(`SELECT ${SPEND_SUMS} FROM spend WHERE task_id = ?`, taskId) ?? {
+    cost: 0,
+    calls: 0,
+    tokens: 0,
+  };
 }
 
 // ── blockers and wins ────────────────────────────────────────────────────

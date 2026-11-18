@@ -28,7 +28,8 @@ import { describeCorrection } from "./learn";
 import { logger } from "./log";
 import { propose } from "./proposals";
 import * as store from "./store";
-import { ProposalSource } from "./types";
+import { capReached } from "./spend";
+import { ProposalSource, SpendRole } from "./types";
 
 const log = logger("doc-pass");
 
@@ -167,6 +168,9 @@ export async function runDocPass(
     store.kvSet(LAST_RUN, at.toISOString());
     return { proposed: 0, ideas: 0, archived, skipped: "nothing new" };
   }
+  // Left due, so it runs on the first tick after the cap lifts.
+  if (!force && capReached(config, at))
+    return { proposed: 0, ideas: 0, archived, skipped: "daily spend cap reached" };
   const result = await think({
     prompt: [
       ...EDITABLE.map((name) => docSection(config, name)),
@@ -185,6 +189,7 @@ export async function runDocPass(
     ].join("\n"),
     schema: PASS_SCHEMA,
     model: config.brain.assistantModel,
+    spend: { role: SpendRole.docPass },
   });
   const answer = result.structured as PassAnswer | null;
   let proposed = 0;

@@ -8,6 +8,7 @@
 
 import { logger } from "./log";
 import { claudeEnv } from "./self";
+import { recordSpend, type SpendTag } from "./spend";
 
 const log = logger("brain");
 
@@ -47,6 +48,9 @@ export interface BrainCall {
   // PostToolUse hook; agents.ts links the docs it made from here).
   onTool?: (call: ToolCall) => void;
   signal?: AbortSignal;
+  // Who the call is for, so its cost lands on the right row (core/spend.ts).
+  // Untagged calls are recorded as "other".
+  spend?: SpendTag;
 }
 
 export interface ToolCall {
@@ -63,6 +67,30 @@ export interface BrainResult {
   isError: boolean;
   // Calls dontAsk turned away (deniedCalls).
   denied?: string[];
+  // What the call cost, as claude reported it. Absent when it said nothing.
+  costUsd?: number;
+  usage?: TokenUsage;
+}
+
+export interface TokenUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+// The result event's usage block, in aug's names.
+export function tokenUsage(
+  event: Pick<StreamEvent, "usage">,
+): TokenUsage | undefined {
+  const u = event.usage;
+  if (!u) return undefined;
+  return {
+    input: u.input_tokens ?? 0,
+    output: u.output_tokens ?? 0,
+    cacheRead: u.cache_read_input_tokens ?? 0,
+    cacheWrite: u.cache_creation_input_tokens ?? 0,
+  };
 }
 
 export type Brain = (call: BrainCall) => Promise<BrainResult>;
@@ -90,8 +118,10 @@ export async function think(call: BrainCall): Promise<BrainResult> {
       ok: !result.isError,
       durationMs: result.durationMs,
       sessionId: result.sessionId,
+      costUsd: result.costUsd ?? null,
       ...(result.isError ? { text: result.text.slice(0, 500) } : {}),
     });
+    recordSpend(call.spend, call.model, result);
     return result;
   } catch (err) {
     done({ ok: false, err });
@@ -162,6 +192,15 @@ export interface StreamEvent {
   is_error?: boolean;
   parent_tool_use_id?: string | null;
   permission_denials?: { tool_name?: string; tool_input?: Record<string, unknown> }[];
+  // On the result event: the whole process's cost so far, and this turn's
+  // tokens (a persistent session's total grows turn by turn).
+  total_cost_usd?: number;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
 }
 
 // A connector call's input can hold a whole document: the tool's name says
@@ -305,5 +344,7 @@ export async function claudeBrain(call: BrainCall): Promise<BrainResult> {
     durationMs: acc.result.duration_ms ?? Date.now() - started,
     isError: acc.result.is_error === true,
     denied,
+    costUsd: acc.result.total_cost_usd,
+    usage: tokenUsage(acc.result),
   };
 }

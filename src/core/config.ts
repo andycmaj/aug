@@ -100,6 +100,14 @@ export interface AugConfig {
   // chat turns aug starts by itself and your coding Starts wait their turn;
   // a chat turn you ask for never waits.
   maxActiveAgents: number;
+  // What aug's own model calls may cost (core/spend.ts). Once today's spend
+  // reaches dailyUsd, chat turns aug starts by itself wait (with the reason
+  // on the task) and the Advisor skips its run; turns you start or type to
+  // still run. Coding agents in tmux are not counted.
+  spend: {
+    capEnabled: boolean;
+    dailyUsd: number;
+  };
   // Makes a task's worktree. {repo_path}, {create} (-c or empty) and
   // {branch} are filled in; stdout is wt's JSON, or a path on the last line.
   worktreeCommand: string;
@@ -175,6 +183,7 @@ export const DEFAULT_CONFIG: AugConfig = {
     slackModel: "haiku",
   },
   maxActiveAgents: 4,
+  spend: { capEnabled: true, dailyUsd: 25 },
   worktreeCommand:
     "wt -C {repo_path} switch {create} {branch} --no-cd --format json -y",
   autostart: true,
@@ -247,6 +256,7 @@ export function mergeConfig(
           : DEFAULT_CONFIG.remote.pollSeconds),
     },
     brain: { ...DEFAULT_CONFIG.brain, ...raw.brain },
+    spend: { ...DEFAULT_CONFIG.spend, ...raw.spend },
     triage: {
       ...DEFAULT_CONFIG.triage,
       ...raw.triage,

@@ -286,6 +286,25 @@ CREATE TABLE IF NOT EXISTS triage_steps (
   at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS triage_steps_run ON triage_steps(run_id, seq);
+
+-- What each headless model call cost (core/spend.ts): one row per call, by
+-- the owner's local day, the task it was for (none for triage, the Advisor)
+-- and the role that made it. Coding agents in tmux are not here.
+CREATE TABLE IF NOT EXISTS spend (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  day TEXT NOT NULL,
+  task_id INTEGER,
+  role TEXT NOT NULL,
+  model TEXT,
+  cost_usd REAL NOT NULL DEFAULT 0,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS spend_day ON spend(day);
+CREATE INDEX IF NOT EXISTS spend_task ON spend(task_id);
 `;
 
 let shared: Database | undefined;
@@ -325,6 +344,7 @@ export const Table = {
   wins: "wins",
   triageRuns: "triage_runs",
   triageSteps: "triage_steps",
+  spend: "spend",
 } as const;
 export type Table = (typeof Table)[keyof typeof Table];
 

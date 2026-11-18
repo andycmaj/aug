@@ -12,7 +12,7 @@ import { think } from "./brain";
 import type { AugConfig } from "./config";
 import { DocName, LEARNED_SECTIONS, readDoc, writeDoc } from "./docs";
 import * as store from "./store";
-import type { CorrectionRow } from "./types";
+import { SpendRole, type CorrectionRow } from "./types";
 
 export { LEARNED_SECTIONS };
 
@@ -135,6 +135,7 @@ export async function learnFrom(
       "You maintain LEARNED.md, what aug has learned about how its owner works. Turn one correction into at most one lesson in plain words. Never record a secret. If an existing line already says it, either skip or return a stronger version that replaces it (strength + 1). Lines without an [s:...] tag were written by the owner: never replace them.",
     schema: LESSON_SCHEMA,
     model: config.brain.triageModel,
+    spend: { role: SpendRole.learn },
   });
   const lesson = result.structured as Lesson | null;
   if (!lesson || lesson.skip || !lesson.text?.trim()) return null;

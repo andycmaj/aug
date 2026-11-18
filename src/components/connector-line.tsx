@@ -5,6 +5,8 @@ import { For } from "solid-js";
 import { useTheme, type Theme, type ThemeColor } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
 import type { ConnectorState } from "../core/engine";
+import { localDay } from "../core/rail";
+import { dailyCap, usd } from "../core/spend";
 
 export function stateGlyph(state: ConnectorState): string {
   return state === "ok"
@@ -26,9 +28,27 @@ export function stateColor(theme: Theme, state: ConnectorState): ThemeColor {
         : theme.textMuted;
 }
 
+// Today's spend on aug's own model calls, against the cap when one is on:
+// warning from 80% of it, error once reached (aug's own turns wait then).
+export function spendWords(spent: number, cap: number | null): {
+  text: string;
+  level: "ok" | "near" | "capped";
+} {
+  if (cap === null) return { text: `${usd(spent)} today`, level: "ok" };
+  return {
+    text: `${usd(spent)}/${usd(cap)} today`,
+    level: spent >= cap ? "capped" : spent >= cap * 0.8 ? "near" : "ok",
+  };
+}
+
 export function ConnectorLine() {
   const aug = useAug();
   const theme = useTheme();
+  const spend = () =>
+    spendWords(
+      aug.spendOn(localDay(aug.now())).cost,
+      dailyCap(aug.desk.config()),
+    );
   const rows = () => [
     { name: "github", s: aug.status().github },
     { name: "slack", s: aug.status().slack },
@@ -55,6 +75,17 @@ export function ConnectorLine() {
           </text>
         )}
       </For>
+      <text
+        fg={
+          spend().level === "capped"
+            ? theme.error
+            : spend().level === "near"
+              ? theme.warning
+              : theme.textMuted
+        }
+      >
+        {spend().text}
+      </text>
     </box>
   );
 }

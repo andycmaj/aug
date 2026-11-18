@@ -90,6 +90,7 @@ export const Commands = {
   BOARD_TAB_3: "board.tab.3",
   BOARD_TAB_4: "board.tab.4",
   BOARD_TAB_5: "board.tab.5",
+  BOARD_TAB_6: "board.tab.6",
   INBOX_EXPAND: "inbox.expand",
   INBOX_FILTER: "inbox.filter",
   INBOX_SEARCH: "inbox.search",

@@ -42,12 +42,14 @@ import { linkLine, projectContext } from "./lookup";
 import { docDraftsDir, paths } from "./paths";
 import { ONBOARD_START, onboardBrief } from "./onboard";
 import { TOOLS_NAME, toolsCommand, toolsEnv, toolsRules } from "./self";
+import { capReached, capReason } from "./spend";
 import { transcript } from "./transcript";
 import * as store from "./store";
 import {
   AgentState,
   Kind,
   SessionKind,
+  SpendRole,
   TaskStatus,
   TurnRole,
   TurnStatus,
@@ -188,6 +190,7 @@ export function generalCall(
   task: TaskRow,
   turns: TurnRow[],
   reason: string,
+  resumed = false,
 ): Pick<
   BrainCall,
   | "prompt"
@@ -201,7 +204,7 @@ export function generalCall(
 > {
   const grant = capabilityGrant("general", config);
   return {
-    prompt: turnPrompt(task, turns, reason),
+    prompt: turnPrompt(task, turns, reason, resumed),
     system: turnSystem(config),
     schema: TURN_SCHEMA,
     model: config.brain.agentModel,
@@ -212,12 +215,26 @@ export function generalCall(
   };
 }
 
+// What a resumed session has not heard: everything after the last turn of
+// its own that finished. A failed or stopped turn may never have reached the
+// session, so what came before it is sent again rather than lost.
+export function unheard(turns: TurnRow[]): TurnRow[] {
+  const last = turns.findLastIndex(
+    (t) => t.role === TurnRole.agent && t.status === TurnStatus.done,
+  );
+  return turns.slice(last + 1);
+}
+
 export function turnPrompt(
   task: TaskRow,
   turns: TurnRow[],
   reason: string,
+  resumed = false,
 ): string {
   const message = lastIncoming(task.id);
+  // A resumed session remembers the conversation: re-sending it would pay
+  // for every earlier turn again on each new one.
+  const fresh = resumed ? unheard(turns) : turns;
   const where = message
     ? `${message.channel} - ${message.title}${message.url ? ` (${message.url})` : ""}`
     : "typed by the owner";
@@ -232,8 +249,12 @@ export function turnPrompt(
       ? "Triage expects a short reply to settle this."
       : "",
     "",
-    "The conversation so far, oldest first:",
-    transcript(turns),
+    resumed
+      ? fresh.length
+        ? "New since your last answer (the earlier conversation is in this session):"
+        : ""
+      : "The conversation so far, oldest first:",
+    transcript(fresh),
     "",
     deniedNote(turns),
     `Why you are being run now: ${reason}.`,
@@ -311,15 +332,21 @@ export class AgentPool {
     return this.active() >= this.limit();
   }
 
-  private enqueue(entry: Waiting): void {
+  private enqueue(entry: Waiting, why = this.waitReason()): void {
     if (this.isWaiting(entry.taskId)) return;
     this.waiting.push(entry);
-    log.debug("queued", { task: entry.taskId, reason: entry.reason });
-    queued(entry.taskId, this.waitReason());
+    log.debug("queued", { task: entry.taskId, reason: entry.reason, why });
+    queued(entry.taskId, why);
   }
 
   waitReason(): string {
     return `waiting its turn (${this.limit()} agents at once)`;
+  }
+
+  // The day's spend has reached config.spend's cap: turns aug starts by
+  // itself wait; the owner's never do.
+  private capped(): boolean {
+    return capReached(this.options.config.get());
   }
 
   request(
@@ -328,6 +355,10 @@ export class AgentPool {
     by: "owner" | "aug",
   ): Promise<void> | null {
     if (this.running.has(taskId)) return null;
+    if (by === "aug" && this.capped()) {
+      this.enqueue({ taskId, reason }, capReason(this.options.config.get()));
+      return null;
+    }
     if (by === "aug" && this.full()) {
       this.enqueue({ taskId, reason });
       return null;
@@ -368,7 +399,13 @@ export class AgentPool {
   // the store changes, since a coding agent frees its slot from a hook.
   drain(): void {
     while (this.waiting.length > 0 && !this.full()) {
-      const next = this.waiting.shift();
+      // Under the cap only the owner's coding Starts go; aug's chat turns
+      // stay queued until the day turns or the owner starts one.
+      const at = this.capped()
+        ? this.waiting.findIndex((w) => w.start)
+        : 0;
+      if (at < 0) break;
+      const [next] = this.waiting.splice(at, 1);
       if (!next) break;
       const task = store.getTask(next.taskId);
       if (!task || task.status !== TaskStatus.open) continue;
@@ -440,9 +477,10 @@ export class AgentPool {
       const result = await think({
         ...(home
           ? assistantCall(config, history, reason, Boolean(resume))
-          : generalCall(config, task, history, reason)),
+          : generalCall(config, task, history, reason, Boolean(resume))),
         cwd,
         ...(resume ? { resume } : { sessionId }),
+        spend: { role: home ? SpendRole.assistant : SpendRole.general, taskId },
         signal: abort.signal,
         onStep: (step) => {
           steps.push(step);
@@ -608,10 +646,16 @@ export function codingCwd(config: AugConfig, task: TaskRow): string {
   return dir;
 }
 
+// The brief rides in every request the coding session makes, so its
+// transcript keeps only the latest turns.
+export const CODING_BRIEF_TURNS = 20;
+
 export function codingBrief(config: AugConfig, task: TaskRow): string {
-  const turns = store
+  const said = store
     .turnsForTask(task.id)
     .filter((t) => t.role !== TurnRole.agent);
+  const turns = said.slice(-CODING_BRIEF_TURNS);
+  const left = said.length - turns.length;
   const ref = store.taskRef(task.id);
   const project = projectContext(task);
   return [
@@ -639,6 +683,11 @@ export function codingBrief(config: AugConfig, task: TaskRow): string {
     task.url ? `Link: ${task.url}` : "",
     ...store.linksForTask(task.id).map((l) => `Link: ${linkLine(l)}`),
     "",
+    ...(left > 0
+      ? [
+          `(${left} earlier ${left === 1 ? "turn" : "turns"} left out; ${toolsCommand("task", ref)} shows its recent chat.)`,
+        ]
+      : []),
     transcript(turns),
     ...(project ? ["", project] : []),
   ].join("\n");

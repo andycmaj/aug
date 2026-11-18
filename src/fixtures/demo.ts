@@ -18,11 +18,13 @@ import type { MadeFile } from "../core/files";
 import { setMux, TmuxMux } from "../core/mux";
 import { setSender } from "../core/outbound";
 import { defaultHome, paths } from "../core/paths";
+import { recordSpend } from "../core/spend";
 import * as store from "../core/store";
 import {
   AgentState,
   Kind,
   SessionKind,
+  SpendRole,
   TurnRole,
   type Channel,
   type Priority,
@@ -653,18 +655,45 @@ export function seedDemo(): void {
   writeDoc(DocName.learned, learned);
 }
 
+// A week of made-up spend for the Cost tab.
+function seedSpend(): void {
+  const tasks = store.listTasks().filter((t) => t.kind !== Kind.coding).slice(0, 3);
+  const roles = [SpendRole.triage, SpendRole.assistant, SpendRole.advisor, SpendRole.slack];
+  for (let ago = 6; ago >= 0; ago--) {
+    const at = new Date(Date.now() - ago * 86400_000);
+    for (const [i, role] of roles.entries())
+      recordSpend({ role }, "haiku", { costUsd: 0.05 * (i + 1) + ago * 0.03 }, at);
+    for (const [i, t] of tasks.entries())
+      recordSpend(
+        { role: SpendRole.general, taskId: t.id },
+        "sonnet",
+        {
+          costUsd: 0.4 * (i + 1) + (ago % 3) * 0.2,
+          usage: { input: 50, output: 1500, cacheRead: 40_000, cacheWrite: 5_000 },
+        },
+        at,
+      );
+  }
+}
+
 // ── the canned brain ──────────────────────────────────────────────────────
 
 const STEPS = ["Read the thread", "WebSearch the ask", "Read notes.md"];
 
 async function demoBrain(call: BrainCall): Promise<BrainResult> {
   const props = (call.schema?.properties ?? {}) as Record<string, unknown>;
+  // Made-up costs, so the Board's Cost tab and the status line have figures.
+  const agentTurn = "did" in props;
   const done = (structured: unknown): BrainResult => ({
     text: "",
     structured,
     sessionId: call.sessionId ?? call.resume ?? null,
     durationMs: 1,
     isError: false,
+    costUsd: agentTurn ? 0.12 : 0.01,
+    usage: agentTurn
+      ? { input: 40, output: 900, cacheRead: 24_000, cacheWrite: 3_000 }
+      : { input: 20, output: 120, cacheRead: 6_000, cacheWrite: 0 },
   });
 
   if ("did" in props) {
@@ -764,7 +793,10 @@ export function installFixture(name: string): Engine {
   });
   setMux(new TmuxMux(config.get().tmuxSocket));
   ensureDocs();
-  if (store.listTasks().length === 0) seedDemo();
+  if (store.listTasks().length === 0) {
+    seedDemo();
+    seedSpend();
+  }
   setBrain(demoBrain);
   setSender(async () => {
     await sleep(300);

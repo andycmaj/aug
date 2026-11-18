@@ -501,3 +501,35 @@ export type DraftAction =
       // The close-out riding with the comment, done in the same press.
       close?: "issue" | "merge" | "approve";
     };
+
+// Who a model call was for, on its spend row (core/spend.ts).
+export const SpendRole = {
+  triage: "triage",
+  advisor: "advisor",
+  docPass: "doc-pass",
+  learn: "learn",
+  redraft: "redraft",
+  assistant: "assistant",
+  general: "general",
+  slack: "slack",
+  other: "other",
+} as const;
+export type SpendRole = (typeof SpendRole)[keyof typeof SpendRole];
+
+export interface SpendTotal {
+  cost: number;
+  calls: number;
+  tokens: number;
+}
+
+export interface SpendByRole extends SpendTotal {
+  role: SpendRole;
+}
+
+export interface SpendByDay extends SpendTotal {
+  day: string;
+}
+
+export interface SpendByTask extends SpendTotal {
+  task_id: number;
+}

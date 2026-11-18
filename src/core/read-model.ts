@@ -10,6 +10,7 @@ import { projectProgress, projectSummary, railProjects } from "./lookup";
 import { perfOn, timing } from "./perf";
 import { taskPr, taskPrStatus } from "./pr";
 import { buildRail, localDay, type RailSection } from "./rail";
+import { spendReport } from "./spend";
 import * as store from "./store";
 import { Kind, type TaskRow } from "./types";
 
@@ -115,6 +116,9 @@ function reads(desk: LiveCheck) {
     inbox: [[T.messages, T.ideas], inboxRows],
     inboxCount: [[T.messages, T.ideas], inboxCount],
     inboxRuns: [[T.triageRuns, T.triageSteps], inboxRuns],
+    spendOn: [[T.spend], store.spendOn],
+    taskSpend: [[T.spend], store.taskSpend],
+    spendReport: [[T.spend, T.tasks], spendReport],
   } as const satisfies Record<string, Read>;
 }
 

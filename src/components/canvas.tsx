@@ -35,6 +35,7 @@ import { useAug } from "../context/aug";
 import { useTerminals, type TermState } from "../context/terminals";
 import type { Lane, LaneMeta } from "../core/lanes";
 import { prChip, prLine } from "../core/pr";
+import { usd } from "../core/spend";
 import {
   type Mention,
   mentionAt,
@@ -274,6 +275,11 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
       tone: status ? prChip(status).tone : ("muted" as const),
     };
   });
+  // What its headless turns have cost (aug-tools spend, the Board's Cost).
+  const spent = () => {
+    const s = aug.taskSpend(props.task.id);
+    return s.calls ? ` · ${usd(s.cost)} spent` : "";
+  };
   const says = () => {
     const t = props.task;
     if (t.agent_state === AgentState.waiting && t.agent_says)
@@ -342,7 +348,7 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
           </box>
         </box>
         <text fg={theme.textMuted} wrapMode="word">
-          {`${props.task.kind} · ${came()}`}
+          {`${props.task.kind} · ${came()}${spent()}`}
         </text>
         <Show when={pr()}>
           {(p: Accessor<NonNullable<ReturnType<typeof pr>>>) => (

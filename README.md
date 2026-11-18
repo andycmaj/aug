@@ -93,6 +93,7 @@ the Advisor proposes a shorter one; past twice it, prompts cut it with a note.
   },
   "opener": "open",
   "maxActiveAgents": 4,
+  "spend": { "capEnabled": true, "dailyUsd": 25 },
   "worktreeCommand": "wt -C {repo_path} switch {create} {branch} --no-cd --format json -y",
   "autostart": true,
   "learning": true,
@@ -124,6 +125,15 @@ agents on a private tmux server (`-L`); unset means your default one. `slack.cha
 Anywhere else, only DMs and mentions of you are triaged. `opener` opens links
 and files the agent made: a command or an argv array, with the target appended.
 It defaults to `open` on macOS, `wslview` on WSL and `xdg-open` on Linux.
+
+`spend` caps what aug's own model calls cost in a day (triage, the
+Assistant, general agents, the Advisor, the Slack reader; coding agents in
+tmux are not counted). Once today's total reaches `dailyUsd`, chat turns aug
+starts by itself wait with the reason on the task and the Advisor skips its
+run; a turn you start or type to still runs. `capEnabled: false` turns the cap
+off; spend is recorded either way. The sidebar's status line shows today's
+total, the Board's Cost tab (`6`) and `aug-tools spend` break it down by role,
+task and day.
 
 `triage.escalate` says what else may become a task without you. On GitHub
 that is the notification reasons listed (by default: assigned to you, a
