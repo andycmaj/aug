@@ -1,6 +1,6 @@
-// ghdash (the PR dashboard) on the table, in place of the task's chat or
+// ghdash (the PR dashboard) on the Canvas, in place of the task's chat or
 // agent terminal: one embedded terminal per task, on the task's PR. q in
-// ghdash or the key again gives the table back.
+// ghdash or the key again gives the Canvas back.
 
 import { existsSync } from "node:fs";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
@@ -49,16 +49,16 @@ export function usePrDash() {
       cwd:
         task.worktree && existsSync(task.worktree) ? task.worktree : undefined,
       onExit: (code) => {
-        // Gone already: closed from here (the key, the table moving on), or
+        // Gone already: closed from here (the key, the selection moving on), or
         // a newer one runs under the same id.
         const state = terminals.get(id);
         if (!state || state.running) return;
         terminals.close(id);
         if (code) showToast(`ghdash exited ${code}`, 4000, "error");
-        if (aug.selectedKey() === `t${task.id}`) setActivePane("task");
+        if (aug.selectedKey() === `t${task.id}`) setActivePane("canvas");
       },
     });
-    setTimeout(() => setActivePane("task"), 0);
+    setTimeout(() => setActivePane("canvas"), 0);
   }
 
   return { togglePrDash, closeOthers };

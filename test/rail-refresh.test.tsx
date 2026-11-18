@@ -73,11 +73,11 @@ test("a row's lane follows writes from this process and from another", async () 
   expect(row()[1]).toContain("agent waiting");
 });
 
-// AUG-0123: the row on the table drew ▸ where its mark goes, so the task you
+// AUG-0123: the selected row drew ▸ where its mark goes, so the task you
 // were watching never showed its lane move until you selected another.
-test("the row on the table keeps its lane mark beside the ▸", async () => {
+test("the selected row keeps its lane mark beside the ▸", async () => {
   const { settle, row, setup } = await boot();
-  // Home is on the table at start; the cursor walks down to this row.
+  // Home is selected at start; the cursor walks down to this row.
   for (const key of ["j", "j"]) {
     setup.mockInput.pressKey(key);
     await settle();

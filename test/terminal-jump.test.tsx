@@ -37,24 +37,24 @@ async function mount(withJump: boolean) {
       <ThemeProvider>
         <TerminalsProvider>
           <KeymapProvider keymap={keymap as KeymapTable}>
-            <FocusProvider panes={["rail", "task"]}>
+            <FocusProvider panes={["rail", "canvas"]}>
               {(() => {
                 const terminals = useTerminals();
                 focus = useFocus();
                 let pane: Renderable | undefined;
                 onMount(() => {
                   terminals.open({ id: "term", title: "T", kind: "agent", argv: SHOW_ONE_KEY });
-                  focus?.setActivePane("task");
+                  focus?.setActivePane("canvas");
                 });
                 return (
                   <box flexDirection="column" flexGrow={1}>
                     <Pane name="rail">
                       <text>rail</text>
                     </Pane>
-                    <Pane name="task" ref={(r) => (pane = r)}>
+                    <Pane name="canvas" ref={(r) => (pane = r)}>
                       <TerminalHost
                         id="term"
-                        attached={() => focus?.isPaneFocused("task") ?? false}
+                        attached={() => focus?.isPaneFocused("canvas") ?? false}
                         pane={() => pane}
                         onDetach={() => {
                           calls.push("detach");
@@ -102,5 +102,5 @@ test("ctrl+t in a terminal with no window of its own goes to it as typed", async
   setup.mockInput.pressKey("t", { ctrl: true });
   expect(await frameWith("024")).toContain("024");
   expect(calls).toEqual([]);
-  expect(focus()?.isPaneFocused("task")).toBe(true);
+  expect(focus()?.isPaneFocused("canvas")).toBe(true);
 });

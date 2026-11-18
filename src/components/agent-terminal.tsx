@@ -1,4 +1,4 @@
-// A coding agent's live terminal on the table. While the task pane has focus
+// A coding agent's live terminal on the Canvas. While the Canvas has focus
 // and the session runs, every key goes to the agent except the detach chord;
 // detaching moves focus back to the rail and the session keeps running.
 // ctrl+t detaches too and moves your own tmux client to the agent's window.
@@ -17,7 +17,7 @@ import { Commands } from "../commands";
 import { useTerminals } from "../context/terminals";
 import { encodeKey } from "../terminal/key-encode";
 
-// Just the screen: adopts the session's renderable while mounted. The table
+// Just the screen: adopts the session's renderable while mounted. The Canvas
 // keeps one mounted as you move between live tasks, so it follows the id;
 // adopting once showed the first task's claude while keys went to the next.
 export function TermView(props: {

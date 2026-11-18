@@ -1,7 +1,7 @@
-// Every action the owner takes on a row, once: the rail, the table, the
+// Every action the owner takes on a row, once: the rail, the Canvas, the
 // Board and the palette all call these. They ask the desk, open dialogs,
-// toast the outcome, and keep the table moving (a row that leaves the rail
-// hands the table to the next). Starting an agent, the editor and the
+// toast the outcome, and keep the selection moving (a row that leaves the
+// rail hands the selection to the next). Starting an agent, the editor and the
 // embedded viewer each have a hook of their own beside this one.
 
 import { createSignal, type Accessor, type JSX } from "solid-js";
@@ -87,8 +87,9 @@ export function useActions(dialogs: Dialogs) {
   const { startAgent } = useAgentStart(dialogs, attachViewer);
   const { showRepos } = useRepos(dialogs);
 
-  // A row is about to leave the rail. On the table: the table walks on.
-  // Only under the cursor: the cursor steps to a neighbor, the table stays.
+  // A row is about to leave the rail. Selected: the selection walks on.
+  // Only under the cursor: the cursor steps to a neighbor, the selection
+  // stays.
   function advanceFrom(key: string) {
     if (aug.selectedKey() === key) {
       const next = aug.walk(1) ?? aug.walk(-1);
@@ -758,7 +759,7 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
-  // O: a file the agent made, in $EDITOR on the table.
+  // O: a file the agent made, in $EDITOR on the Canvas.
   function editFile(item: RailItem) {
     const files = madeFiles(item);
     if (files.length === 0) {

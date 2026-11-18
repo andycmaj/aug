@@ -17,7 +17,7 @@ Four axes, each with one owner in the code:
 
 Agent state lives inside the lifecycle: only a task that is open (or
 later) has a live agent state worth showing. Done and dropped tasks keep
-the last one as history (the table shows it), and the rail ignores it,
+the last one as history (the Canvas shows it), and the rail ignores it,
 except an agent-closed task whose result is unread.
 
 ## Today
@@ -147,7 +147,7 @@ as today):
   the split was not reliable (`/exit` read as a crash). Why it ended goes in
   a new `sessions.end_reason` ("you stopped it", "you closed the task",
   "its window closed", "claude exited", "aug restarted", "failed: ...");
-  the table and the row's sub line show it. Migrated: `saved` -> `stopped`.
+  the Canvas and the row's sub line show it. Migrated: `saved` -> `stopped`.
 - **idle is new** (AUG-0101). Turns are bracketed by explicit signals:
   - start: `prompt` hook (UserPromptSubmit; typed by you or delivered by
     aug), any `tool` hook while not finished.
@@ -216,8 +216,8 @@ and its plain `mark` elsewhere. A blocked row's sub line names its blockers (`bl
 AUG-0012`); a stopped row's says why it ended; a ready row's says
 `yours to close` or `its agent closed it`; a working row whose task is
 already merged says `merged, agent working` (working outranks merged: an
-agent that landed its branch is often still writing its note). The row on
-the table carries its `▸` in the gutter left of the bar, never in place of
+agent that landed its branch is often still writing its note). The selected
+row carries its `▸` in the gutter left of the bar, never in place of
 its mark, so the task you are watching shows its lane move (AUG-0123).
 The rail header counts ready rows (◈) next to asks (◆), and so does a
 folded project row. The done

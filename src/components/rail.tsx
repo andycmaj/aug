@@ -1,6 +1,6 @@
 // The work rail (sidebar): what still wants something from you, under its
-// headings, oldest first. Moving the cursor puts the row on the table; the
-// actions on a row work from here as from the table.
+// headings, oldest first. Moving the cursor selects the row; the actions on
+// a row work from here as from the Canvas.
 
 import {
   createEffect,
@@ -75,8 +75,8 @@ export function Rail(props: { actions: TaskActions }) {
   let scrollRef: ScrollBoxRenderable | undefined;
   let pane: Renderable | undefined;
 
-  // First visit: the first row is on the table. A cursor whose row left the
-  // rail comes back to the table's row, if the rail shows it.
+  // First visit: the first row is selected. A cursor whose row left the rail
+  // comes back to the selected row, if the rail shows it.
   createEffect(() => {
     const list = aug.shownItems();
     if (list.length === 0) return;
@@ -156,12 +156,12 @@ export function Rail(props: { actions: TaskActions }) {
       [Commands.NAV_UP]: () => move((i) => i - 1),
       [Commands.NAV_TOP]: () => move(() => 0),
       [Commands.NAV_BOTTOM]: () => move((_, n) => n - 1),
-      // enter puts the row under the cursor on the table; a project's view
+      // enter selects the row under the cursor; a project's view
       // has nothing to type into, so the rail keeps focus.
       [Commands.OPEN]: () => {
         const item = aug.cursorItem();
         aug.select(aug.cursorKey());
-        if (item?.type !== "project") setActivePane("task");
+        if (item?.type !== "project") setActivePane("canvas");
       },
       [Commands.FOLD]: () => {
         const item = aug.cursorItem();
@@ -339,9 +339,9 @@ function EmptyRail() {
   );
 }
 
-// The highlight is the cursor while the rail has focus, and the row on the
-// table while it does not (tilt-tui's focused/unfocused selection). The row
-// on the table carries a ▸ in the gutter, beside its mark rather than in
+// The highlight is the cursor while the rail has focus, and the selected row
+// while it does not (tilt-tui's focused/unfocused selection). The selected
+// row carries a ▸ in the gutter, beside its mark rather than in
 // place of it: the task you are watching is the one whose lane you want to
 // see move.
 function RailRow(props: {
@@ -619,7 +619,7 @@ export function RailLegend() {
         <text bg={theme.secondary}> </text>
         <text fg={theme.textMuted}>important</text>
         <text fg={theme.accent}>▸</text>
-        <text fg={theme.textMuted}>on the table</text>
+        <text fg={theme.textMuted}>selected</text>
       </box>
     </box>
   );

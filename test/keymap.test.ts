@@ -77,7 +77,7 @@ function footer(scope: string, ctx: HelpCtx): Map<string, string> {
 // A key that means two things at once is a key whose footer lies about one.
 test("in each pane, a key means one thing for any item", () => {
   const clashes = new Set<string>();
-  for (const scope of ["rail", "task", "board"])
+  for (const scope of ["rail", "canvas", "board"])
     for (const ctx of contexts()) {
       const bindings = filterRelevant(
         [
@@ -98,8 +98,8 @@ test("in each pane, a key means one thing for any item", () => {
   expect([...clashes]).toEqual([]);
 });
 
-// The table's own hint words say the same thing as the footer.
-test("the footer names what x and m do to the row on the table", () => {
+// The Canvas's own hint words say the same thing as the footer.
+test("the footer names what x and m do to the selected row", () => {
   const base: HelpCtx = {
     item: null,
     kind: null,
@@ -180,7 +180,7 @@ function shown(scopes: string[], ctx: HelpCtx): Map<string, string> {
 }
 
 test("attached to a terminal, only its own keys are listed", () => {
-  const keys = shown(["terminal", "task", "app"], { ...quiet, attached: true });
+  const keys = shown(["terminal", "canvas", "app"], { ...quiet, attached: true });
   // Detach, the go-to chord and the tmux jump: the keys an attached terminal
   // lets past.
   expect([...keys.values()].sort()).toEqual(
@@ -199,8 +199,8 @@ test("ctrl+t is the attached terminal's tmux jump, and only that", () => {
   expect(others).toEqual([`terminal:${Commands.TERMINAL_JUMP}`]);
 });
 
-test("typing in the chat box lists the box's keys, not the table's", () => {
-  const keys = shown(["input", "task", "app"], { ...quiet, typing: true });
+test("typing in the chat box lists the box's keys, not the Canvas's", () => {
+  const keys = shown(["input", "canvas", "app"], { ...quiet, typing: true });
   expect(keys.get("escape")).toBe(Commands.INPUT_LEAVE);
   for (const k of ["j", "s", "d", "?", "q", "v"])
     expect(keys.has(k)).toBe(false);

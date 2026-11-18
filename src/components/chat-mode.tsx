@@ -1,4 +1,4 @@
-// Chat: the rail beside the table. The regular workflow - walk what waits,
+// Chat: the rail beside the Canvas. The regular workflow - walk what waits,
 // one item at a time, each task one chat.
 
 import { createEffect, createMemo, Show } from "solid-js";
@@ -28,9 +28,9 @@ export function ChatMode() {
     setActivePane("input");
   });
 
-  // A key on the rail acts on the row under the cursor; on the table, on the
-  // row on the table.
-  const tableActions = shell.actions.taskActions(aug.selected, () =>
+  // A key on the rail acts on the row under the cursor; on the Canvas, on the
+  // selected row.
+  const canvasActions = shell.actions.taskActions(aug.selected, () =>
     setActivePane("input"),
   );
   const railActions = shell.actions.taskActions(aug.cursorItem, () => {
@@ -114,7 +114,7 @@ export function ChatMode() {
           <Rail actions={railActions} />
         </Show>
         <box flexDirection="column" flexGrow={1}>
-          <Canvas actions={tableActions} onSay={onSay} onCompose={onCompose} />
+          <Canvas actions={canvasActions} onSay={onSay} onCompose={onCompose} />
           <AugFooter ctx={ctx} left={sidebarVisible() ? RAIL_WIDTH + 2 : 0} />
           <box height={1} flexShrink={0} />
         </box>

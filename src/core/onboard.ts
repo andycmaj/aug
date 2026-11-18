@@ -1,6 +1,6 @@
 // The onboarding interview: interactive claude in its System task's own tmux
 // window, so the owner answers in a real session (their settings, connectors
-// and permission prompts) shown in the task's canvas. It researches first,
+// and permission prompts) shown in the task's Canvas. It researches first,
 // asks only what it could not find, and hands drafts of the owner's docs in
 // through `move propose_doc --file`, where they wait on the same task. It
 // never writes a doc itself.

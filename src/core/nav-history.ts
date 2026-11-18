@@ -1,5 +1,5 @@
 // Where the owner has been, like a browser's back and forward. A place is a
-// row on Chat's table (its rail key) or the Board. In memory, one per run:
+// selected row in Chat (its rail key) or the Board. In memory, one per run:
 // rail keys are cheap to come back to, and a restart starts a fresh trail.
 //
 // The trail is the back/forward stack; going back and then somewhere new

@@ -63,7 +63,7 @@ test("t opens the task even when it is done and off the rail", async () => {
   await find(RUTH);
   expect(frame()).toContain("AUG-0002");
   await press("t");
-  // The table shows the task, not the overview's greeting.
+  // The Canvas shows the task, not the overview's greeting.
   expect(frame()).toContain("Copier renewal - how many seats?");
   expect(frame()).not.toContain("Good ");
 });

@@ -1,5 +1,5 @@
 // A task's pull request: which one it is, what GitHub says about it, and the
-// few words the rail and the table show for it. The owner opens ghdash on it
+// few words the rail and the Canvas show for it. The owner opens ghdash on it
 // (components/use-pr-dash); the engine refreshes the status on its GitHub
 // clock.
 
@@ -417,7 +417,7 @@ const REVIEW_WORDS: Record<PrReview, string> = {
   none: "",
 };
 
-// The whole of it, for the table's header.
+// The whole of it, for the Canvas's header.
 export function prLine(s: PrStatusRow): string {
   const open = s.state === PrState.open || s.state === PrState.draft;
   return [

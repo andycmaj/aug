@@ -61,7 +61,7 @@ export function useShell(opts: {
     showToast("Checking GitHub and Slack...");
     void aug.engine.pollNow();
   };
-  // A row found from the Board opens in Chat, where the table is. A jump
+  // A row found from the Board opens in Chat, where the Canvas is. A jump
   // lands on the rail, never attached: the row it picks may be another
   // agent's terminal, and keys must not start going to it unasked.
   const openFromSearch = (key: string) => {
@@ -70,7 +70,7 @@ export function useShell(opts: {
       aug.setMode(ViewMode.board);
       return;
     }
-    if (focus.isPaneFocused("task")) focus.setActivePane("rail");
+    if (focus.isPaneFocused("canvas")) focus.setActivePane("rail");
     aug.goTo(key);
   };
   const history = (direction: 1 | -1) => {

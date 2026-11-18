@@ -28,7 +28,7 @@ export function useAgentStart(
   function showTask(taskId: number) {
     if (aug.mode() === ViewMode.chat) {
       aug.selectTask(taskId);
-      setActivePane("task");
+      setActivePane("canvas");
     }
   }
 

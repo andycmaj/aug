@@ -147,7 +147,7 @@ worktrees, or aug-made worktrees will get two windows.
 - **Board.** A new `Projects` tab shows one row per project with its tasks,
   worktrees and agent states. Keys: new, adopt, jump (`switch-client`) and
   close.
-- **Chat.** A project task's canvas embeds the viewer session on the task's
+- **Chat.** A project task's Canvas embeds the viewer session on the task's
   window.
 
 ### Tests and demo

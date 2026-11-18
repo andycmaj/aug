@@ -1,4 +1,4 @@
-// $EDITOR in an embedded terminal on the table: a draft, a brief, a chat
+// $EDITOR in an embedded terminal on the Canvas: a draft, a brief, a chat
 // message or a doc. The file goes through core/drafts; what comes back is
 // handed to the desk.
 
@@ -19,7 +19,7 @@ export function useEditor() {
   const { showToast } = useToast();
   const desk = aug.desk;
 
-  // done runs when the editor exits, before the table comes back.
+  // done runs when the editor exits, before the Canvas comes back.
   function openEditor(
     file: string,
     title: string,
@@ -34,14 +34,14 @@ export function useEditor() {
       kind: "editor",
       argv: ["sh", "-c", `${editor} "$1"`, "editor", file],
       onExit: (code) => {
-        // Before close: closing gives the table back, and what comes back
+        // Before close: closing gives the Canvas back, and what comes back
         // may read what done leaves.
         done?.(code);
         terminals.close(EDITOR_ID);
-        setActivePane("task");
+        setActivePane("canvas");
       },
     });
-    setTimeout(() => setActivePane("task"), 0);
+    setTimeout(() => setActivePane("canvas"), 0);
   }
 
   function editDraft(task: TaskRow): false | void {

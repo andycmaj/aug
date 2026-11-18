@@ -19,7 +19,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   user's hooks never leak into what triage reads back.
 - **Coding agents run as interactive `claude` in tmux**, one window per task
   in its project's session (`core/projects.ts`), in a worktree made by `wt`.
-  `core/agents.ts` builds the command line and the brief. The table embeds a
+  `core/agents.ts` builds the command line and the brief. The Canvas embeds a
   grouped viewer session in a PTY. Hooks call `src/bin/aug-tools.ts`, which is
   plain TS and needs no Solid preload. Those hooks write to SQLite, and the TUI
   notices through `PRAGMA data_version`.
@@ -46,9 +46,9 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 - **A task's PR is `core/pr.ts`**: found from its linked threads (the PR
   its agent or branch opened), its URL, a PR thread it came from, or a PR
   link. The engine reads each one's checks and reviews into `pr_status` on
-  the GitHub clock, 25 PRs to one GraphQL query; the rail and the table's
+  the GitHub clock, 25 PRs to one GraphQL query; the rail and the Canvas's
   header show it (marked stale when the last read failed), and `P` opens
-  ghdash on it in the table (`components/use-pr-dash.tsx`).
+  ghdash on it in the Canvas (`components/use-pr-dash.tsx`).
 - **When aug may call GitHub is `core/github-gate.ts`**: a rate limit
   pauses that budget (REST or GraphQL) until its reset, kept in `kv` across
   restarts; a failed poll backs off (doubling, jittered, capped); a PR that
@@ -80,10 +80,13 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   new read is one entry in `reads()`; `test/read-model.test.ts` fails if its
   SQL touches a table it does not name. Pure row helpers (`taskRef`,
   `turnSteps`) are `core/rows.ts`.
-- **The rail has a cursor and a table** (`cursorKey` and `selectedKey` in
-  `context/aug.tsx`). Task actions (`components/task-actions.ts`, the key
-  handlers on a row) act on the cursor row from the rail and on the table row
-  from the table, and `select()` moves both.
+- **The rail has a cursor and a selection** (`cursorKey` and `selectedKey`
+  in `context/aug.tsx`). The selected row shows on the Canvas
+  (`components/canvas.tsx`, focus pane `canvas`), Chat's main pane. Say "the
+  Canvas" and "selected", never "the table", "content" or "on the table".
+  Task actions (`components/task-actions.ts`, the key handlers on a row) act
+  on the cursor row from the rail and on the selected row from the Canvas,
+  and `select()` moves both.
 - **The desk owns every owner move** (`core/desk.ts`): one method per thing
   the owner can do, over the store, the lifecycle and the task's driver.
   Components call `components/actions.tsx`, which asks the desk, opens
@@ -164,7 +167,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `core/doc-pass.ts`, the onboarding interview (`core/onboard.ts`, the
   `propose_doc` move) and shipped versions. Nothing merges; no history.
   The interview is interactive claude in its System task's own window
-  (`inTmux` in `core/driver.ts`), shown in that task's canvas; it writes
+  (`inTmux` in `core/driver.ts`), shown in that task's Canvas; it writes
   drafts to `drafts/docs` and hands them in with `propose_doc --file`.
 - **Home is a `kind: home` task** (`store.homeTask()`), and its agent is the
   Assistant (`core/assistant.ts`): a resumed `claude -p` allowed only
@@ -212,7 +215,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   go-to chord (`ctrl+\`, `keys.goTo` in config) detaches and opens the
   search list. `buildKeymap` swaps config's navigation keys in at start.
 - Navigation history is `core/nav-history.ts`, held by the aug context:
-  every change of the table's row or the view is a visit (recorded once per
+  every change of the selected row or the view is a visit (recorded once per
   handler, so a switch plus a select is one), `[`/`]` go back and forward,
   and the go-to list puts the recent rows first.
 - A `Pane` is `flexShrink=0`, so a growing child (scrollbox, terminal host)

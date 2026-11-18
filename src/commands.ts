@@ -19,7 +19,7 @@ export const Commands = {
   HISTORY_BACK: "nav.history.back",
   HISTORY_FORWARD: "nav.history.forward",
 
-  // On the item at the cursor / on the table
+  // On the item at the cursor / the selected item
   OPEN: "item.open",
   DONE: "task.done",
   REMIND: "task.remind",

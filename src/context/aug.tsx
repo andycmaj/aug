@@ -59,23 +59,23 @@ interface AugContextValue extends ReadModel {
   // tasks left out. The cursor and the walk move over these.
   shownRail: Accessor<RailSection[]>;
   shownItems: Accessor<RailItem[]>;
-  // On the table: what the canvas shows.
+  // The selected row: what the Canvas shows.
   selectedKey: Accessor<string | null>;
   selected: Accessor<RailItem | null>;
-  // Puts a row on the table; the rail cursor follows it.
+  // Selects a row; the rail cursor follows it.
   select: (key: string | null) => void;
   selectTask: (taskId: number) => void;
-  // The rail's highlight, which moves without changing the table.
+  // The rail's highlight, which moves without changing the selection.
   cursorKey: Accessor<string | null>;
   cursorItem: Accessor<RailItem | null>;
   moveCursor: (key: string | null) => void;
   walk: (direction: 1 | -1) => string | null;
-  // Puts a row on Chat's table from anywhere (the Board too): a jump.
+  // Selects a row in Chat from anywhere (the Board too): a jump.
   goTo: (key: string) => void;
   // Back and forward through the places you have been (core/nav-history).
   // False when there is nowhere to go.
   history: (direction: 1 | -1) => boolean;
-  // Rows seen lately, most recent first, the one on the table left out.
+  // Rows seen lately, most recent first, the selected one left out.
   recent: Accessor<RailItem[]>;
   pending: Accessor<Set<number>>;
   facts: (task: TaskRow) => LaneFacts;
@@ -93,7 +93,7 @@ interface AugContextValue extends ReadModel {
   clearFilter: () => void;
   // Home: the Assistant's thread, first on the rail.
   homeId: number;
-  // Puts Home on the table in Chat and asks for its box to take focus.
+  // Selects Home in Chat and asks for its box to take focus.
   goHome: () => void;
   // Chat focuses the box once it is mounted, then clears this.
   wantsInput: Accessor<boolean>;
@@ -222,8 +222,8 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   });
 
   // A task the rail leaves out (done, dropped) that was gone to on purpose,
-  // from the Inbox or the Board: the table shows it all the same. Only the
-  // one asked for, so a row that leaves the rail while on the table (marked
+  // from the Inbox or the Board: the Canvas shows it all the same. Only the
+  // one asked for, so a row that leaves the rail while selected (marked
   // done) still clears it.
   const [offRail, setOffRail] = createSignal<string | null>(null);
 
@@ -246,7 +246,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     };
   });
 
-  // A task put on the table from anywhere (Next, an @ link) unfolds its
+  // A task selected from anywhere (Next, an @ link) unfolds its
   // project so the rail can show it.
   function select(key: string | null) {
     // A row written a moment ago (a new task) is on the rail before we look.
@@ -323,7 +323,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     });
   }
 
-  // Every way to change the table or the view (open, walk, search, Home, v)
+  // Every way to change the selection or the view (open, walk, search, Home, v)
   // is a visit. Recorded after the handler that moved it is done, so a
   // switch to Chat and a select in one key make one visit, not two.
   const trail = new NavHistory();

@@ -64,7 +64,7 @@ export const SCOPE_LABELS: Record<string, string> = {
   terminal: "The terminal (every other key goes to it)",
   input: "The chat box",
   rail: "The rail",
-  task: "The table",
+  canvas: "The Canvas",
   board: "The Board",
   app: "Anywhere",
 };
@@ -109,7 +109,7 @@ function quietWhileTyping(
   );
 }
 
-export const CHAT_PANES = ["rail", "task", "input"];
+export const CHAT_PANES = ["rail", "canvas", "input"];
 export const BOARD_PANES = ["board"];
 
 const listNav = navBindings().filter(
@@ -166,7 +166,7 @@ const onInbox = (c: HelpCtx) => c.board === BoardTab.inbox;
 const inboxMessage = (c: HelpCtx) =>
   onInbox(c) && (c.item === "message" || c.item === "fyi");
 
-// The actions on a row, the same from the rail and from the table.
+// The actions on a row, the same from the rail and from the Canvas.
 const taskActions: BindingSpec<HelpCtx>[] = [
   {
     key: "y",
@@ -337,7 +337,7 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   {
     key: "shift+p",
     cmd: Commands.PR_DASH,
-    desc: "its PR in ghdash, on the table (again to close)",
+    desc: "its PR in ghdash, on the Canvas (again to close)",
     help: "PR",
     relevant: (c) => c.pr,
   },
@@ -437,7 +437,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
   ]),
   rail: [
     ...(listNav as BindingSpec<HelpCtx>[]),
-    { key: "return", cmd: Commands.OPEN, desc: "put it on the table" },
+    { key: "return", cmd: Commands.OPEN, desc: "select it" },
     {
       key: "space",
       cmd: Commands.FOLD,
@@ -448,9 +448,9 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     ...railFilters,
     ...taskActions,
   ],
-  // The chat box sits inside the table, so all of these are reachable from
+  // The chat box sits inside the Canvas, so all of these are reachable from
   // it, and all decline while it has focus.
-  task: quietWhileTyping([
+  canvas: quietWhileTyping([
     ...(navBindings() as BindingSpec<HelpCtx>[]),
     { key: "escape", cmd: Commands.BACK_TO_RAIL, desc: "back to the rail", help: "rail" },
     ...taskActions,
@@ -666,7 +666,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
   ],
 };
 
-// The table with config's navigation keys in place of the defaults, in every
+// The binding table with config's navigation keys in place of the defaults, in every
 // scope that binds them (the go-to chord is in the terminal's too, which is
 // what lets it past an attached agent).
 export function buildKeymap(keys: NavKeys = {}): KeymapTable<HelpCtx> {

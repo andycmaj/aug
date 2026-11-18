@@ -67,7 +67,7 @@ export function useViewer() {
     }
   }
 
-  // Keeps the table's terminal in step with tmux: a live claude on the
+  // Keeps the Canvas's terminal in step with tmux: a live claude on the
   // selected task gets a viewer, and every other viewer goes.
   createEffect(() => {
     const item = aug.selected();

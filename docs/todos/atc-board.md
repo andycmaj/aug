@@ -144,7 +144,7 @@ before it happens, with a blinking alert.
   situation changed under it (a "deviation");
 - a reply about to go to a different channel than the thread it came from.
 
-These show as blinking pairs on the radar and as a banner on the table.
+These show as blinking pairs on the radar and as a banner on the Canvas.
 
 ### Squawk codes and lost comms → agent liveness
 

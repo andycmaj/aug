@@ -7,7 +7,7 @@ import { TerminalsProvider, useTerminals } from "../src/context/terminals";
 let destroy: (() => void) | undefined;
 afterEach(() => destroy?.());
 
-// The table keeps one TermView mounted while you move between live tasks, so
+// The Canvas keeps one TermView mounted while you move between live tasks, so
 // it must follow its id, not keep the screen it adopted first.
 test("TermView shows the terminal its id names after the id changes", async () => {
   const [id, setId] = createSignal("view-1");

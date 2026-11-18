@@ -135,7 +135,7 @@ export function turnEnded(ref: AgentRef, asking: string | null): void {
 }
 
 // Why a session came to an end. However it ended, the task is stopped and s
-// resumes it; the reason is what the table and the row say about it.
+// resumes it; the reason is what the Canvas and the row say about it.
 export const EndReason = {
   stop: "you stopped it",
   closed: "you closed the task",

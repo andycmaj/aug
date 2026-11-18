@@ -1,4 +1,4 @@
-// The table: whatever the rail cursor is on. A task is its chat (or, while a
+// The Canvas: the selected row. A task is its chat (or, while a
 // coding agent's terminal is open, that terminal; or ghdash on its PR, while
 // the owner has that open), with the draft pinned above the box; an FYI or an
 // Advisor idea shows the item itself.
@@ -92,12 +92,12 @@ export function Canvas(props: {
   });
   const term = createMemo(() => {
     const t = task();
-    // Live, it takes the table; once it stops, its Result in the chat does.
+    // Live, it takes the Canvas; once it stops, its Result in the chat does.
     const tm =
       t && inTmux(t) ? terminals.forTask(t.id) : undefined;
     return tm?.running ? tm : undefined;
   });
-  // ghdash (P) or a System task's diff in revdiff (e) takes the table over
+  // ghdash (P) or a System task's diff in revdiff (e) takes the Canvas over
   // the chat and the agent.
   const dash = createMemo(() => {
     const t = task();
@@ -108,11 +108,11 @@ export function Canvas(props: {
     return r?.running ? r : undefined;
   });
   const attached = () =>
-    isPaneFocused("task") && Boolean(dash() ?? term()?.running);
+    isPaneFocused("canvas") && Boolean(dash() ?? term()?.running);
   const editor = () => terminals.get("editor");
 
   useScope(
-    "task",
+    "canvas",
     unlessTyping(
       {
         [Commands.NAV_DOWN]: () => scrollRef?.scrollBy(2),
@@ -130,7 +130,7 @@ export function Canvas(props: {
     { target: () => pane },
   );
 
-  // ghdash goes when the table moves on: it polls GitHub while it runs.
+  // ghdash goes when the selection moves on: it polls GitHub while it runs.
   const prDash = usePrDash();
   createEffect(
     on(
@@ -139,7 +139,7 @@ export function Canvas(props: {
     ),
   );
 
-  // A new item on the table opens at its newest line.
+  // A newly selected item opens at its newest line.
   createEffect(
     on(
       () => aug.selectedKey(),
@@ -148,7 +148,7 @@ export function Canvas(props: {
   );
 
   return (
-    <Pane name="task" ref={(r) => (pane = r)}>
+    <Pane name="canvas" ref={(r) => (pane = r)}>
       <Show when={editor()}>
         {(ed: Accessor<TermState>) => (
           <>
@@ -160,7 +160,7 @@ export function Canvas(props: {
             </box>
             <TerminalHost
               id={ed().id}
-              attached={() => isPaneFocused("task")}
+              attached={() => isPaneFocused("canvas")}
               pane={() => pane}
               onDetach={leave}
             />
@@ -284,8 +284,8 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
     return null;
   };
 
-  // A branch, not an early return: the canvas keeps this header when the
-  // table moves from Home to a task, so the body must follow props.
+  // A branch, not an early return: the Canvas keeps this header when the
+  // selection moves from Home to a task, so the body must follow props.
   return (
     <Show
       when={props.task.kind !== Kind.home}
@@ -514,7 +514,7 @@ function mentionLine(m: Mention, openTasks: (p: ProjectRow) => number): string {
 }
 
 // Text the editor handed back unsent. The box unmounts while the editor has
-// the table, so it waits here for the box to come back.
+// the Canvas, so it waits here for the box to come back.
 const unsent = new Map<number, string>();
 
 // The box under the chat. Typing always continues the same conversation.
@@ -598,7 +598,7 @@ function ChatInput(props: {
       },
       [Commands.INPUT_LEAVE]: () => {
         if (offering()) return void setDismissed(before());
-        setActivePane("task");
+        setActivePane("canvas");
       },
       [Commands.INPUT_EDITOR]: () => {
         const id = props.task.id;

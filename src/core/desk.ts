@@ -673,7 +673,7 @@ export class Desk {
   }
 
   // The onboarding interview: interactive claude in the System task's own
-  // window (its canvas shows it), which reads what it can, asks the rest,
+  // window (its Canvas shows it), which reads what it can, asks the rest,
   // and hands drafts in on the same task. Again, it resumes that session.
   onboard(): string {
     let task = onboardingTask();

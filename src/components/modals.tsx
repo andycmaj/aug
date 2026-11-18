@@ -430,7 +430,7 @@ function searchTag(item: RailItem): string {
 }
 
 // / and the go-to chord: every row on the rail, folded and For later ones
-// too, the ones seen lately first. Picking one puts it on the table.
+// too, the ones seen lately first. Picking one selects it.
 export function SearchModal(props: {
   onPick: (key: string) => void;
   onClose: () => void;

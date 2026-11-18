@@ -1,4 +1,4 @@
-// A System task's proposals in revdiff, on the table: your doc against the
+// A System task's proposals in revdiff, on the Canvas: your doc against the
 // proposed one. Notes left in revdiff go back to be redrafted when it quits.
 // Without revdiff, the diff in a pager.
 
@@ -63,7 +63,7 @@ export function useDocReview() {
         const state = terminals.get(id);
         if (!state || state.running) return;
         terminals.close(id);
-        if (aug.selectedKey() === `t${task.id}`) setActivePane("task");
+        if (aug.selectedKey() === `t${task.id}`) setActivePane("canvas");
         const notes = existsSync(files.out)
           ? readFileSync(files.out, "utf8").trim()
           : "";
@@ -74,7 +74,7 @@ export function useDocReview() {
         });
       },
     });
-    setTimeout(() => setActivePane("task"), 0);
+    setTimeout(() => setActivePane("canvas"), 0);
   }
 
   return { reviewDocs };

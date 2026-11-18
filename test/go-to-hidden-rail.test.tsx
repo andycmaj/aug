@@ -47,7 +47,7 @@ async function boot() {
 // The rail's header counts the open tasks.
 const railShown = (frame: string) => /\d+ open\s+inbox/.test(frame);
 
-test("go to from the table with the rail hidden keeps a pane focused", async () => {
+test("go to from the Canvas with the rail hidden keeps a pane focused", async () => {
   const { press, goTo, renderer, frame } = await boot();
   expect(railShown(frame())).toBe(true);
   await press("e", { ctrl: true });
@@ -63,7 +63,7 @@ test("go to from the table with the rail hidden keeps a pane focused", async () 
 });
 
 // A project has no chat box, so a jump to one from the box unmounts it.
-// opentui-app moves focus to the table and leaves the rail as it was.
+// opentui-app moves focus to the Canvas and leaves the rail as it was.
 for (const hidden of [false, true]) {
   const rail = hidden ? "hidden" : "shown";
   test(`go to a project from the chat box keeps a pane focused (rail ${rail})`, async () => {

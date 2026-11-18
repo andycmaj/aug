@@ -1,5 +1,5 @@
 // The actions on a rail row, one handler set shared by the rail and the
-// table so a key does the same thing wherever focus is. (A "move" is what
+// Canvas so a key does the same thing wherever focus is. (A "move" is what
 // another process asks for through aug-tools; these are the owner's keys.)
 
 import type { CommandHandlers } from "@andycmaj/opentui-app";
