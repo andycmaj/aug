@@ -75,6 +75,7 @@ describe("the triage chain is recorded", () => {
       ["unjudged", "pass"],
       ["same ask", "pass"],
       ["judged fyi", "pass"],
+      ["escalation", "pass"],
       ["new task", "claim"],
       [PROJECT_STEP, "pass"],
     ]);

@@ -33,7 +33,7 @@ import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
 import type { NoiseRule } from "../core/config";
-import { clip as inboxClip, type InboxRow } from "../core/inbox";
+import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "../core/inbox";
 import { messageMeta } from "../core/meta";
 import { Kind, Priority, type MessageRow, type TaskRow } from "../core/types";
 import {
@@ -506,13 +506,18 @@ export function useActions(dialogs: Dialogs) {
       if (task) showToast(`${taskRef(task.id)} on your list`);
       return;
     }
+    if (row.result === InboxResult.held) {
+      const task = desk.heldToTask(row.message.id);
+      if (task) showToast(`${taskRef(task.id)} on your list`);
+      return;
+    }
     const task = desk.fyiToTask(row.message.id);
     if (task) showToast(`${taskRef(task.id)}: it was work; triage will learn`);
   }
 
   function inboxDismiss(row: InboxRow) {
     if (row.type === "idea") desk.dismissIdea(row.idea.id);
-    else desk.readMessage(row.message.id);
+    else for (const m of rowMessages(row)) desk.readMessage(m.id);
   }
 
   function inboxNotATask(row: InboxRow) {

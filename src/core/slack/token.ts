@@ -144,6 +144,7 @@ export async function pollSlack(
           ? `${team}/archives/${channel}/p${msg.ts.replace(".", "")}`
           : null),
       fromMe: msg.user === me,
+      mentionsMe: msg.text.includes(`<@${me}>`),
     });
   };
 

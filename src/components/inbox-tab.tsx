@@ -22,6 +22,7 @@ import {
   nextFilter,
   RESULT_WORDS,
   shownBody,
+  subjectOf,
   type InboxRow,
   type InboxRun,
 } from "../core/inbox";
@@ -197,6 +198,7 @@ type Tone = "muted" | "warning" | "success" | "info";
 function resultTone(result: InboxResult): Tone {
   switch (result) {
     case InboxResult.idea:
+    case InboxResult.held:
     case InboxResult.failed:
     case InboxResult.untriaged:
       return "warning";
@@ -312,7 +314,9 @@ function InboxView(props: {
                       {truncate(row.subject, subjectWidth())}
                     </text>
                     <text fg={fg(tone(resultTone(row.result)))} width={16} flexShrink={0}>
-                      {RESULT_WORDS[row.result]}
+                      {row.type === "message" && row.folded.length > 0
+                        ? `${row.folded.length + 1} joined a task`
+                        : RESULT_WORDS[row.result]}
                     </text>
                     <text fg={fg(theme.textMuted)} width={22} flexShrink={0}>
                       {truncate(ref(), 22)}
@@ -462,6 +466,18 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
             </box>
             <Show when={!props.revealed && msg().message.body.length > BODY_CHARS}>
               <text fg={theme.textMuted}>Shift+B shows the whole message.</text>
+            </Show>
+            <Show when={msg().folded.length > 0}>
+              <box flexDirection="column" marginTop={1}>
+                <text fg={theme.textMuted}>{`${msg().folded.length} earlier on ${taskRef(msg().taskId!)}:`}</text>
+                <For each={msg().folded}>
+                  {(m) => (
+                    <text fg={theme.textMuted}>
+                      {truncate(`  ${localStamp(m.received_at)} · ${m.author_name} · ${subjectOf(m)}`, width())}
+                    </text>
+                  )}
+                </For>
+              </box>
             </Show>
             <Show when={runs().length > 1}>
               <box flexDirection="column" marginTop={1}>

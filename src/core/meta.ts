@@ -31,6 +31,8 @@ export interface SlackMeta {
   ts: string | null;
   thread_ts: string | null;
   dm: boolean;
+  // The text mentions the owner.
+  mention: boolean;
 }
 
 export interface OwnerMeta {
@@ -78,6 +80,7 @@ export function messageMeta(message: MessageRow): MessageMeta {
         ts: str(raw.ts),
         thread_ts: str(raw.thread_ts),
         dm: Boolean(raw.dm),
+        mention: Boolean(raw.mention),
       };
     default:
       return { channel: "owner" };

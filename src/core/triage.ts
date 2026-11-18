@@ -9,7 +9,7 @@
 // which keeps it testable and keeps the agent pool in one place.
 
 import { think } from "./brain";
-import type { AugConfig, NoiseRule } from "./config";
+import type { AugConfig, EscalateRules, NoiseRule } from "./config";
 import { logger } from "./log";
 import { DocName, forPrompt, head } from "./docs";
 import { parsePrUrl } from "./feedback";
@@ -26,6 +26,7 @@ import {
   TaskStatus,
   StepDecision,
   TurnRole,
+  HELD,
   Verdict,
   type MessageRow,
   type ProjectMove,
@@ -436,6 +437,70 @@ const judgedFyi: TriageRule = {
   },
 };
 
+const GITHUB_WHY: Record<string, string> = {
+  assign: "assigned to you",
+  mention: "mentions you",
+  review_requested: "review requested of you",
+  team_mention: "mentions your team",
+};
+
+// Why this message may make a task without the owner, or null: it waits in
+// the Inbox for them (whyHeld says why). Config's triage.escalate is the
+// list, and github.reviewTeams the teams (as the review ask rule reads
+// them); anything that is neither GitHub nor Slack was asked for by hand.
+// A PR's review ask or tag of you or a watched team never gets here: the
+// review ask rule made its task.
+export function escalation(
+  message: MessageRow,
+  rules: EscalateRules,
+  teams: readonly string[],
+): string | null {
+  const meta = messageMeta(message);
+  if (meta.channel === "slack") {
+    if (meta.dm && rules.slack.includes("dm")) return "a DM to you";
+    if (meta.mention && rules.slack.includes("mention")) return "mentions you";
+    return null;
+  }
+  if (meta.channel !== "github") return "not from GitHub or Slack";
+  const reason = meta.reason ?? "";
+  if (reason === "review_requested" && meta.requested) {
+    // GitHub says "review requested" for a team you are on too; the PR says
+    // whom it asked.
+    if (meta.requested.me) return GITHUB_WHY.review_requested!;
+    const team = meta.requested.teams.find((t) => watchedTeam(t, teams));
+    return team ? `review requested of ${team}` : null;
+  }
+  if (reason === "team_mention") {
+    const team = taggedTeams(message.body).find((t) => watchedTeam(t, teams));
+    return team ? `mentions ${team}` : null;
+  }
+  return rules.github.includes(reason) ? (GITHUB_WHY[reason] ?? reason) : null;
+}
+
+function whyHeld(message: MessageRow): string {
+  const meta = messageMeta(message);
+  if (meta.channel === "slack") return "not a DM to you or a mention of you";
+  if (meta.channel !== "github") return "no escalation rule";
+  if (meta.reason === "review_requested" && meta.requested)
+    return `review requested of ${meta.requested.teams.join(", ") || "someone else"}, not a team in github.reviewTeams`;
+  if (meta.reason === "team_mention") return "mentions a team not in github.reviewTeams";
+  return `GitHub says ${meta.reason ?? "nothing"}, which you do not escalate`;
+}
+
+// Work the model saw that no escalation rule names waits for the owner:
+// the Inbox item is what they act on, and m makes it a task.
+const escalate: TriageRule = {
+  name: "escalation",
+  handle: async ({ message, judged, config }) => {
+    const why = escalation(message, config.triage.escalate, config.github.reviewTeams);
+    if (why) return pass(`${why}: it becomes a task`);
+    const j = await judged();
+    const reason = whyHeld(message);
+    store.fileMessage(message.id, j.ok ? j.value.verdict : null, `${HELD}${reason}`, null);
+    return ok({ verdict: "held", taskId: null, reason, effects: [] });
+  },
+};
+
 const newTask: TriageRule = {
   name: "new task",
   handle: async (i) => {
@@ -457,6 +522,7 @@ export const TRIAGE_RULES: readonly TriageRule[] = [
   unjudged,
   sameAsk,
   judgedFyi,
+  escalate,
   newTask,
 ];
 
@@ -676,6 +742,18 @@ function ownAnswer(message: MessageRow, task: TaskRow | null): TriageOutcome {
         ]
       : [];
   return { verdict: "own", taskId: task.id, reason: "you answered", effects };
+}
+
+// m on a message triage held: the task the model's verdict would have made.
+// The owner chose it, so nothing here teaches triage.
+export function taskFromHeld(
+  message: MessageRow,
+  answer: VerdictAnswer,
+  config: TriageConfig,
+): TriageOutcome {
+  const outcome = createFromVerdict(message, answer, config);
+  store.markMessageRead(message.id);
+  return outcome;
 }
 
 function createFromVerdict(

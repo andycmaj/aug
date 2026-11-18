@@ -439,7 +439,11 @@ export const StepDecision = {
 export type StepDecision = (typeof StepDecision)[keyof typeof StepDecision];
 
 // What a triage run ended in: a verdict, or how a gate routed it.
-export type TriageVerdict = Verdict | "attached" | "own" | "opener" | "failed";
+// The reason a message triage held for the owner is filed with (no
+// escalation rule named it); the Inbox reads it back.
+export const HELD = "held: ";
+
+export type TriageVerdict = Verdict | "attached" | "own" | "opener" | "failed" | "held";
 
 export interface TriageRunRow {
   id: number;

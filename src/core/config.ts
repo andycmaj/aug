@@ -24,6 +24,15 @@ export interface NoiseRule {
   githubReason?: string[];
 }
 
+export interface EscalateRules {
+  // GitHub notification reasons (assign, mention, review_requested, ...).
+  // A review requested only of a team, or a team's @org/team tag, counts
+  // only for a team in github.reviewTeams.
+  github: string[];
+  // Slack: a direct message, a message that mentions you.
+  slack: ("dm" | "mention")[];
+}
+
 export interface NavKeys {
   // Go to anything (search the rail) from anywhere, an agent's terminal too.
   // Default ctrl+\ (written "ctrl+\\" in JSON), beside ctrl+] (detach).
@@ -105,6 +114,9 @@ export interface AugConfig {
   triage: {
     // Replaces the defaults when set; the noise move appends to it.
     noise: NoiseRule[];
+    // What may make a task without you: anything else the model calls work
+    // waits in the Inbox under "needs you", and m makes it a task.
+    escalate: EscalateRules;
   };
   theme: "default" | "terminal" | "mono" | "tokyo-night";
   // Whether the terminal's font is a Nerd Font, for marks like merged's
@@ -179,6 +191,10 @@ export const DEFAULT_CONFIG: AugConfig = {
         reason: "a state change on a thread you only follow",
       },
     ],
+    escalate: {
+      github: ["assign", "mention", "review_requested"],
+      slack: ["dm", "mention"],
+    },
   },
   theme: "default",
   log: { enabled: false, level: "info" },
@@ -231,7 +247,11 @@ export function mergeConfig(
           : DEFAULT_CONFIG.remote.pollSeconds),
     },
     brain: { ...DEFAULT_CONFIG.brain, ...raw.brain },
-    triage: { ...DEFAULT_CONFIG.triage, ...raw.triage },
+    triage: {
+      ...DEFAULT_CONFIG.triage,
+      ...raw.triage,
+      escalate: { ...DEFAULT_CONFIG.triage.escalate, ...raw.triage?.escalate },
+    },
     log: { ...DEFAULT_CONFIG.log, ...raw.log },
     capabilities: {
       servers: { ...raw.capabilities?.servers },

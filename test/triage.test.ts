@@ -245,7 +245,8 @@ describe("triage routing", () => {
       title: "#payments thread",
       body,
       receivedAt: new Date(Date.UTC(2026, 10, 5, 12, n)).toISOString(),
-      meta: { channel: "C9", ts: `${100 + n}.0`, thread_ts: "100.0" },
+      // How a channel thread reaches triage: it mentions you.
+      meta: { channel: "C9", ts: `${100 + n}.0`, thread_ts: "100.0", mention: true },
     })!;
   }
 
@@ -483,6 +484,7 @@ describe("triage chain", () => {
       "unjudged",
       "same ask",
       "judged fyi",
+      "escalation",
       "new task",
     ]);
   });
@@ -550,6 +552,7 @@ describe("triage noise from config", () => {
   test("a rule in config files its matches as FYI with no model call", async () => {
     freshHome({
       triage: {
+        ...DEFAULT_CONFIG.triage,
         noise: [
           ...DEFAULT_CONFIG.triage.noise,
           { reason: "the weekly digest", channel: "slack", title: "^weekly" },
@@ -570,6 +573,7 @@ describe("triage noise from config", () => {
   test("every field a rule sets must match", async () => {
     freshHome({
       triage: {
+        ...DEFAULT_CONFIG.triage,
         noise: [{ reason: "digest", channel: "github", title: "^weekly" }],
       },
     });
@@ -580,7 +584,7 @@ describe("triage noise from config", () => {
 
   test("a rule whose pattern does not compile never matches", async () => {
     freshHome({
-      triage: { noise: [{ reason: "broken", body: "([unclosed" }] },
+      triage: { ...DEFAULT_CONFIG.triage, noise: [{ reason: "broken", body: "([unclosed" }] },
     });
     const calls = fakeBrain(() => verdict("fyi"));
     const out = await triage(slackPost(1, "anything", "([unclosed"), { config: config() });
@@ -725,7 +729,7 @@ describe("review requests become coding tasks", () => {
       body: "<@UME> can you review https://github.com/acme/api/pull/40 today?",
       url: "https://acme.slack.com/archives/C9/p100",
       receivedAt: new Date(Date.UTC(2026, 10, 5, 12, 1)).toISOString(),
-      meta: { channel: "C9", ts: "100.0" },
+      meta: { channel: "C9", ts: "100.0", mention: true },
     })!;
     const out = await triage(m, { config: config() });
     const task = store.getTask(out.taskId!)!;

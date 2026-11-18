@@ -87,6 +87,8 @@ export interface RawSlack {
   text: string;
   url: string | null;
   fromMe: boolean;
+  // The text mentions the owner (a mention search found it, or it names them).
+  mentionsMe?: boolean;
 }
 
 export function rawToNewMessage(raw: RawSlack): NewMessage {
@@ -110,6 +112,7 @@ export function rawToNewMessage(raw: RawSlack): NewMessage {
       ts: raw.ts,
       thread_ts: raw.threadTs,
       dm: raw.dm,
+      mention: Boolean(raw.mentionsMe),
     },
   };
 }

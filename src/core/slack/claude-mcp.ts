@@ -321,6 +321,10 @@ export const POLL_SCHEMA = {
             type: "boolean",
             description: "the owner (the token's user) wrote it",
           },
+          mentions_me: {
+            type: "boolean",
+            description: "the text mentions me (@ my name or user id)",
+          },
         },
         required: ["channel", "is_dm", "ts", "user_name", "text", "from_me"],
       },
@@ -344,6 +348,7 @@ export interface PolledMessage {
   text: string;
   permalink?: string;
   from_me: boolean;
+  mentions_me?: boolean;
 }
 
 const SEND_SCHEMA = {
@@ -381,7 +386,7 @@ export function pollPrompt(ctx: PollContext, since: string): string {
     ctx.trackedThreads.length
       ? `- replies in these threads (channel:thread_ts): ${ctx.trackedThreads.join(", ")}.`
       : "",
-    "Include my own messages too, marked from_me. Return at most 50. If there is nothing new, return an empty list.",
+    "Include my own messages too, marked from_me. Mark mentions_me on every message that mentions me. Return at most 50. If there is nothing new, return an empty list.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -405,6 +410,7 @@ export function polledToRaw(m: PolledMessage) {
     text: m.text,
     url: m.permalink || null,
     fromMe: m.from_me,
+    mentionsMe: Boolean(m.mentions_me),
   };
 }
 

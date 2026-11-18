@@ -68,23 +68,29 @@ test("t opens the task even when it is done and off the rail", async () => {
   expect(frame()).not.toContain("Good ");
 });
 
-test("x dismisses a message that joined a task, and the task stays", async () => {
+test("x dismisses every message that joined a task, and the task stays", async () => {
   const { press, find, frame } = await boot();
-  const joined = store.insertMessage({
-    channel: "slack",
-    externalId: "aug-0140-joined",
-    threadKey: "slack:C9:aug-0140",
-    author: "U9",
-    authorName: "Ruth Okafor",
-    title: "#renewals",
-    body: "Zebra followup on the copier",
-    receivedAt: new Date().toISOString(),
-  })!;
-  store.fileMessage(joined.id, null, "joined AUG-0002", RUTH_TASK);
+  const joined = ["Zebra one", "Zebra two"].map((body, i) => {
+    const m = store.insertMessage({
+      channel: "slack",
+      externalId: `aug-0140-joined-${i}`,
+      threadKey: "slack:C9:aug-0140",
+      author: "U9",
+      authorName: "Ruth Okafor",
+      title: "#renewals",
+      body,
+      receivedAt: new Date(Date.now() + i * 1000).toISOString(),
+    })!;
+    store.fileMessage(m.id, null, "joined AUG-0002", RUTH_TASK);
+    return m;
+  });
+  // One row for the task, newest first, saying how many.
   await find("Zebra");
-  expect(frame()).toContain("joined a task");
+  expect(frame()).toContain("Zebra two");
+  expect(frame()).not.toContain("Zebra one");
+  expect(frame()).toContain("2 joined a task");
   await press("x");
-  expect(store.getMessage(joined.id)!.read_at).not.toBeNull();
+  for (const m of joined) expect(store.getMessage(m.id)!.read_at).not.toBeNull();
   expect(store.getTask(RUTH_TASK)!.status).toBe(TaskStatus.open);
   expect(frame()).toContain("Nothing matches");
 });

@@ -4,6 +4,7 @@
 
 import * as store from "./store";
 import {
+  HELD,
   IdeaStatus,
   Verdict,
   type IdeaRow,
@@ -21,6 +22,7 @@ export const InboxResult = {
   // A message
   task: "task",
   attached: "attached",
+  held: "held",
   fyi: "fyi",
   failed: "failed",
   untriaged: "untriaged",
@@ -36,6 +38,7 @@ export type InboxResult = (typeof InboxResult)[keyof typeof InboxResult];
 export const RESULT_WORDS: Record<InboxResult, string> = {
   task: "made a task",
   attached: "joined a task",
+  held: "held for you",
   fyi: "FYI",
   failed: "triage failed",
   untriaged: "not triaged",
@@ -76,6 +79,9 @@ export type InboxRow =
       taskId: number | null;
       read: boolean;
       message: MessageRow;
+      // Older messages that joined the same task, folded into this row
+      // (newest first): one row per task, not one per message.
+      folded: MessageRow[];
     }
   | {
       type: "idea";
@@ -99,6 +105,7 @@ export function messageResult(m: MessageRow): InboxResult {
     return m.verdict && m.verdict !== Verdict.fyi
       ? InboxResult.task
       : InboxResult.attached;
+  if (m.reason?.startsWith(HELD)) return InboxResult.held;
   if (m.verdict === Verdict.fyi)
     return m.reason?.startsWith("awaiting AI triage")
       ? InboxResult.failed
@@ -141,6 +148,7 @@ export function messageRow(m: MessageRow): InboxRow {
     taskId: m.task_id,
     read: m.read_at !== null,
     message: m,
+    folded: [],
   };
 }
 
@@ -159,12 +167,14 @@ export function ideaRow(idea: IdeaRow): InboxRow {
   };
 }
 
-// On the owner until they act: an open idea, or a message triage could not
-// place and they have not dismissed. What the rail's badge counts.
+// On the owner until they act: an open idea, a message triage held for
+// them, or one it could not place, until they dismiss it. What the rail's
+// badge counts.
 export function needsAttention(row: InboxRow): boolean {
   if (row.read) return false;
   return (
     row.result === InboxResult.idea ||
+    row.result === InboxResult.held ||
     row.result === InboxResult.failed ||
     row.result === InboxResult.untriaged
   );
@@ -204,10 +214,39 @@ export function matchesQuery(row: InboxRow, query: string): boolean {
     .includes(q);
 }
 
+const newestFirst = (a: InboxRow, b: InboxRow) =>
+  a.at < b.at ? 1 : a.at > b.at ? -1 : a.key < b.key ? 1 : -1;
+
+// Every message that joined a task is one row, the newest, carrying the
+// rest: a busy thread would otherwise be a row per reply. It is read once
+// all of them are.
+function foldJoined(rows: InboxRow[]): InboxRow[] {
+  const byTask = new Map<number, Extract<InboxRow, { type: "message" }>>();
+  const out: InboxRow[] = [];
+  for (const row of rows) {
+    if (row.type !== "message" || row.result !== InboxResult.attached || row.taskId === null) {
+      out.push(row);
+      continue;
+    }
+    const top = byTask.get(row.taskId);
+    if (!top) {
+      byTask.set(row.taskId, row);
+      out.push(row);
+      continue;
+    }
+    top.folded.push(row.message);
+    top.read = top.read && row.read;
+  }
+  return out;
+}
+
 export function buildInbox(messages: MessageRow[], ideas: IdeaRow[]): InboxRow[] {
-  return [...messages.map(messageRow), ...ideas.map(ideaRow)].sort((a, b) =>
-    a.at < b.at ? 1 : a.at > b.at ? -1 : a.key < b.key ? 1 : -1,
-  );
+  return foldJoined([...messages.map(messageRow), ...ideas.map(ideaRow)].sort(newestFirst));
+}
+
+// A row's messages, itself first: what x dismisses.
+export function rowMessages(row: InboxRow): MessageRow[] {
+  return row.type === "message" ? [row.message, ...row.folded] : [];
 }
 
 export function nextFilter(filter: InboxFilter): InboxFilter {

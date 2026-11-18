@@ -96,6 +96,12 @@ the Advisor proposes a shorter one; past twice it, prompts cut it with a note.
   "worktreeCommand": "wt -C {repo_path} switch {create} {branch} --no-cd --format json -y",
   "autostart": true,
   "learning": true,
+  "triage": {
+    "escalate": {
+      "github": ["assign", "mention", "review_requested"],
+      "slack": ["dm", "mention"]
+    }
+  },
   "theme": "default",
   "log": { "enabled": false, "level": "info" },
   "capabilities": {
@@ -118,6 +124,14 @@ agents on a private tmux server (`-L`); unset means your default one. `slack.cha
 Anywhere else, only DMs and mentions of you are triaged. `opener` opens links
 and files the agent made: a command or an argv array, with the target appended.
 It defaults to `open` on macOS, `wslview` on WSL and `xdg-open` on Linux.
+
+`triage.escalate` says what else may become a task without you. On GitHub
+that is the notification reasons listed (by default: assigned to you, a
+mention of you, a review requested of you). A review requested only of a
+team, or an `@org/team` tag, counts only for a team in `github.reviewTeams`.
+On Slack it is a DM to you or a message that mentions you. Anything else the model calls work is
+held in the Inbox as "needs you", and `m` there makes the task its verdict
+describes.
 
 ### Talk to the Assistant from Slack
 
@@ -252,8 +266,10 @@ does the work, and whatever comes out waits for you.
   noise, and threading (a GitHub issue or Slack thread attaches to its open
   task). Then one `claude -p --json-schema` call reads `TRIAGE.md`, `PERSONA.md`,
   `JOB.md` and `LEARNED.md` and returns `fyi`, `reply`, `general`, `coding`,
-  `task` or `watch`. If triage fails, the message is filed as FYI. It is never
-  assumed to be work.
+  `task` or `watch`. Work becomes a task on its own only when
+  `triage.escalate` names the message (see [Config](#config)); other work is
+  held in the Inbox for you. If triage fails, the message is filed as FYI. It
+  is never assumed to be work.
 - **A general or reply task is one chat.** Each agent turn is a headless
   `claude -p` call, resumed by session id. Its tool steps stream onto the turn
   live. It answers in three sections (_What this is about_, _What I did_,

@@ -34,7 +34,13 @@ import * as repos from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
-import { triage, type TriageEffect, type TriageOutcome } from "./triage";
+import {
+  taskFromHeld,
+  triage,
+  type TriageEffect,
+  type TriageOutcome,
+  type VerdictAnswer,
+} from "./triage";
 import {
   AgentState,
   IdeaStatus,
@@ -562,6 +568,19 @@ export class Desk {
     store.markMessageRead(messageId);
   }
 
+  // A message triage held for you (no escalation rule named it): m makes the
+  // task its verdict describes. Without one (an old run), it is made as an
+  // FYI would be.
+  heldToTask(messageId: number): TaskRow | null {
+    const message = store.getMessage(messageId);
+    if (!message || message.task_id !== null) return null;
+    const answer = heldVerdict(messageId);
+    if (!answer) return this.fyiToTask(messageId);
+    const outcome = taskFromHeld(message, answer, this.config());
+    this.runEffects(outcome.effects);
+    return outcome.taskId === null ? null : store.getTask(outcome.taskId);
+  }
+
   // An FYI that was work after all: it becomes a task and teaches triage.
   fyiToTask(messageId: number): TaskRow | null {
     const m = store.getMessage(messageId);
@@ -719,4 +738,18 @@ function waitsOn(from: number, to: number, seen = new Set<number>()): boolean {
   if (seen.has(from)) return false;
   seen.add(from);
   return store.blockersOf(from).some((id) => waitsOn(id, to, seen));
+}
+
+// The model's verdict from the newest triage run that asked for one.
+function heldVerdict(messageId: number): VerdictAnswer | null {
+  for (const run of store.triageRunsFor(messageId)) {
+    if (!run.verdict) continue;
+    try {
+      const v = JSON.parse(run.verdict) as Partial<VerdictAnswer>;
+      if (v.verdict && v.verdict !== Verdict.fyi && v.title) return v as VerdictAnswer;
+    } catch {
+      // An unreadable run is skipped.
+    }
+  }
+  return null;
 }
