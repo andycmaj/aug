@@ -115,6 +115,26 @@ export function archiveStale(at = new Date()): number {
   return stale.length;
 }
 
+const MACHINE = /\[s:\s*\d/;
+
+// The lines a LEARNED.md edit drops that it may not: an owner's line (no
+// [s:...] tag) ever, and a machine line it does not name in absorbs. A model
+// that rewrites the file whole drops lines by leaving them out, so this is
+// read off the text, not off what the model says it did.
+export function unearnedDrops(
+  current: string,
+  proposed: string,
+  absorbs: string[],
+): string[] {
+  const kept = new Set(proposed.split("\n").map((l) => l.trim()));
+  const named = new Set(absorbs.map((l) => l.trim()));
+  return current
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("- ") && !kept.has(l))
+    .filter((l) => !MACHINE.test(l) || !named.has(l));
+}
+
 function sinceLastPass(): string {
   const since = store.kvGet(LAST_RUN) ?? "";
   const fresh = store
@@ -178,6 +198,13 @@ export async function runDocPass(
     // Never a proposal that is over budget and no smaller than what it
     // replaces.
     if (size > docBudget(config, doc) && text.length >= current.length) continue;
+    if (doc === DocName.learned) {
+      const drops = unearnedDrops(current, text, edit.absorbs ?? []);
+      if (drops.length) {
+        log.info("doc pass dropped a LEARNED.md edit", { lines: drops.length });
+        continue;
+      }
+    }
     propose({
       doc,
       source: ProposalSource.evolve,

@@ -1,9 +1,15 @@
 // SYSTEM tasks: aug asking the owner about its own brain docs. Each holds one
-// or more proposals (a whole new text for one doc), and the owner accepts or
-// rejects the lot. Accept writes the docs (the old files go to .trash) and
-// archives the LEARNED.md lines they absorbed; nothing is ever merged.
+// or more proposals (a whole new text for one doc, drafted against `base`),
+// and the owner accepts or rejects the lot. Accept writes the docs (the old
+// files go to .trash) and archives the LEARNED.md lines they absorbed.
+//
+// A doc keeps moving under an open proposal (a remembered line, a lesson), so
+// only the proposal's own changes, base to proposed, are laid over the doc as
+// it is now (`rebased`). Read whole, the old snapshot would delete every line
+// written since. A shipped version is the exception: it replaces yours.
 
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { think } from "./brain";
 import type { AugConfig } from "./config";
@@ -149,6 +155,37 @@ function absorbed(p: DocProposalRow): string[] {
   }
 }
 
+// diff3 by git, which writeReview already needs: `ours` with base-to-theirs
+// applied, or null when both touched the same lines.
+export function mergeText(ours: string, base: string, theirs: string): string | null {
+  if (ours === base) return theirs;
+  if (theirs === base || ours === theirs) return ours;
+  const dir = mkdtempSync(join(tmpdir(), "aug-merge-"));
+  try {
+    const files = { ours, base, theirs };
+    for (const [name, text] of Object.entries(files))
+      writeFileSync(join(dir, name), text);
+    const run = Bun.spawnSync(
+      ["git", "merge-file", "-p", "--quiet", "ours", "base", "theirs"],
+      { cwd: dir, stdout: "pipe", stderr: "pipe" },
+    );
+    return run.exitCode === 0 ? run.stdout.toString() : null;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// What accepting `p` would write now; null when the doc changed since in the
+// lines the proposal edits.
+export function rebased(p: DocProposalRow): string | null {
+  if (!isDocName(p.doc)) return null;
+  if (p.source === ProposalSource.shipped) return shippedText(p.doc);
+  return mergeText(readDoc(p.doc), p.base, p.proposed);
+}
+
+const STALE =
+  "changed since where the proposal edits it: x rejects it and the next pass drafts again";
+
 function openOn(taskId: number): DocProposalRow[] {
   return store
     .proposalsForTask(taskId)
@@ -159,19 +196,22 @@ export function hasOpenProposals(taskId: number): boolean {
   return openOn(taskId).length > 0;
 }
 
-// Accept: each doc written whole (its old file to the trash), its absorbed
-// lessons out of LEARNED.md and into the archive. One line back.
+// Accept: each doc written (its old file to the trash), its absorbed lessons
+// out of LEARNED.md and into the archive. A proposal whose lines changed
+// since stays open. One line back.
 export function acceptProposals(taskId: number): string {
   const open = openOn(taskId);
   if (open.length === 0) return "nothing to accept";
-  const notes: string[] = [];
+  const wrote: string[] = [];
+  const held: string[] = [];
   for (const p of open) {
     if (!isDocName(p.doc)) continue;
     const doc = p.doc;
-    if (readDoc(doc) !== p.base)
-      notes.push(`${doc} had changed since; that version is in docs/.trash`);
-    const text =
-      p.source === ProposalSource.shipped ? shippedText(doc) : p.proposed;
+    const text = rebased(p);
+    if (text === null) {
+      held.push(doc);
+      continue;
+    }
     replaceDoc(doc, text);
     const lines = absorbed(p);
     if (lines.length) {
@@ -186,10 +226,13 @@ export function acceptProposals(taskId: number): string {
       );
     }
     store.setProposalStatus(p.id, ProposalStatus.accepted);
+    wrote.push(doc);
   }
-  taskClosed(taskId);
-  const docs = open.map((p) => p.doc).join(", ");
-  return [`wrote ${docs}`, ...notes].join("; ");
+  if (held.length === 0) taskClosed(taskId);
+  return [
+    ...(wrote.length ? [`wrote ${wrote.join(", ")}`] : []),
+    ...(held.length ? [`${held.join(", ")} ${STALE}`] : []),
+  ].join("; ");
 }
 
 export function rejectProposals(taskId: number): string {
@@ -241,12 +284,13 @@ export async function redraftProposals(
   const done: string[] = [];
   for (const p of open) {
     const doc = p.doc as DocName;
+    const now = readDoc(doc);
     const result = await think({
       prompt: [
         `## ${doc} as it is now`,
-        p.base,
+        now,
         `## The proposed ${doc}`,
-        p.proposed,
+        rebased(p) ?? p.proposed,
         "## The owner's notes on the proposal (file:line, then the note)",
         notes,
       ].join("\n\n"),
@@ -259,6 +303,7 @@ export async function redraftProposals(
     store.reviseProposal(p.id, {
       proposed: answer.text.trimEnd() + "\n",
       reason: answer.reason ?? p.reason,
+      base: now,
     });
     done.push(doc);
   }
@@ -280,6 +325,9 @@ export interface ReviewFiles {
   // Where revdiff writes the owner's notes.
   out: string;
   empty: boolean;
+  // Docs that changed since where their proposal edits: shown against the
+  // text the proposal was drafted on instead.
+  stale: DocName[];
 }
 
 // The task's proposals as one diff file for revdiff (or a pager). Each doc's
@@ -292,13 +340,14 @@ export function writeReview(taskId: number): ReviewFiles | null {
   mkdirSync(join(dir, "yours"), { recursive: true });
   mkdirSync(join(dir, "proposed"), { recursive: true });
   const parts: string[] = [];
+  const stale: DocName[] = [];
   for (const p of open) {
     const doc = isDocName(p.doc) ? p.doc : null;
     if (!doc) continue;
-    const proposed =
-      p.source === ProposalSource.shipped ? shippedText(doc) : p.proposed;
-    writeFileSync(join(dir, "yours", doc), readDoc(doc));
-    writeFileSync(join(dir, "proposed", doc), proposed);
+    const merged = rebased(p);
+    if (merged === null) stale.push(doc);
+    writeFileSync(join(dir, "yours", doc), merged === null ? p.base : readDoc(doc));
+    writeFileSync(join(dir, "proposed", doc), merged ?? p.proposed);
     const run = Bun.spawnSync(
       [
         "git",
@@ -324,5 +373,6 @@ export function writeReview(taskId: number): ReviewFiles | null {
     diff,
     out: join(dir, "notes.md"),
     empty: parts.every((d) => !d.trim()),
+    stale,
   };
 }

@@ -165,7 +165,11 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   owner has not asked for is a proposal on a `kind: system` task
   (`core/proposals.ts`, `doc_proposals`): the Advisor's daily
   `core/doc-pass.ts`, the onboarding interview (`core/onboard.ts`, the
-  `propose_doc` move) and shipped versions. Nothing merges; no history.
+  `propose_doc` move) and shipped versions. A proposal is a whole text
+  drafted against `base`; review and accept lay only its own changes over
+  the doc as it is now (`rebased`, git merge-file), so lines written since
+  are kept, and one whose lines changed since stays open. A shipped version
+  replaces yours. No history.
   The interview is interactive claude in its System task's own window
   (`inTmux` in `core/driver.ts`), shown in that task's Canvas; it writes
   drafts to `drafts/docs` and hands them in with `propose_doc --file`.

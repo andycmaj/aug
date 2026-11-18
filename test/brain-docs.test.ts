@@ -344,6 +344,106 @@ describe("the daily doc pass", () => {
     expect(readDoc(DocName.job)).toBe(shippedText(DocName.job));
   });
 
+  // AUG-0142: a proposal is a whole doc drafted against the file as it was.
+  // A line written after it (remember, a new lesson) is not in that text, so
+  // the review read it as deleted and accept deleted it.
+  test("a line added after a LEARNED.md proposal is never proposed for deletion", async () => {
+    const a = "- Clarify the ask first [s:2 | ev: c1 | seen: 2026-11-08]";
+    const b = "- Clarify the ask before diving in [s:3 | ev: c2 | seen: 2026-11-08]";
+    writeDoc(
+      DocName.learned,
+      readDoc(DocName.learned).replace("## Watching\n", `## Watching\n${a}\n${b}\n`),
+    );
+    const merged = "- Clarify the ask before diving in [s:3 | ev: c1,c2 | seen: 2026-11-08]";
+    fakeBrain((call) => ({
+      edits: [
+        {
+          doc: "LEARNED.md",
+          text: call.prompt
+            .split("## LEARNED.md")[1]
+            .split("\n")
+            .slice(1)
+            .join("\n")
+            .split("## Corrections since the last pass")[0]
+            .replace(`${a}\n${b}`, merged),
+          reason: "two lines say the same",
+          absorbs: [a, b],
+        },
+      ],
+    }));
+    expect((await runDocPass(config(), new Date(), true)).proposed).toBe(1);
+    const [task] = systemTasks();
+
+    const engine = new Engine({ config: testConfig() });
+    const owners = "Suggest aug ideas when I hit friction";
+    engine.desk.remember(owners);
+    syncDocs();
+    expect(systemTasks()).toHaveLength(1);
+
+    const review = writeReview(task.id)!;
+    const diff = readFileSync(review.diff, "utf8");
+    expect(diff).not.toContain(`-- ${owners}`);
+    expect(diff).toContain(`-${a}`);
+    expect(diff).toContain(`+${merged}`);
+
+    acceptProposals(task.id);
+    const after = readDoc(DocName.learned);
+    expect(after).toContain(`- ${owners}`);
+    expect(after).toContain(merged);
+    expect(after).not.toContain(a);
+  });
+
+  test("a LEARNED.md edit that drops a line it does not name is not proposed", async () => {
+    const owners = "- Mornings are for deep work";
+    writeDoc(
+      DocName.learned,
+      readDoc(DocName.learned).replace("## How you work\n", `## How you work\n${owners}\n`),
+    );
+    fakeBrain(() => ({
+      edits: [
+        {
+          doc: "LEARNED.md",
+          text: readDoc(DocName.learned).replace(`${owners}\n`, ""),
+          reason: "tidy",
+          absorbs: [],
+        },
+      ],
+    }));
+    expect((await runDocPass(config(), new Date(), true)).proposed).toBe(0);
+    fakeBrain(() => ({
+      edits: [
+        {
+          doc: "LEARNED.md",
+          text: readDoc(DocName.learned).replace(`${owners}\n`, ""),
+          reason: "absorbed by naming it is still the owner's line",
+          absorbs: [owners],
+        },
+      ],
+    }));
+    expect((await runDocPass(config(), new Date(), true)).proposed).toBe(0);
+    expect(systemTasks()).toHaveLength(0);
+  });
+
+  test("a proposal whose lines changed since is held, not written", () => {
+    const line = "- Ship small [s:3 | ev: c1 | seen: 2026-11-08]";
+    writeDoc(
+      DocName.learned,
+      readDoc(DocName.learned).replace("## How you work\n", `## How you work\n${line}\n`),
+    );
+    const p = propose({
+      doc: DocName.learned,
+      source: ProposalSource.evolve,
+      proposed: readDoc(DocName.learned).replace(line, "- Ship smaller [s:3 | ev: c1 | seen: 2026-11-08]"),
+      reason: "wording",
+    });
+    const moved = readDoc(DocName.learned).replace(line, "- Ship small [s:4 | ev: c1,c3 | seen: 2026-11-17]");
+    writeDoc(DocName.learned, moved);
+    expect(acceptProposals(p.task_id)).toContain("changed since");
+    expect(readDoc(DocName.learned)).toBe(moved);
+    expect(store.getProposal(p.id)!.status).toBe(ProposalStatus.open);
+    expect(writeReview(p.task_id)!.stale).toEqual([DocName.learned]);
+  });
+
   test("an edit still over budget and no smaller is dropped", async () => {
     freshHome({ ...DEFAULT_CONFIG, docBudgets: { "STYLE.md": 10 } });
     fakeBrain(() => ({

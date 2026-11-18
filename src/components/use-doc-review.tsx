@@ -56,7 +56,9 @@ export function useDocReview() {
       argv: argv(
         files.diff,
         files.out,
-        `${task.title}. Left: your doc. Right: the proposal. Notes you leave are sent back to redraft it; y accepts, x rejects.`,
+        files.stale.length
+          ? `${task.title}. ${files.stale.join(", ")} changed since where the proposal edits it, so this is the proposal against the text it was drafted on; y keeps it waiting, x rejects.`
+          : `${task.title}. Left: your doc. Right: the proposal. Notes you leave are sent back to redraft it; y accepts, x rejects.`,
       ),
       cwd: files.dir,
       onExit: () => {
