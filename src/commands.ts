@@ -80,6 +80,7 @@ export const Commands = {
 
   // Embedded terminal
   TERMINAL_DETACH: "terminal.detach",
+  TERMINAL_JUMP: "terminal.jump",
 
   // Board
   BOARD_LEFT: "board.left",

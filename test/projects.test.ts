@@ -15,6 +15,7 @@ import {
   createProject,
   endedElsewhere,
   freeSessionName,
+  jump,
   moveTask,
   nudge,
   reconcile,
@@ -386,5 +387,19 @@ describe("closing, moving, reconciling", () => {
     await startTask(config(), t.id);
     expect(await nudge(t.id, "New review on #12")).toBe(true);
     expect(fake.sent).toEqual([{ windowId: fake.windows[0].id, text: "New review on #12" }]);
+  });
+
+  // shift+t, and ctrl+t while attached (AUG-0148).
+  test("jump moves aug's own client; outside tmux it answers the attach line", async () => {
+    const t = codingTask();
+    expect(await jump(t.id)).toBe("gone");
+    await startTask(config(), t.id);
+    const w = fake.windows[0];
+    // No host window: aug is not in a client of this server.
+    expect(await jump(t.id)).toEqual({ attach: `tmux attach -t ${w.sessionId}:${w.id}` });
+    expect(fake.switched).toEqual([]);
+    fake.host = "@aug";
+    expect(await jump(t.id)).toBe("jumped");
+    expect(fake.switched).toEqual([w.id]);
   });
 });

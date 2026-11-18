@@ -1,6 +1,7 @@
 // A coding agent's live terminal on the table. While the task pane has focus
 // and the session runs, every key goes to the agent except the detach chord;
 // detaching moves focus back to the rail and the session keeps running.
+// ctrl+t detaches too and moves your own tmux client to the agent's window.
 // A paste goes in too, bracketed when the program asked for it.
 
 import { createEffect, createMemo, onCleanup, Show } from "solid-js";
@@ -45,6 +46,8 @@ export function TermView(props: {
   );
 }
 
+const CTRL_T = "\x14";
+
 function within(node: Renderable | null, target: Renderable): boolean {
   for (let n: Renderable | null = node; n; n = n.parent) {
     if (n === target) return true;
@@ -57,6 +60,9 @@ export function TerminalHost(props: {
   attached: () => boolean;
   pane: () => Renderable | undefined;
   onDetach: () => void;
+  // Your tmux client to this terminal's window; none for one that has no
+  // window of its own (the editor, ghdash), which get the key instead.
+  onJump?: () => void;
 }) {
   const terminals = useTerminals();
   const theme = useTheme();
@@ -103,6 +109,11 @@ export function TerminalHost(props: {
       [Commands.GO_TO]: () => {
         props.onDetach();
         openModal("search");
+      },
+      [Commands.TERMINAL_JUMP]: () => {
+        if (!props.onJump) return terminals.write(props.id, CTRL_T);
+        props.onDetach();
+        props.onJump();
       },
     },
     { target: props.pane },

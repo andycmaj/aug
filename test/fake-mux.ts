@@ -124,6 +124,10 @@ export class FakeMux implements Mux {
     this.switched.push(windowId ?? sessionId);
   }
 
+  attachCommand(sessionId: string, windowId?: string): string {
+    return `tmux attach -t ${windowId ? `${sessionId}:${windowId}` : sessionId}`;
+  }
+
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {
     return ["tmux", "new-session", "-s", viewerName, ";", "link-window", "-s", windowId, "-t", `=${viewerName}:`];
   }

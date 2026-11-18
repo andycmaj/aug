@@ -181,10 +181,22 @@ function shown(scopes: string[], ctx: HelpCtx): Map<string, string> {
 
 test("attached to a terminal, only its own keys are listed", () => {
   const keys = shown(["terminal", "task", "app"], { ...quiet, attached: true });
-  // Detach and the go-to chord: the two keys an attached terminal lets past.
+  // Detach, the go-to chord and the tmux jump: the keys an attached terminal
+  // lets past.
   expect([...keys.values()].sort()).toEqual(
-    [Commands.GO_TO, Commands.TERMINAL_DETACH].sort(),
+    [Commands.GO_TO, Commands.TERMINAL_DETACH, Commands.TERMINAL_JUMP].sort(),
   );
+  expect(keys.get("^t")).toBe(Commands.TERMINAL_JUMP);
+});
+
+// Reserved like ctrl+] (the passthrough lets the terminal scope's keys by),
+// and bound nowhere else, so it means one thing.
+test("ctrl+t is the attached terminal's tmux jump, and only that", () => {
+  expect(keyFor(keymap, "terminal", Commands.TERMINAL_JUMP)).toEqual(["ctrl+t"]);
+  const others = Object.entries(keymap).flatMap(([scope, bindings]) =>
+    (bindings ?? []).filter((b) => b.key === "ctrl+t").map((b) => `${scope}:${b.cmd}`),
+  );
+  expect(others).toEqual([`terminal:${Commands.TERMINAL_JUMP}`]);
 });
 
 test("typing in the chat box lists the box's keys, not the table's", () => {

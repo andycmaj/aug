@@ -107,7 +107,11 @@ export interface Mux {
   // Moves your own tmux client (the one aug runs in) to the session, or to
   // one of its windows. The session is named because a viewer links the
   // same window, and tmux would otherwise land you in the viewer.
+  // It also tells that client, on its status line, how to get back to aug.
   switchClient(sessionId: string, windowId?: string): Promise<void>;
+  // The shell line that attaches a terminal to the session (or one of its
+  // windows), for when aug is not in a client of this server to move.
+  attachCommand(sessionId: string, windowId?: string): string;
   // argv for the embedded terminal: attaches a session of its own holding
   // just that window, so showing it never moves your real client.
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[];
@@ -252,6 +256,9 @@ function idOf(raw: string | undefined): number | null {
   const n = Number(raw);
   return raw && Number.isInteger(n) && n > 0 ? n : null;
 }
+
+// Shown on your client after a jump. #{prefix} is your prefix key.
+export const BACK_TO_AUG = "aug: #{prefix} L goes back to aug";
 
 export interface TmuxSocket {
   socketName?: string;
@@ -480,7 +487,22 @@ export class TmuxMux implements Mux {
   }
 
   async switchClient(sessionId: string, windowId?: string): Promise<void> {
-    await this.cmd("switch-client", ["-t", windowId ? `${sessionId}:${windowId}` : sessionId]);
+    // Named before the switch: tmux finds "the current client" through the
+    // session aug's pane is in, and once moved that client is not in it, so
+    // the message after would go to whichever client tmux likes (a viewer).
+    const [client] = await this.cmd("display-message", ["-p", "#{client_name}"]);
+    const target = windowId ? `${sessionId}:${windowId}` : sessionId;
+    const on = client?.trim() ? ["-c", client.trim()] : [];
+    await this.cmd("switch-client", [...on, "-t", target]);
+    // switch-client -l (prefix L) is tmux's own "last session": aug's.
+    await this.cmd("display-message", [...on, "-d", "5000", BACK_TO_AUG]).catch(
+      (err: unknown) => log.debug("back-to-aug message failed", { err: String(err) }),
+    );
+  }
+
+  attachCommand(sessionId: string, windowId?: string): string {
+    const target = windowId ? `${sessionId}:${windowId}` : sessionId;
+    return [...this.tmuxArgs(), "attach", "-t", target].map(shellQuote).join(" ");
   }
 
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {

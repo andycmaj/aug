@@ -445,12 +445,24 @@ export async function moveTask(
     await archive(from, await mux().state());
 }
 
-export async function jump(taskId: number): Promise<boolean> {
+// What a jump did: moved your client, found no window, or (aug not in a
+// client of this server) the line to run in a terminal of your own.
+export type Jump = "jumped" | "gone" | { attach: string };
+
+// switch-client moves the client aug runs in. Outside tmux (or on another
+// server) there is none, and tmux would move whichever client it likes.
+async function jumpTo(sessionId: string, windowId?: string): Promise<Jump> {
+  if (!(await mux().hostWindow()))
+    return { attach: mux().attachCommand(sessionId, windowId) };
+  await mux().switchClient(sessionId, windowId);
+  return "jumped";
+}
+
+export async function jump(taskId: number): Promise<Jump> {
   const state = await mux().state();
   const window = state.windows.find((w) => w.taskId === taskId);
-  if (!window) return false;
-  await mux().switchClient(window.sessionId, window.id);
-  return true;
+  if (!window) return "gone";
+  return jumpTo(window.sessionId, window.id);
 }
 
 export async function nudge(taskId: number, text: string): Promise<boolean> {
@@ -465,12 +477,11 @@ export async function nudge(taskId: number, text: string): Promise<boolean> {
 export async function jumpToProject(
   config: AugConfig,
   projectId: number,
-): Promise<boolean> {
+): Promise<Jump> {
   const project = store.getProject(projectId);
-  if (!project) return false;
+  if (!project) return "gone";
   const session = await ensureSession(config, project);
-  await mux().switchClient(session.id);
-  return true;
+  return jumpTo(session.id);
 }
 
 export function viewerName(taskId: number): string {

@@ -33,6 +33,7 @@ import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
 import type { NoiseRule } from "../core/config";
+import type { Jump } from "../core/desk";
 import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "../core/inbox";
 import { messageMeta } from "../core/meta";
 import { Kind, Priority, type MessageRow, type TaskRow } from "../core/types";
@@ -290,9 +291,16 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
+  // aug outside tmux has no client to move: the line to run instead.
+  function jumped(outcome: Jump, gone: string) {
+    if (outcome === "gone") showToast(gone);
+    else if (outcome !== "jumped")
+      showToast(`aug is not in tmux; in a terminal run: ${outcome.attach}`, 10000);
+  }
+
   async function jumpToProject(projectId: number) {
     try {
-      await desk.jumpToProject(projectId);
+      jumped(await desk.jumpToProject(projectId), "That project is gone");
     } catch (err) {
       showToast(`Could not jump: ${errorMessage(err)}`, 4000, "error");
     }
@@ -312,8 +320,7 @@ export function useActions(dialogs: Dialogs) {
 
   async function jumpTo(taskId: number) {
     try {
-      if (!(await desk.jumpToTask(taskId)))
-        showToast("Its window is gone; s starts it again");
+      jumped(await desk.jumpToTask(taskId), "Its window is gone; s starts it again");
     } catch (err) {
       showToast(`Could not jump: ${errorMessage(err)}`, 4000, "error");
     }

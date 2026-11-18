@@ -208,6 +208,7 @@ export function Canvas(props: {
                       attached={attached}
                       pane={() => pane}
                       onDetach={leave}
+                      onJump={() => void props.actions[Commands.JUMP]?.()}
                     />
                   )}
                 </Show>

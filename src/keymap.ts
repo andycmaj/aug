@@ -487,6 +487,16 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "detach and go to anything",
       help: "go to",
     },
+    // Reserved, so the agent never gets ctrl+t (claude's todo list): it
+    // still has it in its own window, where this lands you. Detached, the
+    // same jump is shift+t. A terminal with no agent (the editor) is sent
+    // the key as typed.
+    {
+      key: "ctrl+t",
+      cmd: Commands.TERMINAL_JUMP,
+      desc: "detach and jump your tmux client to the agent's window (prefix L comes back)",
+      help: "tmux",
+    },
   ],
   board: [
     ...(listNav as BindingSpec<HelpCtx>[]),

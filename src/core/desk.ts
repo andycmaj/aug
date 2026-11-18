@@ -54,6 +54,8 @@ import {
   type TaskRow,
 } from "./types";
 
+export type { Jump } from "./projects";
+
 export type RetriageResult =
   | { ok: true; outcome: TriageOutcome }
   | { ok: false; why: string };
