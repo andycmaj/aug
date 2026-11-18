@@ -30,7 +30,10 @@ export function stateColor(theme: Theme, state: ConnectorState): ThemeColor {
 
 // Today's spend on aug's own model calls, against the cap when one is on:
 // warning from 80% of it, error once reached (aug's own turns wait then).
-export function spendWords(spent: number, cap: number | null): {
+export function spendWords(
+  spent: number,
+  cap: number | null,
+): {
   text: string;
   level: "ok" | "near" | "capped";
 } {
@@ -44,11 +47,11 @@ export function spendWords(spent: number, cap: number | null): {
 export function ConnectorLine() {
   const aug = useAug();
   const theme = useTheme();
-  const spend = () =>
-    spendWords(
-      aug.spendOn(localDay(aug.now())).cost,
-      dailyCap(aug.desk.config()),
-    );
+  // const spend = () =>
+  //   spendWords(
+  //     aug.spendOn(localDay(aug.now())).cost,
+  //     dailyCap(aug.desk.config()),
+  //   );
   const rows = () => [
     { name: "github", s: aug.status().github },
     { name: "slack", s: aug.status().slack },
@@ -75,6 +78,7 @@ export function ConnectorLine() {
           </text>
         )}
       </For>
+      {/* spend section. hide until we have a better design 
       <text
         fg={
           spend().level === "capped"
@@ -85,7 +89,7 @@ export function ConnectorLine() {
         }
       >
         {spend().text}
-      </text>
+      </text> */}
     </box>
   );
 }
