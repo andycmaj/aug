@@ -15,7 +15,7 @@ import {
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { DOC_PURPOSE, DocName, docPath } from "../core/docs";
-import { focusNext, toRail } from "../core/focus";
+import { toRail } from "../core/focus";
 import { BoardTab, type HelpCtx } from "../keymap";
 import { useActions, useDialogs, type Actions, type Dialogs } from "./actions";
 import { FocusHelp } from "./focus-help";
@@ -90,7 +90,7 @@ export function useShell(opts: {
       [Commands.PALETTE_OPEN]: unlessTyping(() => openModal("palette")),
       [Commands.HELP_OPEN]: unlessTyping(() => openModal("help")),
       [Commands.SIDEBAR_TOGGLE]: toggleSidebar,
-      [Commands.FOCUS_NEXT]: () => focusNext(focus),
+      [Commands.FOCUS_NEXT]: focus.cyclePane,
       [Commands.VIEW_TOGGLE]: unlessTyping(toggleView),
       [Commands.ASK_OPEN]: unlessTyping(aug.goHome),
       [Commands.NEW_TASK]: unlessTyping(actions.newTask),
