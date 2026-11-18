@@ -15,7 +15,6 @@ import type { Renderable, ScrollBoxRenderable } from "@opentui/core";
 import {
   contrastingForeground,
   Pane,
-  PaneHeader,
   truncate,
   useFocus,
   useScope,
@@ -178,29 +177,6 @@ export function Rail(props: { actions: TaskActions }) {
     { target: () => pane },
   );
 
-  const counts = createMemo(() => {
-    let asks = 0;
-    let ready = 0;
-    let approve = 0;
-    let tasks = 0;
-    for (const s of aug.rail()) {
-      if (
-        s.section !== "tasks" &&
-        s.section !== "reviews" &&
-        s.section !== "wins"
-      )
-        continue;
-      for (const i of s.items) {
-        if (i.type !== "task") continue;
-        tasks++;
-        if (i.lane === Lane.waiting) asks++;
-        if (i.lane === Lane.ready) ready++;
-        if (i.lane === Lane.approve) approve++;
-      }
-    }
-    return { asks, ready, approve, tasks };
-  });
-
   return (
     <Pane
       name="rail"
@@ -208,33 +184,6 @@ export function Rail(props: { actions: TaskActions }) {
       width={RAIL_WIDTH}
       ref={(r) => (pane = r)}
     >
-      <PaneHeader title="Work">
-        <text>
-          <Show when={counts().asks > 0}>
-            <span
-              style={{ fg: theme.warning }}
-            >{`${LANE_META.waiting.mark} ${counts().asks}  `}</span>
-          </Show>
-          <Show when={counts().ready > 0}>
-            <span
-              style={{ fg: theme.success }}
-            >{`${LANE_META.ready.mark} ${counts().ready}  `}</span>
-          </Show>
-          <Show when={counts().approve > 0}>
-            <span
-              style={{ fg: theme.success }}
-            >{`${LANE_META.approve.mark} ${counts().approve}  `}</span>
-          </Show>
-          <span
-            style={{ fg: theme.textMuted }}
-          >{`${counts().tasks} open`}</span>
-          {/* Ideas and messages that need you live on the Board's Inbox. */}
-          <Show when={aug.inboxCount() > 0}>
-            <span style={{ fg: theme.warning }}>{`  inbox ${aug.inboxCount()}`}</span>
-          </Show>
-        </text>
-      </PaneHeader>
-
       <FilterBar />
 
       <scrollbox
@@ -290,7 +239,10 @@ export function Rail(props: { actions: TaskActions }) {
 
 // status filter bar: a pill per status with its count, lit while it
 // filters. Digits 1-9 toggle the pills in this order; f steps through them.
-// Nine pills fit the rail only as mark+count with one space between.
+// Nine pills fit the rail only as mark+count with one space between. It is
+// the rail's only header: the pills already count the work, so the inbox
+// badge (ideas and messages wait on the Board's Inbox) rides at its end, and
+// wraps under the pills when all nine are lit.
 function FilterBar() {
   const aug = useAug();
   const theme = useTheme();
@@ -299,8 +251,10 @@ function FilterBar() {
     <box
       flexDirection="row"
       paddingLeft={2}
+      paddingTop={1}
       paddingBottom={1}
       flexShrink={0}
+      flexWrap="wrap"
       justifyContent="space-evenly"
     >
       <For each={RAIL_FILTERS}>
@@ -325,6 +279,9 @@ function FilterBar() {
           );
         }}
       </For>
+      <Show when={aug.inboxCount() > 0}>
+        <text fg={theme.warning}>{` inbox ${aug.inboxCount()} `}</text>
+      </Show>
     </box>
   );
 }

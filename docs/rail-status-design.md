@@ -219,8 +219,8 @@ already merged says `merged, agent working` (working outranks merged: an
 agent that landed its branch is often still writing its note). The selected
 row carries its `▸` in the gutter left of the bar, never in place of
 its mark, so the task you are watching shows its lane move (AUG-0123).
-The rail header counts ready rows (◈) next to asks (◆), and so does a
-folded project row. The done
+The filter pills, the rail's only header, count ready rows (◈) next to
+asks (◆), and so does a folded project row. The done
 hook's "next" line on the task says "Ready for review: yours to close"
 whenever the task stays open.
 
@@ -229,8 +229,9 @@ whenever the task stays open.
 Home, **Wins**, System, Tasks, Code Reviews, Watching, For later. Wins
 is walked first (`WALKED`). The rail holds tasks and projects only:
 messages and Advisor ideas are on the Board's Inbox tab (5), and the
-header's `inbox N` (open ideas plus messages triage could not place)
-says when one needs you.
+`inbox N` at the end of the pills row (open ideas plus messages triage
+could not place) says when one needs you. There is no other header: the
+pills already count the work (AUG-0139).
 
 ### Filters
 

@@ -44,8 +44,8 @@ async function boot() {
   return { press, goTo, renderer: setup.renderer, frame };
 }
 
-// The rail's header counts the open tasks.
-const railShown = (frame: string) => /\d+ open\s+inbox/.test(frame);
+// The rail's pills row ends with the inbox badge.
+const railShown = (frame: string) => /\d+\s+inbox \d+/.test(frame);
 
 test("go to from the Canvas with the rail hidden keeps a pane focused", async () => {
   const { press, goTo, renderer, frame } = await boot();
