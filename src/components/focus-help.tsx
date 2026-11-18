@@ -5,6 +5,7 @@
 
 import { createMemo, For, type Accessor, type JSX } from "solid-js";
 import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/solid";
 import {
   BaseCommands,
   Modal,
@@ -41,6 +42,10 @@ function digitRange(keys: string): string {
   return run ? `${parts[0]}-${parts[parts.length - 1]}` : keys;
 }
 
+// Rows the modal takes around its scrollbox: its top offset, frame, padding,
+// header and a row below, so the frame's bottom edge stays on screen.
+const CHROME_ROWS = 9;
+
 const CLOSE_BINDINGS: BindingSpec[] = [
   { key: "?", cmd: ModalCommands.MODAL_CLOSE, desc: "close" },
   { key: "q", cmd: ModalCommands.MODAL_CLOSE, desc: "close" },
@@ -53,6 +58,7 @@ export function FocusHelp(props: {
 }) {
   const theme = useTheme();
   const bindings = useFocusBindings(() => props.ctx());
+  const dims = useTerminalDimensions();
   let scrollRef: ScrollBoxRenderable | undefined;
 
   const groups = createMemo(() => {
@@ -87,7 +93,7 @@ export function FocusHelp(props: {
       <ModalHeader title="Keys here" hint="j/k scroll · esc/q/?" paddingX={4} />
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
-        maxHeight={18}
+        maxHeight={Math.max(6, dims().height - CHROME_ROWS)}
         paddingLeft={4}
         paddingRight={4}
       >
@@ -113,10 +119,8 @@ export function FocusHelp(props: {
         <text fg={theme.textMuted}>
           Only the keys for where you are and what is under the cursor.
         </text>
+        <box paddingTop={1}>{props.footer}</box>
       </scrollbox>
-      <box paddingLeft={4} paddingRight={4} paddingTop={1}>
-        {props.footer}
-      </box>
     </Modal>
   );
 }

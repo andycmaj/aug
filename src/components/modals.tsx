@@ -414,6 +414,10 @@ export function InfoModal(props: {
 }
 
 const SEARCH_ROWS = 14;
+// Rows the go-to modal takes above and below its list (offset, frame, header,
+// filter), so a short terminal shrinks the list instead of the frame running
+// off the bottom.
+const SEARCH_CHROME_ROWS = 10;
 const SEARCH_HINT_MAX = 48;
 
 function searchTag(item: RailItem): string {
@@ -433,7 +437,13 @@ export function SearchModal(props: {
 }) {
   const theme = useTheme();
   const aug = useAug();
+  const dims = useTerminalDimensions();
   let scrollRef: ScrollBoxRenderable | undefined;
+  // Read once: list navigation takes a fixed page size.
+  const listRows = Math.max(
+    4,
+    Math.min(SEARCH_ROWS, dims().height - SEARCH_CHROME_ROWS),
+  );
   // Re-read only when the store moves, not on every keystroke.
   const docs = createMemo(() => {
     const sections = aug.rail();
@@ -445,7 +455,8 @@ export function SearchModal(props: {
   const nav = useListNavigation({
     itemCount: () => hits().length,
     scrollRef: () => scrollRef,
-    visibleItems: SEARCH_ROWS,
+    // The scrollbox's bottom padding takes one of its rows.
+    visibleItems: listRows - 1,
   });
   // Read once: what was recent when the list opened.
   const recentKeys = aug.recent().map((i) => i.key);
@@ -481,7 +492,7 @@ export function SearchModal(props: {
       />
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
-        maxHeight={SEARCH_ROWS}
+        maxHeight={listRows}
         paddingLeft={2}
         paddingRight={2}
         paddingBottom={1}
