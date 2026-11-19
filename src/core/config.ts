@@ -108,6 +108,16 @@ export interface AugConfig {
     capEnabled: boolean;
     dailyUsd: number;
   };
+  // When a chat turn leaves its session for a new one (core/agents.ts
+  // chatSession). The prompt cache lives an hour: resuming a session idle
+  // past that re-writes its whole context at the cache-write price, so a
+  // new one that reads the conversation back is cheaper. Home's context
+  // grows with every turn, so past homeMaxTokens it starts over too. 0 turns
+  // either off.
+  chat: {
+    idleMinutes: number;
+    homeMaxTokens: number;
+  };
   // Makes a task's worktree. {repo_path}, {create} (-c or empty) and
   // {branch} are filled in; stdout is wt's JSON, or a path on the last line.
   worktreeCommand: string;
@@ -184,6 +194,7 @@ export const DEFAULT_CONFIG: AugConfig = {
   },
   maxActiveAgents: 4,
   spend: { capEnabled: true, dailyUsd: 25 },
+  chat: { idleMinutes: 55, homeMaxTokens: 60_000 },
   worktreeCommand:
     "wt -C {repo_path} switch {create} {branch} --no-cd --format json -y",
   autostart: true,
@@ -257,6 +268,7 @@ export function mergeConfig(
     },
     brain: { ...DEFAULT_CONFIG.brain, ...raw.brain },
     spend: { ...DEFAULT_CONFIG.spend, ...raw.spend },
+    chat: { ...DEFAULT_CONFIG.chat, ...raw.chat },
     triage: {
       ...DEFAULT_CONFIG.triage,
       ...raw.triage,

@@ -282,6 +282,9 @@ export interface SessionRow {
   tmux_window: string | null;
   // Why it ended, in a few words ("you stopped it", "its window closed").
   end_reason: string | null;
+  // Tokens the session's last request carried (a chat session's context),
+  // so a turn can leave a session grown too dear to resume.
+  context_tokens: number | null;
 }
 
 export const NoteLabel = {

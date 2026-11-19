@@ -70,6 +70,9 @@ export interface BrainResult {
   // What the call cost, as claude reported it. Absent when it said nothing.
   costUsd?: number;
   usage?: TokenUsage;
+  // Tokens the last request carried (input, cache read and cache write):
+  // the session's context as the call left it.
+  context?: number;
 }
 
 export interface TokenUsage {
@@ -185,7 +188,8 @@ export interface StreamEvent {
   type: string;
   subtype?: string;
   session_id?: string;
-  message?: { content?: StreamContent[] };
+  // An assistant event carries its own request's usage.
+  message?: { content?: StreamContent[]; usage?: StreamUsage };
   result?: string;
   structured_output?: unknown;
   duration_ms?: number;
@@ -195,12 +199,22 @@ export interface StreamEvent {
   // On the result event: the whole process's cost so far, and this turn's
   // tokens (a persistent session's total grows turn by turn).
   total_cost_usd?: number;
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
-  };
+  usage?: StreamUsage;
+}
+
+interface StreamUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
+function contextTokens(u: StreamUsage): number {
+  return (
+    (u.input_tokens ?? 0) +
+    (u.cache_read_input_tokens ?? 0) +
+    (u.cache_creation_input_tokens ?? 0)
+  );
 }
 
 // A connector call's input can hold a whole document: the tool's name says
@@ -252,6 +266,8 @@ export interface StreamAcc {
   text: string;
   result: StreamEvent | null;
   sessionId: string | null;
+  // The last top-level request's context, in tokens.
+  context?: number;
   // Tool calls waiting for their result, by tool_use id.
   pending?: Map<string, { name: string; input: Record<string, unknown> }>;
 }
@@ -271,6 +287,7 @@ export function parseStreamLine(
   }
   if (event.session_id) acc.sessionId = event.session_id;
   if (event.type === "assistant" && !event.parent_tool_use_id) {
+    if (event.message?.usage) acc.context = contextTokens(event.message.usage);
     for (const part of event.message?.content ?? []) {
       if (part.type === "tool_use" && part.name !== "StructuredOutput") {
         onStep?.(describeStep(part.name ?? "tool", part.input));
@@ -346,5 +363,6 @@ export async function claudeBrain(call: BrainCall): Promise<BrainResult> {
     denied,
     costUsd: acc.result.total_cost_usd,
     usage: tokenUsage(acc.result),
+    context: acc.context,
   };
 }

@@ -16,6 +16,7 @@ import {
   claudeArgs,
   deniedCalls,
   parseStreamLine,
+  type StreamAcc,
 } from "../src/core/brain";
 import { toMessage } from "../src/core/ingest/github";
 import { plainText, threadKeyFor } from "../src/core/slack/shared";
@@ -402,6 +403,32 @@ describe("brain stream", () => {
     );
     expect(steps).toEqual(["WebSearch same-day pay"]);
     expect(acc.sessionId).toBe("s");
+  });
+
+  test("the context is the last top-level request's tokens, not the turn's sum", () => {
+    const acc: StreamAcc = { text: "", result: null, sessionId: null };
+    const request = (read: number, write: number, parent: string | null = null) =>
+      parseStreamLine(
+        JSON.stringify({
+          type: "assistant",
+          parent_tool_use_id: parent,
+          message: {
+            content: [],
+            usage: {
+              input_tokens: 3,
+              cache_read_input_tokens: read,
+              cache_creation_input_tokens: write,
+              output_tokens: 500,
+            },
+          },
+        }),
+        undefined,
+        acc,
+      );
+    request(40_000, 2_000);
+    request(42_000, 1_000);
+    request(5, 5, "sub");
+    expect(acc.context).toBe(43_003);
   });
 
   test("a tool call is paired with its result for onTool", () => {

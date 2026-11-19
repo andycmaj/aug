@@ -240,3 +240,100 @@ test("a doc a headless agent makes is linked to its task; Home links nothing by 
   await Bun.sleep(10);
   expect(calls.at(-1)?.onTool).toBeUndefined();
 });
+
+describe("a chat turn leaves a session the cache has lost, or Home's grown too big", () => {
+  function contextBrain(context: number) {
+    setBrain(async (call) => {
+      calls.push(call);
+      return {
+        text: "ok",
+        structured: null,
+        sessionId: call.sessionId ?? call.resume ?? null,
+        durationMs: 1,
+        isError: false,
+        context,
+      };
+    });
+  }
+
+  // The last answer, as though it finished this many minutes ago.
+  function lastAnswerAgo(taskId: number, minutes: number) {
+    const answer = store.turnsForTask(taskId).findLast((t) => t.role === TurnRole.agent)!;
+    store.updateTurn(answer.id, {
+      finished_at: new Date(Date.now() - minutes * 60_000).toISOString(),
+    });
+  }
+
+  test("Home idle past the cache's hour starts a new session that reads the talk back", async () => {
+    const home = store.homeTask();
+    const pool = new AgentPool({ config: withLimit(4) });
+    say(home.id, "first question");
+    await pool.request(home.id, "typed", "owner");
+    lastAnswerAgo(home.id, 90);
+    say(home.id, "second question");
+    await pool.request(home.id, "typed", "owner");
+    expect(calls[1].resume).toBeUndefined();
+    expect(calls[1].sessionId).not.toBe(calls[0].sessionId);
+    expect(calls[1].prompt).toContain("first question");
+    expect(calls[1].prompt).toContain("second question");
+    // The new session is the one the next warm turn resumes.
+    say(home.id, "third question");
+    await pool.request(home.id, "typed", "owner");
+    expect(calls[2].resume).toBe(calls[1].sessionId);
+  });
+
+  test("Home within the hour and under the size resumes", async () => {
+    contextBrain(20_000);
+    const home = store.homeTask();
+    const pool = new AgentPool({ config: withLimit(4) });
+    say(home.id, "first question");
+    await pool.request(home.id, "typed", "owner");
+    lastAnswerAgo(home.id, 30);
+    say(home.id, "second question");
+    await pool.request(home.id, "typed", "owner");
+    expect(calls[1].resume).toBe(calls[0].sessionId);
+  });
+
+  test("Home past homeMaxTokens of context starts a new session", async () => {
+    contextBrain(70_000);
+    const home = store.homeTask();
+    const pool = new AgentPool({ config: withLimit(4) });
+    say(home.id, "first question");
+    await pool.request(home.id, "typed", "owner");
+    expect(store.getSession(calls[0].sessionId!)!.context_tokens).toBe(70_000);
+    say(home.id, "second question");
+    await pool.request(home.id, "typed", "owner");
+    expect(calls[1].resume).toBeUndefined();
+    expect(calls[1].prompt).toContain("first question");
+  });
+
+  test("0 turns either bound off", async () => {
+    contextBrain(70_000);
+    const off = withLimit(4);
+    off.update((c) => ({ ...c, chat: { idleMinutes: 0, homeMaxTokens: 0 } }));
+    const home = store.homeTask();
+    const pool = new AgentPool({ config: off });
+    say(home.id, "first question");
+    await pool.request(home.id, "typed", "owner");
+    lastAnswerAgo(home.id, 600);
+    say(home.id, "second question");
+    await pool.request(home.id, "typed", "owner");
+    expect(calls[1].resume).toBe(calls[0].sessionId);
+  });
+
+  test("a task's Q/A leaves an idle session but not a big one", async () => {
+    contextBrain(200_000);
+    const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
+    const pool = new AgentPool({ config: withLimit(4) });
+    say(task.id, "look into it");
+    await pool.request(task.id, "go", "owner");
+    say(task.id, "and then?");
+    await pool.request(task.id, "go", "owner");
+    expect(calls[1].resume).toBe(calls[0].sessionId);
+    lastAnswerAgo(task.id, 90);
+    say(task.id, "back again");
+    await pool.request(task.id, "go", "owner");
+    expect(calls[2].resume).toBeUndefined();
+    expect(calls[2].prompt).toContain("look into it");
+  });
+});

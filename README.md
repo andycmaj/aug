@@ -94,6 +94,7 @@ the Advisor proposes a shorter one; past twice it, prompts cut it with a note.
   "opener": "open",
   "maxActiveAgents": 4,
   "spend": { "capEnabled": true, "dailyUsd": 25 },
+  "chat": { "idleMinutes": 55, "homeMaxTokens": 60000 },
   "worktreeCommand": "wt -C {repo_path} switch {create} {branch} --no-cd --format json -y",
   "autostart": true,
   "learning": true,
@@ -134,6 +135,12 @@ run; a turn you start or type to still runs. `capEnabled: false` turns the cap
 off; spend is recorded either way. The sidebar's status line shows today's
 total, the Board's Cost tab (`6`) and `aug-tools spend` break it down by role,
 task and day.
+
+`chat` bounds the sessions chat turns resume. The prompt cache lasts an hour,
+so a turn whose session last answered more than `idleMinutes` ago starts a new
+one that reads the conversation back, rather than paying to re-write the whole
+old one. Home also starts over once its context passes `homeMaxTokens`. `0`
+turns either off.
 
 `triage.escalate` says what else may become a task without you. On GitHub
 that is the notification reasons listed (by default: assigned to you, a

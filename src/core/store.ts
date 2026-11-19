@@ -841,8 +841,9 @@ export function getSession(id: string): SessionRow | null {
 }
 
 export function latestSession(taskId: number): SessionRow | null {
+  // rowid breaks a tie: two sessions can start in the same millisecond.
   return one<SessionRow>(
-    "SELECT * FROM sessions WHERE task_id = ? ORDER BY started_at DESC LIMIT 1",
+    "SELECT * FROM sessions WHERE task_id = ? ORDER BY started_at DESC, rowid DESC LIMIT 1",
     taskId,
   );
 }

@@ -53,6 +53,7 @@ import {
   TaskStatus,
   TurnRole,
   TurnStatus,
+  type SessionRow,
   type TaskRow,
   type TurnRow,
 } from "./types";
@@ -290,6 +291,35 @@ function chatResume(taskId: number, history: TurnRow[]): string | undefined {
     : undefined;
 }
 
+// Why a turn leaves the session it would resume for a new one (config.chat),
+// or null to resume it. Past the prompt cache's hour a resume re-writes the
+// whole context at the cache-write price and buys nothing a new session
+// reading the conversation back does not; Home's context also grows with
+// every turn, so past a size it starts over (docs/assistant-cost-analysis.md).
+export function leaveSession(
+  session: SessionRow,
+  history: TurnRow[],
+  home: boolean,
+  config: AugConfig,
+  at = Date.now(),
+): string | null {
+  const { idleMinutes, homeMaxTokens } = config.chat;
+  const last =
+    history.findLast(
+      (t) =>
+        t.role === TurnRole.agent &&
+        t.session_id === session.id &&
+        t.finished_at !== null,
+    )?.finished_at ?? session.last_event_at;
+  const idle = at - Date.parse(last);
+  if (idleMinutes > 0 && idle > idleMinutes * 60_000)
+    return `idle ${Math.round(idle / 60_000)} minutes`;
+  const context = session.context_tokens ?? 0;
+  if (home && homeMaxTokens > 0 && context > homeMaxTokens)
+    return `context ${context} tokens`;
+  return null;
+}
+
 interface Waiting {
   taskId: number;
   reason: string;
@@ -427,11 +457,15 @@ export class AgentPool {
 
     const config = this.options.config.get();
     const history = store.turnsForTask(taskId);
-    const resume = chatResume(taskId, history);
-    const sessionId = resume ?? randomUUID();
-    const ref = { taskId, sessionId };
     // Home's agent is the Assistant: it talks, and runs aug with aug-tools.
     const home = task.kind === Kind.home;
+    const prior = chatResume(taskId, history);
+    const priorRow = prior ? store.getSession(prior) : null;
+    const left = priorRow ? leaveSession(priorRow, history, home, config) : null;
+    if (left) log.info("new session", { task: taskId, left: prior, why: left });
+    const resume = left ? undefined : prior;
+    const sessionId = resume ?? randomUUID();
+    const ref = { taskId, sessionId };
     const author = home ? "aug" : "agent";
     let turn: TurnRow;
     try {
@@ -510,6 +544,8 @@ export class AgentPool {
       const finished = now();
       recordFiles();
       store.batch(() => {
+        if (result.context !== undefined)
+          store.updateSession(sessionId, { context_tokens: result.context });
         if (!answer) {
           store.updateTurn(turn.id, {
             status: "done",

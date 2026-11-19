@@ -216,7 +216,9 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `aug-tools spend` show it. A resumed general turn sends only the turns
   since its last finished answer (`unheard`), and the coding brief only the
   last `CODING_BRIEF_TURNS`; the Advisor asks only when `workPicture()`'s
-  hash moved.
+  hash moved. A chat turn leaves a session idle past the prompt cache's
+  hour, and Home one past `chat.homeMaxTokens` of context (`leaveSession`,
+  from `sessions.context_tokens`), for a new one that reads the talk back.
 - **Perf counters are `core/perf.ts`**, on with the log (off again with
   `log.perf: false`): per-minute histograms per op plus the slowest examples
   past `log.slowMs` (default 50), in `perf.db` under `AUG_HOME` (its own

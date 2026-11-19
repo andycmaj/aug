@@ -476,6 +476,7 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "projects", column: "brief", ddl: "TEXT NOT NULL DEFAULT ''" },
   { table: "tasks", column: "goal_id", ddl: "INTEGER REFERENCES project_goals(id)" },
   { table: "sessions", column: "end_reason", ddl: "TEXT" },
+  { table: "sessions", column: "context_tokens", ddl: "INTEGER" },
   { table: "tasks", column: "merged_at", ddl: "TEXT" },
   { table: "pr_status", column: "error", ddl: "TEXT" },
   { table: "pr_status", column: "queue", ddl: "TEXT NOT NULL DEFAULT 'none'" },
