@@ -83,6 +83,36 @@ blocked, open.
   ci, changes, review, ready), so the lane need not repeat it.
 - A closed, unmerged PR is no phase: the task is open again.
 
+### The PR chip's ladder and the merge queue (AUG-0158)
+
+The chip is one rung of: draft, in review, changes, approved, checks
+failing or pending, in the merge queue, merged, closed. First match:
+
+| chip | tone | when |
+| --- | --- | --- |
+| `merged` | accent (purple, as the merged lane) | PR merged |
+| `✗ closed` | muted | closed without merging |
+| `✗ MQ` | error | in the queue, its entry `UNMERGEABLE` (about to be kicked) |
+| `↠ MQ 3` | info | in the queue; the number is its place when GitHub gives one |
+| `✗ out of MQ` | error | removed from the queue since its last commit |
+| `✗ conflict`, `✗ ci`, `✗ changes` | error | what is in the way |
+| `● ci` | warning | checks running |
+| `draft` | muted | draft |
+| `✓ approved` | success | approved |
+| `● in review` | warning | review required |
+| `✓ ci` | success | the rest |
+
+The queue is read in the same batch query as the rest (`isInMergeQueue`,
+`mergeQueueEntry { position state }`, the last
+`ADDED/REMOVED_FROM_MERGE_QUEUE_EVENT`, the head commit's date), so a batch
+of 25 still costs one GraphQL point. A removal is news until the next
+commit: a push after it means the owner has answered it. Stored as
+`pr_status.queue` (none, queued, failing, removed), `queue_position` and
+`queue_reason`. The queue is still the review phase (no lane of its own);
+the review lane's word says `in merge queue` or `out of merge queue`
+instead of `PR in review`, and the Canvas's header says the place or why
+it was removed.
+
 ### Ready for review vs merged (AUG-0113)
 
 Ready is the agent's state, merged the task's phase. Merged outranks

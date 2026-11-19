@@ -6,6 +6,7 @@ import {
   prBatchQuery,
   prChip,
   prLine,
+  prQueueWord,
   readPrBatch,
   readPrView,
   refreshPrStatus,
@@ -15,6 +16,7 @@ import {
   type PrFetch,
 } from "../src/core/pr";
 import * as store from "../src/core/store";
+import type { Tone } from "../src/core/lanes";
 import { Kind, type PrStatusRow } from "../src/core/types";
 import { freshHome } from "./helpers";
 
@@ -270,7 +272,7 @@ describe("refreshing", () => {
     await refreshPrStatuses({
       fetch: byUrl(async () => ({ state: "OPEN", reviewDecision: "APPROVED" })),
     });
-    expect(prChip(store.prStatus(t.id)!).text).toBe("#7 ✓ ready");
+    expect(prChip(store.prStatus(t.id)!).text).toBe("#7 ✓ approved");
     const r = await refreshPrStatuses({
       fetch: async () => {
         throw new Error("HTTP 502: Bad Gateway (https://api.github.com/graphql)");
@@ -281,7 +283,7 @@ describe("refreshing", () => {
     const row = store.prStatus(t.id)!;
     expect(row.review).toBe("approved");
     expect(row.error).toContain("502");
-    expect(prChip(row)).toEqual({ text: "#7 ✓ ready · stale", tone: "muted" });
+    expect(prChip(row)).toEqual({ text: "#7 ✓ approved · stale", tone: "muted" });
     expect(prLine(row)).toContain("stale, last read failed: HTTP 502");
     await refreshPrStatuses({ fetch: byUrl(async () => ({ state: "OPEN" })) });
     expect(store.prStatus(t.id)!.error).toBeNull();
@@ -411,6 +413,9 @@ describe("words for it", () => {
     checks: "pass",
     review: "none",
     mergeable: "clean",
+    queue: "none",
+    queue_position: null,
+    queue_reason: null,
     fetched_at: "",
     error: null,
     ...patch,
@@ -428,12 +433,13 @@ describe("words for it", () => {
       "warning",
     );
     expect(prChip(row({ review: "approved" }))).toEqual({
-      text: "#219 ✓ ready",
+      text: "#219 ✓ approved",
       tone: "success",
     });
-    expect(prChip(row({ state: "merged", checks: "fail" })).text).toBe(
-      "#219 merged",
-    );
+    expect(prChip(row({ state: "merged", checks: "fail" }))).toEqual({
+      text: "#219 merged",
+      tone: "accent",
+    });
   });
 
   test("the header line says all of it while open", () => {
@@ -445,5 +451,204 @@ describe("words for it", () => {
     expect(prLine(row({ state: "merged" }))).toBe(
       "PR acme/ledger#219 · merged",
     );
+  });
+});
+
+// One GitHub answer per rung of the ladder, read the way the poller reads
+// it: the batch query's node, then the row, then the rail's chip.
+describe("the merge status ladder, from GitHub's answer", () => {
+  const ref = {
+    repo: "acme/ledger",
+    number: 219,
+    url: "https://github.com/acme/ledger/pull/219",
+  };
+  const check = (conclusion: string | null, status = "COMPLETED") => ({
+    __typename: "CheckRun",
+    status,
+    conclusion,
+  });
+  const node = (
+    patch: Record<string, unknown>,
+    checks = [check("SUCCESS")],
+    committedDate = "2026-11-18T10:00:00Z",
+  ) => ({
+    state: "OPEN",
+    isDraft: false,
+    reviewDecision: "REVIEW_REQUIRED",
+    mergeable: "MERGEABLE",
+    isInMergeQueue: false,
+    mergeQueueEntry: null,
+    timelineItems: { nodes: [] },
+    commits: {
+      nodes: [
+        {
+          commit: {
+            committedDate,
+            statusCheckRollup: { contexts: { nodes: checks } },
+          },
+        },
+      ],
+    },
+    ...patch,
+  });
+  const removed = (createdAt: string, reason: string | null) => ({
+    timelineItems: {
+      nodes: [{ __typename: "RemovedFromMergeQueueEvent", createdAt, reason }],
+    },
+  });
+  const read = (pr: Record<string, unknown>): PrStatusRow => {
+    const batch = readPrBatch([ref], { data: { p0: { pullRequest: pr } } });
+    return {
+      task_id: 1,
+      ...ref,
+      ...readPrView(batch.views.get(ref.url) as GhPrView),
+      fetched_at: "",
+      error: null,
+    };
+  };
+
+  const ladder: [
+    string,
+    Record<string, unknown>,
+    string,
+    Tone,
+    ReturnType<typeof check>[]?,
+  ][] = [
+    ["draft", { isDraft: true, reviewDecision: null }, "#219 draft", "muted"],
+    ["in review", {}, "#219 ● in review", "warning"],
+    [
+      "changes requested",
+      { reviewDecision: "CHANGES_REQUESTED" },
+      "#219 ✗ changes",
+      "error",
+    ],
+    ["approved", { reviewDecision: "APPROVED" }, "#219 ✓ approved", "success"],
+    [
+      "checks failing",
+      { reviewDecision: "APPROVED" },
+      "#219 ✗ ci",
+      "error",
+      [check("FAILURE")],
+    ],
+    [
+      "checks pending",
+      { reviewDecision: "APPROVED" },
+      "#219 ● ci",
+      "warning",
+      [check(null, "IN_PROGRESS")],
+    ],
+    [
+      "in the merge queue, with its place",
+      {
+        reviewDecision: "APPROVED",
+        isInMergeQueue: true,
+        mergeQueueEntry: { position: 3, state: "AWAITING_CHECKS" },
+      },
+      "#219 ↠ MQ 3",
+      "info",
+    ],
+    [
+      "in the merge queue, no place given",
+      { reviewDecision: "APPROVED", isInMergeQueue: true },
+      "#219 ↠ MQ",
+      "info",
+    ],
+    [
+      "in the merge queue but unmergeable",
+      {
+        reviewDecision: "APPROVED",
+        isInMergeQueue: true,
+        mergeQueueEntry: { position: 1, state: "UNMERGEABLE" },
+      },
+      "#219 ✗ MQ",
+      "error",
+    ],
+    [
+      "put out of the queue since its last commit",
+      {
+        reviewDecision: "APPROVED",
+        ...removed("2026-11-18T11:00:00Z", "Failed status checks"),
+      },
+      "#219 ✗ out of MQ",
+      "error",
+    ],
+    [
+      "put out of the queue, then pushed to",
+      {
+        reviewDecision: "APPROVED",
+        ...removed("2026-11-18T09:00:00Z", "Merge conflict"),
+      },
+      "#219 ✓ approved",
+      "success",
+    ],
+    [
+      "merged",
+      { state: "MERGED", reviewDecision: "APPROVED", ...removed("2026-11-18T11:00:00Z", null) },
+      "#219 merged",
+      "accent",
+    ],
+    [
+      "closed without merging",
+      { state: "CLOSED", ...removed("2026-11-18T11:00:00Z", null) },
+      "#219 ✗ closed",
+      "muted",
+    ],
+  ];
+
+  for (const [name, patch, text, tone, checks] of ladder)
+    test(name, () => {
+      expect(prChip(read(node(patch, checks)))).toEqual({ text, tone });
+    });
+
+  test("the queue's fields are asked for in the same query", () => {
+    const q = prBatchQuery([ref]);
+    expect(q).toContain("isInMergeQueue mergeQueueEntry { position state }");
+    expect(q).toContain("REMOVED_FROM_MERGE_QUEUE_EVENT");
+    expect(q).toContain("committedDate");
+    expect(q.match(/query \{/g)).toHaveLength(1);
+  });
+
+  test("the queue is a phase of review: the lane and header say it", () => {
+    const queued = read(
+      node({ isInMergeQueue: true, mergeQueueEntry: { position: 2, state: "QUEUED" } }),
+    );
+    expect(queued).toMatchObject({ queue: "queued", queue_position: 2 });
+    expect(prQueueWord(queued)).toBe("in merge queue");
+    expect(prLine(queued)).toBe(
+      "PR acme/ledger#219 · open · in merge queue, position 2 · checks pass · review required",
+    );
+    const out = read(node(removed("2026-11-18T11:00:00Z", "Merge conflict")));
+    expect(out).toMatchObject({ queue: "removed", queue_reason: "Merge conflict" });
+    expect(prQueueWord(out)).toBe("out of merge queue");
+    expect(prLine(out)).toContain("removed from merge queue: merge conflict");
+    const merged = read(node({ state: "MERGED", isInMergeQueue: false }));
+    expect(merged.queue).toBe("none");
+    expect(prQueueWord(merged)).toBeNull();
+    expect(prQueueWord(read(node({})))).toBeNull();
+  });
+
+  test("a queued PR is stored, and leaving the queue is a change", async () => {
+    const t = prTask(219);
+    const fetch = (pr: Record<string, unknown>): PrFetch =>
+      byUrl(async () => {
+        const batch = readPrBatch([ref], { data: { p0: { pullRequest: pr } } });
+        return batch.views.get(ref.url) as GhPrView;
+      });
+    await refreshPrStatuses({
+      fetch: fetch(node({ isInMergeQueue: true, mergeQueueEntry: { position: 1, state: "MERGEABLE" } })),
+    });
+    expect(store.prStatus(t.id)).toMatchObject({ queue: "queued", queue_position: 1 });
+    let woke = 0;
+    const off = store.onChange(() => woke++);
+    await refreshPrStatuses({
+      fetch: fetch(node(removed("2026-11-18T11:00:00Z", "Failed status checks"))),
+    });
+    off();
+    expect(woke).toBe(1);
+    expect(store.prStatus(t.id)).toMatchObject({
+      queue: "removed",
+      queue_position: null,
+      queue_reason: "Failed status checks",
+    });
   });
 });

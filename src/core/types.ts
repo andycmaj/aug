@@ -343,6 +343,17 @@ export const PrMergeable = {
 } as const;
 export type PrMergeable = (typeof PrMergeable)[keyof typeof PrMergeable];
 
+// Where an open PR stands with GitHub's merge queue: not in it, in it
+// (its entry's checks running or passed), in it but going to be kicked
+// (unmergeable), or taken out without merging since its last commit.
+export const PrQueue = {
+  none: "none",
+  queued: "queued",
+  failing: "failing",
+  removed: "removed",
+} as const;
+export type PrQueue = (typeof PrQueue)[keyof typeof PrQueue];
+
 export interface PrStatusRow {
   task_id: number;
   repo: string;
@@ -352,6 +363,11 @@ export interface PrStatusRow {
   checks: PrChecks;
   review: PrReview;
   mergeable: PrMergeable;
+  queue: PrQueue;
+  // Its place in the queue (1 is next), while queued.
+  queue_position: number | null;
+  // Why it left the queue, when removed.
+  queue_reason: string | null;
   fetched_at: string;
   // Why the last read failed; the rest is from the read before it.
   error: string | null;

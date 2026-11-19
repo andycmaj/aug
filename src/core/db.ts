@@ -218,7 +218,10 @@ CREATE TABLE IF NOT EXISTS pr_status (
   review TEXT NOT NULL,
   mergeable TEXT NOT NULL,
   fetched_at TEXT NOT NULL,
-  error TEXT
+  error TEXT,
+  queue TEXT NOT NULL DEFAULT 'none',
+  queue_position INTEGER,
+  queue_reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS doc_proposals (
@@ -475,6 +478,9 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "sessions", column: "end_reason", ddl: "TEXT" },
   { table: "tasks", column: "merged_at", ddl: "TEXT" },
   { table: "pr_status", column: "error", ddl: "TEXT" },
+  { table: "pr_status", column: "queue", ddl: "TEXT NOT NULL DEFAULT 'none'" },
+  { table: "pr_status", column: "queue_position", ddl: "INTEGER" },
+  { table: "pr_status", column: "queue_reason", ddl: "TEXT" },
 ];
 
 // Agent states renamed or merged (docs/rail-status-design.md): blocked is

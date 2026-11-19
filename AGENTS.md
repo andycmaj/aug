@@ -45,8 +45,8 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   carries them. Setup a user would otherwise do by hand goes here.
 - **A task's PR is `core/pr.ts`**: found from its linked threads (the PR
   its agent or branch opened), its URL, a PR thread it came from, or a PR
-  link. The engine reads each one's checks and reviews into `pr_status` on
-  the GitHub clock, 25 PRs to one GraphQL query; the rail and the Canvas's
+  link. The engine reads each one's checks, reviews and merge queue entry
+  into `pr_status` on the GitHub clock, 25 PRs to one GraphQL query; the rail and the Canvas's
   header show it (marked stale when the last read failed), and `P` opens
   ghdash on it in the Canvas (`components/use-pr-dash.tsx`).
 - **When aug may call GitHub is `core/github-gate.ts`**: a rate limit

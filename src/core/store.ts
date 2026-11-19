@@ -324,15 +324,29 @@ export function setPrStatus(row: PrStatusRow): void {
   const had = prStatus(row.task_id);
   const same =
     had !== null &&
-    (["repo", "number", "url", "state", "checks", "review", "mergeable", "error"] as const).every(
+    ([
+      "repo",
+      "number",
+      "url",
+      "state",
+      "checks",
+      "review",
+      "mergeable",
+      "queue",
+      "queue_position",
+      "queue_reason",
+      "error",
+    ] as const).every(
       (k) => had[k] === row[k],
     );
-  const sql = `INSERT INTO pr_status (task_id, repo, number, url, state, checks, review, mergeable, fetched_at, error)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  const sql = `INSERT INTO pr_status (task_id, repo, number, url, state, checks, review, mergeable,
+       queue, queue_position, queue_reason, fetched_at, error)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (task_id) DO UPDATE SET repo = excluded.repo, number = excluded.number,
        url = excluded.url, state = excluded.state, checks = excluded.checks,
-       review = excluded.review, mergeable = excluded.mergeable, fetched_at = excluded.fetched_at,
-       error = excluded.error`;
+       review = excluded.review, mergeable = excluded.mergeable, queue = excluded.queue,
+       queue_position = excluded.queue_position, queue_reason = excluded.queue_reason,
+       fetched_at = excluded.fetched_at, error = excluded.error`;
   const params = [
     row.task_id,
     row.repo,
@@ -342,6 +356,9 @@ export function setPrStatus(row: PrStatusRow): void {
     row.checks,
     row.review,
     row.mergeable,
+    row.queue,
+    row.queue_position,
+    row.queue_reason,
     row.fetched_at,
     row.error,
   ];

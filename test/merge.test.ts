@@ -67,6 +67,9 @@ describe("merged", () => {
       checks: "pass",
       review: "approved",
       mergeable: "unknown",
+      queue: "none",
+      queue_position: null,
+      queue_reason: null,
       fetched_at: new Date().toISOString(),
       error: null,
     });

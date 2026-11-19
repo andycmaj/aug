@@ -300,6 +300,9 @@ export function seedDemo(): void {
       checks: "pending",
       review: "required",
       mergeable: "clean",
+      queue: "none",
+      queue_position: null,
+      queue_reason: null,
       fetched_at: ago(5),
       error: null,
     });
@@ -399,6 +402,9 @@ export function seedDemo(): void {
       checks: "fail",
       review: "approved",
       mergeable: "clean",
+      queue: "none",
+      queue_position: null,
+      queue_reason: null,
       fetched_at: ago(5),
       error: null,
     });
@@ -505,6 +511,33 @@ export function seedDemo(): void {
     store.updateTask(bump.id, {
       agent_state: AgentState.idle,
       merged_at: ago(15),
+    });
+
+    // 12. Approved and waiting in GitHub's merge queue, second in line.
+    const retry = store.createTask({
+      title: "Retry webhook deliveries with backoff",
+      kind: Kind.coding,
+      channel: "owner",
+      repo: "northwind/web",
+      branch: "webhook-backoff",
+      createdAt: ago(200),
+    });
+    store.updateTask(retry.id, { agent_state: AgentState.idle });
+    store.linkThread(retry.id, "github:northwind/web#91");
+    store.setPrStatus({
+      task_id: retry.id,
+      repo: "northwind/web",
+      number: 91,
+      url: "https://github.com/northwind/web/pull/91",
+      state: "open",
+      checks: "pass",
+      review: "approved",
+      mergeable: "clean",
+      queue: "queued",
+      queue_position: 2,
+      queue_reason: null,
+      fetched_at: ago(5),
+      error: null,
     });
 
     // Today's Wins: the urgent export fix and Erin's question.

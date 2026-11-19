@@ -18,6 +18,7 @@ import * as store from "./store";
 import {
   PrChecks,
   PrMergeable,
+  PrQueue,
   PrReview,
   PrState,
   TaskStatus,
@@ -81,18 +82,31 @@ export function taskPr(task: TaskRow): PrRef | null {
 }
 
 // A PR as GitHub's GraphQL describes it, statusCheckRollup flattened to
-// its contexts (what `gh pr view --json` calls it).
+// its contexts (what `gh pr view --json` calls it), and its last merge
+// queue event and head commit's date flattened beside it.
 export interface GhPrView {
   state?: string;
   isDraft?: boolean;
   reviewDecision?: string | null;
   mergeable?: string;
+  isInMergeQueue?: boolean;
+  // GitHub's MergeQueueEntryState: QUEUED, AWAITING_CHECKS, MERGEABLE,
+  // UNMERGEABLE, LOCKED.
+  mergeQueueEntry?: { position?: number; state?: string } | null;
+  lastQueueEvent?: GhQueueEvent | null;
+  headCommittedAt?: string | null;
   statusCheckRollup?: {
     __typename?: string;
     status?: string;
     conclusion?: string | null;
     state?: string;
   }[];
+}
+
+export interface GhQueueEvent {
+  __typename?: string;
+  createdAt?: string;
+  reason?: string | null;
 }
 
 const FAILED = new Set([
@@ -120,9 +134,45 @@ function rollup(checks: GhPrView["statusCheckRollup"]): PrChecks {
   return pending ? PrChecks.pending : PrChecks.pass;
 }
 
+type QueueFields = Pick<PrStatusRow, "queue" | "queue_position" | "queue_reason">;
+
+const NOT_QUEUED: QueueFields = {
+  queue: PrQueue.none,
+  queue_position: null,
+  queue_reason: null,
+};
+
+// In the queue is what its entry says. Out of it, a removal is news only
+// until the next commit: a push after it is the owner's answer to it, and
+// the PR is back to its checks and reviews.
+function readQueue(view: GhPrView): QueueFields {
+  const entry = view.mergeQueueEntry;
+  if (entry || view.isInMergeQueue)
+    return {
+      queue:
+        entry?.state === "UNMERGEABLE" ? PrQueue.failing : PrQueue.queued,
+      queue_position: entry?.position ?? null,
+      queue_reason: null,
+    };
+  const last = view.lastQueueEvent;
+  if (last?.__typename !== "RemovedFromMergeQueueEvent") return NOT_QUEUED;
+  const at = Date.parse(last.createdAt ?? "");
+  const pushed = Date.parse(view.headCommittedAt ?? "");
+  if (Number.isFinite(at) && Number.isFinite(pushed) && pushed > at)
+    return NOT_QUEUED;
+  return {
+    queue: PrQueue.removed,
+    queue_position: null,
+    queue_reason: last.reason?.trim() || null,
+  };
+}
+
 export function readPrView(
   view: GhPrView,
-): Pick<PrStatusRow, "state" | "checks" | "review" | "mergeable"> {
+): Pick<
+  PrStatusRow,
+  "state" | "checks" | "review" | "mergeable" | keyof QueueFields
+> {
   const state =
     view.state === "MERGED"
       ? PrState.merged
@@ -145,7 +195,14 @@ export function readPrView(
       : view.mergeable === "CONFLICTING"
         ? PrMergeable.conflict
         : PrMergeable.unknown;
-  return { state, checks: rollup(view.statusCheckRollup), review, mergeable };
+  const open = state === PrState.open || state === PrState.draft;
+  return {
+    state,
+    checks: rollup(view.statusCheckRollup),
+    review,
+    mergeable,
+    ...(open ? readQueue(view) : NOT_QUEUED),
+  };
 }
 
 // What one call for several PRs came back with: each PR's view or why it
@@ -159,11 +216,19 @@ export interface PrBatch {
 export type PrFetch = (prs: PrRef[]) => Promise<PrBatch>;
 
 // One GraphQL query reads a batch, where `gh pr view` costs a call per PR.
+// The merge queue rides in the same query: its entry is a field, and its
+// last event one more node per PR, so a batch of 25 still costs 1 point.
 export const PR_BATCH = 25;
 
 const PR_FRAGMENT = `fragment pr on PullRequest {
   state isDraft reviewDecision mergeable
-  commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
+  isInMergeQueue mergeQueueEntry { position state }
+  timelineItems(last: 1, itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT]) { nodes {
+    __typename
+    ... on AddedToMergeQueueEvent { createdAt }
+    ... on RemovedFromMergeQueueEvent { createdAt reason }
+  } }
+  commits(last: 1) { nodes { commit { committedDate statusCheckRollup { contexts(first: 100) { nodes {
     __typename
     ... on CheckRun { status conclusion }
     ... on StatusContext { state }
@@ -178,10 +243,16 @@ export function prBatchQuery(prs: PrRef[]): string {
   return `query {\n  rateLimit { remaining resetAt }\n  ${fields.join("\n  ")}\n}\n${PR_FRAGMENT}`;
 }
 
-interface GqlPr extends Omit<GhPrView, "statusCheckRollup"> {
+interface GqlPr
+  extends Omit<
+    GhPrView,
+    "statusCheckRollup" | "lastQueueEvent" | "headCommittedAt"
+  > {
+  timelineItems?: { nodes?: GhQueueEvent[] } | null;
   commits?: {
     nodes?: {
       commit?: {
+        committedDate?: string;
         statusCheckRollup?: {
           contexts?: { nodes?: GhPrView["statusCheckRollup"] };
         } | null;
@@ -208,10 +279,14 @@ export function readPrBatch(prs: PrRef[], answer: GqlAnswer): PrBatch {
     const repo = data[alias] as { pullRequest?: GqlPr | null } | null;
     const node = repo?.pullRequest;
     if (node) {
-      const { commits, ...rest } = node;
-      const rollup =
-        commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
-      views.set(pr.url, { ...rest, statusCheckRollup: rollup });
+      const { commits, timelineItems, ...rest } = node;
+      const head = commits?.nodes?.[0]?.commit;
+      views.set(pr.url, {
+        ...rest,
+        statusCheckRollup: head?.statusCheckRollup?.contexts?.nodes ?? [],
+        lastQueueEvent: timelineItems?.nodes?.at(-1) ?? null,
+        headCommittedAt: head?.committedDate ?? null,
+      });
       return;
     }
     const said = errors.find((e) => e.path?.[0] === alias)?.message;
@@ -384,24 +459,50 @@ export async function refreshPrStatuses(
   return out;
 }
 
-// The one thing worth knowing at a glance, for a rail row: what is in the
-// way first, then what is pending, then ready. When the last read failed,
-// what it says is old news, and it says so.
+// The merge queue's mark: past review, on its way to merged.
+export const QUEUE_MARK = "↠";
+
+// The one thing worth knowing at a glance, for a rail row, along the ladder
+// draft, in review, changes, approved, in the merge queue, merged: where it
+// ended first, then the queue (a PR in it has left review), then what is in
+// the way, then what is pending, then ready. Short, so the sub line stays
+// one line at the rail's width. When the last read failed, what it says is
+// old news, and it says so.
 export function prChip(s: PrStatusRow): { text: string; tone: Tone } {
   const say = (word: string, tone: Tone) =>
     s.error
       ? { text: `#${s.number} ${word} · stale`, tone: "muted" as const }
       : { text: `#${s.number} ${word}`, tone };
-  if (s.state === PrState.merged) return say("merged", "muted");
-  if (s.state === PrState.closed) return say("closed", "muted");
+  if (s.state === PrState.merged) return say("merged", "accent");
+  if (s.state === PrState.closed) return say("✗ closed", "muted");
+  if (s.queue === PrQueue.failing) return say("✗ MQ", "error");
+  if (s.queue === PrQueue.queued)
+    return say(
+      s.queue_position
+        ? `${QUEUE_MARK} MQ ${s.queue_position}`
+        : `${QUEUE_MARK} MQ`,
+      "info",
+    );
+  if (s.queue === PrQueue.removed) return say("✗ out of MQ", "error");
   if (s.mergeable === PrMergeable.conflict) return say("✗ conflict", "error");
   if (s.checks === PrChecks.fail) return say("✗ ci", "error");
   if (s.review === PrReview.changes) return say("✗ changes", "error");
   if (s.checks === PrChecks.pending) return say("● ci", "warning");
   if (s.state === PrState.draft) return say("draft", "muted");
-  if (s.review === PrReview.approved) return say("✓ ready", "success");
-  if (s.review === PrReview.required) return say("● review", "warning");
+  if (s.review === PrReview.approved) return say("✓ approved", "success");
+  if (s.review === PrReview.required) return say("● in review", "warning");
   return say("✓ ci", "success");
+}
+
+// What the rail's review lane says instead of "PR in review" once the PR
+// has moved on to the queue, or been put out of it.
+export function prQueueWord(s: PrStatusRow | null): string | null {
+  if (!s || s.state === PrState.merged || s.state === PrState.closed)
+    return null;
+  if (s.queue === PrQueue.queued) return "in merge queue";
+  if (s.queue === PrQueue.failing) return "failing in merge queue";
+  if (s.queue === PrQueue.removed) return "out of merge queue";
+  return null;
 }
 
 const CHECK_WORDS: Record<PrChecks, string> = {
@@ -417,12 +518,26 @@ const REVIEW_WORDS: Record<PrReview, string> = {
   none: "",
 };
 
+function queueWords(s: PrStatusRow): string {
+  if (s.queue === PrQueue.queued)
+    return s.queue_position
+      ? `in merge queue, position ${s.queue_position}`
+      : "in merge queue";
+  if (s.queue === PrQueue.failing) return "in merge queue, failing";
+  if (s.queue === PrQueue.removed)
+    return s.queue_reason
+      ? `removed from merge queue: ${s.queue_reason.toLowerCase()}`
+      : "removed from merge queue";
+  return "";
+}
+
 // The whole of it, for the Canvas's header.
 export function prLine(s: PrStatusRow): string {
   const open = s.state === PrState.open || s.state === PrState.draft;
   return [
     `PR ${s.repo}#${s.number}`,
     s.state,
+    open ? queueWords(s) : "",
     open ? CHECK_WORDS[s.checks] : "",
     open ? REVIEW_WORDS[s.review] : "",
     open && s.mergeable === PrMergeable.conflict ? "conflicts" : "",

@@ -32,7 +32,7 @@ import {
   SECTION_TITLES,
   type RailItem,
 } from "../core/rail";
-import { prChip } from "../core/pr";
+import { prChip, prQueueWord } from "../core/pr";
 import { taskRef } from "../core/rows";
 import { AgentState, Kind, TaskStatus, type ProjectRow } from "../core/types";
 import { CHANNEL_WORD, priorityColor, toneColor, useLaneMeta } from "./ui";
@@ -340,6 +340,11 @@ function RailRow(props: {
     // cut sub line keeps it.
     if (item.lane === Lane.working && item.task.merged_at)
       return "merged, agent working";
+    // Past review: its PR waits in GitHub's merge queue, or was put out.
+    if (item.lane === Lane.review) {
+      const queued = prQueueWord(aug.prStatus(item.task.id));
+      if (queued) return queued;
+    }
     return LANE_META[item.lane].word;
   };
   const view = createMemo((): RowView => {
