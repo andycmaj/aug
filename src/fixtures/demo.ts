@@ -512,6 +512,34 @@ export function seedDemo(): void {
     store.addWin(today, exp);
     store.addWin(today, erin);
 
+    // Yesterday, for the Board's Wins tab: a Win its agent shipped, the
+    // export fix (a Win then too, still open), and one dropped beside them.
+    const yesterday = (hour: number) => {
+      const d = new Date();
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, hour).toISOString();
+    };
+    const shipped = store.createTask({
+      title: "Retry Stripe webhooks with backoff",
+      kind: Kind.coding,
+      channel: "owner",
+      repo: "northwind/ledger",
+      branch: "stripe-webhook-retry",
+      createdAt: yesterday(9),
+    });
+    store.addTurn({ taskId: shipped.id, role: TurnRole.you, body: "Retry failed webhooks with exponential backoff, max 5 tries.", startedAt: yesterday(9) });
+    store.addTurn({ taskId: shipped.id, role: TurnRole.agent, body: "Added a retry queue with backoff; tests pass. PR #318 open.", startedAt: yesterday(11) });
+    store.updateTask(shipped.id, { merged_at: yesterday(15) });
+    store.updateTask(shipped.id, { status: "done", closed_at: yesterday(16), closed_by: "you" });
+    const dropped = store.createTask({
+      title: "Investigate flaky invoice PDF test",
+      kind: Kind.task,
+      channel: "owner",
+      createdAt: yesterday(10),
+    });
+    store.updateTask(dropped.id, { status: "dropped", closed_at: yesterday(14), closed_by: "you" });
+    store.addWin(localDay(new Date(yesterday(12))), shipped.id);
+    store.addWin(localDay(new Date(yesterday(12))), exp);
+
     // FYI
     for (const [i, m] of [
       {

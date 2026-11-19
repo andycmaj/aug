@@ -37,6 +37,7 @@ import { AugFooter } from "./footer";
 import { boardTab, setBoardTab } from "./board-tab";
 import { CostTab } from "./cost-tab";
 import { useInboxTab } from "./inbox-tab";
+import { useWinsTab } from "./wins-tab";
 import { ChoiceModal, PromptModal } from "./modals";
 import { useShell } from "./shell";
 import { duration, toneColor } from "./ui";
@@ -50,6 +51,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "projects", label: "4 Projects" },
   { key: "inbox", label: "5 Inbox" },
   { key: "cost", label: "6 Cost" },
+  { key: "wins", label: "7 Wins" },
 ];
 
 // A project, then its goals each with their open tasks, then the open tasks
@@ -129,6 +131,11 @@ export function BoardMode() {
     dialogs: shell.dialogs,
   });
 
+  const wins = useWinsTab({
+    active: () => tab() === Tab.wins,
+    actions: shell.actions,
+  });
+
   const target = (): TaskRow | null => {
     if (tab() === Tab.columns) return cardTask();
     if (tab() === Tab.projects) {
@@ -136,6 +143,7 @@ export function BoardMode() {
       return line?.type === "task" ? line.task : null;
     }
     if (tab() === Tab.inbox) return inbox.task();
+    if (tab() === Tab.wins) return wins.task();
     return null;
   };
 
@@ -224,13 +232,16 @@ export function BoardMode() {
       case Tab.inbox:
         inbox.move(d);
         break;
+      case Tab.wins:
+        wins.move(d);
+        break;
       case Tab.cost:
         costScroll?.scrollBy(d * 2);
         break;
     }
   };
   const horizontal = (d: number) => {
-    if (tab() !== Tab.columns) return;
+    if (tab() !== Tab.columns) return false;
     setCol((c) => Math.max(0, Math.min(BOARD_COLUMNS.length - 1, c + d)));
     setRow(0);
   };
@@ -249,7 +260,9 @@ export function BoardMode() {
               ? setProjAt(0)
               : tab() === Tab.inbox
                 ? inbox.move(-Infinity)
-                : tab() === Tab.cost
+                : tab() === Tab.wins
+                  ? wins.move(-Infinity)
+                  : tab() === Tab.cost
                   ? costScroll?.scrollTo(0)
                   : notesScroll?.scrollTo(0),
       [Commands.NAV_BOTTOM]: () => vertical(999),
@@ -264,7 +277,9 @@ export function BoardMode() {
       [Commands.BOARD_TAB_4]: () => setTab(Tab.projects),
       [Commands.BOARD_TAB_5]: () => setTab(Tab.inbox),
       [Commands.BOARD_TAB_6]: () => setTab(Tab.cost),
+      [Commands.BOARD_TAB_7]: () => setTab(Tab.wins),
       ...inbox.commands,
+      ...wins.commands,
       [Commands.PROJECT_ADOPT]: () =>
         void shell.actions.adopt(
           tab() === Tab.projects ? projectLine()?.project.id : undefined,
@@ -282,8 +297,9 @@ export function BoardMode() {
       [Commands.REPOS]: () => void shell.actions.showRepos(),
       [Commands.MOVE_TO_PROJECT]: onTask(shell.actions.moveToProject),
       [Commands.OPEN]: () => {
-        // Enter on the Inbox opens the row in place (INBOX_EXPAND).
-        if (tab() === Tab.inbox) return false;
+        // Enter on the Inbox and Wins opens the row in place (INBOX_EXPAND,
+        // WINS_EXPAND).
+        if (tab() === Tab.inbox || tab() === Tab.wins) return false;
         const line = tab() === Tab.projects ? projectLine() : null;
         if (line?.type === "project" || line?.type === "goal") {
           void shell.actions.jumpToProject(line.project.id);
@@ -335,6 +351,7 @@ export function BoardMode() {
       pr: Boolean(t && aug.taskPr(t)),
       board: tab(),
       ...(tab() === Tab.inbox ? inbox.ctx() : {}),
+      ...(tab() === Tab.wins ? wins.ctx() : {}),
     };
   };
 
@@ -458,6 +475,9 @@ export function BoardMode() {
             </Match>
             <Match when={tab() === Tab.inbox}>
               <inbox.View width={dims().width} />
+            </Match>
+            <Match when={tab() === Tab.wins}>
+              <wins.View width={dims().width} />
             </Match>
             <Match when={tab() === Tab.cost}>
               <CostTab

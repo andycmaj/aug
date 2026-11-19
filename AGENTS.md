@@ -115,6 +115,10 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   asked is read at ingest, a tagged team from the comment), and a review
   the model finds elsewhere becomes one too. An
   unmapped repo is said on the task, never guessed; Start asks.
+- **Wins history is `task_events`** (triggers in `core/db.ts`, read by
+  `core/wins-board.ts`): what happened to a task, kept after its columns
+  move on. The Board's tab 7 (`components/wins-tab.tsx`) shows a day's
+  Wins and what else got done (docs/rail-status-design.md, Wins).
 - **The Inbox is the Board's tab 5** (`core/inbox.ts`,
   `components/inbox-tab.tsx`): every message triage saw and every Advisor
   idea, newest first, with the chain that routed it. Every inbox and

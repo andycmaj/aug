@@ -533,3 +533,26 @@ export interface SpendByDay extends SpendTotal {
 export interface SpendByTask extends SpendTotal {
   task_id: number;
 }
+
+// What happened to a task (task_events, written by triggers in db.ts).
+export const TaskEventKind = {
+  created: "created",
+  done: "done",
+  dropped: "dropped",
+  later: "later",
+  reopened: "reopened",
+  merged: "merged",
+  unmerged: "unmerged",
+  // Its agent said it was done (aug-tools done); detail is the summary.
+  finished: "finished",
+} as const;
+export type TaskEventKind = (typeof TaskEventKind)[keyof typeof TaskEventKind];
+
+export interface TaskEventRow {
+  id: number;
+  task_id: number;
+  kind: TaskEventKind;
+  // done/dropped: who closed it; finished: the agent's summary; created: kind.
+  detail: string | null;
+  at: string;
+}

@@ -292,6 +292,22 @@ test("the Inbox's keys say what they do to each row", () => {
   expect(footer("board", { ...base(), item: "task", kind: "task", board: BoardTab.columns }).get("Enter")).toBe("open");
 });
 
+test("the Wins tab's keys: Enter opens the row, t goes, h and l walk days", () => {
+  const wins = (item: HelpCtx["item"], extra: Partial<HelpCtx> = {}) =>
+    footer("board", { ...base(), item, kind: item ? "task" : null, board: BoardTab.wins, ...extra });
+  const today = wins("task", { winsToday: true });
+  expect([today.get("Enter"), today.get("t"), today.get("h")]).toEqual(["details", "go to task", "earlier"]);
+  expect([today.has("l"), today.has("0")]).toEqual([false, false]);
+  const past = wins("task", { winsToday: false });
+  expect([past.get("l"), past.get("0")]).toEqual(["later", "today"]);
+  expect(wins(null).has("Enter")).toBe(false);
+  expect(wins(null).get("h")).toBe("earlier");
+  // Off Wins, h is the column move and t is nothing on the Board.
+  const columns = footer("board", { ...base(), item: "task", kind: "task", board: BoardTab.columns });
+  expect(columns.get("Enter")).toBe("open");
+  expect(columns.has("t")).toBe(false);
+});
+
 function base(): HelpCtx {
   return {
     item: null,

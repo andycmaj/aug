@@ -282,6 +282,22 @@ Marks that change neither lifecycle nor agent state:
     (2/5)`, done of pinned.
   - Tomorrow the box is empty and yesterday's open Wins are back in their
     sections. No carry-over.
+  - The Board's Wins tab (7, AUG-0156, `core/wins-board.ts`,
+    `components/wins-tab.tsx`) reads a day back: yesterday and today by
+    default, `h`/`l` a day earlier or later, `0` back to today. Each day
+    lists its Wins with how they came out at the day's end (done, merged,
+    dropped, for later, still open; today a still-open Win says its lane),
+    then **Also done**: every other task closed, merged or finished by its
+    agent that day, or talked over (your turns or its agent's), with the
+    count of tasks made and moves asked. Enter opens a row in place (the
+    day's events, last turns, moves naming it, PR and branch, agent time
+    clipped to the day, spend); `t` goes to the task.
+  - History is `task_events(task_id, kind, detail, at)`, written by SQLite
+    triggers on `tasks` (made, done, dropped, later, reopened, merged,
+    unmerged) and on `sessions.result` (finished), so every writer in every
+    process is heard and a reopen no longer erases a close. A database from
+    before it is backfilled once from `created_at`, `closed_at`, `merged_at`
+    and session results. A day is its local midnights as an ISO range.
 
 ## Implementation order
 

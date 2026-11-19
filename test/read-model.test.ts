@@ -114,6 +114,7 @@ describe("read model", () => {
     store.addIdea("idea", "body", plain.id);
     store.addNote("you", NoteLabel.note, "hi");
     store.addKnowledge("t", "t", "b", "you");
+    store.addWin(localDay(new Date()), plain.id);
     store.addSpend({ day: localDay(new Date()), taskId: plain.id, role: SpendRole.general, model: "sonnet", costUsd: 0.1, input: 1, output: 1, cacheRead: 0, cacheWrite: 0 });
 
     const queried: string[] = [];
@@ -160,6 +161,8 @@ describe("read model", () => {
       spendOn: (r) => r.spendOn("2026-11-15"),
       taskSpend: (r) => r.taskSpend(plain.id),
       spendReport: (r) => r.spendReport(DEFAULT_CONFIG, new Date()),
+      winsDay: (r) => [r.winsDay(localDay(new Date()), new Date()), r.winsDay("2026-11-15", new Date())],
+      winDetail: (r) => [r.winDetail(plain.id, localDay(new Date())), r.winDetail(withPr.id, localDay(new Date()))],
     };
     const known = new Set<string>(TABLES);
     for (const [name, call] of Object.entries(calls) as [ReadName, (r: ReadModel) => unknown][]) {

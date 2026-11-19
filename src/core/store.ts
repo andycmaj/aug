@@ -21,6 +21,7 @@ import {
   type SpendByTask,
   type SpendRole,
   type SpendTotal,
+  type TaskEventRow,
   type CorrectionRow,
   type ProjectMove,
   PROJECT_MOVE,
@@ -1298,6 +1299,63 @@ export function addWin(day: string, taskId: number): void {
 
 export function removeWin(day: string, taskId: number): void {
   run("DELETE FROM wins WHERE day = ? AND task_id = ?", day, taskId);
+}
+
+// ── task events (the Wins tab's history) ────────────────────────────────
+
+// Events in [from, to), oldest first.
+export function eventsBetween(from: string, to: string): TaskEventRow[] {
+  return all<TaskEventRow>(
+    "SELECT * FROM task_events WHERE at >= ? AND at < ? ORDER BY at, id",
+    from,
+    to,
+  );
+}
+
+// A task's events before `to`, oldest first: what it had come to by then.
+export function eventsForTask(taskId: number, to: string): TaskEventRow[] {
+  return all<TaskEventRow>(
+    "SELECT * FROM task_events WHERE task_id = ? AND at < ? ORDER BY at, id",
+    taskId,
+    to,
+  );
+}
+
+// The owner's and the agents' turns per task in [from, to).
+export function turnCountsBetween(
+  from: string,
+  to: string,
+): { task_id: number; role: TurnRole; n: number }[] {
+  return all(
+    "SELECT task_id, role, COUNT(*) AS n FROM turns WHERE started_at >= ? AND started_at < ? AND role IN ('you', 'agent') GROUP BY task_id, role",
+    from,
+    to,
+  );
+}
+
+export function turnsForTaskBetween(taskId: number, from: string, to: string): TurnRow[] {
+  return all<TurnRow>(
+    "SELECT * FROM turns WHERE task_id = ? AND started_at >= ? AND started_at < ? ORDER BY started_at, id",
+    taskId,
+    from,
+    to,
+  );
+}
+
+export function movesBetween(from: string, to: string): MoveRow[] {
+  return all<MoveRow>(
+    "SELECT * FROM moves WHERE created_at >= ? AND created_at < ? ORDER BY created_at, id",
+    from,
+    to,
+  );
+}
+
+export function taskSpendOn(taskId: number, day: string): SpendTotal {
+  return one<SpendTotal>(`SELECT ${SPEND_SUMS} FROM spend WHERE task_id = ? AND day = ?`, taskId, day) ?? {
+    cost: 0,
+    calls: 0,
+    tokens: 0,
+  };
 }
 
 // Task id -> its PR's last read state, for every task with one.

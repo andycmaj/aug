@@ -305,6 +305,20 @@ CREATE TABLE IF NOT EXISTS spend (
 );
 CREATE INDEX IF NOT EXISTS spend_day ON spend(day);
 CREATE INDEX IF NOT EXISTS spend_task ON spend(task_id);
+
+-- What happened to a task, one row per change, kept after the task's own
+-- columns move on (a reopen clears closed_at). Triggers write it
+-- (recordEvents), so every writer in every process is heard. The Wins tab
+-- reads a day of it.
+CREATE TABLE IF NOT EXISTS task_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  kind TEXT NOT NULL,
+  detail TEXT,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS task_events_at ON task_events(at);
+CREATE INDEX IF NOT EXISTS task_events_task ON task_events(task_id);
 `;
 
 let shared: Database | undefined;
@@ -317,6 +331,7 @@ export function openDb(file = paths.db()): Database {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
   migrate(db);
+  recordEvents(db);
   trackTables(db);
   return db;
 }
@@ -345,6 +360,7 @@ export const Table = {
   triageRuns: "triage_runs",
   triageSteps: "triage_steps",
   spend: "spend",
+  taskEvents: "task_events",
 } as const;
 export type Table = (typeof Table)[keyof typeof Table];
 
@@ -365,6 +381,71 @@ function trackTables(db: Database): void {
         `CREATE TRIGGER IF NOT EXISTS tv_${table}_${op.toLowerCase()} AFTER ${op} ON ${table} BEGIN UPDATE table_versions SET v = v + 1 WHERE name = '${table}'; END`,
       );
   }
+}
+
+// SQLite's now in the shape of now(): ISO, UTC, milliseconds.
+const SQL_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+
+// Task changes into task_events. After migrate: merged_at is an added
+// column. Home is not work, so it has no events.
+const EVENT_TRIGGERS = `
+CREATE TRIGGER IF NOT EXISTS ev_task_created AFTER INSERT ON tasks
+WHEN NEW.kind != 'home'
+BEGIN
+  INSERT INTO task_events (task_id, kind, detail, at) VALUES (NEW.id, 'created', NEW.kind, NEW.created_at);
+END;
+CREATE TRIGGER IF NOT EXISTS ev_task_status AFTER UPDATE OF status ON tasks
+WHEN NEW.status != OLD.status AND NEW.kind != 'home'
+  AND (NEW.status != 'open' OR OLD.status IN ('done', 'dropped'))
+BEGIN
+  INSERT INTO task_events (task_id, kind, detail, at) VALUES (
+    NEW.id,
+    CASE NEW.status WHEN 'open' THEN 'reopened' ELSE NEW.status END,
+    CASE WHEN NEW.status IN ('done', 'dropped') THEN NEW.closed_by END,
+    CASE WHEN NEW.status IN ('done', 'dropped') THEN COALESCE(NEW.closed_at, ${SQL_NOW}) ELSE ${SQL_NOW} END
+  );
+END;
+CREATE TRIGGER IF NOT EXISTS ev_task_merged AFTER UPDATE OF merged_at ON tasks
+WHEN (OLD.merged_at IS NULL) != (NEW.merged_at IS NULL)
+BEGIN
+  INSERT INTO task_events (task_id, kind, at) VALUES (
+    NEW.id,
+    CASE WHEN NEW.merged_at IS NULL THEN 'unmerged' ELSE 'merged' END,
+    COALESCE(NEW.merged_at, ${SQL_NOW})
+  );
+END;
+CREATE TRIGGER IF NOT EXISTS ev_session_finished AFTER UPDATE OF result ON sessions
+WHEN NEW.result IS NOT NULL AND NEW.result IS NOT OLD.result
+BEGIN
+  INSERT INTO task_events (task_id, kind, detail, at) VALUES (NEW.task_id, 'finished', NEW.result, ${SQL_NOW});
+END;
+`;
+
+// Tasks from before task_events get what their columns still say, once:
+// when each was made, closed, merged, and what its agents finished.
+const EVENTS_BACKFILLED = "events.backfilled";
+
+function recordEvents(db: Database): void {
+  db.transaction(() => {
+    if (!db.query("SELECT 1 FROM kv WHERE key = ?").get(EVENTS_BACKFILLED)) {
+      db.exec(`
+        INSERT INTO task_events (task_id, kind, detail, at)
+        SELECT id, 'created', kind, created_at FROM tasks WHERE kind != 'home'`);
+      db.exec(`
+        INSERT INTO task_events (task_id, kind, detail, at)
+        SELECT id, status, closed_by, closed_at FROM tasks
+        WHERE kind != 'home' AND status IN ('done', 'dropped') AND closed_at IS NOT NULL`);
+      db.exec(`
+        INSERT INTO task_events (task_id, kind, at)
+        SELECT id, 'merged', merged_at FROM tasks WHERE merged_at IS NOT NULL`);
+      db.exec(`
+        INSERT INTO task_events (task_id, kind, detail, at)
+        SELECT task_id, 'finished', result, COALESCE(ended_at, last_event_at) FROM sessions
+        WHERE result IS NOT NULL`);
+      db.query("INSERT INTO kv (key, value) VALUES (?, ?)").run(EVENTS_BACKFILLED, new Date().toISOString());
+    }
+    db.exec(EVENT_TRIGGERS);
+  })();
 }
 
 export function tableVersions(): Record<Table, number> {

@@ -12,6 +12,7 @@ import { taskPr, taskPrStatus } from "./pr";
 import { buildRail, localDay, type RailSection } from "./rail";
 import { spendReport } from "./spend";
 import * as store from "./store";
+import { winDetail, winsDay } from "./wins-board";
 import { Kind, type TaskRow } from "./types";
 
 export type Track = (tables: readonly Table[]) => void;
@@ -119,6 +120,25 @@ function reads(desk: LiveCheck) {
     spendOn: [[T.spend], store.spendOn],
     taskSpend: [[T.spend], store.taskSpend],
     spendReport: [[T.spend, T.tasks], spendReport],
+    winsDay: [
+      [T.wins, T.taskEvents, T.tasks, T.turns, T.moves, T.prStatus, T.taskBlockers],
+      winsDay,
+    ],
+    winDetail: [
+      [
+        T.tasks,
+        T.taskEvents,
+        T.turns,
+        T.moves,
+        T.sessions,
+        T.spend,
+        T.prStatus,
+        T.taskThreads,
+        T.messages,
+        T.taskLinks,
+      ],
+      winDetail,
+    ],
   } as const satisfies Record<string, Read>;
 }
 

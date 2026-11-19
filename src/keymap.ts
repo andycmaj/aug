@@ -48,6 +48,8 @@ export interface HelpCtx {
   // An Inbox row's task Start and Move act on: the one a message made or
   // joined, or the one an approved idea made.
   inboxWork?: boolean;
+  // The Wins tab shows today (l and 0 have nowhere to go).
+  winsToday?: boolean;
 }
 
 export const BoardTab = {
@@ -57,6 +59,7 @@ export const BoardTab = {
   projects: "projects",
   inbox: "inbox",
   cost: "cost",
+  wins: "wins",
 } as const;
 export type BoardTab = (typeof BoardTab)[keyof typeof BoardTab];
 
@@ -163,6 +166,7 @@ const isSystem = (c: HelpCtx) => isTask(c) && c.kind === "system";
 const onColumns = (c: HelpCtx) => c.board === BoardTab.columns;
 const onProjects = (c: HelpCtx) => c.board === BoardTab.projects;
 const onInbox = (c: HelpCtx) => c.board === BoardTab.inbox;
+const onWins = (c: HelpCtx) => c.board === BoardTab.wins;
 // An Inbox message (an FYI or not), not an idea.
 const inboxMessage = (c: HelpCtx) =>
   onInbox(c) && (c.item === "message" || c.item === "fyi");
@@ -505,19 +509,57 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     { key: "left", cmd: Commands.BOARD_LEFT, desc: "column left", relevant: onColumns },
     { key: "l", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
     { key: "right", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
-    // The footer folds the six into "1-6 tabs" (BOARD_HELP_OPTIONS).
+    // The footer folds the seven into "1-7 tabs" (BOARD_HELP_OPTIONS).
     { key: "1", cmd: Commands.BOARD_TAB_1, desc: "tab: columns", help: "tabs" },
     { key: "2", cmd: Commands.BOARD_TAB_2, desc: "tab: live handoffs" },
     { key: "3", cmd: Commands.BOARD_TAB_3, desc: "tab: knowledge" },
     { key: "4", cmd: Commands.BOARD_TAB_4, desc: "tab: projects" },
     { key: "5", cmd: Commands.BOARD_TAB_5, desc: "tab: inbox" },
     { key: "6", cmd: Commands.BOARD_TAB_6, desc: "tab: cost" },
+    { key: "7", cmd: Commands.BOARD_TAB_7, desc: "tab: wins" },
     {
       key: "return",
       cmd: Commands.OPEN,
       desc: "open the task in Chat, or jump to the project's session",
       help: "open",
-      relevant: (c) => c.item !== null && !onInbox(c),
+      relevant: (c) => c.item !== null && !onInbox(c) && !onWins(c),
+    },
+    // Wins: a day's Wins and what else got done, the day before beside it.
+    {
+      key: "return",
+      cmd: Commands.WINS_EXPAND,
+      desc: "Wins: show or hide what happened to it that day",
+      help: "details",
+      relevant: (c) => onWins(c) && c.item !== null,
+    },
+    {
+      key: "t",
+      cmd: Commands.WINS_GO,
+      desc: "Wins: go to the task",
+      help: "go to task",
+      relevant: (c) => onWins(c) && c.item !== null,
+    },
+    { key: "h", cmd: Commands.WINS_PREV_DAY, desc: "Wins: a day earlier", help: "earlier", relevant: onWins },
+    { key: "left", cmd: Commands.WINS_PREV_DAY, desc: "Wins: a day earlier", relevant: onWins },
+    {
+      key: "l",
+      cmd: Commands.WINS_NEXT_DAY,
+      desc: "Wins: a day later (never past today)",
+      help: "later",
+      relevant: (c) => onWins(c) && !c.winsToday,
+    },
+    {
+      key: "right",
+      cmd: Commands.WINS_NEXT_DAY,
+      desc: "Wins: a day later (never past today)",
+      relevant: (c) => onWins(c) && !c.winsToday,
+    },
+    {
+      key: "0",
+      cmd: Commands.WINS_TODAY,
+      desc: "Wins: back to today",
+      help: "today",
+      relevant: (c) => onWins(c) && !c.winsToday,
     },
     // The Inbox: every message triage saw and every Advisor idea.
     {
@@ -693,5 +735,5 @@ export const keymap = defaultKeymap;
 
 // Footer folding for the Board's tab digits.
 export const BOARD_HELP_OPTIONS = {
-  combinedKeys: { [Commands.BOARD_TAB_1]: "1-6" },
+  combinedKeys: { [Commands.BOARD_TAB_1]: "1-7" },
 };
