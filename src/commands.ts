@@ -18,6 +18,7 @@ export const Commands = {
   GO_TO: "nav.goto",
   HISTORY_BACK: "nav.history.back",
   HISTORY_FORWARD: "nav.history.forward",
+  UNDO: "move.undo",
 
   // On the item at the cursor / the selected item
   OPEN: "item.open",

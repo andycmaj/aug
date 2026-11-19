@@ -24,7 +24,6 @@ import {
   MoveStatus,
   ProjectStatus,
   ProposalSource,
-  SessionKind,
   TaskStatus,
   TurnRole,
   type GoalRow,
@@ -473,8 +472,8 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Give the task a new title",
     task: true,
     args: { title: { help: "the new title", required: true } },
-    run(_engine, task, args) {
-      store.updateTask(task!.id, { title: args.title.trim() });
+    run(desk, task, args) {
+      desk.retitle(task!.id, args.title);
       return `${ref(task)} is now: ${args.title.trim()}`;
     },
   },
@@ -507,14 +506,7 @@ export const MOVES: Record<string, MoveSpec> = {
     args: { project: { help: "the project's name", required: true } },
     async run(desk, task, args) {
       const project = projectNamed(args.project);
-      // A task that never started has no window to move or session to wake.
-      if (store.latestSession(task!.id)?.kind === SessionKind.tmux)
-        await desk.moveTask(task!.id, project.id);
-      else store.updateTask(task!.id, { project_id: project.id });
-      // A goal belongs to one project; the task leaves it behind.
-      const goal = task!.goal_id ? store.getGoal(task!.goal_id) : null;
-      if (goal && goal.project_id !== project.id)
-        store.updateTask(task!.id, { goal_id: null });
+      await desk.moveTask(task!.id, project.id);
       return `${ref(task)} is in project ${project.name}`;
     },
   },
@@ -568,8 +560,8 @@ export const MOVES: Record<string, MoveSpec> = {
       url: { help: "the http(s) URL", required: true },
       title: { help: "what it is, in a few words" },
     },
-    run(_engine, task, args, by) {
-      const link = store.addTaskLink(
+    run(desk, task, args, by) {
+      const link = desk.link(
         task!.id,
         checkUrl(args.url),
         args.title?.trim() || null,
@@ -583,9 +575,9 @@ export const MOVES: Record<string, MoveSpec> = {
     task: true,
     positional: "url",
     args: { url: { help: "the URL, as it was attached", required: true } },
-    run(_engine, task, args) {
+    run(desk, task, args) {
       const url = args.url.trim();
-      if (!store.removeTaskLink(task!.id, url)) {
+      if (!desk.unlink(task!.id, url)) {
         const links = store.linksForTask(task!.id).map((l) => l.url);
         throw new MoveError(
           `${ref(task)} has no link ${url}${links.length ? `. Links: ${links.join(", ")}` : ""}`,
@@ -942,7 +934,18 @@ export async function runMove(
   if (by === SLACK_ASKER && CONFIRM_MOVES.has(verb))
     return { ok: true, result: holdForYes(verb, args) };
   try {
-    return { ok: true, result: await spec.run(desk, task, args, by) };
+    // Every move is kept for ctrl+z: one the desk did not record (a tell, a
+    // goal, a repo) is kept as one it cannot undo.
+    const { value, recorded } = await desk.undos.asMove(by, async () =>
+      spec.run(desk, task, args, by),
+    );
+    if (!recorded)
+      desk.undos.cannot(
+        `${verb}${task ? ` ${ref(task)}` : ""}`,
+        "it is not a move ctrl+z takes back",
+        by,
+      );
+    return { ok: true, result: value };
   } catch (err) {
     if (err instanceof MoveError) return { ok: false, result: err.message };
     log.error("move failed", { verb, err });

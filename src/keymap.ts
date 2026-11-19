@@ -422,6 +422,15 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "forward again (history)",
     },
     { key: "shift+n", cmd: Commands.NEW_TASK, desc: "new task" },
+    // Raw mode turns off the terminal's suspend, so ctrl+z reaches aug. An
+    // attached agent still gets it (not in the terminal scope), and the
+    // chat box keeps it (quietWhileTyping).
+    {
+      key: "ctrl+z",
+      cmd: Commands.UNDO,
+      desc: "undo the last move (yours or the Assistant's)",
+      help: "undo",
+    },
     {
       key: "ctrl+r",
       cmd: Commands.POLL_NOW,

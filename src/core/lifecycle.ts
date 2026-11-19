@@ -33,6 +33,14 @@ export function holdForStart(taskId: number): void {
   });
 }
 
+// The hold a kind change put on, taken back (ctrl+z): it never started, so
+// there is nothing to continue.
+export function holdReleased(taskId: number): void {
+  const task = store.getTask(taskId);
+  if (task?.agent_state === AgentState.queued && task.queue_reason === HELD_FOR_START)
+    store.updateTask(taskId, { agent_state: AgentState.none, queue_reason: null });
+}
+
 // Held back by the pool's limit, with the reason the rail shows.
 export function queued(taskId: number, reason: string): void {
   store.updateTask(taskId, {

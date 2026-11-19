@@ -77,6 +77,14 @@ export function useShell(opts: {
     if (!aug.history(direction))
       showToast(direction < 0 ? "Nowhere further back" : "Nowhere further forward");
   };
+  // Newest move first; one that cannot be undone, or whose task changed
+  // since, says so and leaves the stack, so ctrl+z again reaches the one
+  // before it.
+  const undo = () =>
+    void aug.desk.undo().then(
+      (r) => showToast(r.text, r.ok ? 3000 : 5000, r.ok ? "info" : "error"),
+      (err) => showToast(`Could not undo: ${err instanceof Error ? err.message : String(err)}`, 5000, "error"),
+    );
   const advisor = () => {
     showToast("The Advisor is reading your work...");
     void aug.engine.advisorNow();
@@ -106,6 +114,7 @@ export function useShell(opts: {
       [Commands.GO_TO]: () => openModal("search"),
       [Commands.HISTORY_BACK]: unlessTyping(() => history(-1)),
       [Commands.HISTORY_FORWARD]: unlessTyping(() => history(1)),
+      [Commands.UNDO]: unlessTyping(undo),
     },
     { target: () => layout },
   );
@@ -138,6 +147,13 @@ export function useShell(opts: {
       label: "Forward again",
       hint: aug.desk.config().keys?.forward ?? "]",
       run: () => history(1),
+    },
+    {
+      id: "undo",
+      group: "Work",
+      label: "Undo the last move",
+      hint: "^z",
+      run: undo,
     },
     {
       id: "new",

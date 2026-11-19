@@ -157,6 +157,16 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   else. A move that would open a dialog answers `needs ...` in words instead.
   `AGENT_MOVES` is what a task's agent may ask for. "Move" means this bus; the
   owner's keys are task actions.
+- **ctrl+z is `core/undo.ts`**: the desk keeps this session's moves (the
+  owner's keys and the Assistant's verbs, never a task's own agent's),
+  newest first, 50 deep, in memory. A desk method that changes a task wraps
+  itself in `onTask(what, ...)`, which keeps the task as it was before and
+  after; undo puts back only the parts the move changed, and refuses when
+  any of them changed since. One with outside effects (start, send, archive)
+  wraps itself in `cannot(what, why, ...)`, and a verb that reached no
+  recording desk method is kept as one by `runMove`, so ctrl+z names it
+  rather than reaching past it. A new desk method that changes a task
+  goes through `onTask`; one that writes outside aug's rows, `cannot`.
 - **A project carries a brief, goals and docs** (`projects.brief`,
   `project_goals`, `project_links`; a task's `goal_id`). `lookup.projectContext`
   puts them in every brief of a task in the project, so a task's own brief
