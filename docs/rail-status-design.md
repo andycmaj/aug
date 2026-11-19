@@ -228,7 +228,7 @@ whenever the task stays open.
 
 Home, **Wins**, System, Tasks, Code Reviews, Watching, For later. Wins
 is walked first (`WALKED`). The rail holds tasks and projects only:
-messages and Advisor ideas are on the Board's Inbox tab (5), and the
+messages and Advisor ideas are on the Board's Inbox tab (4), and the
 `inbox N` at the end of the pills row (open ideas plus messages triage
 could not place) says when one needs you. There is no other header: the
 pills already count the work (AUG-0139).
@@ -282,7 +282,7 @@ Marks that change neither lifecycle nor agent state:
     (2/5)`, done of pinned.
   - Tomorrow the box is empty and yesterday's open Wins are back in their
     sections. No carry-over.
-  - The Board's Wins tab (7, AUG-0156, `core/wins-board.ts`,
+  - The Board's Wins tab (1, the Board's first, AUG-0156, `core/wins-board.ts`,
     `components/wins-tab.tsx`) reads a day back: today on top, then
     yesterday; `h`/`l` a day earlier or later, `0` back to today.
     Everything reads newest first: days, rows (by their latest event or

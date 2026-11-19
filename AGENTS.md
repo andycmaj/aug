@@ -56,7 +56,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   waits for the reset. The engine's GitHub status line says each of these.
 - **Claudes started outside aug are `core/strays.ts`**: found through Claude
   Code's own `~/.claude/sessions/<pid>.json` (pid, session id, cwd, tmux
-  pane). The `adopt` move and `A` on the Board make one a coding task: one in
+  pane). The `adopt` move and `A` on the Board's Columns make one a coding task: one in
   tmux keeps running and its window moves into the project's session; one in
   a plain terminal is recorded as saved, so Start resumes it in a window.
 - **Slack goes through a `SlackTransport`** (`core/slack/`): `token`,
@@ -117,9 +117,9 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   unmapped repo is said on the task, never guessed; Start asks.
 - **Wins history is `task_events`** (triggers in `core/db.ts`, read by
   `core/wins-board.ts`): what happened to a task, kept after its columns
-  move on. The Board's tab 7 (`components/wins-tab.tsx`) shows a day's
+  move on. The Board's tab 1 (`components/wins-tab.tsx`) shows a day's
   Wins and what else got done (docs/rail-status-design.md, Wins).
-- **The Inbox is the Board's tab 5** (`core/inbox.ts`,
+- **The Inbox is the Board's tab 4** (`core/inbox.ts`,
   `components/inbox-tab.tsx`): every message triage saw and every Advisor
   idea, newest first, with the chain that routed it. Every inbox and
   triage action lives there; the rail holds tasks and projects only.

@@ -52,14 +52,13 @@ export interface HelpCtx {
   winsToday?: boolean;
 }
 
+// In tab order (keys 1-5): Wins first.
 export const BoardTab = {
+  wins: "wins",
   columns: "columns",
-  notes: "notes",
   knowledge: "knowledge",
-  projects: "projects",
   inbox: "inbox",
   cost: "cost",
-  wins: "wins",
 } as const;
 export type BoardTab = (typeof BoardTab)[keyof typeof BoardTab];
 
@@ -164,7 +163,6 @@ const isWork = (c: HelpCtx) =>
   isTask(c) && c.kind !== "home" && c.kind !== "system";
 const isSystem = (c: HelpCtx) => isTask(c) && c.kind === "system";
 const onColumns = (c: HelpCtx) => c.board === BoardTab.columns;
-const onProjects = (c: HelpCtx) => c.board === BoardTab.projects;
 const onInbox = (c: HelpCtx) => c.board === BoardTab.inbox;
 const onWins = (c: HelpCtx) => c.board === BoardTab.wins;
 // An Inbox message (an FYI or not), not an idea.
@@ -509,14 +507,12 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     { key: "left", cmd: Commands.BOARD_LEFT, desc: "column left", relevant: onColumns },
     { key: "l", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
     { key: "right", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
-    // The footer folds the seven into "1-7 tabs" (BOARD_HELP_OPTIONS).
-    { key: "1", cmd: Commands.BOARD_TAB_1, desc: "tab: columns", help: "tabs" },
-    { key: "2", cmd: Commands.BOARD_TAB_2, desc: "tab: live handoffs" },
+    // The footer folds the five into "1-5 tabs" (BOARD_HELP_OPTIONS).
+    { key: "1", cmd: Commands.BOARD_TAB_1, desc: "tab: wins", help: "tabs" },
+    { key: "2", cmd: Commands.BOARD_TAB_2, desc: "tab: columns" },
     { key: "3", cmd: Commands.BOARD_TAB_3, desc: "tab: knowledge" },
-    { key: "4", cmd: Commands.BOARD_TAB_4, desc: "tab: projects" },
-    { key: "5", cmd: Commands.BOARD_TAB_5, desc: "tab: inbox" },
-    { key: "6", cmd: Commands.BOARD_TAB_6, desc: "tab: cost" },
-    { key: "7", cmd: Commands.BOARD_TAB_7, desc: "tab: wins" },
+    { key: "4", cmd: Commands.BOARD_TAB_4, desc: "tab: inbox" },
+    { key: "5", cmd: Commands.BOARD_TAB_5, desc: "tab: cost" },
     {
       key: "return",
       cmd: Commands.OPEN,
@@ -641,45 +637,18 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     },
     {
       key: "c",
-      cmd: Commands.BOARD_COMPOSE,
-      desc: "write a live handoff note",
-      help: "write",
-      relevant: (c) => c.board === BoardTab.columns || c.board === BoardTab.notes,
-    },
-    {
-      key: "c",
       cmd: Commands.BOARD_COMPOSE_KNOWLEDGE,
       desc: "write a knowledge entry",
       help: "write",
       relevant: (c) => c.board === BoardTab.knowledge,
     },
-    {
-      key: "c",
-      cmd: Commands.PROJECT_NEW,
-      desc: "new project",
-      help: "new project",
-      relevant: onProjects,
-    },
-    {
-      key: "e",
-      cmd: Commands.PROJECT_EDIT,
-      desc: "edit the project's brief, goals, repos and docs",
-      help: "brief",
-      relevant: (c) => onProjects(c) && c.item !== null,
-    },
-    {
-      key: "x",
-      cmd: Commands.PROJECT_ARCHIVE,
-      desc: "archive the project",
-      help: "archive",
-      relevant: (c) => onProjects(c) && c.item !== null,
-    },
+    // Strays are agents too: the agents' view adopts them.
     {
       key: "shift+a",
       cmd: Commands.PROJECT_ADOPT,
       desc: "adopt a tmux session or a stray claude as a project",
       help: "adopt",
-      relevant: onProjects,
+      relevant: onColumns,
     },
     {
       key: "s",
@@ -735,5 +704,5 @@ export const keymap = defaultKeymap;
 
 // Footer folding for the Board's tab digits.
 export const BOARD_HELP_OPTIONS = {
-  combinedKeys: { [Commands.BOARD_TAB_1]: "1-7" },
+  combinedKeys: { [Commands.BOARD_TAB_1]: "1-5" },
 };

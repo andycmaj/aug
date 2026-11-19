@@ -49,7 +49,7 @@ async function boot() {
     await settle();
   };
   const frame = () => setup.captureCharFrame();
-  await press("v", "5");
+  await press("v", "4");
   return { press, find, frame, settle };
 }
 

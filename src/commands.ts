@@ -48,7 +48,6 @@ export const Commands = {
   PROJECT_ADOPT: "project.adopt",
   PROJECT_ARCHIVE: "project.archive",
   PROJECT_EDIT: "project.edit",
-  PROJECT_NEW: "project.new",
   REPOS: "project.repos",
   SEND: "action.send",
   EDIT_DRAFT: "action.edit",
@@ -90,8 +89,6 @@ export const Commands = {
   BOARD_TAB_3: "board.tab.3",
   BOARD_TAB_4: "board.tab.4",
   BOARD_TAB_5: "board.tab.5",
-  BOARD_TAB_6: "board.tab.6",
-  BOARD_TAB_7: "board.tab.7",
   WINS_EXPAND: "wins.expand",
   WINS_GO: "wins.go",
   WINS_PREV_DAY: "wins.prev-day",
@@ -104,6 +101,5 @@ export const Commands = {
   INBOX_NOISE: "inbox.noise",
   INBOX_RETRIAGE: "inbox.retriage",
   INBOX_BODY: "inbox.body",
-  BOARD_COMPOSE: "board.compose",
   BOARD_COMPOSE_KNOWLEDGE: "board.compose.knowledge",
 } as const;

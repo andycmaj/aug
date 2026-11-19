@@ -712,15 +712,7 @@ export class Desk {
     writeDoc(DocName.learned, next);
   }
 
-  // ── the Board's notes and knowledge ───────────────────────────────────
-
-  note(label: NoteLabel, body: string): void {
-    store.addNote(OWNER, label, body);
-  }
-
-  readNotes(): void {
-    store.markNotesRead(OWNER);
-  }
+  // ── the Board's knowledge ─────────────────────────────────────────────
 
   addKnowledge(topic: string, title: string, body: string): void {
     store.addKnowledge(topic, title, body, OWNER);

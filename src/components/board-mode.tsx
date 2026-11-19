@@ -1,6 +1,5 @@
-// The Board: every agent and its session. Columns are the agent's states;
-// Live handoffs are the notes agents leave each other; Knowledge is what
-// they learned, by topic.
+// The Board: the day's Wins first, then every agent by state (Columns),
+// Knowledge (what agents learned, by topic), the Inbox and Cost.
 
 import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
@@ -14,59 +13,31 @@ import {
   useScope,
   useTheme,
   useToast,
-  type ThemeColor,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
 import { BOARD_COLUMNS, LANE_META } from "../core/lanes";
-import type { GoalProgress } from "../core/lookup";
-import { ageLabel } from "../core/rail";
-import { goalRef, noteReadBy, projectRepos, taskRef } from "../core/rows";
-import {
-  AgentState,
-  GoalStatus,
-  Kind,
-  NoteLabel,
-  TaskStatus,
-  type KnowledgeRow,
-  type ProjectRow,
-  type TaskRow,
-} from "../core/types";
+import { taskRef } from "../core/rows";
+import { AgentState, Kind, type KnowledgeRow, type TaskRow } from "../core/types";
 import { BOARD_HELP_OPTIONS, BoardTab, type HelpCtx } from "../keymap";
 import { AugFooter } from "./footer";
 import { boardTab, setBoardTab } from "./board-tab";
 import { CostTab } from "./cost-tab";
 import { useInboxTab } from "./inbox-tab";
 import { useWinsTab } from "./wins-tab";
-import { ChoiceModal, PromptModal } from "./modals";
+import { PromptModal } from "./modals";
 import { useShell } from "./shell";
 import { duration, toneColor } from "./ui";
 
 const Tab = BoardTab;
 type Tab = BoardTab;
 const TABS: { key: Tab; label: string }[] = [
-  { key: "columns", label: "1 Columns" },
-  { key: "notes", label: "2 Live handoffs" },
+  { key: "wins", label: "1 Wins" },
+  { key: "columns", label: "2 Columns" },
   { key: "knowledge", label: "3 Knowledge" },
-  { key: "projects", label: "4 Projects" },
-  { key: "inbox", label: "5 Inbox" },
-  { key: "cost", label: "6 Cost" },
-  { key: "wins", label: "7 Wins" },
+  { key: "inbox", label: "4 Inbox" },
+  { key: "cost", label: "5 Cost" },
 ];
-
-// A project, then its goals each with their open tasks, then the open tasks
-// that serve no goal.
-type ProjectLine =
-  | {
-      type: "project";
-      project: ProjectRow;
-      tasks: number;
-      goalsMet: number;
-      goals: number;
-      docs: number;
-    }
-  | { type: "goal"; project: ProjectRow; progress: GoalProgress }
-  | { type: "task"; task: TaskRow; project: ProjectRow; underGoal: boolean };
 
 const tab = boardTab;
 const setTab = setBoardTab;
@@ -83,8 +54,6 @@ export function BoardMode() {
   const [col, setCol] = createSignal(0);
   const [row, setRow] = createSignal(0);
   const [knowledgeAt, setKnowledgeAt] = createSignal(0);
-  const [projAt, setProjAt] = createSignal(0);
-  let notesScroll: ScrollBoxRenderable | undefined;
   let costScroll: ScrollBoxRenderable | undefined;
 
   const columns = createMemo(() =>
@@ -95,36 +64,6 @@ export function BoardMode() {
       Math.min(row(), (columns()[col()]?.tasks.length ?? 1) - 1)
     ] ?? null;
   const knowledge = createMemo(() => aug.knowledge());
-  const notes = createMemo(() => aug.notes(100));
-  const projectLines = createMemo((): ProjectLine[] => {
-    const out: ProjectLine[] = [];
-    const isOpen = (t: TaskRow) =>
-      t.status === TaskStatus.open || t.status === TaskStatus.later;
-    for (const project of aug.projects()) {
-      const summary = aug.projectSummary(project);
-      const progress = aug.projectProgress(project);
-      out.push({
-        type: "project",
-        project,
-        tasks: summary.open,
-        goalsMet: summary.goalsMet,
-        goals: summary.goals,
-        docs: aug.projectLinks(project.id).length,
-      });
-      for (const g of progress.goals) {
-        if (g.goal.status === GoalStatus.dropped) continue;
-        out.push({ type: "goal", project, progress: g });
-        for (const task of g.tasks.filter(isOpen))
-          out.push({ type: "task", task, project, underGoal: true });
-      }
-      for (const task of progress.loose)
-        out.push({ type: "task", task, project, underGoal: false });
-    }
-    return out;
-  });
-  const projectLine = (): ProjectLine | null =>
-    projectLines()[Math.min(projAt(), projectLines().length - 1)] ?? null;
-
   const inbox = useInboxTab({
     active: () => tab() === Tab.inbox,
     actions: shell.actions,
@@ -138,10 +77,6 @@ export function BoardMode() {
 
   const target = (): TaskRow | null => {
     if (tab() === Tab.columns) return cardTask();
-    if (tab() === Tab.projects) {
-      const line = projectLine();
-      return line?.type === "task" ? line.task : null;
-    }
     if (tab() === Tab.inbox) return inbox.task();
     if (tab() === Tab.wins) return wins.task();
     return null;
@@ -164,7 +99,7 @@ export function BoardMode() {
     shell.dialogs.show(() => (
         <PromptModal
           title="Knowledge: a durable discovery"
-          hint="topic: title - what was learned. Short-lived coordination belongs in Live handoffs."
+          hint="topic: title - what was learned. Short-lived coordination is a handoff note (aug-tools note)."
           placeholder="export: inter-company transfers - the bank feed keeps them, the export drops them"
           onSubmit={(line) => {
             const m = line.match(/^\s*([^:]+):\s*([^-–]+?)\s*[-–]\s*(.+)$/);
@@ -183,29 +118,6 @@ export function BoardMode() {
       ));
   }
 
-  function compose() {
-    if (tab() !== Tab.columns && tab() !== Tab.notes) return false;
-    shell.dialogs.show(() => (
-      <ChoiceModal
-        title="Leave a live handoff for the agents"
-        hint="Task-specific and short-lived; agents read it before starting."
-        choices={Object.values(NoteLabel).map((label) => ({
-          label,
-          run: () =>
-            shell.dialogs.show(() => (
-              <PromptModal
-                title={`Handoff (${label})`}
-                placeholder="the census sync is behind a VPN and will not run from a laptop"
-                onSubmit={(body) => aug.desk.note(label, body)}
-                onClose={shell.dialogs.close}
-              />
-            )),
-        }))}
-        onClose={shell.dialogs.close}
-      />
-    ));
-  }
-
   const vertical = (d: number) => {
     switch (tab()) {
       case Tab.columns:
@@ -216,17 +128,9 @@ export function BoardMode() {
           ),
         );
         break;
-      case Tab.notes:
-        notesScroll?.scrollBy(d * 2);
-        break;
       case Tab.knowledge:
         setKnowledgeAt((k) =>
           Math.max(0, Math.min(knowledge().length - 1, k + d)),
-        );
-        break;
-      case Tab.projects:
-        setProjAt((i) =>
-          Math.max(0, Math.min(projectLines().length - 1, i + d)),
         );
         break;
       case Tab.inbox:
@@ -256,70 +160,35 @@ export function BoardMode() {
           ? setRow(0)
           : tab() === Tab.knowledge
             ? setKnowledgeAt(0)
-            : tab() === Tab.projects
-              ? setProjAt(0)
-              : tab() === Tab.inbox
-                ? inbox.move(-Infinity)
-                : tab() === Tab.wins
-                  ? wins.move(-Infinity)
-                  : tab() === Tab.cost
-                  ? costScroll?.scrollTo(0)
-                  : notesScroll?.scrollTo(0),
+            : tab() === Tab.inbox
+              ? inbox.move(-Infinity)
+              : tab() === Tab.wins
+                ? wins.move(-Infinity)
+                : costScroll?.scrollTo(0),
       [Commands.NAV_BOTTOM]: () => vertical(999),
       [Commands.BOARD_LEFT]: () => horizontal(-1),
       [Commands.BOARD_RIGHT]: () => horizontal(1),
-      [Commands.BOARD_TAB_1]: () => setTab(Tab.columns),
-      [Commands.BOARD_TAB_2]: () => {
-        setTab(Tab.notes);
-        aug.desk.readNotes();
-      },
+      [Commands.BOARD_TAB_1]: () => setTab(Tab.wins),
+      [Commands.BOARD_TAB_2]: () => setTab(Tab.columns),
       [Commands.BOARD_TAB_3]: () => setTab(Tab.knowledge),
-      [Commands.BOARD_TAB_4]: () => setTab(Tab.projects),
-      [Commands.BOARD_TAB_5]: () => setTab(Tab.inbox),
-      [Commands.BOARD_TAB_6]: () => setTab(Tab.cost),
-      [Commands.BOARD_TAB_7]: () => setTab(Tab.wins),
+      [Commands.BOARD_TAB_4]: () => setTab(Tab.inbox),
+      [Commands.BOARD_TAB_5]: () => setTab(Tab.cost),
       ...inbox.commands,
       ...wins.commands,
-      [Commands.PROJECT_ADOPT]: () =>
-        void shell.actions.adopt(
-          tab() === Tab.projects ? projectLine()?.project.id : undefined,
-        ),
-      [Commands.PROJECT_ARCHIVE]: () => {
-        const line = projectLine();
-        if (tab() !== Tab.projects || !line) return false;
-        shell.actions.archiveProject(line.project.id);
-      },
-      [Commands.PROJECT_EDIT]: () => {
-        const line = projectLine();
-        if (tab() !== Tab.projects || !line) return false;
-        return shell.actions.editProject(line.project.id);
-      },
+      [Commands.PROJECT_ADOPT]: () => void shell.actions.adopt(),
       [Commands.REPOS]: () => void shell.actions.showRepos(),
       [Commands.MOVE_TO_PROJECT]: onTask(shell.actions.moveToProject),
       [Commands.OPEN]: () => {
         // Enter on the Inbox and Wins opens the row in place (INBOX_EXPAND,
         // WINS_EXPAND).
         if (tab() === Tab.inbox || tab() === Tab.wins) return false;
-        const line = tab() === Tab.projects ? projectLine() : null;
-        if (line?.type === "project" || line?.type === "goal") {
-          void shell.actions.jumpToProject(line.project.id);
-          return;
-        }
         const t = target();
         if (t) openInChat(t);
       },
-      [Commands.BOARD_COMPOSE]: compose,
       [Commands.BOARD_COMPOSE_KNOWLEDGE]: composeKnowledge,
-      [Commands.PROJECT_NEW]: () => {
-        if (tab() !== Tab.projects) return false;
-        shell.actions.newProject();
-      },
       [Commands.START]: onTask(shell.actions.start),
       [Commands.STOP]: onTask(shell.actions.stop),
       [Commands.JUMP]: () => {
-        const line = tab() === Tab.projects ? projectLine() : null;
-        if (line?.type === "project" || line?.type === "goal")
-          return void shell.actions.jumpToProject(line.project.id);
         const t = target();
         if (!t) return false;
         void shell.actions.jumpTo(t.id);
@@ -337,9 +206,8 @@ export function BoardMode() {
 
   const ctx = (): HelpCtx => {
     const t = target();
-    const line = tab() === Tab.projects ? projectLine() : null;
     return {
-      item: t ? "task" : line ? "project" : null,
+      item: t ? "task" : null,
       kind: t?.kind ?? null,
       hasDraft: false,
       live: Boolean(
@@ -399,9 +267,6 @@ export function BoardMode() {
                 >{` ${t.label} `}</text>
               )}
             </For>
-            <Show when={tab() === Tab.notes}>
-              <text fg={theme.textMuted}>agents post with aug-tools note</text>
-            </Show>
           </box>
           <Switch>
             <Match when={tab() === Tab.columns}>
@@ -411,60 +276,6 @@ export function BoardMode() {
                 row={row()}
                 width={dims().width}
               />
-            </Match>
-            <Match when={tab() === Tab.notes}>
-              <scrollbox
-                ref={(r: ScrollBoxRenderable) => (notesScroll = r)}
-                flexGrow={1}
-                flexBasis={0}
-                paddingLeft={1}
-                paddingRight={2}
-              >
-                <For
-                  each={notes()}
-                  fallback={
-                    <text fg={theme.textMuted}>
-                      No handoffs yet. c writes one; agents post with aug-tools
-                      note.
-                    </text>
-                  }
-                >
-                  {(n) => {
-                    const readBy = noteReadBy(n);
-                    const tone =
-                      n.label === "blocked"
-                        ? theme.error
-                        : n.label === "ready to push"
-                          ? theme.success
-                          : n.label === "working on"
-                            ? theme.info
-                            : theme.textMuted;
-                    return (
-                      <box flexDirection="column" marginBottom={1}>
-                        <box flexDirection="row" justifyContent="space-between">
-                          <text>
-                            <span style={{ fg: theme.text, attributes: 1 }}>
-                              {n.author}
-                            </span>
-                            <span style={{ fg: tone }}>{`  ● ${n.label}`}</span>
-                          </text>
-                          <text
-                            fg={theme.textMuted}
-                          >{`${ageLabel(n.created_at, aug.now())} ago`}</text>
-                        </box>
-                        <text fg={theme.text} wrapMode="word">
-                          {n.body}
-                        </text>
-                        <Show when={readBy.length > 0}>
-                          <text
-                            fg={theme.textMuted}
-                          >{`· read by ${readBy.join(", ")}`}</text>
-                        </Show>
-                      </box>
-                    );
-                  }}
-                </For>
-              </scrollbox>
             </Match>
             <Match when={tab() === Tab.knowledge}>
               <Knowledge
@@ -485,13 +296,6 @@ export function BoardMode() {
                 scrollRef={(r) => (costScroll = r)}
               />
             </Match>
-            <Match when={tab() === Tab.projects}>
-              <Projects
-                lines={projectLines()}
-                selected={projAt()}
-                width={dims().width}
-              />
-            </Match>
           </Switch>
         </box>
         <AugFooter ctx={ctx} options={BOARD_HELP_OPTIONS} />
@@ -499,150 +303,6 @@ export function BoardMode() {
       </box>
       <shell.Modals ctx={ctx} />
     </box>
-  );
-}
-
-// Ten cells of done out of all.
-function meter(done: number, all: number): string {
-  const full = all ? Math.round((done / all) * 10) : 0;
-  return `${"▰".repeat(full)}${"▱".repeat(10 - full)}`;
-}
-
-function Projects(props: {
-  lines: ProjectLine[];
-  selected: number;
-  width: number;
-}) {
-  const theme = useTheme();
-  const aug = useAug();
-  const live = (task: TaskRow) => {
-    const s = aug.latestSession(task.id);
-    return Boolean(s?.tmux_window && !s.ended_at);
-  };
-  return (
-    <Show
-      when={props.lines.length > 0}
-      fallback={
-        <box paddingLeft={1} flexDirection="column">
-          <text fg={theme.textMuted}>
-            No projects yet. c makes one (a tmux session); A adopts a session or
-            a claude you already have.
-          </text>
-          <text fg={theme.textMuted}>
-            Starting a coding task outside a project makes a project of its own.
-          </text>
-        </box>
-      }
-    >
-      <scrollbox flexGrow={1} flexBasis={0} paddingLeft={1}>
-        <For each={props.lines}>
-          {(line, i) => {
-            const on = () => i() === props.selected;
-            const fg = (color: ThemeColor) =>
-              on() ? contrastingForeground(theme.primary) : color;
-            if (line.type === "project") {
-              const repos = projectRepos(line.project);
-              const brief =
-                line.project.brief.split("\n").find((l) => l.trim()) ?? "";
-              return (
-                <box flexDirection="column" marginTop={i() === 0 ? 0 : 1}>
-                  <box
-                    flexDirection="row"
-                    gap={2}
-                    backgroundColor={on() ? theme.primary : undefined}
-                  >
-                    <text fg={fg(theme.primary)} attributes={1}>
-                      {`◫ ${line.project.name}`}
-                    </text>
-                    <text fg={fg(theme.textMuted)}>
-                      {truncate(
-                        [
-                          `tmux ${line.project.tmux_session}`,
-                          repos.length ? repos.join(", ") : null,
-                          `${line.tasks} open`,
-                          line.goals
-                            ? `goals ${line.goalsMet}/${line.goals} met`
-                            : null,
-                          line.docs
-                            ? `${line.docs} doc${line.docs === 1 ? "" : "s"}`
-                            : null,
-                          line.project.solo ? "one task" : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · "),
-                        props.width - line.project.name.length - 12,
-                      )}
-                    </text>
-                  </box>
-                  <box paddingLeft={2}>
-                    <text fg={theme.textMuted}>
-                      {brief
-                        ? truncate(brief, props.width - 8)
-                        : "no brief yet: e writes one, with goals and docs"}
-                    </text>
-                  </box>
-                </box>
-              );
-            }
-            if (line.type === "goal") {
-              const g = line.progress;
-              const met = g.goal.status === GoalStatus.met;
-              return (
-                <box
-                  flexDirection="row"
-                  gap={2}
-                  paddingLeft={2}
-                  backgroundColor={on() ? theme.primary : undefined}
-                >
-                  <text fg={fg(met ? theme.success : theme.secondary)}>
-                    {`${met ? "◉" : "◎"} ${goalRef(g.goal.id)}`}
-                  </text>
-                  <text fg={fg(met ? theme.textMuted : theme.text)}>
-                    {truncate(g.goal.title, 44)}
-                  </text>
-                  <text fg={fg(theme.textMuted)}>
-                    {[
-                      g.tasks.length
-                        ? `${meter(g.done, g.tasks.length)} ${g.done}/${g.tasks.length} done`
-                        : "no tasks yet",
-                      g.working ? `${g.working} working` : null,
-                      met ? "met" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </text>
-                </box>
-              );
-            }
-            const t = line.task;
-            return (
-              <box
-                flexDirection="row"
-                gap={2}
-                paddingLeft={line.underGoal ? 4 : 2}
-                backgroundColor={on() ? theme.primary : undefined}
-              >
-                <text fg={fg(theme.textMuted)}>{taskRef(t.id)}</text>
-                <text fg={fg(theme.text)}>{truncate(t.title, 44)}</text>
-                <text fg={fg(theme.textMuted)}>
-                  {truncate(
-                    [
-                      t.branch ??
-                        (t.kind === "coding" ? "no worktree" : t.kind),
-                      t.agent_state === AgentState.none ? null : t.agent_state,
-                      live(t) ? "● live" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · "),
-                    Math.max(10, props.width - 70),
-                  )}
-                </text>
-              </box>
-            );
-          }}
-        </For>
-      </scrollbox>
-    </Show>
   );
 }
 

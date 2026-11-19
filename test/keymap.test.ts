@@ -229,18 +229,18 @@ test("the Board lists each tab's own keys", () => {
       pr: false,
       board: tab,
     });
-  expect(board(BoardTab.notes).get("c")).toBe(Commands.BOARD_COMPOSE);
   expect(board(BoardTab.knowledge).get("c")).toBe(
     Commands.BOARD_COMPOSE_KNOWLEDGE,
   );
-  expect(board(BoardTab.projects).get("c")).toBe(Commands.PROJECT_NEW);
-  expect(board(BoardTab.notes).has("x")).toBe(false);
-  expect(board(BoardTab.notes).has("h")).toBe(false);
+  expect(board(BoardTab.columns).has("c")).toBe(false);
+  expect(board(BoardTab.cost).has("x")).toBe(false);
+  expect(board(BoardTab.knowledge).has("h")).toBe(false);
   expect(board(BoardTab.columns).has("h")).toBe(true);
-  expect(board(BoardTab.projects, "project").get("x")).toBe(
-    Commands.PROJECT_ARCHIVE,
-  );
+  expect(board(BoardTab.columns).get("A")).toBe(Commands.PROJECT_ADOPT);
+  expect(board(BoardTab.wins).has("A")).toBe(false);
   expect(board(BoardTab.columns, null).has("Enter")).toBe(false);
+  // Wins is the first tab.
+  expect(Object.values(BoardTab)[0]).toBe(BoardTab.wins);
 });
 
 test("Home's row does not offer the key that goes Home", () => {
