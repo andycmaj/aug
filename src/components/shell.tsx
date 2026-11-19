@@ -7,6 +7,7 @@ import { useRenderer } from "@opentui/solid";
 import {
   CommandPalette,
   useFocus,
+  useKeymap,
   useScope,
   useToast,
   useTheme,
@@ -21,6 +22,9 @@ import { FocusHelp } from "./focus-help";
 import { INBOX_KEY, setBoardTab } from "./board-tab";
 import { SearchModal, StatusModal } from "./modals";
 import { RailLegend } from "./rail";
+import { useFocusBindings } from "./footer";
+import { logger } from "../core/log";
+import { paletteEntries, type PaletteExtra } from "../palette";
 
 export interface ShellApi {
   dialogs: Dialogs;
@@ -31,9 +35,11 @@ export interface ShellApi {
   Modals: (props: { ctx: Accessor<HelpCtx> }) => JSX.Element;
 }
 
+const log = logger("shell");
+
 export function useShell(opts: {
   typing: Accessor<boolean>;
-  extraPalette?: () => PaletteAction[];
+  extraPalette?: () => PaletteExtra[];
 }): ShellApi {
   const renderer = useRenderer();
   const aug = useAug();
@@ -43,6 +49,7 @@ export function useShell(opts: {
   const theme = useTheme();
   const dialogs = useDialogs();
   const actions = useActions(dialogs);
+  const keymap = useKeymap();
   let layout: Renderable | undefined;
 
   // App keys decline while a text box has focus, so typing reaches it.
@@ -119,79 +126,9 @@ export function useShell(opts: {
     { target: () => layout },
   );
 
-  const paletteActions = (): PaletteAction[] => [
-    {
-      id: "walk",
-      group: "Work",
-      label: "Walk me through my tasks",
-      hint: "n",
-      run: () => actions.walk(1),
-    },
-    {
-      id: "search",
-      group: "Work",
-      label: "Go to: search the rail, or a recent row",
-      hint: "/",
-      run: () => openModal("search"),
-    },
-    {
-      id: "history-back",
-      group: "Work",
-      label: "Back to where you were",
-      hint: aug.desk.config().keys?.back ?? "[",
-      run: () => history(-1),
-    },
-    {
-      id: "history-forward",
-      group: "Work",
-      label: "Forward again",
-      hint: aug.desk.config().keys?.forward ?? "]",
-      run: () => history(1),
-    },
-    {
-      id: "undo",
-      group: "Work",
-      label: "Undo the last move",
-      hint: "^z",
-      run: undo,
-    },
-    {
-      id: "new",
-      group: "Work",
-      label: "New task / give an agent a job",
-      hint: "N",
-      run: actions.newTask,
-    },
-    {
-      id: "ask",
-      group: "Work",
-      label: "Ask the Assistant (Home)",
-      hint: "a",
-      run: aug.goHome,
-    },
-    {
-      id: "view",
-      group: "Work",
-      label:
-        aug.mode() === ViewMode.chat ? "Switch to the Board" : "Switch to Chat",
-      hint: "v",
-      run: toggleView,
-    },
-    ...(opts.extraPalette?.() ?? []),
-    {
-      id: "poll",
-      group: "Connections",
-      label: "Check GitHub and Slack now",
-      hint: "^r",
-      run: pollNow,
-    },
-    {
-      id: "status",
-      group: "Connections",
-      label: "Connections and Advisor status",
-      hint: "C",
-      run: () => openModal("status"),
-    },
+  // Moves with no key of their own; everything with a key comes from the
+  // keymap (palette.ts).
+  const paletteExtras = (): PaletteExtra[] => [
     {
       id: "advisor",
       group: "Connections",
@@ -205,14 +142,42 @@ export function useShell(opts: {
       hint: DOC_PURPOSE[name].slice(0, 24),
       run: () => actions.openEditor(docPath(name), name),
     })),
-    { id: "quit", group: "App", label: "Quit", hint: "q", run: quit },
   ];
+
+  // Runs the command as its key would, from the pane the palette was opened
+  // over (a modal holds focus while it is open).
+  const runCommand = (cmd: string) => {
+    const result = keymap.dispatchCommand(cmd, {
+      focused: focus.activePaneTarget() ?? null,
+    });
+    if (!result.ok) log.info(`palette: ${cmd} did not run (${result.reason})`);
+  };
+
+  function Palette(props: { ctx: Accessor<HelpCtx> }) {
+    const bindings = useFocusBindings(() => props.ctx());
+    const entries = (): PaletteAction[] =>
+      paletteEntries(bindings(), props.ctx(), [
+        ...paletteExtras(),
+        ...(opts.extraPalette?.() ?? []),
+      ]).map((e) => ({
+        id: e.id,
+        label: e.label,
+        hint: e.hint,
+        group: e.group,
+        run: () => {
+          const cmd = e.cmd;
+          if (cmd) runCommand(cmd);
+          else e.run?.();
+        },
+      }));
+    return <CommandPalette actions={entries()} onClose={closeModal} />;
+  }
 
   function Modals(props: { ctx: Accessor<HelpCtx> }) {
     return (
       <>
         <Show when={activeModal() === "palette"}>
-          <CommandPalette actions={paletteActions()} onClose={closeModal} />
+          <Palette ctx={props.ctx} />
         </Show>
         <Show when={activeModal() === "help"}>
           <FocusHelp

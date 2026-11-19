@@ -237,6 +237,10 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   binding per key; only the `terminal` scope while one is attached). A
   binding that applies only sometimes says so with `relevant`, or both will
   list it where it does nothing. The Board's tab is `HelpCtx.board`.
+  The `:` palette lists the same set (`src/palette.ts`: one entry per
+  command, movement left out, a binding about the row is the one whose
+  `relevant` declines with no row) plus the moves with no key, and runs a
+  key's command through `keymap.dispatchCommand` on the pane under it.
 - Keymap layers run before a focused `<input>`. Any handler reachable while the
   chat box has focus must decline (`unlessTyping`).
 - A key listed in the `terminal` scope gets past an attached agent (the
