@@ -17,7 +17,7 @@ import {
 import type { AugConfig } from "./config";
 import { mentionedProjects, mentionedTasks } from "./mentions";
 import { docsBlock } from "./prompts";
-import { findTasks, projectDetail, projectLine, taskDetail, taskLine } from "./lookup";
+import { findTasks, projectBrief, projectLine, taskDetail } from "./lookup";
 import { MOVES } from "./moves";
 import { docDraftsDir } from "./paths";
 import { TOOLS_NAME, toolsEnv, toolsRules } from "./self";
@@ -26,8 +26,10 @@ import * as store from "./store";
 import { transcript } from "./transcript";
 import {
   AgentState,
+  Priority,
   ProjectStatus,
   SLACK_AUTHOR,
+  TaskStatus,
   TurnRole,
   type TurnRow,
 } from "./types";
@@ -116,22 +118,71 @@ export function assistantSystem(config: AugConfig): string {
   ].join("\n");
 }
 
-function snapshot(): string {
+// Where things stand, as counts: the Assistant lists the rows with
+// `aug-tools tasks` when it needs them, and the tasks a turn names come in
+// full beside it. No clock in it, so it is the same text until the work
+// changes.
+export function whereThingsStand(): string {
   const open = findTasks();
   const projects = store
     .listProjects()
     .filter((p) => p.status === ProjectStatus.active);
+  const later = open.filter((t) => t.status === TaskStatus.later).length;
+  const urgent = open.filter((t) => t.priority === Priority.urgent).length;
+  const agents = Object.values(AgentState)
+    .filter((s) => s !== AgentState.none)
+    .map((s) => [s, open.filter((t) => t.agent_state === s).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([s, n]) => `${n} ${s}`);
   const working = open.filter((t) => t.agent_state === AgentState.working);
   return [
-    `Now: ${new Date().toString()}`,
-    `Open work (${open.length}):`,
-    open.slice(-40).map(taskLine).join("\n") || "(none)",
+    `Open work: ${open.length} task${open.length === 1 ? "" : "s"} (${open.length - later} open, ${later} later${urgent ? `, ${urgent} urgent` : ""}); ${TOOLS_NAME} tasks lists them.`,
+    `Agents: ${agents.join(", ") || "none"}`,
+    `Agents working now: ${working.map((t) => store.taskRef(t.id)).join(", ") || "none"}`,
     `Projects: ${projects.length ? "" : "(none)"}`,
     projects.map(projectLine).join("\n"),
-    `Agents working now: ${working.map((t) => store.taskRef(t.id)).join(", ") || "none"}`,
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+// What the Assistant's session was last told of where things stand, kept
+// once its turn finished so a turn that never ran is not counted as heard.
+const WHERE_KEY = "assistant.where";
+
+export function heardWhere(sessionId: string): string | null {
+  const raw = store.kvGet(WHERE_KEY);
+  if (!raw) return null;
+  try {
+    const kept = JSON.parse(raw) as { session?: string; where?: string };
+    return kept.session === sessionId && typeof kept.where === "string"
+      ? kept.where
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberWhere(sessionId: string, where: string): void {
+  store.kvSet(WHERE_KEY, JSON.stringify({ session: sessionId, where }));
+}
+
+// A resumed session already holds what it was told: send it what moved.
+function whereSection(where: string, heard: string | null): string {
+  const now = `Now: ${new Date().toString()}`;
+  if (heard === null) return `## Where things stand\n${now}\n${where}`;
+  if (heard === where)
+    return `## Where things stand: unchanged since your last turn\n${now}`;
+  const before = new Set(heard.split("\n"));
+  const after = new Set(where.split("\n"));
+  const gone = [...before].filter((l) => !after.has(l)).map((l) => `- ${l}`);
+  const came = [...after].filter((l) => !before.has(l)).map((l) => `+ ${l}`);
+  return [
+    "## Where things stand: changed since your last turn (- was, + is)",
+    now,
+    ...gone,
+    ...came,
+  ].join("\n");
 }
 
 export function fromSlack(turns: TurnRow[]): boolean {
@@ -144,18 +195,21 @@ function unanswered(turns: TurnRow[]): TurnRow[] {
   return turns.slice(last + 1);
 }
 
+// `heard` is what this session was last told of where things stand; only a
+// resumed session has one, and without it the whole picture goes.
 export function assistantPrompt(
   turns: TurnRow[],
   reason: string,
   resumed: boolean,
+  where: string = whereThingsStand(),
+  heard: string | null = null,
 ): string {
   const fresh = unanswered(turns);
   const said = fresh.map((t) => t.body).join("\n");
   const mentioned = mentionedTasks(said);
   const projects = mentionedProjects(said);
   return [
-    "## Where things stand",
-    snapshot(),
+    whereSection(where, resumed ? heard : null),
     // A resumed session remembers the conversation; a new one reads it back.
     !resumed && turns.length > fresh.length
       ? `\n## Earlier in Home\n${transcript(turns.slice(0, turns.length - fresh.length).slice(-20))}`
@@ -164,7 +218,7 @@ export function assistantPrompt(
       ? `\n## Tasks the owner named\n${mentioned.map((t) => taskDetail(t, 8)).join("\n\n---\n\n")}`
       : "",
     projects.length
-      ? `\n## Projects the owner named\n${projects.map(projectDetail).join("\n\n")}`
+      ? `\n## Projects the owner named\n${projects.map(projectBrief).join("\n\n")}`
       : "",
     "",
     deniedNote(turns),
@@ -174,18 +228,27 @@ export function assistantPrompt(
     .join("\n");
 }
 
+// `resume` is the session this turn resumes; `where` is the picture it is
+// sent, which the caller remembers for that session once the turn finished.
 export function assistantCall(
   config: AugConfig,
   turns: TurnRow[],
   reason: string,
-  resumed: boolean,
+  resume: string | undefined,
+  where: string,
 ): Pick<
   BrainCall,
   "prompt" | "system" | "model" | "tools" | "allow" | "pluginDirs" | "env"
 > {
   const grant = capabilityGrant("assistant", config);
   return {
-    prompt: assistantPrompt(turns, reason, resumed),
+    prompt: assistantPrompt(
+      turns,
+      reason,
+      Boolean(resume),
+      where,
+      resume ? heardWhere(resume) : null,
+    ),
     system: assistantSystem(config),
     model: config.brain.assistantModel,
     tools: [...ASSISTANT_TOOLS, ...grant.tools],

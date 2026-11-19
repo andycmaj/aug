@@ -7,7 +7,7 @@
 
 import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { assistantCall } from "./assistant";
+import { assistantCall, rememberWhere, whereThingsStand } from "./assistant";
 import { think, BrainError, type BrainCall } from "./brain";
 import {
   capabilityAllow,
@@ -507,10 +507,11 @@ export class AgentPool {
     };
 
     const steps: string[] = [];
+    const where = home ? whereThingsStand() : "";
     try {
       const result = await think({
         ...(home
-          ? assistantCall(config, history, reason, Boolean(resume))
+          ? assistantCall(config, history, reason, resume, where)
           : generalCall(config, task, history, reason, Boolean(resume))),
         cwd,
         ...(resume ? { resume } : { sessionId }),
@@ -540,6 +541,7 @@ export class AgentPool {
         );
         store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
       }
+      if (home) rememberWhere(sessionId, where);
       const answer = result.structured as TurnAnswer | null;
       const finished = now();
       recordFiles();

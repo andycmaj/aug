@@ -191,6 +191,24 @@ export function projectDetail(p: ProjectRow): string {
     .join("\n");
 }
 
+// A project as the Assistant gets it when the owner names it: the brief,
+// the goals and how far each has come, and the docs. Its open work is a
+// `project <name>` away.
+export function projectBrief(p: ProjectRow): string {
+  const goals = projectProgress(p).goals.filter(
+    (g) => g.goal.status !== GoalStatus.dropped,
+  );
+  const links = store.linksForProject(p.id);
+  return [
+    projectLine(p),
+    p.brief ? `\nBrief:\n${p.brief}` : "\nNo brief yet.",
+    goals.length ? `\nGoals:\n${goals.map(goalLine).join("\n")}` : "\nNo goals yet.",
+    links.length ? `\nDocs:\n${links.map((l) => `- ${linkLine(l)}`).join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 // The project a task is in, as its agent's brief tells it: what the project
 // is for, the goal this task serves, the others beside it, and the docs.
 export function projectContext(task: TaskRow): string {
