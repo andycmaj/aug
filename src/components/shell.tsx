@@ -6,6 +6,7 @@ import type { Renderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import {
   CommandPalette,
+  PaletteMode,
   useFocus,
   useKeymap,
   useScope,
@@ -31,8 +32,12 @@ export interface ShellApi {
   actions: Actions;
   // Spread onto the mode's layout box: app keys apply while focus is in it.
   layoutRef: (r: Renderable) => void;
-  // `ctx` is what the focused pane is on, for the ? help.
-  Modals: (props: { ctx: Accessor<HelpCtx> }) => JSX.Element;
+  // `ctx` is what the focused pane is on, for the ? help; `subject` names it
+  // for the palette's title (a row's ref and title, or the Board's tab).
+  Modals: (props: {
+    ctx: Accessor<HelpCtx>;
+    subject?: Accessor<string | null>;
+  }) => JSX.Element;
 }
 
 const log = logger("shell");
@@ -153,7 +158,10 @@ export function useShell(opts: {
     if (!result.ok) log.info(`palette: ${cmd} did not run (${result.reason})`);
   };
 
-  function Palette(props: { ctx: Accessor<HelpCtx> }) {
+  function Palette(props: {
+    ctx: Accessor<HelpCtx>;
+    subject?: Accessor<string | null>;
+  }) {
     const bindings = useFocusBindings(() => props.ctx());
     const entries = (): PaletteAction[] =>
       paletteEntries(bindings(), props.ctx(), [
@@ -163,21 +171,39 @@ export function useShell(opts: {
         id: e.id,
         label: e.label,
         hint: e.hint,
-        group: e.group,
+        // Context is a short list about one row: no headers.
+        group: aug.paletteMode() === PaletteMode.ALL ? e.group : undefined,
+        inContext: e.inContext,
         run: () => {
           const cmd = e.cmd;
           if (cmd) runCommand(cmd);
           else e.run?.();
         },
       }));
-    return <CommandPalette actions={entries()} onClose={closeModal} />;
+    const title = () => {
+      if (aug.paletteMode() === PaletteMode.ALL) return "All commands";
+      const subject = props.subject?.();
+      return subject ? `Commands · ${subject}` : "Commands";
+    };
+    return (
+      <CommandPalette
+        actions={entries()}
+        title={title()}
+        mode={aug.paletteMode()}
+        onModeChange={aug.setPaletteMode}
+        onClose={closeModal}
+      />
+    );
   }
 
-  function Modals(props: { ctx: Accessor<HelpCtx> }) {
+  function Modals(props: {
+    ctx: Accessor<HelpCtx>;
+    subject?: Accessor<string | null>;
+  }) {
     return (
       <>
         <Show when={activeModal() === "palette"}>
-          <Palette ctx={props.ctx} />
+          <Palette ctx={props.ctx} subject={props.subject} />
         </Show>
         <Show when={activeModal() === "help"}>
           <FocusHelp

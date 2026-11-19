@@ -241,6 +241,9 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   command, movement left out, a binding about the row is the one whose
   `relevant` declines with no row) plus the moves with no key, and runs a
   key's command through `keymap.dispatchCommand` on the pane under it.
+  It opens on Context (the pane's and the row's, flat, titled for the row:
+  each view's `subject`); tab shows All (app-wide and keyless too,
+  grouped). The mode is `paletteMode` on the aug context, one per session.
 - Keymap layers run before a focused `<input>`. Any handler reachable while the
   chat box has focus must decline (`unlessTyping`).
 - A key listed in the `terminal` scope gets past an attached agent (the

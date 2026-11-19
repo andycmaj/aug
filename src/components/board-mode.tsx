@@ -213,6 +213,15 @@ export function BoardMode() {
     { target: p.target },
   );
 
+  // What the palette's context mode is about: the card or row the keys act
+  // on, else the tab.
+  const subject = (): string => {
+    const t = target();
+    if (t) return `${taskRef(t.id)} ${t.title}`;
+    const label = TABS.find((x) => x.key === tab())?.label.replace(/^\d+ /, "");
+    return `Board: ${label ?? tab()}`;
+  };
+
   const ctx = (): HelpCtx => {
     const t = target();
     return {
@@ -310,7 +319,7 @@ export function BoardMode() {
         <AugFooter ctx={ctx} options={BOARD_HELP_OPTIONS} />
         <box height={1} flexShrink={0} />
       </box>
-      <shell.Modals ctx={ctx} />
+      <shell.Modals ctx={ctx} subject={subject} />
     </box>
   );
 }

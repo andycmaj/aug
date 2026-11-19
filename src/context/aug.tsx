@@ -15,7 +15,7 @@ import {
   type ParentProps,
   type Setter,
 } from "solid-js";
-import { createRequiredContext } from "@andycmaj/opentui-app";
+import { createRequiredContext, PaletteMode } from "@andycmaj/opentui-app";
 import { coalesce } from "../core/coalesce";
 import { dataVersion, TABLES, tableVersions, type Table } from "../core/db";
 import type { Desk } from "../core/desk";
@@ -85,6 +85,9 @@ interface AugContextValue extends ReadModel {
   // Projects whose tasks the rail hides under their row.
   folded: Accessor<Set<number>>;
   toggleFold: (projectId: number) => void;
+  // The palette's mode, kept for the session and shared by Chat and Board.
+  paletteMode: Accessor<PaletteMode>;
+  setPaletteMode: (mode: PaletteMode) => void;
   // The rail's status filter; empty shows every status.
   railFilter: Accessor<Set<RailFilter>>;
   filterCounts: Accessor<Record<RailFilter, number>>;
@@ -196,6 +199,9 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
 
   const items = createMemo(() => flattenRail(rail()));
   const [railFilter, setRailFilter] = createSignal<Set<RailFilter>>(new Set());
+  const [paletteMode, setPaletteMode] = createSignal<PaletteMode>(
+    PaletteMode.CONTEXT,
+  );
   const filtered = createMemo(() => filterRail(rail(), railFilter()));
   const counts = createMemo(() => filterCounts(rail()));
   const shownRail = createMemo(() => foldRail(filtered(), folded()));
@@ -405,6 +411,8 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
         setMode,
         folded,
         toggleFold,
+        paletteMode,
+        setPaletteMode,
         railFilter,
         filterCounts: counts,
         toggleFilter,

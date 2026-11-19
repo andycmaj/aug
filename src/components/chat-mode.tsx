@@ -6,6 +6,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { useFocus, useTheme } from "@andycmaj/opentui-app";
 import { useAug } from "../context/aug";
 import { useTerminals } from "../context/terminals";
+import { taskRef } from "../core/rows";
 import { AgentState, Kind } from "../core/types";
 import type { HelpCtx } from "../keymap";
 import { Canvas } from "./canvas";
@@ -93,6 +94,14 @@ export function ChatMode() {
     };
   });
 
+  // What the palette's context mode is about: the row the keys act on.
+  const subject = (): string | null => {
+    const item = isPaneFocused("rail") ? aug.cursorItem() : aug.selected();
+    if (!item) return null;
+    if (item.type === "project") return `project ${item.project.name}`;
+    return `${taskRef(item.task.id)} ${item.task.title}`;
+  };
+
   const ctx = createMemo(
     (): HelpCtx => ({
       ...baseCtx(),
@@ -119,7 +128,7 @@ export function ChatMode() {
           <box height={1} flexShrink={0} />
         </box>
       </box>
-      <shell.Modals ctx={ctx} />
+      <shell.Modals ctx={ctx} subject={subject} />
       <Show when={dims().width < 80}>
         <text fg={theme.warning}>widen the terminal for the full rail</text>
       </Show>

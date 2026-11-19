@@ -97,14 +97,11 @@ afterEach(() => {
   if (home) rmSync(home, { recursive: true, force: true });
 });
 
-async function boot() {
+async function boot(size = { width: 160, height: 45 }) {
   home = mkdtempSync(join(tmpdir(), "aug-palette-"));
   process.env.AUG_HOME = home;
   const engine = installFixture("demo");
-  const setup = await testRender(() => <App engine={engine} />, {
-    width: 160,
-    height: 45,
-  });
+  const setup = await testRender(() => <App engine={engine} />, size);
   destroy = () => setup.renderer.destroy();
   const settle = async (ms = 40) => {
     await Bun.sleep(ms);
@@ -119,28 +116,84 @@ async function boot() {
     setup.mockInput.pressEnter();
     await settle();
   };
-  return { type, enter, frame: () => setup.captureCharFrame() };
+  const tab = async () => {
+    setup.mockInput.pressTab();
+    await settle();
+  };
+  const escape = async () => {
+    setup.mockInput.pressEscape();
+    await settle();
+  };
+  return { type, enter, tab, escape, frame: () => setup.captureCharFrame() };
 }
 
-test("the palette lists the row's actions from the keymap, not movement", async () => {
+const CONTEXT_ON = "▌ Context ▐";
+const ALL_ON = "▌ All ▐";
+
+test("the palette opens on the row's own actions, flat, named for the row", async () => {
   const { type, frame } = await boot();
   await type(":");
   const shown = frame();
-  expect(shown).toContain(PaletteGroup.row);
+  expect(shown).toMatch(/Commands · AUG-\d+ Home/);
+  expect(shown).toContain(CONTEXT_ON);
   expect(shown).toContain("Everything aug knows about it");
+  // App-wide moves and movement are not about this row.
+  expect(shown).not.toContain("Keyboard help");
   expect(shown).not.toContain("Command palette");
-  await type("down");
-  expect(frame()).toContain("No matching commands");
+  expect(shown).not.toContain(PaletteGroup.row);
 });
 
-test("running a key's entry does what the key does", async () => {
-  const { type, enter, frame } = await boot();
+test("tab shows every action, grouped, and back", async () => {
+  const { type, tab, frame } = await boot();
+  await type(":");
+  await tab();
+  let shown = frame();
+  expect(shown).toContain("All commands");
+  expect(shown).toContain(ALL_ON);
+  expect(shown).toContain(PaletteGroup.row);
+  expect(shown).toContain(PaletteGroup.anywhere);
+  expect(shown).toContain("Keyboard help");
+  await tab();
+  shown = frame();
+  expect(shown).toContain(CONTEXT_ON);
+  expect(shown).not.toContain("Keyboard help");
+});
+
+test("the query stays across the toggle, and a key's entry does what the key does", async () => {
+  const { type, enter, tab, frame } = await boot();
   expect(frame()).not.toContain("Agent board");
   await type(":");
   await type("switch chat");
+  expect(frame()).toContain("No match here. 1 in All (tab).");
+  await tab();
+  expect(frame()).toContain("Switch Chat / Board");
   await enter();
   // v switched to the Board.
   expect(frame()).toContain("Agent board");
+});
+
+test("the mode is kept for the session, across Chat and Board", async () => {
+  const { type, tab, escape, frame } = await boot();
+  await type(":");
+  await tab();
+  await escape();
+  await type(":");
+  expect(frame()).toContain("All commands");
+  await escape();
+  await type("v");
+  await type(":");
+  expect(frame()).toContain("All commands");
+  await tab();
+  expect(frame()).toMatch(/Commands · Board: |Commands · AUG-\d+ /);
+});
+
+test("in a short terminal the toggle stays on screen", async () => {
+  const { type, tab, frame } = await boot({ width: 80, height: 20 });
+  await type(":");
+  await tab();
+  const shown = frame();
+  expect(shown).toContain(ALL_ON);
+  expect(shown).toContain("tab  switch");
 });
 
 test("a row's entry runs on the row the palette was opened over", async () => {
