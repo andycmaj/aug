@@ -151,6 +151,32 @@ describe("winsDay", () => {
     expect(d.moves).toBe(1);
   });
 
+  test("rows and their events read newest first", () => {
+    const day = shiftDay(today(), -1);
+    const [y, m, dd] = day.split("-").map(Number);
+    const yAt = (h: number) => new Date(y, m - 1, dd, h).toISOString();
+    const early = task("early win");
+    const late = task("late win");
+    const quiet = task("quiet win");
+    store.addWin(day, early.id);
+    store.addWin(day, late.id);
+    store.addWin(day, quiet.id);
+    store.addTurn({ taskId: early.id, role: TurnRole.you, body: "a", startedAt: yAt(9) });
+    store.addTurn({ taskId: late.id, role: TurnRole.you, body: "b", startedAt: yAt(15) });
+    const closedEarly = task("closed early");
+    const talkedLate = task("talked late");
+    store.updateTask(closedEarly.id, { merged_at: yAt(10) });
+    store.updateTask(closedEarly.id, { status: TaskStatus.done, closed_at: yAt(11), closed_by: "you" });
+    store.addTurn({ taskId: talkedLate.id, role: TurnRole.agent, body: "c", startedAt: yAt(17) });
+
+    const d = winsDay(day, now());
+    // No activity sorts after any; among the quiet, the later pinned first.
+    expect(d.wins.map((w) => w.task.id)).toEqual([late.id, early.id, quiet.id]);
+    expect(d.also.map((r) => r.task.id)).toEqual([talkedLate.id, closedEarly.id]);
+    expect(d.also[1].events.map((e) => e.kind)).toEqual([TaskEventKind.done, TaskEventKind.merged]);
+    expect(winDetail(closedEarly.id, day)!.events.map((e) => e.kind)).toEqual([TaskEventKind.done, TaskEventKind.merged]);
+  });
+
   test("an empty day is empty", () => {
     const d = winsDay("2020-01-01", now());
     expect(d).toMatchObject({ wins: [], also: [], made: 0, moves: 0 });
@@ -173,7 +199,7 @@ describe("winDetail", () => {
       .run(noon(yday), new Date(Date.parse(from) + 3600_000).toISOString());
 
     const d = winDetail(t.id, today())!;
-    expect(d.turns.map((x) => x.body)).toEqual(["turn 2", "turn 3", "turn 4", "turn 5", "turn 6", "turn 7"]);
+    expect(d.turns.map((x) => x.body)).toEqual(["turn 7", "turn 6", "turn 5", "turn 4", "turn 3", "turn 2"]);
     expect(d.moreTurns).toBe(2);
     expect(d.moves).toHaveLength(1);
     expect(d.agentMs).toBe(3600_000);

@@ -1325,9 +1325,9 @@ export function eventsForTask(taskId: number, to: string): TaskEventRow[] {
 export function turnCountsBetween(
   from: string,
   to: string,
-): { task_id: number; role: TurnRole; n: number }[] {
+): { task_id: number; role: TurnRole; n: number; last: string }[] {
   return all(
-    "SELECT task_id, role, COUNT(*) AS n FROM turns WHERE started_at >= ? AND started_at < ? AND role IN ('you', 'agent') GROUP BY task_id, role",
+    "SELECT task_id, role, COUNT(*) AS n, MAX(started_at) AS last FROM turns WHERE started_at >= ? AND started_at < ? AND role IN ('you', 'agent') GROUP BY task_id, role",
     from,
     to,
   );

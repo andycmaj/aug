@@ -1,6 +1,6 @@
 // The Board's Wins tab: a day's Wins and how each came out, then what else
 // got done that day. A day is the owner's local date, as Wins are pinned
-// (localDay). History comes from task_events (triggers in db.ts), turns
+// (localDay). Everything reads newest first. History comes from task_events (triggers in db.ts), turns
 // and moves, so a past day reads the same after its tasks move on.
 
 import { laneOf, type Lane } from "./lanes";
@@ -38,11 +38,13 @@ export interface DayRow {
   outcome: Outcome;
   // Today only: its lane now, how far it has come.
   lane: Lane | null;
-  // That day's events, oldest first.
+  // That day's events, newest first.
   events: TaskEventRow[];
   // Turns that day: the owner's lines and the agent's answers.
   you: number;
   agent: number;
+  // The latest event or turn that day: rows sort on it, newest first.
+  last: string | null;
 }
 
 export interface WinsDay {
@@ -60,7 +62,7 @@ export interface WinsDay {
 export interface WinDetail {
   task: TaskRow;
   events: TaskEventRow[];
-  // The day's turns, the last few.
+  // The day's turns, the newest few, newest first.
   turns: TurnRow[];
   moreTurns: number;
   moves: MoveRow[];
@@ -138,8 +140,9 @@ export function winsDay(day: string, now: Date): WinsDay {
   };
 
   const row = (task: TaskRow, win: boolean): DayRow => {
-    const own = events.filter((e) => e.task_id === task.id);
+    const own = events.filter((e) => e.task_id === task.id).reverse();
     const turns = counts.filter((c) => c.task_id === task.id);
+    const last = [...own.map((e) => e.at), ...turns.map((c) => c.last)].sort().pop() ?? null;
     return {
       task,
       win,
@@ -154,14 +157,20 @@ export function winsDay(day: string, now: Date): WinsDay {
       events: own,
       you: turns.find((c) => c.role === TurnRole.you)?.n ?? 0,
       agent: turns.find((c) => c.role === TurnRole.agent)?.n ?? 0,
+      last,
     };
   };
+  // Newest activity first; then the later pinned (or higher id) first.
+  const newest = (order: (r: DayRow) => number) => (a: DayRow, b: DayRow) =>
+    (b.last ?? "").localeCompare(a.last ?? "") || order(b) - order(a);
 
   const winIds = store.winsOn(day);
-  const wins = winIds.flatMap((id) => {
-    const t = taskOf(id);
-    return t ? [row(t, true)] : [];
-  });
+  const wins = winIds
+    .flatMap((id) => {
+      const t = taskOf(id);
+      return t ? [row(t, true)] : [];
+    })
+    .sort(newest((r) => winIds.indexOf(r.task.id)));
 
   const touched = new Set<number>();
   for (const e of events) if (LANDED.has(e.kind)) touched.add(e.task_id);
@@ -172,14 +181,7 @@ export function winsDay(day: string, now: Date): WinsDay {
       const t = taskOf(id);
       return t ? [row(t, false)] : [];
     })
-    .sort((a, b) => {
-      const landed = (r: DayRow) => r.events.filter((e) => LANDED.has(e.kind));
-      const la = landed(a);
-      const lb = landed(b);
-      if (la.length > 0 !== lb.length > 0) return la.length > 0 ? -1 : 1;
-      if (la.length && lb.length) return la[la.length - 1].at < lb[lb.length - 1].at ? -1 : 1;
-      return b.you + b.agent - (a.you + a.agent) || a.task.id - b.task.id;
-    });
+    .sort(newest((r) => r.task.id));
 
   return {
     day,
@@ -223,10 +225,10 @@ export function winDetail(taskId: number, day: string): WinDetail | null {
   const turns = store.turnsForTaskBetween(taskId, from, to);
   return {
     task,
-    events: store.eventsBetween(from, to).filter((e) => e.task_id === taskId),
-    turns: turns.slice(-DETAIL_TURNS),
+    events: store.eventsBetween(from, to).filter((e) => e.task_id === taskId).reverse(),
+    turns: turns.slice(-DETAIL_TURNS).reverse(),
     moreTurns: Math.max(0, turns.length - DETAIL_TURNS),
-    moves: movesFor(taskId, from, to),
+    moves: movesFor(taskId, from, to).reverse(),
     pr: taskPrStatus(task),
     agentMs: agentMs(taskId, from, to),
     spend: store.taskSpendOn(taskId, day),

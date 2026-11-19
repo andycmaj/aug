@@ -283,8 +283,11 @@ Marks that change neither lifecycle nor agent state:
   - Tomorrow the box is empty and yesterday's open Wins are back in their
     sections. No carry-over.
   - The Board's Wins tab (7, AUG-0156, `core/wins-board.ts`,
-    `components/wins-tab.tsx`) reads a day back: yesterday and today by
-    default, `h`/`l` a day earlier or later, `0` back to today. Each day
+    `components/wins-tab.tsx`) reads a day back: today on top, then
+    yesterday; `h`/`l` a day earlier or later, `0` back to today.
+    Everything reads newest first: days, rows (by their latest event or
+    turn that day; quiet Wins last, latest pinned first) and each row's
+    events, turns and moves. Each day
     lists its Wins with how they came out at the day's end (done, merged,
     dropped, for later, still open; today a still-open Win says its lane),
     then **Also done**: every other task closed, merged or finished by its

@@ -1,4 +1,4 @@
-// The Wins tab: the day before and the day, each with its Wins and how they
+// The Wins tab: the day and the day before it, newest first, each with its Wins and how they
 // came out, then what else landed or moved. Today and yesterday by default;
 // h and l walk the pair back and forth a day. Enter opens a row in place
 // (the day's events, turns, moves, PR and agent time); t goes to the task.
@@ -57,7 +57,7 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
   const today = () => localDay(aug.now());
   const day = () => focusDay() ?? today();
   const days = createMemo((): WinsDay[] =>
-    opts.active() ? [aug.winsDay(shiftDay(day(), -1), aug.now()), aug.winsDay(day(), aug.now())] : [],
+    opts.active() ? [aug.winsDay(day(), aug.now()), aug.winsDay(shiftDay(day(), -1), aug.now())] : [],
   );
   const lines = createMemo((): WinsLine[] =>
     days().flatMap((d) =>
@@ -176,7 +176,7 @@ function WinsView(props: {
     <box flexDirection="column" flexGrow={1} flexBasis={0} paddingLeft={1}>
       <box flexDirection="row" gap={2} flexShrink={0} paddingBottom={1}>
         <text fg={theme.textMuted}>
-          {props.days[1]?.isToday ? "h the day before" : "h the day before · l the day after · 0 today"}
+          {props.days[0]?.isToday ? "h the day before" : "h the day before · l the day after · 0 today"}
         </text>
       </box>
       <scrollbox ref={(r: ScrollBoxRenderable) => (scrollRef = r)} flexGrow={1} flexBasis={0} paddingRight={2}>
@@ -397,7 +397,7 @@ function Detail(props: { taskId: number; day: string; width: number }) {
             </Show>
             {sub(
               d().turns.length
-                ? `Chat and agent${d().moreTurns ? ` (last ${d().turns.length}, ${d().moreTurns} earlier)` : ""}`
+                ? `Chat and agent${d().moreTurns ? ` (newest ${d().turns.length}, ${d().moreTurns} older)` : ""}`
                 : "Chat and agent",
             )}
             <For each={d().turns} fallback={<text fg={theme.textMuted}>No turns this day.</text>}>
