@@ -96,6 +96,15 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   (`core/engine.ts`) is what runs: pollers, timers, the moves drain and the
   tmux watch; it owns a desk. Triage returns effects and does not start
   agents itself.
+- **`messages` is the inbox** (`core/triage-worker.ts`): each row has a
+  `state` (`new | triaging | done | failed`), `attempts` and `next_at`.
+  Pollers only insert and then save their cursor; the engine's one worker
+  (`triageInbox`) claims due rows oldest first, resets stale claims at
+  start, retries a failed model call with backoff up to
+  `TRIAGE_MAX_ATTEMPTS`, then leaves it on the Inbox tab. A burst on one
+  thread (rows within `BATCH_WINDOW_MS`) is one chain run on the latest,
+  carrying all their text; the earlier rows follow it (rule `batch`).
+  Ask a row's state, never its `reason` string.
 - **Triage is a chain of rules** (`TRIAGE_RULES` in `core/triage.ts`): each
   returns `ok(outcome)` to claim a message or `pass(why)` to hand it on
   (`core/result.ts`), in the order listed, and `runChain` runs them. Gates

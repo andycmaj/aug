@@ -34,6 +34,7 @@ import {
   type IdeaRow,
   type Kind,
   type MessageRow,
+  type MessageState,
   type MoveRow,
   type NoteLabel,
   type NoteRow,
@@ -628,15 +629,19 @@ export function recentMessages(limit: number): MessageRow[] {
   );
 }
 
-// Messages triage could not place (failed, or never triaged): on the owner.
-// Keep in step with inbox.ts messageResult.
+// Messages on the owner: one triage held for them, or one it gave up on
+// (failed, no retry left). One the worker has yet to reach is not theirs.
+// Keep in step with inbox.ts messageResult and needsAttention.
 export function unplacedMessages(): number {
   return (
     one<{ n: number }>(
       `SELECT COUNT(*) AS n FROM messages
        WHERE from_me = 0 AND task_id IS NULL AND read_at IS NULL
-         AND NOT (COALESCE(verdict, '') = 'fyi' AND COALESCE(reason, '') NOT LIKE 'awaiting AI triage%')
-         AND COALESCE(reason, '') NOT LIKE 'a greeting%'`,
+         AND (
+           (state = 'failed' AND next_at IS NULL)
+           OR (state = 'done' AND COALESCE(verdict, '') != 'fyi'
+               AND COALESCE(reason, '') NOT LIKE 'a greeting%')
+         )`,
     )?.n ?? 0
   );
 }
@@ -647,8 +652,10 @@ export function fileMessage(
   reason: string | null,
   taskId: number | null,
 ): void {
+  // Filed is placed: the worker never takes it again (the chain settles
+  // its own runs after this, failed included).
   run(
-    "UPDATE messages SET verdict = ?, reason = ?, task_id = ? WHERE id = ?",
+    "UPDATE messages SET verdict = ?, reason = ?, task_id = ?, state = 'done', next_at = NULL WHERE id = ?",
     verdict,
     reason,
     taskId,
@@ -658,6 +665,52 @@ export function fileMessage(
 
 export function markMessageRead(id: number): void {
   run("UPDATE messages SET read_at = ? WHERE id = ?", now(), id);
+}
+
+// ── the inbox (messages as triage's work queue) ──────────────────────────
+
+// What the triage worker may take now, oldest first: new ones, and failed
+// ones whose retry is due. One the owner has read is theirs.
+export function dueMessages(atIso: string): MessageRow[] {
+  return all<MessageRow>(
+    `SELECT * FROM messages
+     WHERE read_at IS NULL
+       AND (state = 'new' OR (state = 'failed' AND next_at IS NOT NULL))
+       AND COALESCE(next_at, '') <= ?
+     ORDER BY received_at, id`,
+    atIso,
+  );
+}
+
+// The moves claim: only one taker wins a row, and each take is a try.
+export function claimMessage(id: number): boolean {
+  const won = db()
+    .query(
+      "UPDATE messages SET state = 'triaging', attempts = attempts + 1 WHERE id = ? AND state != 'triaging' RETURNING id",
+    )
+    .get(id);
+  changed();
+  return won != null;
+}
+
+// The chain's last word on a message; nextAt is when a failed one is tried
+// again, null for never.
+export function settleMessage(
+  id: number,
+  state: MessageState,
+  nextAt: string | null = null,
+): void {
+  run("UPDATE messages SET state = ?, next_at = ? WHERE id = ?", state, nextAt, id);
+}
+
+// At start: a message claimed by an aug that died is new again. One aug
+// runs per home, so every claim left is stale.
+export function resetTriaging(): number {
+  const rows = db()
+    .query("UPDATE messages SET state = 'new' WHERE state = 'triaging' RETURNING id")
+    .all();
+  if (rows.length) changed();
+  return rows.length;
 }
 
 // ── turns (a task's chat) ────────────────────────────────────────────────

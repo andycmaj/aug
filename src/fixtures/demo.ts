@@ -23,6 +23,7 @@ import * as store from "../core/store";
 import {
   AgentState,
   Kind,
+  MessageState,
   SessionKind,
   SpendRole,
   TurnRole,
@@ -634,6 +635,8 @@ export function seedDemo(): void {
         receivedAt: ago(m.minutes),
       })!;
       if (m.reason) store.fileMessage(row.id, m.verdict, m.reason, null);
+      if (m.reason?.startsWith("awaiting AI triage"))
+        store.settleMessage(row.id, MessageState.failed);
     }
     store.addIdea(
       "Nobody has answered Priya about the payroll export",

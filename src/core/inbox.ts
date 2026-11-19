@@ -6,6 +6,7 @@ import * as store from "./store";
 import {
   HELD,
   IdeaStatus,
+  MessageState,
   Verdict,
   type IdeaRow,
   type MessageRow,
@@ -41,7 +42,7 @@ export const RESULT_WORDS: Record<InboxResult, string> = {
   held: "held for you",
   fyi: "FYI",
   failed: "triage failed",
-  untriaged: "not triaged",
+  untriaged: "awaiting triage",
   greeting: "greeting",
   own: "your message",
   idea: "idea",
@@ -105,11 +106,11 @@ export function messageResult(m: MessageRow): InboxResult {
     return m.verdict && m.verdict !== Verdict.fyi
       ? InboxResult.task
       : InboxResult.attached;
+  if (m.state === MessageState.new || m.state === MessageState.triaging)
+    return InboxResult.untriaged;
+  if (m.state === MessageState.failed) return InboxResult.failed;
   if (m.reason?.startsWith(HELD)) return InboxResult.held;
-  if (m.verdict === Verdict.fyi)
-    return m.reason?.startsWith("awaiting AI triage")
-      ? InboxResult.failed
-      : InboxResult.fyi;
+  if (m.verdict === Verdict.fyi) return InboxResult.fyi;
   if (m.reason?.startsWith("a greeting")) return InboxResult.greeting;
   return InboxResult.untriaged;
 }
@@ -168,16 +169,14 @@ export function ideaRow(idea: IdeaRow): InboxRow {
 }
 
 // On the owner until they act: an open idea, a message triage held for
-// them, or one it could not place, until they dismiss it. What the rail's
-// badge counts.
+// them, or one it gave up on (no retry left), until they dismiss it. One
+// still waiting for the worker is not theirs yet. What the rail's badge
+// counts (store.unplacedMessages).
 export function needsAttention(row: InboxRow): boolean {
   if (row.read) return false;
-  return (
-    row.result === InboxResult.idea ||
-    row.result === InboxResult.held ||
-    row.result === InboxResult.failed ||
-    row.result === InboxResult.untriaged
-  );
+  if (row.result === InboxResult.failed)
+    return row.type === "message" && row.message.next_at === null;
+  return row.result === InboxResult.idea || row.result === InboxResult.held;
 }
 
 export function inFilter(row: InboxRow, filter: InboxFilter): boolean {
@@ -193,13 +192,16 @@ export function inFilter(row: InboxRow, filter: InboxFilter): boolean {
     case InboxFilter.actionable:
       // Your own messages, greetings, handled ideas and whatever you have
       // dismissed (x marks it read) are kept for "all": none asks anything
-      // more of you.
+      // more of you. One triage has yet to place (or will retry) shows here
+      // without asking for you.
       return (
         needsAttention(row) ||
         (!row.read &&
           (row.result === InboxResult.task ||
             row.result === InboxResult.attached ||
-            row.result === InboxResult.fyi))
+            row.result === InboxResult.fyi ||
+            row.result === InboxResult.untriaged ||
+            row.result === InboxResult.failed))
       );
   }
 }

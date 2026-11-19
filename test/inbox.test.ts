@@ -13,7 +13,7 @@ import {
   type InboxRow,
 } from "../src/core/inbox";
 import * as store from "../src/core/store";
-import { IdeaStatus, Kind, Verdict, type MessageRow } from "../src/core/types";
+import { IdeaStatus, Kind, MessageState, Verdict, type MessageRow } from "../src/core/types";
 import { freshHome } from "./helpers";
 
 beforeEach(() => freshHome());
@@ -43,6 +43,13 @@ function filed(verdict: Verdict | null, reason: string | null, task = false, ext
   return store.getMessage(m.id)!;
 }
 
+// The model failed on it: given up (no retry left) unless retryAt says when.
+function failedTriage(retryAt: string | null = null) {
+  const m = filed(Verdict.fyi, "awaiting AI triage (timeout)");
+  store.settleMessage(m.id, MessageState.failed, retryAt);
+  return store.getMessage(m.id)!;
+}
+
 const byKey = (rows: InboxRow[]) => new Map(rows.map((r) => [r.key, r]));
 
 describe("each row says where it went", () => {
@@ -50,7 +57,8 @@ describe("each row says where it went", () => {
     const made = filed(Verdict.task, "a direct ask", true);
     const joined = filed(null, "joined AUG-0001", true);
     const fyi = filed(Verdict.fyi, "a bot");
-    const failed = filed(Verdict.fyi, "awaiting AI triage (timeout)");
+    const failed = failedTriage();
+    const retrying = failedTriage("2026-11-05T11:00:00.000Z");
     const greeting = filed(null, "a greeting; waits for the ask");
     const untriaged = message();
     const own = filed(null, "your own message", false, { fromMe: true });
@@ -59,6 +67,7 @@ describe("each row says where it went", () => {
     expect(rows.get(`m${joined.id}`)!.result).toBe(InboxResult.attached);
     expect(rows.get(`m${fyi.id}`)!.result).toBe(InboxResult.fyi);
     expect(rows.get(`m${failed.id}`)!.result).toBe(InboxResult.failed);
+    expect(rows.get(`m${retrying.id}`)!.result).toBe(InboxResult.failed);
     expect(rows.get(`m${greeting.id}`)!.result).toBe(InboxResult.greeting);
     expect(rows.get(`m${untriaged.id}`)!.result).toBe(InboxResult.untriaged);
     expect(rows.get(`m${own.id}`)!.result).toBe(InboxResult.own);
@@ -82,17 +91,19 @@ describe("each row says where it went", () => {
 });
 
 describe("the badge counts what is on you", () => {
-  test("open ideas and messages triage could not place, and nothing else", () => {
+  test("open ideas and messages triage gave up on, and nothing else", () => {
     filed(Verdict.task, "a direct ask", true);
     filed(Verdict.fyi, "a bot");
     filed(null, "a greeting; waits for the ask");
     filed(null, "your own message", false, { fromMe: true });
-    filed(Verdict.fyi, "awaiting AI triage (timeout)");
+    failedTriage();
+    // The worker's still: one it has not reached, one it will retry.
     message();
+    failedTriage("2026-11-05T11:00:00.000Z");
     store.addIdea("idea", "body", null);
     store.setIdeaStatus(store.addIdea("gone", "body", null).id, IdeaStatus.dismissed);
-    expect(inboxCount()).toBe(3);
-    expect(inboxRows().filter((r) => inFilter(r, InboxFilter.attention))).toHaveLength(3);
+    expect(inboxCount()).toBe(2);
+    expect(inboxRows().filter((r) => inFilter(r, InboxFilter.attention))).toHaveLength(2);
   });
 });
 
@@ -116,9 +127,9 @@ describe("filters", () => {
   test("a dismissed message leaves actionable, needs-you and the badge", () => {
     const made = filed(Verdict.task, "a direct ask", true);
     const joined = filed(null, "joined AUG-0001", true);
-    const failed = filed(Verdict.fyi, "awaiting AI triage (timeout)");
+    const failed = failedTriage();
     const untriaged = message();
-    expect(inboxCount()).toBe(2);
+    expect(inboxCount()).toBe(1);
     for (const m of [made, joined, failed, untriaged]) store.markMessageRead(m.id);
     const rows = inboxRows();
     expect(rows.filter((r) => inFilter(r, InboxFilter.actionable))).toHaveLength(0);

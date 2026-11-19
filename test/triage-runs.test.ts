@@ -263,5 +263,41 @@ describe("the backfill", () => {
     expect(steps[0]).toEqual({ rule: "legacy", decision: "claim", reason: "a direct ask" });
     expect(steps).toHaveLength(3);
   });
+
+  test("each message's inbox state comes from what it kept, once", () => {
+    const db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, from_me INTEGER NOT NULL DEFAULT 0, verdict TEXT, reason TEXT, task_id INTEGER, read_at TEXT, received_at TEXT NOT NULL);
+      INSERT INTO messages (id, verdict, reason, task_id, received_at) VALUES
+        (1, 'task', 'a direct ask', 7, '2026-11-01'),
+        (2, NULL, 'a greeting; waits for the ask', NULL, '2026-11-02'),
+        (3, 'fyi', 'awaiting AI triage (timeout)', NULL, '2026-11-03'),
+        (4, NULL, NULL, NULL, '2026-11-04');
+    `);
+    migrate(db);
+    // A later state change survives the next start's migrate.
+    db.exec("UPDATE messages SET state = 'done' WHERE id = 4");
+    migrate(db);
+    expect(
+      db.query("SELECT id, state, attempts, next_at FROM messages ORDER BY id").all(),
+    ).toEqual([
+      { id: 1, state: "done", attempts: 0, next_at: null },
+      { id: 2, state: "done", attempts: 0, next_at: null },
+      // Failed before: tried once, left for the owner.
+      { id: 3, state: "failed", attempts: 1, next_at: null },
+      { id: 4, state: "done", attempts: 0, next_at: null },
+    ]);
+  });
+
+  test("a message never triaged is new, so the worker takes it", () => {
+    const db = new Database(":memory:");
+    db.exec(`
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, from_me INTEGER NOT NULL DEFAULT 0, verdict TEXT, reason TEXT, task_id INTEGER, received_at TEXT NOT NULL);
+      INSERT INTO messages (id, received_at) VALUES (4, '2026-11-04');
+    `);
+    migrate(db);
+    expect(db.query("SELECT state FROM messages").get()).toEqual({ state: "new" });
+  });
 });
 

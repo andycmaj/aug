@@ -40,7 +40,8 @@ import * as projects from "./projects";
 import { setSlackSender } from "./outbound";
 import * as store from "./store";
 import { settleStaleTurns } from "./turn-check";
-import { linkByBranch, triage, type TriageEffect } from "./triage";
+import { linkByBranch, type TriageEffect } from "./triage";
+import { triageNext } from "./triage-worker";
 import { SessionKind, TaskStatus, type TaskRow } from "./types";
 
 export type ConnectorState = "off" | "polling" | "ok" | "error";
@@ -119,6 +120,7 @@ export class Engine {
 
   constructor(private options: EngineOptions) {
     const { config } = options;
+    this.slack = options.slack ?? null;
     this.pool = new AgentPool({ config });
     this.drivers = new Drivers({
       pool: this.pool,
@@ -198,6 +200,9 @@ export class Engine {
       this.setStatus("advisor", off("fixture mode"));
       return;
     }
+    void this.resumeTriage();
+    // Retries come due on their own clock.
+    this.timers.push(setInterval(() => void this.triageInbox(), 15_000));
     const config = this.options.config.get();
     log.info("engine start", {
       github: config.github.enabled,
@@ -321,26 +326,68 @@ export class Engine {
 
   // ── ingest ──────────────────────────────────────────────────────────────
 
-  private async ingest(messages: store.NewMessage[]): Promise<number> {
+  // A poller only inserts (a duplicate is refused) and moves its cursor on
+  // after; triage is the worker's, so a crash between the two loses nothing.
+  private ingest(messages: store.NewMessage[]): number {
     let fresh = 0;
     for (const m of messages) {
       const row = measure("engine.insert_message", () => store.insertMessage(m));
       if (!row) continue;
       fresh++;
       linkByBranch(row);
-      const triaged = perfStart("engine.triage", { channel: m.channel });
-      const outcome = await triage(row, { config: this.options.config.get() });
-      triaged({ verdict: outcome.verdict });
-      log.debug("triaged", {
-        message: row.id,
-        channel: m.channel,
-        verdict: outcome.verdict,
-        task: outcome.taskId,
-        reason: outcome.reason,
-      });
-      this.runEffects(outcome.effects);
     }
+    if (fresh && !this.options.offline) void this.triageInbox();
     return fresh;
+  }
+
+  // The inbox's one worker: GitHub's and Slack's messages wait their turn
+  // here, oldest first. A call while it runs asks for one more pass, so a
+  // message inserted mid-run is not left until the next tick.
+  private triaging: Promise<number> | null = null;
+  private triageAgain = false;
+  triageInbox(): Promise<number> {
+    if (this.triaging) {
+      this.triageAgain = true;
+      return this.triaging;
+    }
+    const run = async (): Promise<number> => {
+      let ran = 0;
+      do {
+        this.triageAgain = false;
+        for (;;) {
+          let done: Awaited<ReturnType<typeof triageNext>>;
+          try {
+            done = await triageNext({ config: this.options.config.get() });
+          } catch (err) {
+            // Its messages wait for their retry; the next tick goes on.
+            log.error("triage failed", { err: errorMessage(err) });
+            break;
+          }
+          if (!done) break;
+          ran++;
+          log.debug("triaged", {
+            messages: done.messages.join(","),
+            verdict: done.outcome.verdict,
+            task: done.outcome.taskId,
+            reason: done.outcome.reason,
+          });
+          this.runEffects(done.outcome.effects);
+        }
+      } while (this.triageAgain);
+      return ran;
+    };
+    this.triaging = run().finally(() => {
+      this.triaging = null;
+    });
+    return this.triaging;
+  }
+
+  // At start: claims an aug that died left are new again, and the worker
+  // takes whatever waits (inserted, never triaged; a retry come due).
+  resumeTriage(): Promise<number> {
+    const reset = store.resetTriaging();
+    if (reset) log.info("triage claims reset", { messages: reset });
+    return this.triageInbox();
   }
 
   runEffects(effects: TriageEffect[]): void {
@@ -418,9 +465,7 @@ export class Engine {
         const since =
           store.kvGet("github.since") ??
           new Date(Date.now() - 2 * 86400000).toISOString();
-        fresh = await this.ingest(
-          await pollGithub(since, api, store.hasBranchTasks),
-        );
+        fresh = this.ingest(await pollGithub(since, api, store.hasBranchTasks));
         store.kvSet("github.since", startedAt);
       }
       // On the same clock: what the rail says about each task's PR.
@@ -528,8 +573,8 @@ export class Engine {
         ...polled,
         messages: polled.messages.filter((m) => m.meta?.channel !== own),
       };
+      const fresh = this.ingest(result.messages);
       store.kvSet(`slack.cursor.${slack.kind}`, JSON.stringify(result.cursor));
-      const fresh = await this.ingest(result.messages);
       done({ read: result.messages.length, fresh });
       this.setStatus("slack", {
         state: "ok",

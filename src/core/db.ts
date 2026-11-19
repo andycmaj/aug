@@ -49,7 +49,10 @@ CREATE TABLE IF NOT EXISTS messages (
   reason TEXT,
   read_at TEXT,
   from_me INTEGER NOT NULL DEFAULT 0,
-  meta TEXT NOT NULL DEFAULT '{}'
+  meta TEXT NOT NULL DEFAULT '{}',
+  state TEXT NOT NULL DEFAULT 'new',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_at TEXT
 );
 CREATE INDEX IF NOT EXISTS messages_thread ON messages(thread_key);
 CREATE INDEX IF NOT EXISTS messages_task ON messages(task_id);
@@ -482,6 +485,9 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "pr_status", column: "queue", ddl: "TEXT NOT NULL DEFAULT 'none'" },
   { table: "pr_status", column: "queue_position", ddl: "INTEGER" },
   { table: "pr_status", column: "queue_reason", ddl: "TEXT" },
+  { table: "messages", column: "state", ddl: "TEXT NOT NULL DEFAULT 'new'" },
+  { table: "messages", column: "attempts", ddl: "INTEGER NOT NULL DEFAULT 0" },
+  { table: "messages", column: "next_at", ddl: "TEXT" },
 ];
 
 // Agent states renamed or merged (docs/rail-status-design.md): blocked is
@@ -500,6 +506,8 @@ function columns(db: Database, table: string): string[] {
 }
 
 export function migrate(db: Database): void {
+  const before = columns(db, "messages");
+  const stateAdded = before.length > 0 && !before.includes("state");
   for (const { table, column, ddl } of ADDED_COLUMNS) {
     const cols = columns(db, table);
     if (cols.length > 0 && !cols.includes(column))
@@ -508,6 +516,10 @@ export function migrate(db: Database): void {
   // Indexes on added columns wait until the columns exist.
   if (columns(db, "tasks").includes("branch"))
     db.exec("CREATE INDEX IF NOT EXISTS tasks_branch ON tasks(repo, branch)");
+  if (columns(db, "messages").includes("state")) {
+    if (stateAdded) backfillMessageState(db);
+    db.exec("CREATE INDEX IF NOT EXISTS messages_state ON messages(state, next_at)");
+  }
   for (const [from, to] of RENAMED_STATES) {
     if (columns(db, "tasks").length > 0)
       db.query("UPDATE tasks SET agent_state = ? WHERE agent_state = ?").run(to, from);
@@ -515,6 +527,25 @@ export function migrate(db: Database): void {
       db.query("UPDATE sessions SET state = ? WHERE state = ?").run(to, from);
   }
   backfillTriage(db);
+}
+
+// A file from before the inbox kept state: what its columns say. A message
+// triage filed is done; one the model failed on has had its try and stays
+// for the owner (no next_at, so the worker leaves it); one nothing filed
+// (aug died between insert and triage) is new, and the worker takes it.
+function backfillMessageState(db: Database): void {
+  const ran =
+    columns(db, "triage_runs").length > 0
+      ? "OR EXISTS (SELECT 1 FROM triage_runs r WHERE r.message_id = messages.id)"
+      : "";
+  db.exec(`
+    UPDATE messages SET
+      state = CASE
+        WHEN reason LIKE 'awaiting AI triage%' THEN 'failed'
+        WHEN verdict IS NOT NULL OR reason IS NOT NULL OR task_id IS NOT NULL ${ran} THEN 'done'
+        ELSE 'new'
+      END,
+      attempts = CASE WHEN reason LIKE 'awaiting AI triage%' THEN 1 ELSE 0 END`);
 }
 
 // Messages triaged before the chain was recorded get one run with a single

@@ -46,6 +46,7 @@ import {
   AgentState,
   IdeaStatus,
   Kind,
+  MessageState,
   PROJECT_MOVE,
   Priority,
   ProjectStatus,
@@ -683,7 +684,9 @@ export class Desk {
   }
 
   // Triage again, as a new run. A message on a task is refused: a second
-  // pass could make a duplicate, and "not a task" is the way back.
+  // pass could make a duplicate, and "not a task" is the way back. It is
+  // claimed like the worker claims, so the two never triage it at once; a
+  // failure here is the owner's to see, so it is not retried for them.
   async retriage(messageId: number): Promise<RetriageResult> {
     const message = store.getMessage(messageId);
     if (!message) return { ok: false, why: "no such message" };
@@ -692,9 +695,16 @@ export class Desk {
         ok: false,
         why: `it is on ${store.taskRef(message.task_id)}: use not a task instead`,
       };
-    const outcome = await triage(message, { config: this.config() });
-    this.runEffects(outcome.effects);
-    return { ok: true, outcome };
+    if (!store.claimMessage(messageId))
+      return { ok: false, why: "triage is running on it now" };
+    try {
+      const outcome = await triage(message, { config: this.config() });
+      this.runEffects(outcome.effects);
+      return { ok: true, outcome };
+    } catch (err) {
+      store.settleMessage(messageId, MessageState.failed);
+      throw err;
+    }
   }
 
   // x on an Inbox message: read, so it leaves "actionable"; nothing else moves.

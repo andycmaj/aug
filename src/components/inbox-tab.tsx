@@ -200,7 +200,6 @@ function resultTone(result: InboxResult): Tone {
     case InboxResult.idea:
     case InboxResult.held:
     case InboxResult.failed:
-    case InboxResult.untriaged:
       return "warning";
     case InboxResult.task:
     case InboxResult.tasked:
@@ -401,7 +400,7 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
               fallback={
                 <text fg={msg().result === InboxResult.untriaged ? theme.warning : theme.textMuted}>
                   {msg().result === InboxResult.untriaged
-                    ? "Triage has not run on it. Shift+U runs it."
+                    ? "Waiting for the triage worker. Shift+U runs it now."
                     : `filed before triage kept its chain: ${msg().message.reason ?? RESULT_WORDS[msg().result]}`}
                 </text>
               }

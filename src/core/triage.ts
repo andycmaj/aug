@@ -28,6 +28,7 @@ import {
   StepDecision,
   TurnRole,
   HELD,
+  MessageState,
   Verdict,
   type MessageRow,
   type ProjectMove,
@@ -569,6 +570,9 @@ export async function runChain(
 export interface TriageDeps {
   config: TriageConfig;
   rules?: readonly TriageRule[];
+  // Earlier messages on the thread whose text the message carries
+  // (core/triage-worker.ts): they follow wherever it goes.
+  batch?: readonly MessageRow[];
 }
 
 export async function triage(
@@ -578,24 +582,61 @@ export async function triage(
   const item = inbound(message, deps.config);
   const { rule, outcome, steps } = await runChain(deps.rules ?? TRIAGE_RULES, item);
   const asked = item.asked();
-  store.addTriageRun({
-    messageId: message.id,
-    input: {
-      dm: item.dm,
-      fromMe: Boolean(message.from_me),
-      openOnThread: item.openOnThread ? store.taskRef(item.openOnThread.id) : null,
-      lastOnThread: item.lastOnThread ? store.taskRef(item.lastOnThread.id) : null,
-    },
-    verdict: asked ? (asked.ok ? asked.value : { error: asked.error }) : null,
-    rule,
-    outcome: outcome.verdict,
-    taskId: outcome.taskId,
-    projectId: outcome.taskId ? (store.getTask(outcome.taskId)?.project_id ?? null) : null,
-    reason: outcome.reason,
-    steps,
+  const batched = deps.batch ?? [];
+  store.batch(() => {
+    store.addTriageRun({
+      messageId: message.id,
+      input: {
+        dm: item.dm,
+        fromMe: Boolean(message.from_me),
+        openOnThread: item.openOnThread ? store.taskRef(item.openOnThread.id) : null,
+        lastOnThread: item.lastOnThread ? store.taskRef(item.lastOnThread.id) : null,
+        ...(batched.length ? { batch: batched.map((m) => m.id) } : {}),
+      },
+      verdict: asked ? (asked.ok ? asked.value : { error: asked.error }) : null,
+      rule,
+      outcome: outcome.verdict,
+      taskId: outcome.taskId,
+      projectId: outcome.taskId ? (store.getTask(outcome.taskId)?.project_id ?? null) : null,
+      reason: outcome.reason,
+      steps,
+    });
+    store.settleMessage(message.id, settledState(outcome));
+    for (const other of batched) followLead(other, message.id, outcome);
   });
-  logger("triage").debug("routed", { message: message.id, rule });
+  logger("triage").debug("routed", { message: message.id, rule, batch: batched.length });
   return outcome;
+}
+
+export function settledState(outcome: TriageOutcome): MessageState {
+  return outcome.verdict === "failed" ? MessageState.failed : MessageState.done;
+}
+
+export const BATCH_RULE = "batch";
+
+// A message triaged together with a later one on its thread goes where that
+// one went: its text was part of what the chain read, so it is filed the
+// same way and its run says with which.
+function followLead(other: MessageRow, leadId: number, outcome: TriageOutcome): void {
+  const lead = store.getMessage(leadId);
+  if (!lead) return;
+  store.fileMessage(other.id, lead.verdict, lead.reason, lead.task_id);
+  if (lead.read_at) store.markMessageRead(other.id);
+  const reason = `triaged with message ${leadId}, later on this thread`;
+  store.addTriageRun({
+    messageId: other.id,
+    input: { lead: leadId },
+    verdict: null,
+    rule: BATCH_RULE,
+    outcome: outcome.verdict,
+    taskId: lead.task_id,
+    projectId: lead.task_id ? (store.getTask(lead.task_id)?.project_id ?? null) : null,
+    reason,
+    steps: [
+      { rule: BATCH_RULE, decision: StepDecision.claim, reason, at: new Date().toISOString() },
+    ],
+  });
+  store.settleMessage(other.id, settledState(outcome));
 }
 
 const DM_THREAD = /:dm$/;
@@ -613,7 +654,10 @@ function inbound(
   const judged = (): Promise<Judged> =>
     (verdict ??= askVerdict(
       message,
-      store.messagesForThread(message.thread_key),
+      // What is being triaged right now is the message itself, not earlier.
+      store
+        .messagesForThread(message.thread_key)
+        .filter((m) => m.state !== MessageState.triaging),
       // Only a DM offers its open task as a same-ask candidate.
       dm ? openOnThread : null,
       config,

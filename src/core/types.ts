@@ -195,7 +195,23 @@ export interface MessageRow {
   // Channel-specific coordinates an outbound reply needs (slack channel +
   // thread_ts, github repo + number + subject type).
   meta: string;
+  // Where it is in the inbox (MessageState); attempts counts triage tries,
+  // and next_at is when a failed one is tried again (null: given up).
+  state: MessageState;
+  attempts: number;
+  next_at: string | null;
 }
+
+// A message is the inbox's unit of work: pollers insert it new, the triage
+// worker claims it (triaging) and settles it done, or failed when the model
+// could not judge it.
+export const MessageState = {
+  new: "new",
+  triaging: "triaging",
+  done: "done",
+  failed: "failed",
+} as const;
+export type MessageState = (typeof MessageState)[keyof typeof MessageState];
 
 export const TurnRole = {
   // Something that came in: a message on the thread.
