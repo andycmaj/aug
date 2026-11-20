@@ -43,8 +43,8 @@ describe.skipIf(!process.env.AUG_REAL_CLAUDE)("Claude Docs grants through real c
     async () => {
       freshHome();
       setBrain(claudeBrain);
-      // Some connector grant, as in AUG-0402: with no mcp__ rule at all the
-      // connectors never connect (brainEnv) and the tool is absent, not denied.
+      // Some connector grant, as in AUG-0402: with no mcp__ rule at all no
+      // connector loads (--strict-mcp-config) and the tool is absent, not denied.
       const config = granted(["slack.read"]);
       const { result } = await run(
         config,

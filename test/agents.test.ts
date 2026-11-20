@@ -597,6 +597,18 @@ describe("ingest", () => {
   });
 });
 
+describe("claude.ai connectors", () => {
+  test("a call with no MCP rule loads no MCP server", () => {
+    expect(claudeArgs({ prompt: "x" })).toContain("--strict-mcp-config");
+    expect(claudeArgs({ prompt: "x", allow: ["Read"] })).toContain(
+      "--strict-mcp-config",
+    );
+    expect(
+      claudeArgs({ prompt: "x", allow: ["Read", "mcp__claude_ai_Slack__slack_read_thread"] }),
+    ).not.toContain("--strict-mcp-config");
+  });
+});
+
 describe("brainEnv", () => {
   test("waits for connectors only when an MCP tool is allowed", () => {
     expect(brainEnv({ prompt: "x", allow: ["Read"] })).toEqual({});

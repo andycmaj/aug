@@ -64,7 +64,10 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   one-shot send call), or `mcp` (a stub). claude.ai connectors load even with
   `--setting-sources ""`, but under `-p` they connect before the first request
   only with `MCP_CONNECTION_NONBLOCKING=false` (`brainEnv`), and a tool runs
-  only if a granted capability names it (Knowledge #26, claude 2.1.322).
+  only if a granted capability names it. A call with no `mcp__` rule gets
+  `--strict-mcp-config` and loads none: late-connecting connectors re-add
+  their schemas every resumed turn and miss the prompt cache (Knowledge #26,
+  claude 2.1.322).
 - **The Slack remote is `core/slack/remote.ts`** (`docs/slack-remote.md`):
   opt-in (`remote.enabled`), separate from the triage poller. It reads one
   conversation only the owner is in (self-DM or a private channel), hears

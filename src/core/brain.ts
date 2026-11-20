@@ -134,12 +134,15 @@ export async function think(call: BrainCall): Promise<BrainResult> {
 
 export class BrainError extends Error {}
 
+export function wantsMcp(call: BrainCall): boolean {
+  return call.allow?.some((rule) => rule.startsWith("mcp__")) ?? false;
+}
+
 // Under -p, claude.ai connectors connect in the background and the first
 // request goes out before they're up, so a granted connector tool simply isn't
 // there. When the call is allowed any MCP tool, make claude wait for them.
 export function brainEnv(call: BrainCall): Record<string, string> {
-  const wantsMcp = call.allow?.some((rule) => rule.startsWith("mcp__"));
-  return wantsMcp
+  return wantsMcp(call)
     ? { MCP_CONNECTION_NONBLOCKING: "false", ...call.env }
     : { ...call.env };
 }
@@ -171,6 +174,11 @@ export function claudeArgs(call: BrainCall): string[] {
     args.push("--allowedTools", ...call.allow);
   }
   if (call.disallow?.length) args.push("--disallowedTools", ...call.disallow);
+  // claude.ai connectors load even with --setting-sources "". A call with no
+  // mcp__ rule can't run one, yet a resumed session that loads them late
+  // appends their 35 schemas (removal, then addition) each turn and misses
+  // the prompt cache: the whole context re-written (AUG-0160). Load none.
+  if (!wantsMcp(call)) args.push("--strict-mcp-config");
   return args;
 }
 
