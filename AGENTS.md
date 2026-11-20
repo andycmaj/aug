@@ -202,7 +202,8 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 - **Home is a `kind: home` task** (`store.homeTask()`), and its agent is the
   Assistant (`core/assistant.ts`): a resumed `claude -p` allowed only
   `aug-tools`. `listTasks()` never returns it, so nothing that lists work
-  sees it.
+  sees it. A turn's path, its command line and what it costs in the prompt
+  cache are `docs/assistant-lifecycle.md`.
 - **What a headless agent may call is `core/capabilities.ts`.** Config
   grants each role (`general`, `assistant`) capabilities: connector tools
   (`slack.read`), commands (`Bash(<cmd>:*)`) or a Claude Code plugin, loaded
