@@ -1,9 +1,10 @@
 // AUG-0148: ctrl+t while attached detaches and jumps your tmux client to the
 // agent's window; a terminal with no window of its own (the editor) gets the
-// key as typed. Pressed through the real keymap.
+// key as typed. AUG-0176: ctrl+e toggles the rail the same way and leaves you
+// attached. Pressed through the real keymap.
 
 import { afterEach, expect, test } from "bun:test";
-import { onMount } from "solid-js";
+import { onMount, Show } from "solid-js";
 import { testRender } from "@opentui/solid";
 import {
   FocusProvider,
@@ -22,7 +23,7 @@ let destroy: (() => void) | undefined;
 afterEach(() => destroy?.());
 
 // Non-canonical, so ctrl+t arrives as its byte (not the tty's status key),
-// and od prints it: 024 is ctrl+t in octal.
+// and od prints it: 024 is ctrl+t in octal, 005 ctrl+e.
 const SHOW_ONE_KEY = [
   "sh",
   "-c",
@@ -48,9 +49,11 @@ async function mount(withJump: boolean) {
                 });
                 return (
                   <box flexDirection="column" flexGrow={1}>
-                    <Pane name="rail">
-                      <text>rail</text>
-                    </Pane>
+                    <Show when={focus?.sidebarVisible()}>
+                      <Pane name="rail">
+                        <text>rail</text>
+                      </Pane>
+                    </Show>
                     <Pane name="canvas" ref={(r) => (pane = r)}>
                       <TerminalHost
                         id="term"
@@ -102,5 +105,32 @@ test("ctrl+t in a terminal with no window of its own goes to it as typed", async
   setup.mockInput.pressKey("t", { ctrl: true });
   expect(await frameWith("024")).toContain("024");
   expect(calls).toEqual([]);
+  expect(focus()?.isPaneFocused("canvas")).toBe(true);
+});
+
+test("ctrl+e on an agent hides and shows the rail, stays attached, and the agent never sees it", async () => {
+  const { setup, calls, frameWith, focus } = await mount(true);
+  expect(focus()?.sidebarVisible()).toBe(true);
+  setup.mockInput.pressKey("e", { ctrl: true });
+  await setup.renderOnce();
+  expect(focus()?.sidebarVisible()).toBe(false);
+  expect(focus()?.isPaneFocused("canvas")).toBe(true);
+  // Showing it mounts the rail, which would take focus; it must not.
+  setup.mockInput.pressKey("e", { ctrl: true });
+  await setup.renderOnce();
+  await setup.renderOnce();
+  expect(focus()?.sidebarVisible()).toBe(true);
+  expect(focus()?.isPaneFocused("canvas")).toBe(true);
+  expect(setup.renderer.currentFocusedRenderable).not.toBeNull();
+  expect(calls).toEqual([]);
+  expect(await frameWith("005")).not.toContain("005");
+});
+
+test("ctrl+e in a terminal with no window of its own goes to it as typed", async () => {
+  const { setup, calls, frameWith, focus } = await mount(false);
+  setup.mockInput.pressKey("e", { ctrl: true });
+  expect(await frameWith("005")).toContain("005");
+  expect(calls).toEqual([]);
+  expect(focus()?.sidebarVisible()).toBe(true);
   expect(focus()?.isPaneFocused("canvas")).toBe(true);
 });

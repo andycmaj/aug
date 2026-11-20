@@ -509,6 +509,16 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "detach and jump your tmux client to the agent's window (prefix L comes back)",
       help: "tmux",
     },
+    // Reserved, so the rail toggles while attached as it does anywhere (the
+    // owner's call, AUG-0176): the agent loses ctrl+e (end of line in
+    // claude's prompt; End still works). You stay attached either way. A
+    // terminal with no agent (the editor) is sent the key as typed.
+    {
+      key: "ctrl+e",
+      cmd: Commands.SIDEBAR_TOGGLE,
+      desc: "show / hide the rail (you stay attached)",
+      help: "rail",
+    },
   ],
   board: [
     ...(listNav as BindingSpec<HelpCtx>[]),

@@ -1,10 +1,11 @@
 // A coding agent's live terminal on the Canvas. While the Canvas has focus
 // and the session runs, every key goes to the agent except the detach chord;
 // detaching moves focus back to the rail and the session keeps running.
-// ctrl+t detaches too and moves your own tmux client to the agent's window.
+// ctrl+t detaches too and moves your own tmux client to the agent's window;
+// ctrl+e shows or hides the rail and leaves you attached.
 // A paste goes in too, bracketed when the program asked for it.
 
-import { createEffect, createMemo, onCleanup, Show } from "solid-js";
+import { batch, createEffect, createMemo, onCleanup, Show } from "solid-js";
 import {
   decodePasteBytes,
   type BoxRenderable,
@@ -47,6 +48,7 @@ export function TermView(props: {
 }
 
 const CTRL_T = "\x14";
+const CTRL_E = "\x05";
 
 function within(node: Renderable | null, target: Renderable): boolean {
   for (let n: Renderable | null = node; n; n = n.parent) {
@@ -101,7 +103,7 @@ export function TerminalHost(props: {
   // The go-to chord is reserved here like detach, so it gets past the agent:
   // it detaches first, so closing the list (or picking another agent's row)
   // never leaves keys going to a terminal.
-  const { openModal } = useFocus();
+  const { openModal, toggleSidebar, setActivePane, state: focus } = useFocus();
   useScope(
     "terminal",
     {
@@ -114,6 +116,17 @@ export function TerminalHost(props: {
         if (!props.onJump) return terminals.write(props.id, CTRL_T);
         props.onDetach();
         props.onJump();
+      },
+      // onJump marks an agent (it has a window of its own), as for ctrl+t.
+      // Showing the rail focuses it, which would detach: put focus back in
+      // the same batch, so the agent never loses the keys in between.
+      [Commands.SIDEBAR_TOGGLE]: () => {
+        if (!props.onJump) return terminals.write(props.id, CTRL_E);
+        const pane = focus.activePane;
+        batch(() => {
+          toggleSidebar();
+          setActivePane(pane);
+        });
       },
     },
     { target: props.pane },

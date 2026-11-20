@@ -249,7 +249,10 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 - A key listed in the `terminal` scope gets past an attached agent (the
   passthrough lets that scope's keys through): `ctrl+]` detaches, and the
   go-to chord (`ctrl+\`, `keys.goTo` in config) detaches and opens the
-  search list. `buildKeymap` swaps config's navigation keys in at start.
+  search list, `ctrl+t` jumps your tmux client to the agent, and `ctrl+e`
+  shows or hides the rail and stays attached (the agent loses them; a
+  terminal with no agent gets them). `buildKeymap` swaps config's navigation
+  keys in at start.
 - Navigation history is `core/nav-history.ts`, held by the aug context:
   every change of the selected row or the view is a visit (recorded once per
   handler, so a switch plus a select is one), `[`/`]` go back and forward,

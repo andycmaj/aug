@@ -181,12 +181,18 @@ function shown(scopes: string[], ctx: HelpCtx): Map<string, string> {
 
 test("attached to a terminal, only its own keys are listed", () => {
   const keys = shown(["terminal", "canvas", "app"], { ...quiet, attached: true });
-  // Detach, the go-to chord and the tmux jump: the keys an attached terminal
-  // lets past.
+  // Detach, the go-to chord, the tmux jump and the rail: the keys an
+  // attached terminal lets past.
   expect([...keys.values()].sort()).toEqual(
-    [Commands.GO_TO, Commands.TERMINAL_DETACH, Commands.TERMINAL_JUMP].sort(),
+    [
+      Commands.GO_TO,
+      Commands.TERMINAL_DETACH,
+      Commands.TERMINAL_JUMP,
+      Commands.SIDEBAR_TOGGLE,
+    ].sort(),
   );
   expect(keys.get("^t")).toBe(Commands.TERMINAL_JUMP);
+  expect(keys.get("^e")).toBe(Commands.SIDEBAR_TOGGLE);
 });
 
 // Reserved like ctrl+] (the passthrough lets the terminal scope's keys by),
@@ -197,6 +203,17 @@ test("ctrl+t is the attached terminal's tmux jump, and only that", () => {
     (bindings ?? []).filter((b) => b.key === "ctrl+t").map((b) => `${scope}:${b.cmd}`),
   );
   expect(others).toEqual([`terminal:${Commands.TERMINAL_JUMP}`]);
+});
+
+// AUG-0176: ctrl+e toggles the rail attached or not, so it means the same
+// thing in both tables.
+test("ctrl+e is the rail toggle anywhere, an attached terminal too", () => {
+  const uses = Object.entries(keymap).flatMap(([scope, bindings]) =>
+    (bindings ?? []).filter((b) => b.key === "ctrl+e").map((b) => `${scope}:${b.cmd}`),
+  );
+  expect(uses.sort()).toEqual(
+    [`app:${Commands.SIDEBAR_TOGGLE}`, `terminal:${Commands.SIDEBAR_TOGGLE}`].sort(),
+  );
 });
 
 test("typing in the chat box lists the box's keys, not the Canvas's", () => {
