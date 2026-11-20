@@ -33,45 +33,60 @@ async function run(config: AugConfig, prompt: string) {
   return { result, steps };
 }
 
+// The write never runs and the answer names the grant. haiku either tries it
+// and is denied, or declines it from the prompt's grant line without trying
+// (2 of 5 runs with docs.read): both are right, so neither is required.
+function expectWriteRefused(
+  config: AugConfig,
+  { result, steps }: Awaited<ReturnType<typeof run>>,
+) {
+  const denied = result.denied ?? [];
+  const tried = steps.some((s) => s.startsWith(`${DOCS}batch`));
+  const refused = denied.some((d) => d.startsWith(`${DOCS}batch`));
+  expect(tried).toBe(refused);
+  if (refused)
+    expect(grantSteps(denied, "general", config)[0]).toContain(
+      'add "docs.write" to capabilities.grants.general',
+    );
+  expect(result.text).toContain("docs.write");
+}
+
 describe.skipIf(!process.env.AUG_REAL_CLAUDE)("Claude Docs grants through real claude", () => {
   afterAll(() => setBrain(async () => {
     throw new Error("no brain after the real-claude test");
   }));
 
   test(
-    "ungranted, a doc's create is denied and the turn can say what to grant",
+    "ungranted, a doc's create never runs and the turn says what to grant",
     async () => {
       freshHome();
       setBrain(claudeBrain);
       // Some connector grant, as in AUG-0402: with no mcp__ rule at all no
       // connector loads (--strict-mcp-config) and the tool is absent, not denied.
       const config = granted(["slack.read"]);
-      const { result } = await run(
+      const got = await run(
         config,
         `Call ${DOCS}batch once with container {"kind":"project","create":{"name":"aug probe","doc":{"markdown":"# aug probe"}}} and batch []. Then stop and say what happened.`,
       );
-      const denied = result.denied ?? [];
-      expect(denied.some((d) => d.startsWith(`${DOCS}batch`))).toBe(true);
-      expect(grantSteps(denied, "general", config)[0]).toContain(
-        'add "docs.write" to capabilities.grants.general',
-      );
+      expectWriteRefused(config, got);
     },
     240_000,
   );
 
   test(
-    "docs.read granted, guide runs and a write is still denied",
+    "docs.read granted, guide runs and a write still never does",
     async () => {
       freshHome();
       setBrain(claudeBrain);
-      const { result, steps } = await run(
-        granted(["docs.read"]),
+      const config = granted(["docs.read"]);
+      const got = await run(
+        config,
         `Call ${DOCS}guide with items ["topic.index"], then call ${DOCS}batch once with container {"kind":"project","create":{"name":"aug probe","doc":{"markdown":"# aug probe"}}} and batch []. Then stop.`,
       );
-      expect(steps.some((s) => s.startsWith(`${DOCS}guide`))).toBe(true);
-      const denied = result.denied ?? [];
+      expect(got.steps.some((s) => s.startsWith(`${DOCS}guide`))).toBe(true);
+      const denied = got.result.denied ?? [];
       expect(denied.some((d) => d.startsWith(`${DOCS}guide`))).toBe(false);
-      expect(denied.some((d) => d.startsWith(`${DOCS}batch`))).toBe(true);
+      expectWriteRefused(config, got);
     },
     240_000,
   );
