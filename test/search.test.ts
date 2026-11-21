@@ -118,7 +118,7 @@ describe("search", () => {
     expect(titles("aug-23")).toEqual([want]);
   });
 
-  test("tasks off the open list (For later, watching) are found too", () => {
+  test("tasks off the open list (For later, watching) are found too, once", () => {
     const later = store.createTask({
       title: "Renew the cert",
       kind: Kind.task,
@@ -132,8 +132,9 @@ describe("search", () => {
     });
     store.setWatching(watched.id, true);
     const hits = find("cert");
+    // Watched, it is listed under Watching too, and found at its own row.
     expect(hits.map((h) => [h.title, h.section]).sort()).toEqual([
-      ["Cert rollout", "Watching"],
+      ["Cert rollout", "Tasks"],
       ["Renew the cert", "For later"],
     ]);
     expect(store.getTask(later.id)!.status).toBe(TaskStatus.later);

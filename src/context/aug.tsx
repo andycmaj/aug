@@ -24,13 +24,15 @@ import { laneOf, type BoardColumn, type LaneFacts } from "../core/lanes";
 import { count, perfOn, sample, timing } from "../core/perf";
 import { readModel, readsRun, type ReadModel } from "../core/read-model";
 import {
+  baseKey,
   cycleFilter as nextFilter,
   filterCounts,
   filterRail,
   flattenRail,
   foldRail,
   nextKey,
-  WALKED,
+  rowFor,
+  walkableKeys,
   type RailFilter,
   type RailItem,
   type RailSection,
@@ -59,9 +61,14 @@ interface AugContextValue extends ReadModel {
   // tasks left out. The cursor and the walk move over these.
   shownRail: Accessor<RailSection[]>;
   shownItems: Accessor<RailItem[]>;
-  // The selected row: what the Canvas shows.
+  // The selected task's key (`t<id>`, never a copy's row key): what the
+  // Canvas shows. A task listed twice (a Win, a watched task) is one
+  // selection on either row.
   selectedKey: Accessor<string | null>;
   selected: Accessor<RailItem | null>;
+  // The shown row that stands for the selection: the cursor's, when it is
+  // on one of the selected task's rows, else the task's own row.
+  selectedRowKey: Accessor<string | null>;
   // Selects a row; the rail cursor follows it.
   select: (key: string | null) => void;
   selectTask: (taskId: number) => void;
@@ -206,12 +213,24 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   const counts = createMemo(() => filterCounts(rail()));
   const shownRail = createMemo(() => foldRail(filtered(), folded()));
   const shownItems = createMemo(() => flattenRail(shownRail()));
+  // Where the selection is on the rail. A row that just left keeps its key
+  // here while the cursor is still on it, so Next goes on from it.
+  const currentRow = (): string | null => {
+    const sel = selectedKey();
+    const cur = cursorKey();
+    if (sel && cur && baseKey(cur) === sel) return cur;
+    return rowFor(shownItems(), sel)?.key ?? sel;
+  };
+  const selectedRowKey = createMemo((): string | null => {
+    const key = currentRow();
+    return shownItems().some((i) => i.key === key) ? key : null;
+  });
   // The order the walk last saw, so Next from a row that just left the rail
   // (marked done) goes on from where it stood.
   let lastOrder: string[] = [];
   const order = createMemo(() => {
     const keys = shownItems().map((i) => i.key);
-    const current = selectedKey();
+    const current = currentRow();
     if (current && !keys.includes(current) && lastOrder.includes(current)) {
       // keep the departed key in place for one more Next
       const at = lastOrder.indexOf(current);
@@ -235,7 +254,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
 
   const selected = createMemo((): RailItem | null => {
     const key = selectedKey();
-    const item = items().find((i) => i.key === key);
+    const item = rowFor(items(), key);
     if (item) return item;
     if (!key || key !== offRail()) return null;
     const task = reads.task(Number(key.slice(1)));
@@ -249,15 +268,18 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
       slipped: false,
       at: task.created_at,
       group: null,
+      copy: false,
+      tags: [],
     };
   });
 
   // A task selected from anywhere (Next, an @ link) unfolds its
-  // project so the rail can show it.
+  // project so the rail can show it. A task's key lands on its own row; a
+  // copy's row key (from the rail) on that row.
   function select(key: string | null) {
     // A row written a moment ago (a new task) is on the rail before we look.
     redraw.flush();
-    const item = items().find((i) => i.key === key);
+    const item = rowFor(items(), key);
     if (item?.type === "task" && item.group !== null)
       setFold(item.group, false);
     // Nor does the status filter hide it: like tilt-tui's picker, going to
@@ -265,12 +287,13 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     if (
       item &&
       railFilter().size > 0 &&
-      !flattenRail(filtered()).some((i) => i.key === key)
+      !flattenRail(filtered()).some((i) => i.key === item.key)
     )
       setRailFilter(new Set<RailFilter>());
-    setOffRail(!item && key?.startsWith("t") ? key : null);
-    setSelectedKey(key);
-    setCursorKey(key);
+    const base = baseKey(key);
+    setOffRail(!item && base?.startsWith("t") ? base : null);
+    setSelectedKey(base);
+    setCursorKey(item?.key ?? base);
   }
 
   function selectTask(taskId: number) {
@@ -310,14 +333,8 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
 
   function walk(direction: 1 | -1): string | null {
     redraw.flush();
-    const walkable = new Set(
-      shownRail()
-        .filter((s) => WALKED.includes(s.section))
-        .flatMap((s) => s.items)
-        .filter((i) => i.type !== "project")
-        .map((i) => i.key),
-    );
-    const key = nextKey(order(), walkable, selectedKey(), direction);
+    const walkable = walkableKeys(shownRail(), selectedKey());
+    const key = nextKey(order(), walkable, currentRow(), direction);
     if (key) select(key);
     return key;
   }
@@ -354,7 +371,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
     });
   });
   const exists = (place: Place) =>
-    place.view === "board" || items().some((i) => i.key === place.key);
+    place.view === "board" || rowFor(items(), place.key) !== null;
   function history(direction: 1 | -1): boolean {
     redraw.flush();
     const place = direction < 0 ? trail.back(exists) : trail.forward(exists);
@@ -365,8 +382,8 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   }
   const recent = createMemo(() => {
     trailMoved();
-    const byKey = new Map(items().map((i) => [i.key, i]));
-    return trail.recent().flatMap((k) => byKey.get(k) ?? []);
+    const list = items();
+    return trail.recent().flatMap((k) => rowFor(list, k) ?? []);
   });
 
   const anyWorking = createMemo(() =>
@@ -395,6 +412,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
         shownItems,
         selectedKey,
         selected,
+        selectedRowKey,
         select,
         selectTask,
         cursorKey,

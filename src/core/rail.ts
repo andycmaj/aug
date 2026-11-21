@@ -56,6 +56,11 @@ export const WALKED: Section[] = [
   "watching",
 ];
 
+// A tag a row wears beside its mark: pinned as today's Win, or watched.
+export const Tag = { win: "win", watching: "watching" } as const;
+export type Tag = (typeof Tag)[keyof typeof Tag];
+export const TAG_MARK: Record<Tag, string> = { win: "★", watching: "◉" };
+
 export type RailItem =
   | {
       type: "task";
@@ -67,8 +72,44 @@ export type RailItem =
       at: string;
       // The project whose row it sits under in Tasks, folding with it.
       group: number | null;
+      // The second row of a task that is also listed under Wins or
+      // Watching: the task sits in its project too, and that row is the
+      // one counted, searched and gone to. Its key is `t<id>@<section>`.
+      copy: boolean;
+      // Tags the row's place does not already say (no ★ under Wins).
+      tags: Tag[];
     }
   | ({ type: "project"; key: string; at: string } & RailProject);
+
+type TaskItem = Extract<RailItem, { type: "task" }>;
+
+// A task's own key: what the selection, history and go-to hold. A copy's
+// row key carries the section after an @.
+export const taskKey = (taskId: number) => `t${taskId}`;
+export function baseKey(key: string): string;
+export function baseKey(key: string | null): string | null;
+export function baseKey(key: string | null): string | null {
+  if (key === null) return null;
+  const at = key.indexOf("@");
+  return at === -1 ? key : key.slice(0, at);
+}
+
+// The row a key stands for: that row, else its task's own row, else the
+// first copy of it (a done Win sits only under Wins).
+export function rowFor(items: RailItem[], key: string | null): RailItem | null {
+  if (key === null) return null;
+  const exact = items.find((i) => i.key === key);
+  if (exact) return exact;
+  const base = baseKey(key);
+  return (
+    items.find((i) => i.key === base) ??
+    items.find((i) => baseKey(i.key) === base) ??
+    null
+  );
+}
+
+// Each row once: a task's copies left out.
+export const isCopy = (item: RailItem) => item.type === "task" && item.copy;
 
 export interface RailSection {
   section: Section;
@@ -124,6 +165,27 @@ export function isSlipped(
   return now.getTime() - Date.parse(since) > SLIPPED_AFTER_MS;
 }
 
+// Where a task sits on the rail, Wins and Watching aside: they list it
+// again (buildRail). Null: off the rail.
+function placeOf(
+  task: TaskRow,
+  lane: Lane,
+  onYou: Section,
+): Section | null {
+  // aug asking about its own docs: on you until answered, never later.
+  if (task.kind === Kind.system)
+    return task.status === TaskStatus.open || task.status === TaskStatus.later
+      ? Section.system
+      : null;
+  // An agent-closed task stays until you have read its result.
+  if (task.status === TaskStatus.done) return lane === Lane.ready ? onYou : null;
+  if (task.status === TaskStatus.dropped) return null;
+  // Unless its agent asks you something: then it is back on you.
+  if (task.status === TaskStatus.later)
+    return task.agent_state === AgentState.waiting ? onYou : Section.later;
+  return onYou;
+}
+
 export function buildRail(input: RailInput): RailSection[] {
   const sections: Record<Section, RailItem[]> = {
     home: [],
@@ -145,15 +207,17 @@ export function buildRail(input: RailInput): RailSection[] {
       slipped: false,
       at: input.home.created_at,
       group: null,
+      copy: false,
+      tags: [],
     });
 
   const projectIds = new Set((input.projects ?? []).map((p) => p.project.id));
 
   const reviews = input.reviews ?? new Set<number>();
   const wins = new Map((input.wins ?? []).map((id, i) => [id, i]));
-  const winItems: RailItem[] = [];
+  const winItems: TaskItem[] = [];
   for (const task of input.tasks) {
-    const onYou = reviews.has(task.id) ? sections.reviews : sections.tasks;
+    const onYou = reviews.has(task.id) ? Section.reviews : Section.tasks;
     const blockers = input.blockers?.get(task.id)?.length ?? 0;
     const lane = laneOf(task, {
       hasPendingAction: input.pendingActions.has(task.id),
@@ -161,9 +225,9 @@ export function buildRail(input: RailInput): RailSection[] {
       prState: reviews.has(task.id) ? null : (input.prStates?.get(task.id) ?? null),
       blockers,
     });
-    const item: RailItem = {
+    const item: TaskItem = {
       type: "task",
-      key: `t${task.id}`,
+      key: taskKey(task.id),
       task,
       lane,
       priority: task.priority,
@@ -175,33 +239,47 @@ export function buildRail(input: RailInput): RailSection[] {
       ),
       at: task.created_at,
       group: null,
+      copy: false,
+      tags: [],
     };
-    // A Win sits in Wins alone for the day, done ones too: the box shows
-    // how the day went.
-    if (wins.has(task.id) && task.kind !== Kind.system) {
-      if (task.status !== TaskStatus.dropped) winItems[wins.get(task.id)!] = item;
-      continue;
-    }
-    // aug asking about its own docs: on you until answered, never later.
-    if (task.kind === Kind.system) {
-      if (task.status === TaskStatus.open || task.status === TaskStatus.later)
-        sections.system.push(item);
-      continue;
-    }
-    if (task.status === TaskStatus.done) {
-      // An agent-closed task stays until you have read its result.
-      if (lane === Lane.ready) onYou.push(item);
-      continue;
-    }
-    if (task.status === TaskStatus.dropped) continue;
-    if (task.status === TaskStatus.later) {
-      // Unless its agent asks you something: then it is back on you.
-      if (task.agent_state === AgentState.waiting) onYou.push(item);
-      else sections.later.push({ ...item, at: task.remind_at ?? item.at });
-      continue;
-    }
-    if (task.watching) sections.watching.push(item);
-    else onYou.push(item);
+    // A Win is listed under Wins for the day, done ones too (the box shows
+    // how the day went), as well as where it sits.
+    const win =
+      wins.has(task.id) &&
+      task.kind !== Kind.system &&
+      task.status !== TaskStatus.dropped;
+    // Watching lists an open task you watch; it stays in its project too.
+    const watched =
+      Boolean(task.watching) &&
+      task.status === TaskStatus.open &&
+      task.kind !== Kind.system;
+    const place = placeOf(task, lane, onYou);
+    const tagsFor = (section: Section | null): Tag[] => [
+      ...(win && section !== Section.wins ? [Tag.win] : []),
+      // The watching lane's mark already says it.
+      ...(task.watching &&
+      section !== Section.watching &&
+      lane !== Lane.watching
+        ? [Tag.watching]
+        : []),
+    ];
+    if (place === Section.later)
+      sections.later.push({
+        ...item,
+        at: task.remind_at ?? item.at,
+        tags: tagsFor(place),
+      });
+    else if (place) sections[place].push({ ...item, tags: tagsFor(place) });
+    const copy = (section: Section): TaskItem => ({
+      ...item,
+      // A task with no row of its own (a done Win) is not a copy: its row
+      // under Wins is the one.
+      key: place ? `${item.key}@${section}` : item.key,
+      copy: place !== null,
+      tags: tagsFor(section),
+    });
+    if (win) winItems[wins.get(task.id)!] = copy(Section.wins);
+    if (watched) sections.watching.push(copy(Section.watching));
   }
 
   const byAt = (a: RailItem, b: RailItem) =>
@@ -353,7 +431,8 @@ export function filterOf(lane: Lane): RailFilter | null {
 const isHome = (item: RailItem) =>
   item.type === "task" && item.task.kind === Kind.home;
 
-// Tasks under each pill, Home left out: it is not work.
+// Tasks under each pill, Home left out: it is not work. Each task once: a
+// Win or a watched task listed twice is one task.
 export function filterCounts(
   sections: RailSection[],
 ): Record<RailFilter, number> {
@@ -361,7 +440,7 @@ export function filterCounts(
     RAIL_FILTERS.map((f) => [f.filter, 0]),
   ) as Record<RailFilter, number>;
   for (const item of flattenRail(sections)) {
-    if (item.type !== "task" || isHome(item)) continue;
+    if (item.type !== "task" || isHome(item) || item.copy) continue;
     const f = filterOf(item.lane);
     if (f) counts[f]++;
   }
@@ -410,6 +489,28 @@ export function cycleFilter(
 
 export function flattenRail(sections: RailSection[]): RailItem[] {
   return sections.flatMap((s) => s.items);
+}
+
+// The rows Next may land on: tasks in walked sections, each task at its
+// first row in walk order (a Win under Wins, not again in its project),
+// and never the selected task's other row.
+export function walkableKeys(
+  sections: RailSection[],
+  selected: string | null,
+): Set<string> {
+  const seen = new Set<string>(selected ? [baseKey(selected)] : []);
+  const keys = new Set<string>();
+  for (const s of sections) {
+    if (!WALKED.includes(s.section)) continue;
+    for (const item of s.items) {
+      if (item.type !== "task") continue;
+      const base = baseKey(item.key);
+      if (seen.has(base)) continue;
+      seen.add(base);
+      keys.add(item.key);
+    }
+  }
+  return keys;
 }
 
 // Next on a walk: the row after this one in walked sections. A key that left

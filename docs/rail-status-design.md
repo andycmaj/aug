@@ -293,7 +293,8 @@ Marks that change neither lifecycle nor agent state:
 
 - **priority** (urgent, important): the lower bar's color; urgent reddens
   the title. Unchanged.
-- **watching**: moves the row to Watching. Unchanged.
+- **watching**: lists the task under Watching too (AUG-0175); it stays in
+  its project. Its row there wears `◉` unless its lane is already watching.
 - **slipped** (derived): a theirs row quiet 3 days; red bar. Never for
   blocked.
 - **project, goal**: the project chip, nesting under the project row.
@@ -305,11 +306,12 @@ Marks that change neither lifecycle nor agent state:
   - Key `z` on a task row toggles it (`W` and `w` are taken); move `win`
     (`--off yes` to unpin) for the Assistant. Not an agent move: Wins are
     the owner's focus.
-  - A Win sits in the Wins section only (one row per key; it leaves Tasks,
-    Code Reviews or Watching for the day), not nested under its project,
-    with its project chip. It keeps its lane mark. A Win done today stays
-    there with ✓ so the day's box shows progress; the heading says `Wins
-    (2/5)`, done of pinned.
+  - A Win is listed under Wins and stays where it sits (its project, Code
+    Reviews, For later): see **Listed twice** below. Under Wins it is not
+    nested, with its project chip; in its project it wears `★`. It keeps
+    its lane mark. A Win done today stays under Wins so the day's box shows
+    progress (its only row: a done task has no other); the heading says
+    `Wins (2/5)`, done of pinned.
   - Tomorrow the box is empty and yesterday's open Wins are back in their
     sections. No carry-over.
   - The Board's Wins tab (1, the Board's first, AUG-0156, `core/wins-board.ts`,
@@ -331,6 +333,42 @@ Marks that change neither lifecycle nor agent state:
     process is heard and a reopen no longer erases a close. A database from
     before it is backfilled once from `created_at`, `closed_at`, `merged_at`
     and session results. A day is its local midnights as an ISO range.
+
+### Listed twice (AUG-0175)
+
+A Win, and an open task you watch, show in two places: where the task
+sits (its project's group in Tasks, Code Reviews, For later) and under the
+Wins or Watching heading; one that is both shows in all three. The rows
+are one task:
+
+- **Keys.** The task's own row keeps `t<id>`; a row under a heading is a
+  copy (`copy: true`), keyed `t<id>@wins` or `t<id>@watching`, so the
+  cursor tells them apart. A task with no row of its own (a done Win) has
+  its Wins row as its own, keyed `t<id>`. `baseKey` strips the `@`;
+  `rowFor` finds a key's row (exact, else the task's own, else a copy).
+- **Selection.** `selectedKey` is always the task's key, so the Canvas
+  never changes when the cursor moves between its rows. `selectedRowKey`
+  is the row standing for it: the cursor's, when it is on one of the
+  task's rows, else its own row. That row gets `▸`; its other rows a dim
+  `▹`. When a row goes (unwatched, unpinned, folded), the selection falls
+  to the task's remaining row.
+- **Counts.** Each heading counts its own members, copies included
+  (Tasks counts the task in its project; Wins `done/pinned`; Watching its
+  watched tasks). The filter pills, the Canvas's overview and the
+  project's `open` count each task once (copies left out).
+- **Look.** A copy is not nested and names its project (`◫ name`, with
+  or without a PR chip); a row wears `★` (Win) and `◉` (watched) only
+  where its heading does not already say it. One line: the title is cut
+  by the tags' width.
+- **Walking.** Up, down, top and bottom pass every shown row, copies
+  included. Next and back (`n`, `b`) stop at each task once, at its first
+  row in walk order (a Win under Wins), and never on the selected task's
+  other row (`walkableKeys`). Folding a project hides its rows, not the
+  copies. Search, Go to and the Board list each task once, at its own row
+  (the Board reads tasks, not the rail).
+- The Wins tab (AUG-0156) reads `task_events` and `wins`, not the rail,
+  so nothing there changes. Lanes are unchanged: a copy has its task's
+  lane.
 
 ## Implementation order
 

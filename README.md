@@ -274,7 +274,14 @@ nothing to install):
   chapters, with review findings, saved into Plannotator and opened in
   `plannotator review` with each finding as a comment on its lines (from
   "aug guide"). The comments you keep, and yours, go to the agent when you
-  send feedback. Needs `plannotator` on your PATH.
+  send feedback. Needs `plannotator` on your PATH. The findings are kept
+  with the guide, so **Open the guide's review** (in `.` and the palette,
+  once a task has a guide) opens that review again with no model run, each
+  finding refit to the change as it is now. The change is taken against
+  `origin/main` when it is ahead of your `main`; lock files are left out,
+  and a big change is reviewed in batches of related files (same commit,
+  a test and its code, one naming what another defines), so every file's
+  diff is read.
 - `quiz` (coding, with a checkout): quizzes you on the change, one question
   at a time, in interactive claude beside the agent (or on the Canvas when
   it has no window).
@@ -307,7 +314,8 @@ nothing to install):
 work is done), `merged`, `done`; rules `kind`, `channel`, `githubReason`,
 `author`, `title`, `body` (case-blind regexes, as in `triage.noise`) and
 `project`. Runs it starts wait for each other, stop at the day's spend cap,
-and never open anything: a guide is saved for you to open.
+and never open anything: a guide is saved for you to open with **Open the
+guide's review**, and its turn says so.
 
 ```json
 "guide": { "on": [{ "event": "triaged", "kind": "coding", "githubReason": ["review_requested"] }] },

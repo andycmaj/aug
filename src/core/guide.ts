@@ -1,15 +1,22 @@
 // The guide action's second half (docs/task-actions-design.md, guide): the
 // skill answers with Plannotator guide JSON (chapters, plus review findings
-// as line notes); aug makes the patch itself, so the guide describes exactly
-// what is in the checkout, fits the guide to it, and saves it into
-// Plannotator, where `plannotator review` lists it under Guides.
+// as line notes); aug makes the patch itself and puts it in the skill's
+// prompts (core/guide-run.ts), so the guide describes exactly what is in the
+// checkout, fits the guide to it, and saves it into Plannotator, where
+// `plannotator review` lists it under Guides.
 //
 // Plannotator keeps a saved guide's notes but draws them nowhere. A live
 // `plannotator review` session takes comments over HTTP
 // (/api/external-annotations) and pins them to their lines, in the diff and
 // in the guide alike, so the findings are posted there once it is up.
+//
+// Plannotator cannot hold them for a review opened later (its drafts are
+// the page's own), so aug keeps them beside guide.json
+// (guide-findings.json) and posts them into whichever review it opens for
+// that guide: right after the run, or later from the task's actions, refit
+// to the patch as it is then.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { errorMessage, logger } from "./log";
 
@@ -45,16 +52,36 @@ const NOTE_TEXT_MAX = 1000;
 const NOTES_PER_FILE_MAX = 20;
 
 // The JSON object in the skill's answer: a ```json fence, or the whole text.
-export function parseGuide(text: string): Guide | { error: string } {
+function jsonIn(text: string): { value: Record<string, unknown> } | { error: string } {
   const fenced = /```(?:json)?\s*\n([\s\S]*?)\n```/.exec(text);
   const raw = (fenced?.[1] ?? text).trim();
   let value: unknown;
   try {
     value = JSON.parse(raw);
   } catch (err) {
-    return { error: `the guide is not JSON: ${errorMessage(err)}` };
+    return { error: `the answer is not JSON: ${errorMessage(err)}` };
   }
-  if (!isRecord(value)) return { error: "the guide is not a JSON object" };
+  return isRecord(value) ? { value } : { error: "the answer is not a JSON object" };
+}
+
+function parseDiffs(list: unknown): GuideDiff[] {
+  return (Array.isArray(list) ? list : []).filter(isRecord).map((d) => ({
+    file: str(d.file),
+    summary: str(d.summary),
+    notes: (Array.isArray(d.notes) ? d.notes : []).filter(isRecord).flatMap((n) => {
+      const lineStart = Number(n.lineStart);
+      const lineEnd = Number(n.lineEnd ?? n.lineStart);
+      const text = str(n.text).slice(0, NOTE_TEXT_MAX);
+      if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || !text) return [];
+      return [{ lineStart, lineEnd, ...(n.side === "old" ? { side: "old" as const } : {}), text }];
+    }),
+  }));
+}
+
+export function parseGuide(text: string): Guide | { error: string } {
+  const read = jsonIn(text);
+  if ("error" in read) return { error: read.error.replace("the answer", "the guide") };
+  const value = read.value;
   const sections = Array.isArray(value.sections) ? value.sections : [];
   const guide: Guide = {
     title: str(value.title) || "Guided review",
@@ -62,22 +89,21 @@ export function parseGuide(text: string): Guide | { error: string } {
     sections: sections.filter(isRecord).map((s) => ({
       title: str(s.title) || "Changes",
       overview: str(s.overview),
-      diffs: (Array.isArray(s.diffs) ? s.diffs : []).filter(isRecord).map((d) => ({
-        file: str(d.file),
-        summary: str(d.summary),
-        notes: (Array.isArray(d.notes) ? d.notes : []).filter(isRecord).flatMap((n) => {
-          const lineStart = Number(n.lineStart);
-          const lineEnd = Number(n.lineEnd ?? n.lineStart);
-          const text = str(n.text).slice(0, NOTE_TEXT_MAX);
-          if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || !text) return [];
-          return [{ lineStart, lineEnd, ...(n.side === "old" ? { side: "old" as const } : {}), text }];
-        }),
-      })),
+      diffs: parseDiffs(s.diffs),
     })),
     unplacedFiles: (Array.isArray(value.unplacedFiles) ? value.unplacedFiles : []).map(str),
   };
   if (guide.sections.length === 0) return { error: "the guide has no chapters" };
   return guide;
+}
+
+// A batch's answer (job notes): each of its files' summary and notes.
+export function parseBatchNotes(text: string): GuideDiff[] | { error: string } {
+  const read = jsonIn(text);
+  if ("error" in read) return read;
+  const value = read.value;
+  if (!Array.isArray(value.files)) return { error: "the answer has no files list" };
+  return parseDiffs(value.files).filter((d) => d.file);
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -101,15 +127,32 @@ export interface Patch {
 // committed, as Plannotator's own guides take it.
 export function patchFor(cwd: string, base: string): Patch | { error: string } {
   for (const b of base === "main" ? ["main", "master"] : [base]) {
-    const mb = git(cwd, ["merge-base", b, "HEAD"]);
-    if (!mb.ok) continue;
-    const diff = git(cwd, ["diff", "--no-color", "--no-ext-diff", mb.out.trim()]);
+    const mb = mergeBase(cwd, b);
+    if (!mb) continue;
+    const diff = git(cwd, ["diff", "--no-color", "--no-ext-diff", mb.sha]);
     if (!diff.ok) return { error: `git diff failed: ${diff.out}` };
     const text = diff.out + untracked(cwd);
-    if (!text.trim()) return { error: `no change against ${b}` };
-    return { text, mergeBase: mb.out.trim(), base: b };
+    if (!text.trim()) return { error: `no change against ${mb.ref}` };
+    return { text, mergeBase: mb.sha, base: mb.ref };
   }
   return { error: `no merge base with ${base} in ${cwd}` };
+}
+
+// The branch's base: `origin/<base>` when the remote has moved on past the
+// local branch (a local main nobody pulled would put others' merged work in
+// the change), else the local one.
+function mergeBase(cwd: string, base: string): { ref: string; sha: string } | null {
+  const local = git(cwd, ["merge-base", base, "HEAD"]);
+  const remoteRef = `origin/${base}`;
+  const remote =
+    !base.includes("/") && git(cwd, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remoteRef}`]).ok
+      ? git(cwd, ["merge-base", remoteRef, "HEAD"])
+      : null;
+  const l = local.ok ? local.out.trim() : null;
+  const r = remote?.ok ? remote.out.trim() : null;
+  if (r && (!l || (l !== r && git(cwd, ["merge-base", "--is-ancestor", l, r]).ok)))
+    return { ref: remoteRef, sha: r };
+  return l ? { ref: base, sha: l } : null;
 }
 
 // New files the agent has not added are in the change too. Each is diffed
@@ -174,17 +217,15 @@ export function patchHunks(patch: string): Map<string, FileHunks> {
 
 // The guide made to fit the patch: chapters name only files in it, each
 // once; the rest go to unplacedFiles; a note outside its file's hunks is
-// left off the file. Every note becomes a review comment: on its lines when
-// they are in one hunk, else on its file.
+// left off the file. Every note becomes a review comment (reviewComments).
 export function fitGuide(
   guide: Guide,
   patch: string,
-): { guide: Guide; findings: number; lines: string[]; comments: ReviewComment[] } {
+): { guide: Guide; findings: Finding[]; lines: string[]; comments: ReviewComment[] } {
   const hunks = patchHunks(patch);
   const placed = new Set<string>();
-  let findings = 0;
+  const findings: Finding[] = [];
   const lines: string[] = [];
-  const comments: ReviewComment[] = [];
   const sections: GuideSection[] = [];
   for (const section of guide.sections) {
     const diffs: GuideDiff[] = [];
@@ -193,14 +234,11 @@ export function fitGuide(
       if (!file || placed.has(diff.file)) continue;
       placed.add(diff.file);
       const notes = (diff.notes ?? []).slice(0, NOTES_PER_FILE_MAX);
-      findings += notes.length;
       const pinned: GuideNote[] = [];
       for (const n of notes) {
+        findings.push({ file: diff.file, note: n });
         lines.push(`- \`${diff.file}\` ${lineWord(n)}: ${n.text}`);
-        if (insideOneHunk(n, file)) {
-          pinned.push(n);
-          comments.push(lineComment(diff.file, n));
-        } else comments.push(fileComment(diff.file, n));
+        if (insideOneHunk(n, file)) pinned.push(n);
       }
       diffs.push({ file: diff.file, summary: diff.summary, ...(pinned.length ? { notes: pinned } : {}) });
     }
@@ -211,8 +249,34 @@ export function fitGuide(
     guide: { ...guide, sections, unplacedFiles: unplaced },
     findings,
     lines,
-    comments,
+    comments: reviewComments(findings, patch).comments,
   };
+}
+
+// One review note and the file it is on, as the skill wrote it: kept so a
+// review opened later fits it to the patch as it is then.
+export interface Finding {
+  file: string;
+  note: GuideNote;
+}
+
+// The findings as review comments on `patch`: on their lines when one hunk
+// shows them, else on their file naming the lines. A file the patch no
+// longer touches has nowhere to show one, so its findings are left out.
+export function reviewComments(
+  findings: Finding[],
+  patch: string,
+): { comments: ReviewComment[]; dropped: number } {
+  const hunks = patchHunks(patch);
+  const comments: ReviewComment[] = [];
+  let dropped = 0;
+  for (const { file, note } of findings) {
+    const fileHunks = hunks.get(file);
+    if (!fileHunks) dropped++;
+    else if (insideOneHunk(note, fileHunks)) comments.push(lineComment(file, note));
+    else comments.push(fileComment(file, note));
+  }
+  return { comments, dropped };
 }
 
 function lineWord(n: GuideNote): string {
@@ -308,6 +372,12 @@ export async function postComments(
         log.warn("comments not posted", { port, error: last });
         return { error: last };
       }
+      // aug's comments from before (a review reused, a draft brought back)
+      // go first, so the findings are there once.
+      const cleared = await fetch(`${base}/api/external-annotations?source=${COMMENT_SOURCE}`, {
+        method: "DELETE",
+      });
+      if (!cleared.ok) log.warn("old comments not cleared", { port, status: cleared.status });
       const res = await fetch(`${base}/api/external-annotations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -375,26 +445,61 @@ export interface SavedGuide {
   id: string;
   file: string;
   guide: Guide;
-  findings: number;
+  findings: Finding[];
   // One Markdown line per finding.
   lines: string[];
   comments: ReviewComment[];
   patch: Patch;
 }
 
-// The skill's answer, fitted to the checkout's patch, written to `dir` and
+// What a review opened later needs, beside guide.json.
+export const FINDINGS_FILE = "guide-findings.json";
+
+export interface SavedFindings {
+  id: string;
+  title: string;
+  base: string;
+  findings: Finding[];
+}
+
+export function readFindings(dir: string): SavedFindings | null {
+  const file = join(dir, FINDINGS_FILE);
+  if (!existsSync(file)) return null;
+  try {
+    const value: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (!isRecord(value) || !Array.isArray(value.findings)) return null;
+    return {
+      id: str(value.id),
+      title: str(value.title),
+      base: str(value.base) || "main",
+      findings: value.findings.filter(isRecord).flatMap((f) => {
+        const n = isRecord(f.note) ? f.note : null;
+        if (!n || typeof f.file !== "string") return [];
+        const lineStart = Number(n.lineStart);
+        const lineEnd = Number(n.lineEnd);
+        const text = str(n.text);
+        if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || !text) return [];
+        return [{ file: f.file, note: { lineStart, lineEnd, ...(n.side === "old" ? { side: "old" as const } : {}), text } }];
+      }),
+    };
+  } catch (err) {
+    log.warn("saved findings unreadable", { file, err });
+    return null;
+  }
+}
+
+// The guide, fitted to the patch its calls were given, written to `dir` and
 // saved into Plannotator.
 export async function saveGuide(opts: {
-  answer: string;
+  guide: Guide;
   cwd: string;
-  base: string;
   dir: string;
   pr?: string;
+  // The patch the calls were given.
+  patch: Patch;
 }): Promise<SavedGuide | { error: string }> {
-  const parsed = parseGuide(opts.answer);
-  if ("error" in parsed) return parsed;
-  const patch = patchFor(opts.cwd, opts.base);
-  if ("error" in patch) return patch;
+  const parsed = opts.guide;
+  const patch = opts.patch;
   const { guide, findings, lines, comments } = fitGuide(parsed, patch.text);
   if (guide.sections.length === 0) return { error: "no chapter of the guide names a file in the change" };
   mkdirSync(opts.dir, { recursive: true });
@@ -405,27 +510,100 @@ export async function saveGuide(opts: {
     log.warn("guide import failed", { file, error: saved.error });
     return { error: `plannotator did not take the guide: ${saved.error}` };
   }
+  const kept: SavedFindings = { id: saved.id, title: guide.title, base: patch.base, findings };
+  writeFileSync(join(opts.dir, FINDINGS_FILE), `${JSON.stringify(kept, null, 2)}\n`);
   return { id: saved.id, file, guide, findings, lines, comments, patch };
 }
 
+// The diff with each hunk line's old and new line number in front. Given a
+// bare diff, a model pins notes to the diff's own line numbers instead.
+export function numberedPatch(text: string): string {
+  const out: string[] = [];
+  let oldLine = 0;
+  let newLine = 0;
+  let oldLeft = 0;
+  let newLeft = 0;
+  const col = (n: number | null) => (n === null ? "" : String(n)).padStart(5);
+  for (const line of text.split("\n")) {
+    const hunk = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (hunk) {
+      oldLine = Number(hunk[1]);
+      oldLeft = hunk[2] === undefined ? 1 : Number(hunk[2]);
+      newLine = Number(hunk[3]);
+      newLeft = hunk[4] === undefined ? 1 : Number(hunk[4]);
+      out.push(line);
+      continue;
+    }
+    if (oldLeft <= 0 && newLeft <= 0) {
+      out.push(line);
+      continue;
+    }
+    if (line.startsWith("+")) {
+      out.push(`${col(null)} ${col(newLine++)} ${line}`);
+      newLeft--;
+    } else if (line.startsWith("-")) {
+      out.push(`${col(oldLine++)} ${col(null)} ${line}`);
+      oldLeft--;
+    } else if (line.startsWith(" ") || line === "") {
+      out.push(`${col(oldLine++)} ${col(newLine++)} ${line}`);
+      oldLeft--;
+      newLeft--;
+    } else out.push(line); // "\ No newline at end of file"
+  }
+  return out.join("\n");
+}
+
+// What the owner sent from the review, or null when there is nothing to
+// pass on: an approval, or a review closed without feedback.
+export function reviewNotes(text: string): string | null {
+  const notes = text.trim();
+  if (!notes) return null;
+  if (/^(The user approved|Review session closed without feedback)\.?$/i.test(notes)) return null;
+  return notes;
+}
+
 // What the action's turn says: the chapters, then the findings by file.
-export function guideMarkdown(saved: SavedGuide): string {
+// `opened`: aug opens the review now; else (a trigger ran it) the owner
+// opens it from the task's actions. `denied`: calls the run was refused,
+// so no notes may mean it did not look, not that nothing stood out.
+export function guideMarkdown(
+  saved: SavedGuide,
+  opts: { opened?: boolean; denied?: string[]; gaps?: string[] } = {},
+): string {
+  const opened = opts.opened ?? true;
+  const denied = opts.denied ?? [];
+  const gaps = opts.gaps ?? [];
   const notes = saved.guide.sections.flatMap((s) =>
     s.diffs.flatMap((d) => (d.notes ?? []).map((n) => ({ file: d.file, n }))),
   );
-  const unpinned = saved.findings - notes.length;
+  const count = saved.findings.length;
+  const unpinned = count - notes.length;
   return [
     `**${saved.guide.title}**`,
     saved.guide.intent,
     "",
     `${saved.guide.sections.length} chapter${saved.guide.sections.length === 1 ? "" : "s"}: ${saved.guide.sections.map((s) => s.title).join("; ")}.`,
-    saved.findings
-      ? `${saved.findings} review note${saved.findings === 1 ? "" : "s"}${unpinned > 0 ? ` (${unpinned} not on a changed line)` : ""}:`
-      : "No review notes: nothing stood out.",
+    ...(denied.length
+      ? [
+          `A read was denied (${denied.map((d) => `\`${d.slice(0, 120)}\``).join(", ")}): the review may have missed things.`,
+          "",
+        ]
+      : []),
+    ...(gaps.length ? [...gaps, ""] : []),
+    count
+      ? `${count} review note${count === 1 ? "" : "s"}${unpinned > 0 ? ` (${unpinned} not on a changed line)` : ""}:`
+      : denied.length || gaps.length
+        ? "No review notes."
+        : "No review notes: nothing stood out.",
     ...saved.lines,
     "",
-    `Saved in Plannotator (\`${saved.id}\`). The review aug opens has these notes as comments; its Agents tab lists the guide.`,
+    opened
+      ? `Saved in Plannotator (\`${saved.id}\`). The review aug opens has these notes as comments; its Agents tab lists the guide.`
+      : `Saved in Plannotator (\`${saved.id}\`). To see these notes as comments in its review, pick "${OPEN_REVIEW_TITLE}" from this task's actions (\`.\` or the palette).`,
   ]
     .filter((line, i, all) => line !== "" || all[i - 1] !== "")
     .join("\n");
 }
+
+// How the task's actions name opening the saved guide's review.
+export const OPEN_REVIEW_TITLE = "Open the guide's review";

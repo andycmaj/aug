@@ -28,8 +28,10 @@ import { useAug } from "../context/aug";
 import { Lane, LANE_META } from "../core/lanes";
 import {
   ageLabel,
+  baseKey,
   RAIL_FILTERS,
   SECTION_TITLES,
+  TAG_MARK,
   type RailItem,
 } from "../core/rail";
 import { prChip, prQueueWord } from "../core/pr";
@@ -61,6 +63,9 @@ interface RowView {
   markColor: ThemeColor;
   title: string;
   titleColor: ThemeColor;
+  // Tag marks beside the title (★ Win, ◉ watched), where the row's place
+  // does not already say it.
+  tags?: string;
   sub: string;
   lead?: string;
   chip?: { text: string; color: ThemeColor } | null;
@@ -82,9 +87,7 @@ export function Rail(props: { actions: TaskActions }) {
     const shown = (key: string | null) => list.some((i) => i.key === key);
     if (!aug.selectedKey()) aug.select(list[0].key);
     else if (!shown(aug.cursorKey()))
-      aug.moveCursor(
-        shown(aug.selectedKey()) ? aug.selectedKey() : list[0].key,
-      );
+      aug.moveCursor(aug.selectedRowKey() ?? list[0].key);
   });
 
   const cursorIndex = () =>
@@ -220,7 +223,11 @@ export function Rail(props: { actions: TaskActions }) {
                       item={item()}
                       nested={isNested(item())}
                       cursor={aug.cursorKey() === item().key}
-                      onTable={aug.selectedKey() === item().key}
+                      onTable={aug.selectedRowKey() === item().key}
+                      twin={
+                        aug.selectedRowKey() !== item().key &&
+                        aug.selectedKey() === baseKey(item().key)
+                      }
                       focused={focused()}
                       theme={theme}
                     />
@@ -300,12 +307,14 @@ function EmptyRail() {
 // while it does not (tilt-tui's focused/unfocused selection). The selected
 // row carries a ▸ in the gutter, beside its mark rather than in
 // place of it: the task you are watching is the one whose lane you want to
-// see move.
+// see move. The selected task's other row (a Win or a watched task is
+// listed twice) carries a dim ▹: the same task.
 function RailRow(props: {
   item: RailItem;
   nested: boolean;
   cursor: boolean;
   onTable: boolean;
+  twin: boolean;
   focused: boolean;
   theme: Theme;
 }) {
@@ -376,6 +385,9 @@ function RailRow(props: {
         // The last read only: finding the PR anew is a few queries a row.
         const status = aug.prStatus(item.task.id);
         const chip = status ? prChip(status) : null;
+        const project = projectChip(
+          item.task.project_id ? aug.project(item.task.project_id) : null,
+        );
         return {
           bar: item.slipped ? theme().error : toneColor(theme(), meta.tone),
           bar2:
@@ -386,17 +398,16 @@ function RailRow(props: {
           markColor: toneColor(theme(), meta.tone),
           title: item.task.title,
           titleColor: item.priority === "urgent" ? theme().error : theme().text,
+          tags: item.tags.map((t) => TAG_MARK[t]).join(""),
+          // A copy under Wins or Watching is out of its project: it names it,
+          // PR chip or not.
           sub: chip
-            ? `${taskRef(item.task.id)} · ${word}`
+            ? [taskRef(item.task.id), item.copy ? project : null, word]
+                .filter(Boolean)
+                .join(" · ")
             : [
                 age,
-                (!props.nested &&
-                  projectChip(
-                    item.task.project_id
-                      ? aug.project(item.task.project_id)
-                      : null,
-                  )) ||
-                  CHANNEL_WORD[item.task.channel],
+                (!props.nested && project) || CHANNEL_WORD[item.task.channel],
                 taskRef(item.task.id),
                 word,
               ].join(" · "),
@@ -449,16 +460,27 @@ function RailRow(props: {
       marginLeft={props.nested ? NEST : 0}
       marginBottom={1}
     >
-      <text fg={theme().accent}>{props.onTable ? "▸" : " "}</text>
+      <text fg={props.onTable ? theme().accent : theme().textMuted}>
+        {props.onTable ? "▸" : props.twin ? "▹" : " "}
+      </text>
       <box flexDirection="column" flexGrow={1} backgroundColor={bg()}>
         <box flexDirection="row" gap={1}>
           <text bg={view().bar}> </text>
           <text fg={lit() ? selFg() : view().markColor}>{view().mark}</text>
+          <Show when={view().tags}>
+            <text fg={lit() ? selFg() : theme().warning}>{view().tags}</text>
+          </Show>
           <text
             fg={lit() ? selFg() : view().titleColor}
             attributes={lit() ? 1 : 0}
           >
-            {truncate(view().title, RAIL_WIDTH - 9 - (props.nested ? NEST : 0))}
+            {truncate(
+              view().title,
+              RAIL_WIDTH -
+                9 -
+                (props.nested ? NEST : 0) -
+                (view().tags ? (view().tags ?? "").length + 1 : 0),
+            )}
           </text>
         </box>
         <box flexDirection="row" gap={1}>
@@ -532,6 +554,18 @@ export function RailLegend() {
       mark: "⌂",
       markColor: theme.primary,
       word: "Home",
+    },
+    {
+      bar: theme.borderSubtle ?? theme.textMuted,
+      mark: TAG_MARK.win,
+      markColor: theme.warning,
+      word: "Win, listed under Wins",
+    },
+    {
+      bar: theme.borderSubtle ?? theme.textMuted,
+      mark: TAG_MARK.watching,
+      markColor: theme.warning,
+      word: "watched, under Watching",
     },
     {
       bar: theme.secondary,

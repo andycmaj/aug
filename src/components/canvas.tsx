@@ -776,7 +776,7 @@ function Opening() {
   const lanes = createMemo(() => {
     const counts = new Map<string, number>();
     for (const i of aug.items()) {
-      if (i.type !== "task") continue;
+      if (i.type !== "task" || i.copy) continue;
       counts.set(i.lane, (counts.get(i.lane) ?? 0) + 1);
     }
     return [...counts.entries()];

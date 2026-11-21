@@ -15,6 +15,7 @@ import { Rail, RAIL_WIDTH } from "./rail";
 import { useShell } from "./shell";
 import { PaletteGroup, type PaletteExtra } from "../palette";
 import { actionsFor } from "../core/task-actions";
+import { OPEN_REVIEW_TITLE } from "../core/guide";
 
 export function ChatMode() {
   const aug = useAug();
@@ -40,7 +41,18 @@ export function ChatMode() {
       hint: a.key ?? ".",
       inContext: true,
       run: () => shell.actions.runAction(task, a.name),
-    }));
+    })).concat(
+      aug.desk.hasGuideReview(task.id)
+        ? [{
+            id: "action-guide-review",
+            group: PaletteGroup.row,
+            label: `Action: ${OPEN_REVIEW_TITLE}`,
+            hint: ".",
+            inContext: true,
+            run: () => shell.actions.openGuideReview(task),
+          }]
+        : [],
+    );
   };
 
   // `a` from anywhere (the Board too) lands in Home's box.

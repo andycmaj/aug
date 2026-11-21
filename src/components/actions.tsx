@@ -30,9 +30,9 @@ import { infoTitle, itemInfo } from "../core/info";
 import { errorMessage, logger } from "../core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt";
 import { strayLabel, type Stray } from "../core/strays";
-import { neighborKey, type RailItem } from "../core/rail";
+import { baseKey, neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
-import { postComments } from "../core/guide";
+import { OPEN_REVIEW_TITLE, postComments, reviewNotes } from "../core/guide";
 import type { ActionResult } from "../core/run-action";
 import { actionsFor, keyedActions } from "../core/task-actions";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
@@ -92,20 +92,24 @@ export function useActions(dialogs: Dialogs) {
   const { startAgent } = useAgentStart(dialogs, attachViewer);
   const { showRepos } = useRepos(dialogs);
 
-  // A row is about to leave the rail. Selected: the selection walks on.
-  // Only under the cursor: the cursor steps to a neighbor, the selection
-  // stays.
+  // A task's rows are about to leave the rail. Selected: the selection
+  // walks on. Only under the cursor: the cursor steps to a neighbor (not
+  // the task's other row), the selection stays.
   function advanceFrom(key: string) {
     if (aug.selectedKey() === key) {
       const next = aug.walk(1) ?? aug.walk(-1);
       if (!next) aug.select(null);
       return;
     }
-    if (aug.cursorKey() === key) {
+    const cursor = aug.cursorKey();
+    if (cursor && baseKey(cursor) === key) {
       aug.moveCursor(
         neighborKey(
-          aug.shownItems().map((i) => i.key),
-          key,
+          aug
+            .shownItems()
+            .map((i) => i.key)
+            .filter((k) => k === cursor || baseKey(k) !== key),
+          cursor,
         ),
       );
     }
@@ -448,6 +452,17 @@ export function useActions(dialogs: Dialogs) {
     });
   }
 
+  // The last guide's review, with its findings posted again: no model run.
+  function openGuideReview(task: TaskRow) {
+    const opened = desk.guideReview(task.id);
+    if ("error" in opened) {
+      showToast(opened.error, 5000, "error");
+      return;
+    }
+    showToast(opened.text, 4000);
+    if (opened.terminal) openActionTerminal(task, OPEN_REVIEW_TITLE, opened.terminal);
+  }
+
   // A pane action with no agent window: interactive claude on the Canvas,
   // closed when it exits.
   function openActionTerminal(
@@ -480,11 +495,12 @@ export function useActions(dialogs: Dialogs) {
   }
 
   // What the owner sent from plannotator review goes to the agent, as if
-  // typed; an approval or a closed tab sends nothing. It carries aug's
-  // comments the owner kept, unlabelled, so the message says so.
+  // typed; an approval or a review closed without feedback sends nothing
+  // (reviewNotes). It carries aug's comments the owner kept, unlabelled, so
+  // the message says so.
   function sendReviewNotes(task: TaskRow, file: string) {
-    const notes = existsSync(file) ? readFileSync(file, "utf8").trim() : "";
-    if (!notes || /^The user approved\.?$/i.test(notes)) return;
+    const notes = reviewNotes(existsSync(file) ? readFileSync(file, "utf8") : "");
+    if (!notes) return;
     desk
       .say(task.id, `My notes from the guided review in Plannotator (with the review findings aug posted there that I kept):\n\n${notes}`)
       .then(
@@ -503,7 +519,8 @@ export function useActions(dialogs: Dialogs) {
   // .: the actions that apply to this task.
   function pickAction(task: TaskRow): false | void {
     const offered = actionsFor(desk.config(), task);
-    if (offered.length === 0) {
+    const review = desk.hasGuideReview(task.id);
+    if (offered.length === 0 && !review) {
       showToast("No actions apply here (config.json \"actions\")");
       return;
     }
@@ -515,7 +532,11 @@ export function useActions(dialogs: Dialogs) {
           label: a.title,
           hint: keys.has(a.name) ? `${a.name} · ${a.key}` : a.name,
           run: () => runAction(task, a.name),
-        }))}
+        })).concat(
+          review
+            ? [{ label: OPEN_REVIEW_TITLE, hint: "the last guide, no run", run: () => openGuideReview(task) }]
+            : [],
+        )}
         onClose={dialogs.close}
       />
     ));
@@ -1022,6 +1043,7 @@ export function useActions(dialogs: Dialogs) {
     taskActions,
     runAction,
     pickAction,
+    openGuideReview,
     togglePrDash,
     editorId: editor.editorId,
   };

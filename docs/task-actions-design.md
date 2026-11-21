@@ -231,7 +231,44 @@ Done (step 6), the guide:
   `plannotator guide import --snapshot` (`--pr` when the task has one).
   The turn lists the chapters and every finding; the TUI opens
   `plannotator review` on the Canvas, and what the owner writes there goes
-  to the agent when it exits (an approval sends nothing).
+  to the agent when it exits (an approval, or a review closed without
+  feedback, sends nothing: `reviewNotes`).
+- The diff is in the prompts, in batches (AUG-0185). A forked run kept
+  its session's habit of chained shell (`mb=$(git merge-base ...); git
+  diff $mb | head`), which aug's allow rules deny, and wrote its chapters
+  from memory with no findings; and nothing made a run read a big diff
+  whole. So the guide no longer forks or reads the diff itself:
+  - Base: `origin/<base>` when the remote has moved past the local branch
+    (an unpulled local main put others' merged work in the change), else
+    the local one (`mergeBase` in `core/guide.ts`). The review aug opens
+    takes the same ref (`plannotator review --base origin/main` works).
+  - aug takes the patch before the run (no change: refused before anything
+    is spent) and plans it (`core/guide-batches.ts`): lock files are left
+    out of every prompt (and so unplaced); a file past 400k characters is
+    named on the turn, not reviewed; the rest are grouped by what relates
+    them, with no parser: files changed in the same commit of the branch,
+    a test and what it tests (same stem, one in a test path or the same
+    folder), and a diff that names what another file's diff defines
+    (declarations on changed lines and git's hunk-header function names)
+    or imports it by path. Groups fill batches of about 100k characters
+    (about 25k tokens); a group too big is split by folder, then by file.
+  - One batch (most changes) is one headless call, `job: whole`: the
+    whole diff in the prompt, each hunk line with its old and new numbers
+    in two columns (`numberedPatch`; given a bare diff, haiku pinned notes
+    to the diff's own line numbers). Several are one call per batch, three
+    at a time (`job: notes`: its files' summaries and notes, the index of
+    every file beside them, Read allowed for the rest), then one `job:
+    chapters` call from the index and the summaries; aug lays the notes
+    into the chapters, and a reviewed file no chapter names goes in a last
+    "Other changes", so no note is lost (`core/guide-run.ts`).
+  - So every file's diff is in exactly one prompt, whatever the model
+    chooses to read. What no call answered for, chapters that did not
+    parse, files too large and denied calls are said on the turn and in
+    the toast, never "nothing stood out".
+  - Checked with haiku on scratch homes: one call for a small change, no
+    tool reads, three findings on their lines; a change forced into two
+    batches: three calls, both planted bugs found on their lines, and the
+    chapters put a test back with its code though the batches split them.
 - Checked (plannotator 0.28.61, headless Chrome): Plannotator keeps v4
   notes but draws them nowhere: not in `plannotator review`'s Guides view,
   not in an exported page, not in an Inbox review (even with
@@ -246,10 +283,43 @@ Done (step 6), the guide:
   owner's Send Feedback carries every comment still there, unlabelled, so
   the message to the agent says it includes the findings the owner kept.
   An earlier build wrote findings into each chapter's overview instead.
-- Gaps: a guide a trigger saved has no review aug opened, so no comments
-  (running the action again does post them); the review offers the last
-  session's comments as a recovered draft, so restoring it after a re-run
-  doubles them.
+- Gaps (closed by AUG-0185, below): a guide a trigger saved had no review
+  aug opened, so no comments; the review offers the last session's
+  comments as a recovered draft, so restoring it after a re-run doubled
+  them.
+- Plannotator cannot hold the findings for a review opened later (checked
+  in the 0.29.1 source): drafts are written by the browser page, a comment
+  with a `source` is not counted as the reviewer's, `/api/draft` is
+  internal, and the external-annotation store lives only as long as the
+  review process. So aug keeps them (AUG-0185, the owner's pick over
+  keeping a background review alive):
+  - `saveGuide` writes `guide-findings.json` beside `guide.json`: the
+    guide's id, title, base and each finding as its file and note, as the
+    skill wrote it (not yet fitted, so a later patch can place it again).
+  - **Open the guide's review** in the `.` picker and the palette, on a
+    task with saved findings (`desk.hasGuideReview`, `desk.guideReview`):
+    no model run. It takes the patch as it is now, refits the findings
+    (`reviewComments`: on their lines when one hunk shows them, else on
+    their file naming the lines; a file no longer in the change has nowhere
+    to show one, so its findings are left out and the toast counts them),
+    and opens `plannotator review` on a port aug picks, as after a run.
+  - Every post first clears aug's own (`DELETE
+    /api/external-annotations?source=aug-guide`), then posts the batch, so
+    the findings are there once. Feedback goes to the agent on exit as
+    before.
+  - A guide a trigger ran opens nothing; its turn ends by pointing at Open
+    the guide's review instead of "the review aug opens".
+  - Checked live (plannotator 0.29.1, scratch HOME, `PLANNOTATOR_BROWSER=none`):
+    saved findings refit, posted 0.55s after the review started, posted
+    again into the same review: it held 2 comments, not 4.
+  - Restoring a recovered draft, checked in headless Chrome on 0.29.1: the
+    page saves aug's comments into its draft, and the next review of the
+    same change offers "Draft Recovered ... restore them?". Restored after
+    aug posts, before, or with the re-run's findings reworded, the page
+    shows each finding once (badge 2), and Send Feedback carries each
+    once: a restored comment with a `source` gives way to the live ones
+    from that source. Not doubled on 0.29.1 whether or not aug clears
+    first; the clear guards a review that is reused.
 - Not the Inbox: `submit_guide` refuses a v4 snapshot, drops notes unless
   `inboxCodeReview` is on, and the Inbox's first start writes
   `~/.claude/rules/plannotator-inbox.md` into the owner's Claude config.
@@ -286,7 +356,8 @@ Done (step 7), triggers:
   action and event. Auto runs go one at a time behind each other (not the
   agents' pool), none past the day's spend cap; their turn says the event
   ("Summarize the work so far (on done)"). A guide run by itself is saved
-  in Plannotator; its review waits for the owner to open it.
+  in Plannotator; its review waits for the owner to open it (Open the
+  guide's review).
 
 All eight steps are built.
 

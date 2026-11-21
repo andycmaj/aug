@@ -173,8 +173,8 @@ describe("rail", () => {
     expect(rail.map((s) => s.section)).toEqual(["tasks", "watching", "later"]);
     expect(
       rail[0].items.map((i) => (i.type === "task" ? i.task.title : "")),
-    ).toEqual(["finished", "early", "late"]);
-    expect(rail[1].items).toHaveLength(1);
+    ).toEqual(["finished", "early", "watched", "late"]);
+    expect(rail[1].items.map((i) => i.key)).toEqual([`t${watched.id}@watching`]);
     expect(
       flattenRail(rail).some((i) => i.type === "task" && i.task.id === gone.id),
     ).toBe(false);
@@ -513,7 +513,7 @@ describe("status model (docs/rail-status-design.md)", () => {
     });
   }
 
-  test("Wins sit first, alone, in pinned order, done ones kept with the tally", () => {
+  test("Wins sit first, in pinned order, done ones kept with the tally; open ones stay in Tasks too", () => {
     const a = coding("a");
     const b = coding("b");
     const c = coding("c");
@@ -521,11 +521,12 @@ describe("status model (docs/rail-status-design.md)", () => {
     const rail = railWith([c.id, b.id]);
     expect(rail.map((s) => s.section).slice(0, 3)).toEqual(["home", "wins", "tasks"]);
     const wins = rail.find((s) => s.section === "wins")!;
-    expect(wins.items.map((i) => i.key)).toEqual([`t${c.id}`, `t${b.id}`]);
+    // A done Win has no row of its own: its row under Wins is the one.
+    expect(wins.items.map((i) => i.key)).toEqual([`t${c.id}@wins`, `t${b.id}`]);
     expect(wins.count).toBe(2);
     expect(wins.done).toBe(1);
     const tasks = rail.find((s) => s.section === "tasks")!;
-    expect(tasks.items.map((i) => i.key)).toEqual([`t${a.id}`]);
+    expect(tasks.items.map((i) => i.key)).toEqual([`t${a.id}`, `t${c.id}`]);
     expect(WALKED[0]).toBe("wins");
   });
 

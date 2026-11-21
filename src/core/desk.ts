@@ -34,7 +34,7 @@ import * as repos from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
-import { startAction, type ActionResult } from "./run-action";
+import { guideReview, hasGuideReview, startAction, type ActionResult } from "./run-action";
 import { capReached } from "./spend";
 import {
   ActionEvent,
@@ -313,6 +313,19 @@ export class Desk {
     const why = whyNot(spec, task);
     if (why) return { error: why };
     return this.startAction(config, task, spec);
+  }
+
+  // The task's last guide, reopened in Plannotator with its findings and no
+  // model run (core/guide.ts). Nothing to undo: it opens a review.
+  hasGuideReview(taskId: number): boolean {
+    const task = store.getTask(taskId);
+    return !!task && hasGuideReview(task);
+  }
+
+  guideReview(taskId: number): ActionResult | { error: string } {
+    const task = store.getTask(taskId);
+    if (!task) return { error: `no task ${store.taskRef(taskId)}` };
+    return guideReview(task);
   }
 
   private startAction(

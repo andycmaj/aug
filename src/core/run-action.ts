@@ -37,7 +37,19 @@ import {
   skillSource,
   type ActionSpec,
 } from "./task-actions";
-import { freePort, guideMarkdown, type ReviewComment, saveGuide } from "./guide";
+import {
+  freePort,
+  guideMarkdown,
+  patchFor,
+  readFindings,
+  reviewComments,
+  saveGuide,
+  type Guide,
+  type Patch,
+  type ReviewComment,
+} from "./guide";
+import { branchCommits, planBatches, type BatchPlan } from "./guide-batches";
+import { reviewInBatches } from "./guide-run";
 import { transcript } from "./transcript";
 import {
   SpendRole,
@@ -102,6 +114,8 @@ function actionPrompt(
   task: TaskRow,
   forked: boolean,
   as: string,
+  // The guide's job, appended to the skill's args.
+  job?: string,
 ): string {
   const turns = store
     .turnsForTask(task.id)
@@ -120,7 +134,7 @@ function actionPrompt(
         ? `The task's chat so far, oldest first:\n${transcript(turns)}`
         : "",
     "",
-    invocation(spec, task, as),
+    job ? `${invocation(spec, task, as)}; job: ${job}` : invocation(spec, task, as),
   ]
     .filter((line, i, all) => line !== "" || all[i - 1] !== "")
     .join("\n");
@@ -167,16 +181,32 @@ export function startAction(
       };
   }
 
-  const session = spec.via === ActionVia.fork ? forkable(task) : null;
+  // The guide reads its diff from its prompts, so it runs headless (fresh
+  // context, room for the diff) and is planned before anything is spent:
+  // no change, no run.
+  const guide = spec.output === ActionOutput.guide;
+  const session = spec.via === ActionVia.fork && !guide ? forkable(task) : null;
   const cwd = session?.cwd ?? cwdFor(task);
+  let plan: { patch: Patch; batches: BatchPlan } | undefined;
+  if (guide) {
+    const patch = patchFor(task.worktree ?? cwd, ACTION_BASE);
+    if ("error" in patch) return { error: `${spec.name}: ${patch.error}` };
+    plan = { patch, batches: planBatches(patch, task.worktree ?? cwd) };
+  }
   const turn = actionTurn(task, spec, event);
   running.add(key);
-  log.info("action start", { task: task.id, action: spec.name, fork: !!session });
+  log.info("action start", {
+    task: task.id,
+    action: spec.name,
+    fork: !!session,
+    ...(plan ? { batches: plan.batches.batches.length } : {}),
+  });
 
-  const done = run(config, task, spec, turn, {
+  const done = run(config, task, spec, turn, event, {
     cwd,
     session: session?.id,
     as: source.as,
+    plan,
     pluginDirs: [...new Set([source.dir, ...grant.pluginDirs])],
     tools: [...new Set([...ACTION_TOOLS, ...grant.tools])],
     allow: [
@@ -272,6 +302,8 @@ interface RunShape {
   session?: string;
   // The skill's name as this run loads it (a wrapped user skill's differs).
   as: string;
+  // The guide's patch and its batches.
+  plan?: { patch: Patch; batches: BatchPlan };
   pluginDirs: string[];
   tools: string[];
   allow: string[];
@@ -282,11 +314,13 @@ async function run(
   task: TaskRow,
   spec: ActionSpec,
   turn: TurnRow,
+  event: string | undefined,
   shape: RunShape,
 ): Promise<ActionResult> {
   const steps: string[] = [];
   const timing = log.time("action done", { task: task.id, action: spec.name });
   try {
+    if (shape.plan) return await runGuide(config, task, spec, turn, event, shape, shape.plan, steps, timing);
     const result = await think({
       prompt: actionPrompt(spec, task, Boolean(shape.session), shape.as),
       system: actionSystem(spec),
@@ -311,8 +345,6 @@ async function run(
       store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
     }
     if (result.isError) throw new BrainError(result.text || "claude failed");
-    if (spec.output === ActionOutput.guide)
-      return await finishGuide(task, spec, turn, result.text, timing);
     const text = result.text.trim();
     const files =
       spec.output === ActionOutput.file ? writeOutput(task, spec, text) : [];
@@ -341,58 +373,165 @@ async function run(
   }
 }
 
-// The guide's answer saved into Plannotator; its review opened on the
-// Canvas. A guide Plannotator refuses fails the run, with the answer kept
-// as a file so nothing is lost.
+// The guide's calls (core/guide-run.ts), each a headless call with the
+// action's tools; every step lands on the turn, named by its call.
+async function runGuide(
+  config: AugConfig,
+  task: TaskRow,
+  spec: ActionSpec,
+  turn: TurnRow,
+  event: string | undefined,
+  shape: RunShape,
+  plan: { patch: Patch; batches: BatchPlan },
+  steps: string[],
+  timing: (fields?: Record<string, unknown>) => void,
+): Promise<ActionResult> {
+  const cwd = task.worktree ?? shape.cwd;
+  const commits = branchCommits(cwd, plan.patch.mergeBase).length
+    ? git(cwd, ["log", "--no-merges", "--oneline", `${plan.patch.mergeBase}..HEAD`])
+    : "";
+  const ran = await reviewInBatches({
+    plan: plan.batches,
+    commits,
+    prompt: (job) => actionPrompt(spec, task, false, shape.as, job),
+    ask: async (prompt, label) => {
+      const result = await think({
+        prompt,
+        system: actionSystem(spec),
+        model: spec.model ?? config.brain.agentModel,
+        cwd: shape.cwd,
+        tools: shape.tools,
+        allow: shape.allow,
+        pluginDirs: shape.pluginDirs,
+        env: { AUG_TASK_ID: String(task.id), ...toolsEnv() },
+        spend: { role: SpendRole.action, taskId: task.id },
+        onStep: (step) => {
+          steps.push(`${label}: ${step}`);
+          store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
+        },
+      });
+      if (result.denied?.length) {
+        steps.push(
+          ...result.denied.map((d) => `${DENIED_STEP}${d}`),
+          ...grantSteps(result.denied, "general", config),
+        );
+        store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
+      }
+      if (result.isError) throw new BrainError(result.text || "claude failed");
+      return { text: result.text, denied: result.denied ?? [] };
+    },
+  });
+  if ("error" in ran) {
+    const files = ran.answer
+      ? writeOutput(task, { ...spec, name: `${spec.name}-answer` }, ran.answer.trim())
+      : [];
+    throw new GuideError(ran.error, files);
+  }
+  log.info("guide calls", { task: task.id, calls: ran.calls, gaps: ran.gaps.length });
+  return finishGuide(task, spec, turn, ran.guide, { event, patch: plan.patch, denied: ran.denied, gaps: ran.gaps }, timing);
+}
+
+function git(cwd: string, args: string[]): string {
+  const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
+  return r.exitCode === 0 ? r.stdout.toString().trim() : "";
+}
+
+// The guide saved into Plannotator, its findings kept beside it; its review
+// opened on the Canvas when the owner ran it (one a trigger ran waits for
+// them: guideReview). A guide Plannotator refuses fails the run.
 async function finishGuide(
   task: TaskRow,
   spec: ActionSpec,
   turn: TurnRow,
-  answer: string,
+  guide: Guide,
+  run: { event?: string; patch: Patch; denied: string[]; gaps: string[] },
   timing: (fields?: Record<string, unknown>) => void,
 ): Promise<ActionResult> {
+  const { event, denied } = run;
   const cwd = task.worktree ?? cwdFor(task);
   const dir = paths.work(task.id);
   const saved = await saveGuide({
-    answer,
+    guide,
     cwd,
-    base: ACTION_BASE,
     dir,
     pr: prUrl(task) ?? undefined,
+    patch: run.patch,
   });
   if ("error" in saved) {
-    const files = writeOutput(task, { ...spec, name: `${spec.name}-answer` }, answer.trim());
+    const files = writeOutput(task, { ...spec, name: `${spec.name}-answer` }, JSON.stringify(guide, null, 2));
     throw new GuideError(saved.error, files);
   }
   store.updateTurn(turn.id, {
     status: TurnStatus.done,
-    body: guideMarkdown(saved),
-    did: `${saved.guide.title}: ${saved.findings} review notes`,
+    body: guideMarkdown(saved, { opened: !event, denied, gaps: run.gaps }),
+    did: `${saved.guide.title}: ${saved.findings.length} review notes`,
     finished_at: now(),
     files: JSON.stringify([
       { path: saved.file, name: "guide.json", bytes: Bun.file(saved.file).size },
     ]),
   });
   timing({ ok: true });
+  const warn = denied.length
+    ? " (a read was denied: it may have missed things)"
+    : run.gaps.length
+      ? " (not all of it reviewed: see the turn)"
+      : "";
+  if (event) return { ok: true, text: `${spec.title}: saved, its review waits for you${warn}` };
+  return {
+    ok: true,
+    text: `${spec.title}: saved, opening Plannotator${warn}`,
+    terminal: reviewTerminal(cwd, dir, saved.patch.base, saved.comments),
+  };
+}
+
+// The task's last guide has findings saved to open a review with.
+export function hasGuideReview(task: TaskRow): boolean {
+  return readFindings(paths.work(task.id)) !== null;
+}
+
+// The last guide's review, with no model run: its findings refit to the
+// patch as it is now, to be posted once the review is up.
+export function guideReview(task: TaskRow): ActionResult | { error: string } {
+  const dir = paths.work(task.id);
+  const kept = readFindings(dir);
+  if (!kept) return { error: `${store.taskRef(task.id)} has no saved guide: run the guide first` };
+  const cwd = task.worktree ?? cwdFor(task);
+  if (!existsSync(cwd)) return { error: `${cwd} is gone` };
+  const patch = patchFor(cwd, kept.base);
+  if ("error" in patch) return patch;
+  const { comments, dropped } = reviewComments(kept.findings, patch.text);
+  log.info("guide review", { task: task.id, comments: comments.length, dropped });
+  return {
+    ok: true,
+    text: `${kept.title || "Guide"}: opening Plannotator${dropped ? ` (${dropped} note${dropped === 1 ? "" : "s"} on files no longer changed left out)` : ""}`,
+    terminal: reviewTerminal(cwd, dir, patch.base, comments),
+  };
+}
+
+// `plannotator review` on a port aug picks, so it can post the findings;
+// what the owner sends lands in guide-feedback.md.
+function reviewTerminal(
+  cwd: string,
+  dir: string,
+  base: string,
+  comments: ReviewComment[],
+): NonNullable<ActionResult["terminal"]> {
+  mkdirSync(dir, { recursive: true });
   const feedback = join(dir, "guide-feedback.md");
   const port = freePort();
   return {
-    ok: true,
-    text: `${spec.title}: saved, opening Plannotator`,
-    terminal: {
-      argv: [
-        "sh",
-        "-c",
-        'rm -f "$2"; plannotator review --base "$1" | tee "$2"',
-        "plannotator",
-        saved.patch.base,
-        feedback,
-      ],
-      cwd,
-      env: { PLANNOTATOR_UPDATE_CHECK: "0", PLANNOTATOR_PORT: String(port) },
+    argv: [
+      "sh",
+      "-c",
+      'rm -f "$2"; plannotator review --base "$1" | tee "$2"',
+      "plannotator",
+      base,
       feedback,
-      comments: { port, list: saved.comments },
-    },
+    ],
+    cwd,
+    env: { PLANNOTATOR_UPDATE_CHECK: "0", PLANNOTATOR_PORT: String(port) },
+    feedback,
+    comments: { port, list: comments },
   };
 }
 

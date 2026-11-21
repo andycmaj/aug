@@ -16,6 +16,8 @@ function taskItem(task: ReturnType<typeof store.createTask>): RailItem {
     slipped: false,
     at: task.created_at,
     group: null,
+    copy: false,
+    tags: [],
   };
 }
 
