@@ -256,10 +256,15 @@ Done (step 6), the guide:
   read the diff, found an unguarded zero divisor, saved the guide, and the
   review UI showed the chapter with the finding under Review notes.
 
+Done (step 8): `aug-tools move action AUG-0012 [name]` (no name lists the
+ones that apply). It starts the run and answers at once (moves run one at
+a time, and an action takes minutes); a `pane` action answers that it
+needs the TUI. Not in `AGENT_MOVES`; from Slack it waits for the owner's
+yes (`CONFIRM_MOVES`), since it spends money. README: Task actions.
+
 Still to build:
 
 7. Triggers: the `runAction` triage effect, lifecycle events, `action_runs`.
-8. The `action` move; README config.
 
 ## Decisions (owner, 2026-11-20)
 

@@ -18,6 +18,7 @@ import {
 import { DEFAULT_CONFIG, mergeConfig } from "../src/core/config";
 import { Engine } from "../src/core/engine";
 import { sessionStarted } from "../src/core/lifecycle";
+import { runMove } from "../src/core/moves";
 import { setMux } from "../src/core/mux";
 import * as store from "../src/core/store";
 import {
@@ -349,5 +350,29 @@ describe("a bare user skill, headless", () => {
     } finally {
       delete process.env.CLAUDE_CONFIG_DIR;
     }
+  });
+});
+
+describe("as a move", () => {
+  test("starts it and answers at once; without a name, lists them", async () => {
+    const t = task(Kind.general);
+    const ref = store.taskRef(t.id);
+    const list = await runMove(engine.desk, "action", { task: ref });
+    expect(list.result).toContain("summarize (Summarize the work so far)");
+    const run = await runMove(engine.desk, "action", { task: ref, name: "summarize" });
+    expect(run.ok).toBe(true);
+    expect(run.result).toContain("started summarize");
+    expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(true);
+  });
+
+  test("a pane action needs the TUI; an agent cannot run one", async () => {
+    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "aug-wt-")) });
+    const ref = store.taskRef(t.id);
+    const quiz = await runMove(engine.desk, "action", { task: ref, name: "quiz" });
+    expect(quiz.ok).toBe(false);
+    expect(quiz.result).toContain("needs the TUI");
+    const agent = await runMove(engine.desk, "action", { task: ref, name: "summarize" }, `agent ${ref}`);
+    expect(agent.ok).toBe(false);
+    expect(agent.result).toContain("owner's move");
   });
 });
