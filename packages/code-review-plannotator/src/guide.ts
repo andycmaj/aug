@@ -1,9 +1,9 @@
-// The guide action's second half (docs/task-actions-design.md, guide): the
-// skill answers with Plannotator guide JSON (chapters, plus review findings
-// as line notes); aug makes the patch itself and puts it in the skill's
-// prompts (core/guide-run.ts), so the guide describes exactly what is in the
-// checkout, fits the guide to it, and saves it into Plannotator, where
-// `plannotator review` lists it under Guides.
+// The guide's second half: the model answers with Plannotator guide JSON
+// (chapters, plus review findings as line notes); the caller makes the
+// patch itself (patchFor) and puts it in the prompts (run.ts), so the guide
+// describes exactly what is in the checkout. Here it is fitted to that patch
+// and saved into Plannotator, where `plannotator review` lists it under
+// Guides.
 //
 // Plannotator keeps a saved guide's notes but draws them nowhere. A live
 // `plannotator review` session takes comments over HTTP
@@ -11,16 +11,13 @@
 // in the guide alike, so the findings are posted there once it is up.
 //
 // Plannotator cannot hold them for a review opened later (its drafts are
-// the page's own), so aug keeps them beside guide.json
-// (guide-findings.json) and posts them into whichever review it opens for
-// that guide: right after the run, or later from the task's actions, refit
-// to the patch as it is then.
+// the page's own), so they are kept beside guide.json (guide-findings.json)
+// and posted into whichever review is opened for that guide: right after
+// the run, or later, refit to the patch as it is then.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { errorMessage, logger } from "./log";
-
-const log = logger("guide");
+import { errorMessage, log } from "./log";
 
 export interface GuideNote {
   lineStart: number;
@@ -340,8 +337,8 @@ function fileComment(filePath: string, n: GuideNote): ReviewComment {
   };
 }
 
-// A port nothing listens on, for the review aug opens (PLANNOTATOR_PORT),
-// so aug knows where to post.
+// A port nothing listens on, for the review the caller opens
+// (PLANNOTATOR_PORT), so it knows where to post.
 export function freePort(): number {
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
   const port = server.port;
@@ -363,7 +360,7 @@ export async function postComments(
   let last = "Plannotator did not answer";
   while (Date.now() < deadline) {
     try {
-      // The port was free when aug picked it; make sure Plannotator is the
+      // The port was free when it was picked; make sure Plannotator is the
       // one that took it before handing it the findings.
       const diff = await fetch(`${base}/api/diff`);
       const body: unknown = diff.ok ? await diff.json().catch(() => null) : null;
@@ -372,7 +369,7 @@ export async function postComments(
         log.warn("comments not posted", { port, error: last });
         return { error: last };
       }
-      // aug's comments from before (a review reused, a draft brought back)
+      // Our comments from before (a review reused, a draft brought back)
       // go first, so the findings are there once.
       const cleared = await fetch(`${base}/api/external-annotations?source=${COMMENT_SOURCE}`, {
         method: "DELETE",
@@ -561,49 +558,3 @@ export function reviewNotes(text: string): string | null {
   if (/^(The user approved|Review session closed without feedback)\.?$/i.test(notes)) return null;
   return notes;
 }
-
-// What the action's turn says: the chapters, then the findings by file.
-// `opened`: aug opens the review now; else (a trigger ran it) the owner
-// opens it from the task's actions. `denied`: calls the run was refused,
-// so no notes may mean it did not look, not that nothing stood out.
-export function guideMarkdown(
-  saved: SavedGuide,
-  opts: { opened?: boolean; denied?: string[]; gaps?: string[] } = {},
-): string {
-  const opened = opts.opened ?? true;
-  const denied = opts.denied ?? [];
-  const gaps = opts.gaps ?? [];
-  const notes = saved.guide.sections.flatMap((s) =>
-    s.diffs.flatMap((d) => (d.notes ?? []).map((n) => ({ file: d.file, n }))),
-  );
-  const count = saved.findings.length;
-  const unpinned = count - notes.length;
-  return [
-    `**${saved.guide.title}**`,
-    saved.guide.intent,
-    "",
-    `${saved.guide.sections.length} chapter${saved.guide.sections.length === 1 ? "" : "s"}: ${saved.guide.sections.map((s) => s.title).join("; ")}.`,
-    ...(denied.length
-      ? [
-          `A read was denied (${denied.map((d) => `\`${d.slice(0, 120)}\``).join(", ")}): the review may have missed things.`,
-          "",
-        ]
-      : []),
-    ...(gaps.length ? [...gaps, ""] : []),
-    count
-      ? `${count} review note${count === 1 ? "" : "s"}${unpinned > 0 ? ` (${unpinned} not on a changed line)` : ""}:`
-      : denied.length || gaps.length
-        ? "No review notes."
-        : "No review notes: nothing stood out.",
-    ...saved.lines,
-    "",
-    opened
-      ? `Saved in Plannotator (\`${saved.id}\`). The review aug opens has these notes as comments; its Agents tab lists the guide.`
-      : `Saved in Plannotator (\`${saved.id}\`). To see these notes as comments in its review, pick "${OPEN_REVIEW_TITLE}" from this task's actions (\`.\` or the palette).`,
-  ]
-    .filter((line, i, all) => line !== "" || all[i - 1] !== "")
-    .join("\n");
-}
-
-// How the task's actions name opening the saved guide's review.
-export const OPEN_REVIEW_TITLE = "Open the guide's review";

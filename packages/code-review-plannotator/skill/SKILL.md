@@ -1,17 +1,17 @@
 ---
 name: guide
-description: Write a guided review of a branch's change, with review findings pinned to their lines, as Plannotator guide JSON. Use when asked for a guided review, a walkthrough of a change in chapters, or a review of an aug task's branch.
+description: Write a guided review of a branch's change, with review findings pinned to their lines, as Plannotator guide JSON. Use when asked for a guided review, a walkthrough of a change in chapters, or a review of a branch.
 allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Bash(git status:*), Bash(git show:*), Bash(git merge-base:*)
 ---
 
-Write a guided review of the change in this checkout, for the owner, who
-reads it in Plannotator beside the diff. It does two jobs in one: it orders
+Write a guided review of the change in this checkout, for the reviewer,
+who reads it in Plannotator beside the diff. It does two jobs in one: it orders
 the change into chapters a reviewer reads in one sitting, and it carries
 your review: the problems you found, each pinned to its lines.
 
-You are given the task, a base branch and maybe a pull request, and a
-`job` in your arguments. aug puts the diff in your prompt, so you do not
-read it with git:
+You are given what the change is for, a base branch and maybe a pull
+request, and a `job` in your arguments. The diff is in your prompt, so you
+do not read it with git:
 
 - `job: whole`: the whole change's diff follows. Write the full guide:
   chapters and review notes, answered as the guide JSON below.
@@ -31,8 +31,8 @@ plain command per Bash call, no chaining or shell variables.
 
 ## Read
 
-1. The diff, all of it. In aug's diffs each hunk line carries its old and
-   new line numbers in two columns: those are the numbers for notes. It is
+1. The diff, all of it. In the diffs you are given, each hunk line carries
+   its old and new line numbers in two columns: those are the numbers for notes. It is
    your main and usually only source.
 2. The branch's commits and a pull request's description, when given, for
    intent.

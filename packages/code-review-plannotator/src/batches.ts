@@ -1,5 +1,5 @@
 // The guide's patch cut into batches, each small enough for one model call
-// to hold whole (docs/task-actions-design.md, guide in batches). Every file's
+// to hold whole (aug's docs/task-actions-design.md, guide in batches). Every file's
 // diff goes into exactly one batch's prompt, so nothing depends on the model
 // choosing to read it. Related files share a batch, so a finding that needs
 // both is in reach: files changed in the same commit of the branch, a test

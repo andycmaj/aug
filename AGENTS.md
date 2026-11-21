@@ -13,13 +13,21 @@ A bun workspace (`packages/*`, hoisted installs). A package imports another
 by name, `@aug/core/store`, from its `src/` (each `exports` `"./*":
 "./src/*.ts"`), never by relative path across packages; nothing is built.
 One root `tsconfig.json` and one `bun test` cover them all. Dependencies run
-one way: cli → tui → fixtures → core.
+one way: cli → tui → fixtures → core → code-review-plannotator.
 
 - **`@aug/core`**: the domain (below: `core/x.ts` means
   `packages/core/src/x.ts`), its embedded text (`defaults/`, aug's plugin
   `plugin/`, `contrib/revdiff/`) and the test helpers other packages' tests
   import (`@aug/core/test/support/helpers`: `freshHome()`, `fakeBrain()`,
   `fake-mux`).
+- **`@aug/code-review-plannotator`**: the guided review as a library, runnable
+  without aug: the patch (`patchFor`, origin/<base> merge base), batches of
+  related files (`planBatches`), the calls with an injected `ask`
+  (`reviewInBatches`), fitting the guide to the patch, the Plannotator
+  snapshot, import and live comments, and the job instructions
+  (`skill/SKILL.md`, which aug's plugin ships as `aug:guide`). It knows
+  nothing of aug: warnings go to `setGuideLog`, which aug points at
+  aug.log.
 - **`@aug/fixtures`**: the demo day, the offline GitHub sim and a fake
   claude.
 - **`@aug/tui`**: the UI (`index.tsx`, app, components, context, terminal,
@@ -200,7 +208,8 @@ Tests live beside their package (`packages/<name>/test/`).
   session (`core/run-action.ts`), and its answer is a `TurnRole.action` turn,
   never the agent's; `pane` (the quiz) runs interactive claude in a split
   of the agent's window. `guide` saves its answer into Plannotator
-  (`core/guide.ts`). `.` opens the picker; the palette lists each one;
+  (`@aug/code-review-plannotator`; aug's words for its turn are
+  `core/guide-turn.ts`). `.` opens the picker; the palette lists each one;
   `actions.<name>.key` binds one at start.
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `aug-tools move <verb>`, the Assistant's

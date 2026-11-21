@@ -316,7 +316,7 @@ export class Desk {
   }
 
   // The task's last guide, reopened in Plannotator with its findings and no
-  // model run (core/guide.ts). Nothing to undo: it opens a review.
+  // model run (@aug/code-review-plannotator). Nothing to undo: it opens a review.
   hasGuideReview(taskId: number): boolean {
     const task = store.getTask(taskId);
     return !!task && hasGuideReview(task);

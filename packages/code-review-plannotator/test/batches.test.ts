@@ -11,8 +11,8 @@ import {
   splitPatch,
   stem,
   type FilePatch,
-} from "../src/guide-batches";
-import { reviewInBatches, type GuideAsk } from "../src/guide-run";
+} from "../src/batches";
+import { reviewInBatches, type GuideAsk } from "../src/run";
 
 function sh(cwd: string, ...args: string[]) {
   const r = Bun.spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe" });

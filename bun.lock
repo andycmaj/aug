@@ -21,10 +21,15 @@
         "citty": "^0.2.2",
       },
     },
+    "packages/code-review-plannotator": {
+      "name": "@aug/code-review-plannotator",
+      "version": "0.0.1",
+    },
     "packages/core": {
       "name": "@aug/core",
       "version": "0.0.1",
       "dependencies": {
+        "@aug/code-review-plannotator": "workspace:*",
         "libtmux": "0.1.2",
       },
     },
@@ -59,6 +64,8 @@
     "@ansi-tools/parser": ["@ansi-tools/parser@1.1.0", "", {}, "sha512-jPLW4AF9KkhinubLrc5yQt8aE3cbXQ7qzVCffmrCEDCe0XnRmW7/QmljKItg9G6j7/LeJ++xT5bQFgZLny7HnQ=="],
 
     "@aug/cli": ["@aug/cli@workspace:packages/cli"],
+
+    "@aug/code-review-plannotator": ["@aug/code-review-plannotator@workspace:packages/code-review-plannotator"],
 
     "@aug/core": ["@aug/core@workspace:packages/core"],
 

@@ -9,6 +9,7 @@
     "./*": "./src/*.ts"
   },
   "dependencies": {
+    "@aug/code-review-plannotator": "workspace:*",
     "libtmux": "0.1.2"
   }
 }

@@ -19,7 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import guideSkill from "../plugin/skills/guide/SKILL.md" with { type: "text" };
+import guideSkill from "@aug/code-review-plannotator/SKILL.md" with { type: "text" };
 import quizSkill from "../plugin/skills/quiz/SKILL.md" with { type: "text" };
 import summarizeSkill from "../plugin/skills/summarize/SKILL.md" with { type: "text" };
 import { claudeDir, declaredRules, pluginSkillFiles } from "./capabilities";
@@ -55,7 +55,7 @@ export const ActionOutput = {
   // The skill does its own output (a pane the owner talks in).
   none: "none",
   // The answer is Plannotator guide JSON: saved into Plannotator, opened in
-  // `plannotator review`, its findings listed on the turn (core/guide.ts).
+  // `plannotator review`, its findings listed on the turn (@aug/code-review-plannotator).
   guide: "guide",
 } as const;
 export type ActionOutput = (typeof ActionOutput)[keyof typeof ActionOutput];

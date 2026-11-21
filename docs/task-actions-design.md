@@ -223,7 +223,7 @@ Done (step 6), the guide:
 - `aug:guide` (`fork`, coding with a worktree, output `guide`) answers with
   Plannotator guide JSON only: chapters (Plannotator's own methodology) and
   review findings as line notes. It needs no plannotator capability: the
-  skill only reads git, and aug does the rest (`core/guide.ts`).
+  skill only reads git, and aug does the rest (`@aug/code-review-plannotator`, `guide.ts`).
 - aug makes the patch itself (`git diff <merge-base>`, main then master),
   fits the guide to it (files not in the patch dropped, files left out
   listed as unplaced, each file once, a note outside its file's hunks kept
@@ -240,10 +240,10 @@ Done (step 6), the guide:
   whole. So the guide no longer forks or reads the diff itself:
   - Base: `origin/<base>` when the remote has moved past the local branch
     (an unpulled local main put others' merged work in the change), else
-    the local one (`mergeBase` in `core/guide.ts`). The review aug opens
+    the local one (`mergeBase` in `@aug/code-review-plannotator` `guide.ts`). The review aug opens
     takes the same ref (`plannotator review --base origin/main` works).
   - aug takes the patch before the run (no change: refused before anything
-    is spent) and plans it (`core/guide-batches.ts`): lock files are left
+    is spent) and plans it (`@aug/code-review-plannotator` `batches.ts`): lock files are left
     out of every prompt (and so unplaced); a file past 400k characters is
     named on the turn, not reviewed; the rest are grouped by what relates
     them, with no parser: files changed in the same commit of the branch,
@@ -260,7 +260,7 @@ Done (step 6), the guide:
     every file beside them, Read allowed for the rest), then one `job:
     chapters` call from the index and the summaries; aug lays the notes
     into the chapters, and a reviewed file no chapter names goes in a last
-    "Other changes", so no note is lost (`core/guide-run.ts`).
+    "Other changes", so no note is lost (`@aug/code-review-plannotator` `run.ts`).
   - So every file's diff is in exactly one prompt, whatever the model
     chooses to read. What no call answered for, chapters that did not
     parse, files too large and denied calls are said on the turn and in

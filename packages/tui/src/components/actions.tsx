@@ -32,7 +32,8 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "@aug/core/adop
 import { strayLabel, type Stray } from "@aug/core/strays";
 import { baseKey, neighborKey, type RailItem } from "@aug/core/rail";
 import { taskRef } from "@aug/core/rows";
-import { OPEN_REVIEW_TITLE, postComments, reviewNotes } from "@aug/core/guide";
+import { postComments, reviewNotes } from "@aug/code-review-plannotator/guide";
+import { OPEN_REVIEW_TITLE } from "@aug/core/guide-turn";
 import type { ActionResult } from "@aug/core/run-action";
 import { actionsFor, keyedActions } from "@aug/core/task-actions";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";

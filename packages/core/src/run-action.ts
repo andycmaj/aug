@@ -39,7 +39,6 @@ import {
 } from "./task-actions";
 import {
   freePort,
-  guideMarkdown,
   patchFor,
   readFindings,
   reviewComments,
@@ -47,9 +46,11 @@ import {
   type Guide,
   type Patch,
   type ReviewComment,
-} from "./guide";
-import { branchCommits, planBatches, type BatchPlan } from "./guide-batches";
-import { reviewInBatches } from "./guide-run";
+} from "@aug/code-review-plannotator/guide";
+import { branchCommits, planBatches, type BatchPlan } from "@aug/code-review-plannotator/batches";
+import { setGuideLog } from "@aug/code-review-plannotator/log";
+import { reviewInBatches } from "@aug/code-review-plannotator/run";
+import { guideMarkdown } from "./guide-turn";
 import { transcript } from "./transcript";
 import {
   SpendRole,
@@ -60,6 +61,9 @@ import {
 } from "./types";
 
 const log = logger("run-action");
+
+// The review library's warnings land in aug.log.
+setGuideLog(logger("guide"));
 
 export interface ActionResult {
   ok: boolean;
@@ -373,7 +377,7 @@ async function run(
   }
 }
 
-// The guide's calls (core/guide-run.ts), each a headless call with the
+// The guide's calls (@aug/code-review-plannotator run.ts), each a headless call with the
 // action's tools; every step lands on the turn, named by its call.
 async function runGuide(
   config: AugConfig,

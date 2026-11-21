@@ -1,11 +1,11 @@
-// The guide's calls (docs/task-actions-design.md, guide in batches). A
+// The guide's calls (aug's docs/task-actions-design.md, guide in batches). A
 // change that fits one call is one call (job whole): the whole numbered
 // diff in the prompt, the guide JSON back. A bigger one is one call per
 // batch (job notes: its files' summaries and review notes), a few at a time,
 // then one call that orders every file into chapters from the index and
-// those summaries (job chapters). aug lays the notes into the chapters.
+// those summaries (job chapters). The notes are laid into the chapters.
 // Every file's diff is in exactly one prompt; what no call answered for is
-// said on the turn, never passed over.
+// reported as a gap, never passed over.
 
 import {
   numberedPatch,
@@ -14,7 +14,7 @@ import {
   type Guide,
   type GuideDiff,
 } from "./guide";
-import type { BatchPlan, FilePatch } from "./guide-batches";
+import type { BatchPlan, FilePatch } from "./batches";
 
 export type GuideAsk = (prompt: string, label: string) => Promise<{ text: string; denied: string[] }>;
 

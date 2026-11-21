@@ -15,7 +15,7 @@ import { Rail, RAIL_WIDTH } from "./rail";
 import { useShell } from "./shell";
 import { PaletteGroup, type PaletteExtra } from "../palette";
 import { actionsFor } from "@aug/core/task-actions";
-import { OPEN_REVIEW_TITLE } from "@aug/core/guide";
+import { OPEN_REVIEW_TITLE } from "@aug/core/guide-turn";
 
 export function ChatMode() {
   const aug = useAug();
