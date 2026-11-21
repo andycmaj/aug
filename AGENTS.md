@@ -89,7 +89,11 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   Canvas" and "selected", never "the table", "content" or "on the table".
   Task actions (`components/task-actions.ts`, the key handlers on a row) act
   on the cursor row from the rail and on the selected row from the Canvas,
-  and `select()` moves both.
+  and `select()` moves both. A Win or watched task has a second row under
+  its heading (`t<id>@wins`, `copy: true`): `selectedKey` is always the
+  task's `t<id>`, the cursor a row key, so find rows with `rowFor` and
+  compare with `baseKey`, and leave copies out of anything that counts or
+  lists tasks (rail-status-design.md, Listed twice).
 - **The desk owns every owner move** (`core/desk.ts`): one method per thing
   the owner can do, over the store, the lifecycle and the task's driver.
   Components call `components/actions.tsx`, which asks the desk, opens

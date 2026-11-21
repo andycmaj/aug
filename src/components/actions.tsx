@@ -30,7 +30,7 @@ import { infoTitle, itemInfo } from "../core/info";
 import { errorMessage, logger } from "../core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt";
 import { strayLabel, type Stray } from "../core/strays";
-import { neighborKey, type RailItem } from "../core/rail";
+import { baseKey, neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
 import { postComments } from "../core/guide";
 import type { ActionResult } from "../core/run-action";
@@ -92,20 +92,24 @@ export function useActions(dialogs: Dialogs) {
   const { startAgent } = useAgentStart(dialogs, attachViewer);
   const { showRepos } = useRepos(dialogs);
 
-  // A row is about to leave the rail. Selected: the selection walks on.
-  // Only under the cursor: the cursor steps to a neighbor, the selection
-  // stays.
+  // A task's rows are about to leave the rail. Selected: the selection
+  // walks on. Only under the cursor: the cursor steps to a neighbor (not
+  // the task's other row), the selection stays.
   function advanceFrom(key: string) {
     if (aug.selectedKey() === key) {
       const next = aug.walk(1) ?? aug.walk(-1);
       if (!next) aug.select(null);
       return;
     }
-    if (aug.cursorKey() === key) {
+    const cursor = aug.cursorKey();
+    if (cursor && baseKey(cursor) === key) {
       aug.moveCursor(
         neighborKey(
-          aug.shownItems().map((i) => i.key),
-          key,
+          aug
+            .shownItems()
+            .map((i) => i.key)
+            .filter((k) => k === cursor || baseKey(k) !== key),
+          cursor,
         ),
       );
     }
