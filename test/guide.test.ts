@@ -446,56 +446,17 @@ describe("the guide action", () => {
     expect(engine.desk.hasGuideReview(task.id)).toBe(true);
   });
 
-  test("the skill is handed the diff as a file, the one its notes are placed on", async () => {
+  test("the diff is in the prompt, numbered, and the run is headless", async () => {
     const dir = repo();
     answering(`\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\``);
     const { engine, task } = codingTask(dir);
     const started = engine.desk.runAction(task.id, "guide");
     if ("error" in started) throw new Error(started.error);
     await started.done;
-    const file = join(paths.work(task.id), "guide-patch.diff");
-    expect(prompts[0]).toContain(file);
-    expect(prompts[0]).toContain("do not run git diff");
-    // Each hunk line carries its old and new numbers: div is new line 5.
-    expect(readFileSync(file, "utf8")).toMatch(/^\s+5 \+export function div/m);
-  });
-
-  test("a numbered patch puts old and new line numbers beside each hunk line", () => {
-    const text = [
-      "diff --git a/f.ts b/f.ts",
-      "--- a/f.ts",
-      "+++ b/f.ts",
-      "@@ -2,3 +2,3 @@",
-      " keep",
-      "-old",
-      "+new",
-      " --- a dash line in the code",
-      "\\ No newline at end of file",
-      "diff --git a/g.ts b/g.ts",
-      "--- a/g.ts",
-      "+++ b/g.ts",
-      "@@ -0,0 +1 @@",
-      "+only",
-      "",
-    ].join("\n");
-    const body = numberedPatch(text).split("\n").filter((l) => !l.startsWith("#"));
-    expect(body).toEqual([
-      "diff --git a/f.ts b/f.ts",
-      "--- a/f.ts",
-      "+++ b/f.ts",
-      "@@ -2,3 +2,3 @@",
-      "    2     2  keep",
-      "    3       -old",
-      "          3 +new",
-      "    4     4  --- a dash line in the code",
-      "\\ No newline at end of file",
-      "diff --git a/g.ts b/g.ts",
-      "--- a/g.ts",
-      "+++ b/g.ts",
-      "@@ -0,0 +1 @@",
-      "          1 +only",
-      "",
-    ]);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("job: whole");
+    // div is new line 5.
+    expect(prompts[0]).toMatch(/^\s+5 \+export function div/m);
   });
 
   test("no change against the base is refused before the run spends anything", () => {

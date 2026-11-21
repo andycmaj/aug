@@ -233,19 +233,42 @@ Done (step 6), the guide:
   `plannotator review` on the Canvas, and what the owner writes there goes
   to the agent when it exits (an approval, or a review closed without
   feedback, sends nothing: `reviewNotes`).
-- The skill is handed that patch (AUG-0185). A fork of a coding session
-  kept the session's habit of chained shell (`mb=$(git merge-base ...);
-  git diff $mb | head`), which aug's allow rules deny; the run then wrote
-  its chapters from memory with no findings. So aug takes the patch before
-  the run (no change: refused before anything is spent), writes it to
-  `guide-patch.diff` in the work dir with each hunk line's old and new
-  line numbers in two columns (`numberedPatch`: read through Read, a bare
-  diff's only numbers are the file's own, and haiku pinned notes to those),
-  and the prompt says to read it instead of running git. The guide is
-  fitted to that same patch. A run with a denied call says so on its turn
-  and toast ("a read was denied: it may have missed things") instead of
-  "nothing stood out". Checked with haiku on a scratch home: one Read of
-  the file, no git, three findings pinned to their lines.
+- The diff is in the prompts, in batches (AUG-0185). A forked run kept
+  its session's habit of chained shell (`mb=$(git merge-base ...); git
+  diff $mb | head`), which aug's allow rules deny, and wrote its chapters
+  from memory with no findings; and nothing made a run read a big diff
+  whole. So the guide no longer forks or reads the diff itself:
+  - Base: `origin/<base>` when the remote has moved past the local branch
+    (an unpulled local main put others' merged work in the change), else
+    the local one (`mergeBase` in `core/guide.ts`). The review aug opens
+    takes the same ref (`plannotator review --base origin/main` works).
+  - aug takes the patch before the run (no change: refused before anything
+    is spent) and plans it (`core/guide-batches.ts`): lock files are left
+    out of every prompt (and so unplaced); a file past 400k characters is
+    named on the turn, not reviewed; the rest are grouped by what relates
+    them, with no parser: files changed in the same commit of the branch,
+    a test and what it tests (same stem, one in a test path or the same
+    folder), and a diff that names what another file's diff defines
+    (declarations on changed lines and git's hunk-header function names)
+    or imports it by path. Groups fill batches of about 100k characters
+    (about 25k tokens); a group too big is split by folder, then by file.
+  - One batch (most changes) is one headless call, `job: whole`: the
+    whole diff in the prompt, each hunk line with its old and new numbers
+    in two columns (`numberedPatch`; given a bare diff, haiku pinned notes
+    to the diff's own line numbers). Several are one call per batch, three
+    at a time (`job: notes`: its files' summaries and notes, the index of
+    every file beside them, Read allowed for the rest), then one `job:
+    chapters` call from the index and the summaries; aug lays the notes
+    into the chapters, and a reviewed file no chapter names goes in a last
+    "Other changes", so no note is lost (`core/guide-run.ts`).
+  - So every file's diff is in exactly one prompt, whatever the model
+    chooses to read. What no call answered for, chapters that did not
+    parse, files too large and denied calls are said on the turn and in
+    the toast, never "nothing stood out".
+  - Checked with haiku on scratch homes: one call for a small change, no
+    tool reads, three findings on their lines; a change forced into two
+    batches: three calls, both planted bugs found on their lines, and the
+    chapters put a test back with its code though the batches split them.
 - Checked (plannotator 0.28.61, headless Chrome): Plannotator keeps v4
   notes but draws them nowhere: not in `plannotator review`'s Guides view,
   not in an exported page, not in an Inbox review (even with

@@ -9,24 +9,33 @@ reads it in Plannotator beside the diff. It does two jobs in one: it orders
 the change into chapters a reviewer reads in one sitting, and it carries
 your review: the problems you found, each pinned to its lines.
 
-You are given the task, a base branch and maybe a pull request. Without a
-base, try `main`, then `master`.
+You are given the task, a base branch and maybe a pull request, and a
+`job` in your arguments. aug puts the diff in your prompt, so you do not
+read it with git:
+
+- `job: whole`: the whole change's diff follows. Write the full guide:
+  chapters and review notes, answered as the guide JSON below.
+- `job: notes, batch K of N`: the change was cut into batches of related
+  files; this batch's diffs follow, and the index lists every changed file.
+  Review only this batch's files (Read any other file when a finding needs
+  it) and answer with the notes JSON below: a summary and notes for every
+  file of the batch, no chapters.
+- `job: chapters`: every file was reviewed in batches; the index gives each
+  file's summary. Order the files into chapters and answer with the guide
+  JSON below, without notes.
+
+Without a job (run by hand in a session), take the diff yourself: `git
+merge-base <base> HEAD` (try `main`, then `master`), then `git diff
+<merge-base>`, plus new files `git status --short` lists as `??`. Run one
+plain command per Bash call, no chaining or shell variables.
 
 ## Read
 
-When you are given a diff file, that file is the change: read all of it
-(in parts if it is long) and skip step 1's git commands. Its hunk lines
-carry their old and new line numbers in two columns: those are the numbers
-for notes, not the line numbers of the file itself. Run one plain
-command per Bash call, no chaining or shell variables.
-
-1. `git merge-base <base> HEAD`, then `git diff <merge-base>`: that diff
-   (it includes uncommitted edits) is what the guide describes, plus new
-   files not yet added (`git status --short` lists them as `??`; read
-   them too). Read it once, carefully. It is your main and usually only
-   source.
-2. `git log --oneline <merge-base>..HEAD` for intent. A pull request's
-   description, when you were given one and can read it.
+1. The diff, all of it. In aug's diffs each hunk line carries its old and
+   new line numbers in two columns: those are the numbers for notes. It is
+   your main and usually only source.
+2. The branch's commits and a pull request's description, when given, for
+   intent.
 3. A few targeted reads only, each answering a question you can name: a
    definition the diff calls, one call site. Do not explore the repository.
 
@@ -73,7 +82,18 @@ emoji, no selling words ("elegant", "robust").
 ## Answer
 
 Answer with one JSON object only, in a ```json fence, nothing before or
-after:
+after. For `job: notes`:
+
+```json
+{
+  "files": [
+    { "file": "src/x.ts", "summary": "...",
+      "notes": [{ "lineStart": 12, "lineEnd": 12, "text": "Bug: ..." }] }
+  ]
+}
+```
+
+Otherwise the guide (`job: chapters` leaves out `notes`):
 
 ```json
 {

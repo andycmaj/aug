@@ -1,8 +1,9 @@
 // The guide action's second half (docs/task-actions-design.md, guide): the
 // skill answers with Plannotator guide JSON (chapters, plus review findings
-// as line notes); aug makes the patch itself, so the guide describes exactly
-// what is in the checkout, fits the guide to it, and saves it into
-// Plannotator, where `plannotator review` lists it under Guides.
+// as line notes); aug makes the patch itself and puts it in the skill's
+// prompts (core/guide-run.ts), so the guide describes exactly what is in the
+// checkout, fits the guide to it, and saves it into Plannotator, where
+// `plannotator review` lists it under Guides.
 //
 // Plannotator keeps a saved guide's notes but draws them nowhere. A live
 // `plannotator review` session takes comments over HTTP
@@ -51,16 +52,36 @@ const NOTE_TEXT_MAX = 1000;
 const NOTES_PER_FILE_MAX = 20;
 
 // The JSON object in the skill's answer: a ```json fence, or the whole text.
-export function parseGuide(text: string): Guide | { error: string } {
+function jsonIn(text: string): { value: Record<string, unknown> } | { error: string } {
   const fenced = /```(?:json)?\s*\n([\s\S]*?)\n```/.exec(text);
   const raw = (fenced?.[1] ?? text).trim();
   let value: unknown;
   try {
     value = JSON.parse(raw);
   } catch (err) {
-    return { error: `the guide is not JSON: ${errorMessage(err)}` };
+    return { error: `the answer is not JSON: ${errorMessage(err)}` };
   }
-  if (!isRecord(value)) return { error: "the guide is not a JSON object" };
+  return isRecord(value) ? { value } : { error: "the answer is not a JSON object" };
+}
+
+function parseDiffs(list: unknown): GuideDiff[] {
+  return (Array.isArray(list) ? list : []).filter(isRecord).map((d) => ({
+    file: str(d.file),
+    summary: str(d.summary),
+    notes: (Array.isArray(d.notes) ? d.notes : []).filter(isRecord).flatMap((n) => {
+      const lineStart = Number(n.lineStart);
+      const lineEnd = Number(n.lineEnd ?? n.lineStart);
+      const text = str(n.text).slice(0, NOTE_TEXT_MAX);
+      if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || !text) return [];
+      return [{ lineStart, lineEnd, ...(n.side === "old" ? { side: "old" as const } : {}), text }];
+    }),
+  }));
+}
+
+export function parseGuide(text: string): Guide | { error: string } {
+  const read = jsonIn(text);
+  if ("error" in read) return { error: read.error.replace("the answer", "the guide") };
+  const value = read.value;
   const sections = Array.isArray(value.sections) ? value.sections : [];
   const guide: Guide = {
     title: str(value.title) || "Guided review",
@@ -68,22 +89,21 @@ export function parseGuide(text: string): Guide | { error: string } {
     sections: sections.filter(isRecord).map((s) => ({
       title: str(s.title) || "Changes",
       overview: str(s.overview),
-      diffs: (Array.isArray(s.diffs) ? s.diffs : []).filter(isRecord).map((d) => ({
-        file: str(d.file),
-        summary: str(d.summary),
-        notes: (Array.isArray(d.notes) ? d.notes : []).filter(isRecord).flatMap((n) => {
-          const lineStart = Number(n.lineStart);
-          const lineEnd = Number(n.lineEnd ?? n.lineStart);
-          const text = str(n.text).slice(0, NOTE_TEXT_MAX);
-          if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || !text) return [];
-          return [{ lineStart, lineEnd, ...(n.side === "old" ? { side: "old" as const } : {}), text }];
-        }),
-      })),
+      diffs: parseDiffs(s.diffs),
     })),
     unplacedFiles: (Array.isArray(value.unplacedFiles) ? value.unplacedFiles : []).map(str),
   };
   if (guide.sections.length === 0) return { error: "the guide has no chapters" };
   return guide;
+}
+
+// A batch's answer (job notes): each of its files' summary and notes.
+export function parseBatchNotes(text: string): GuideDiff[] | { error: string } {
+  const read = jsonIn(text);
+  if ("error" in read) return read;
+  const value = read.value;
+  if (!Array.isArray(value.files)) return { error: "the answer has no files list" };
+  return parseDiffs(value.files).filter((d) => d.file);
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -107,15 +127,32 @@ export interface Patch {
 // committed, as Plannotator's own guides take it.
 export function patchFor(cwd: string, base: string): Patch | { error: string } {
   for (const b of base === "main" ? ["main", "master"] : [base]) {
-    const mb = git(cwd, ["merge-base", b, "HEAD"]);
-    if (!mb.ok) continue;
-    const diff = git(cwd, ["diff", "--no-color", "--no-ext-diff", mb.out.trim()]);
+    const mb = mergeBase(cwd, b);
+    if (!mb) continue;
+    const diff = git(cwd, ["diff", "--no-color", "--no-ext-diff", mb.sha]);
     if (!diff.ok) return { error: `git diff failed: ${diff.out}` };
     const text = diff.out + untracked(cwd);
-    if (!text.trim()) return { error: `no change against ${b}` };
-    return { text, mergeBase: mb.out.trim(), base: b };
+    if (!text.trim()) return { error: `no change against ${mb.ref}` };
+    return { text, mergeBase: mb.sha, base: mb.ref };
   }
   return { error: `no merge base with ${base} in ${cwd}` };
+}
+
+// The branch's base: `origin/<base>` when the remote has moved on past the
+// local branch (a local main nobody pulled would put others' merged work in
+// the change), else the local one.
+function mergeBase(cwd: string, base: string): { ref: string; sha: string } | null {
+  const local = git(cwd, ["merge-base", base, "HEAD"]);
+  const remoteRef = `origin/${base}`;
+  const remote =
+    !base.includes("/") && git(cwd, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remoteRef}`]).ok
+      ? git(cwd, ["merge-base", remoteRef, "HEAD"])
+      : null;
+  const l = local.ok ? local.out.trim() : null;
+  const r = remote?.ok ? remote.out.trim() : null;
+  if (r && (!l || (l !== r && git(cwd, ["merge-base", "--is-ancestor", l, r]).ok)))
+    return { ref: remoteRef, sha: r };
+  return l ? { ref: base, sha: l } : null;
 }
 
 // New files the agent has not added are in the change too. Each is diffed
@@ -451,21 +488,18 @@ export function readFindings(dir: string): SavedFindings | null {
   }
 }
 
-// The skill's answer, fitted to the checkout's patch, written to `dir` and
+// The guide, fitted to the patch its calls were given, written to `dir` and
 // saved into Plannotator.
 export async function saveGuide(opts: {
-  answer: string;
+  guide: Guide;
   cwd: string;
-  base: string;
   dir: string;
   pr?: string;
-  // The patch the skill was handed; taken now when none was.
-  patch?: Patch;
+  // The patch the calls were given.
+  patch: Patch;
 }): Promise<SavedGuide | { error: string }> {
-  const parsed = parseGuide(opts.answer);
-  if ("error" in parsed) return parsed;
-  const patch = opts.patch ?? patchFor(opts.cwd, opts.base);
-  if ("error" in patch) return patch;
+  const parsed = opts.guide;
+  const patch = opts.patch;
   const { guide, findings, lines, comments } = fitGuide(parsed, patch.text);
   if (guide.sections.length === 0) return { error: "no chapter of the guide names a file in the change" };
   mkdirSync(opts.dir, { recursive: true });
@@ -481,29 +515,8 @@ export async function saveGuide(opts: {
   return { id: saved.id, file, guide, findings, lines, comments, patch };
 }
 
-// The diff handed to the skill, so it reviews exactly the patch its notes
-// are placed on, and needs no shell to read it (a fork of a coding session
-// chains commands out of habit, and a chained command is denied).
-export const PATCH_FILE = "guide-patch.diff";
-
-export function writePatch(dir: string, patch: Patch): string {
-  mkdirSync(dir, { recursive: true });
-  const file = join(dir, PATCH_FILE);
-  writeFileSync(file, numberedPatch(patch.text));
-  return file;
-}
-
-// The diff with each hunk line's old and new line number in front: read
-// through the Read tool, a bare diff's only numbers are the file's own,
-// and a note pinned to those lands on the wrong lines.
-const NUMBERED_HEAD = [
-  "# The change as a diff. In each hunk the first column is the line's number",
-  "# in the old file, the second its number in the new file (blank where the",
-  "# line is not on that side), then the diff line. Review notes take these",
-  "# numbers: the new column, or the old one for a removed line (side old).",
-  "",
-].join("\n");
-
+// The diff with each hunk line's old and new line number in front. Given a
+// bare diff, a model pins notes to the diff's own line numbers instead.
 export function numberedPatch(text: string): string {
   const out: string[] = [];
   let oldLine = 0;
@@ -537,7 +550,7 @@ export function numberedPatch(text: string): string {
       newLeft--;
     } else out.push(line); // "\ No newline at end of file"
   }
-  return NUMBERED_HEAD + out.join("\n");
+  return out.join("\n");
 }
 
 // What the owner sent from the review, or null when there is nothing to
@@ -555,10 +568,11 @@ export function reviewNotes(text: string): string | null {
 // so no notes may mean it did not look, not that nothing stood out.
 export function guideMarkdown(
   saved: SavedGuide,
-  opts: { opened?: boolean; denied?: string[] } = {},
+  opts: { opened?: boolean; denied?: string[]; gaps?: string[] } = {},
 ): string {
   const opened = opts.opened ?? true;
   const denied = opts.denied ?? [];
+  const gaps = opts.gaps ?? [];
   const notes = saved.guide.sections.flatMap((s) =>
     s.diffs.flatMap((d) => (d.notes ?? []).map((n) => ({ file: d.file, n }))),
   );
@@ -575,9 +589,10 @@ export function guideMarkdown(
           "",
         ]
       : []),
+    ...(gaps.length ? [...gaps, ""] : []),
     count
       ? `${count} review note${count === 1 ? "" : "s"}${unpinned > 0 ? ` (${unpinned} not on a changed line)` : ""}:`
-      : denied.length
+      : denied.length || gaps.length
         ? "No review notes."
         : "No review notes: nothing stood out.",
     ...saved.lines,
