@@ -21,12 +21,16 @@ configureLog(() => config.get().log);
 logCrashes();
 startPerf({ proc: "aug", sampleProcess: true });
 logger("aug").info("start", {
-  fixture: cli.fixture ?? null,
+  fixture: cli.fixture ?? (cli.sim ? "sim" : null),
   home: process.env.AUG_HOME ?? null,
 });
 
 let engine: Engine;
-if (cli.fixture) {
+let started = () => {};
+if (cli.sim) {
+  const { installSim } = await import("./fixtures/sim");
+  ({ engine, started } = installSim(cli.sim));
+} else if (cli.fixture) {
   const { installFixture } = await import("./fixtures/demo");
   engine = installFixture(cli.fixture);
 } else {
@@ -46,6 +50,7 @@ if (!claim.ok) {
 }
 process.on("exit", () => releaseHome());
 engine.start();
+started();
 // From process start; startup.first_frame is the screen itself.
 timing("startup.engine", performance.now());
 

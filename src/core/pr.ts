@@ -243,7 +243,9 @@ export function prBatchQuery(prs: PrRef[]): string {
   return `query {\n  rateLimit { remaining resetAt }\n  ${fields.join("\n  ")}\n}\n${PR_FRAGMENT}`;
 }
 
-interface GqlPr
+// The raw shapes, exported so the offline simulator (src/fixtures/sim)
+// builds its answers against them and cannot drift from what is parsed.
+export interface GqlPr
   extends Omit<
     GhPrView,
     "statusCheckRollup" | "lastQueueEvent" | "headCommittedAt"
@@ -261,7 +263,7 @@ interface GqlPr
   };
 }
 
-interface GqlAnswer {
+export interface GqlAnswer {
   data?: Record<string, unknown> | null;
   errors?: { message?: string; path?: (string | number)[] }[];
 }

@@ -293,5 +293,18 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   change with `bun run demo` or a scratch `AUG_HOME`.
 - `bun run demo` runs the fixture day. Drive it in tmux with a unique session
   name and `tmux capture-pane -p`.
+- `bun run sim [review-cycle|review-ask] [--brain fake|haiku]` is the real
+  TUI on a scratch home against an offline GitHub (`src/fixtures/sim/`):
+  the engine's `github.api`/`github.prs` seam reads a JSON state file, Send
+  writes to it, so triage, `pr_status`, the rail, `aug-tools feedback` and
+  nudges run unchanged with no GitHub call. From another terminal,
+  `bun run sim:do pr-open [--mine] | comment | mention | review --verdict
+  approve|changes|comment --comments N | ci fail|pass | push | merge |
+  play <scenario> | state` changes it, and the sim polls on the write. Its
+  repo `sim/aug` is a remote-less clone of aug whose PR branches are real
+  commits, so a task on one starts in a worktree with a real diff; the
+  seeded coding task's `--mine` PR is linked to it. A scenario is a list of
+  events in `SCENARIOS` (`events.ts`); `test/sim.test.ts` reads the fake
+  through `pollGithub` and `readPrBatch`, so it cannot drift from them.
 - `bun test` covers the core. Reproduce a bug in a test before fixing it.
 - Real-mode checks cost tokens: use `haiku` in a scratch `AUG_HOME`.

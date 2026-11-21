@@ -744,7 +744,7 @@ function seedSpend(): void {
 
 const STEPS = ["Read the thread", "WebSearch the ask", "Read notes.md"];
 
-async function demoBrain(call: BrainCall): Promise<BrainResult> {
+export async function demoBrain(call: BrainCall): Promise<BrainResult> {
   const props = (call.schema?.properties ?? {}) as Record<string, unknown>;
   // Made-up costs, so the Board's Cost tab and the status line have figures.
   const agentTurn = "did" in props;
@@ -839,10 +839,13 @@ async function demoBrain(call: BrainCall): Promise<BrainResult> {
 // AUG_HOME (for aug-tools); a demo run there would reconcile aug's live
 // sessions against the empty demo tmux server and mark every claude gone.
 // Your real home is never the demo's either.
-export function demoHome(env: Record<string, string | undefined> = process.env): string {
+export function demoHome(
+  env: Record<string, string | undefined> = process.env,
+  prefix = "aug-demo-",
+): string {
   const named = env.AUG_HOME;
   if (named && !env.AUG && resolve(named) !== resolve(defaultHome())) return named;
-  return mkdtempSync(join(tmpdir(), "aug-demo-"));
+  return mkdtempSync(join(tmpdir(), prefix));
 }
 
 export function installFixture(name: string): Engine {
