@@ -5,7 +5,7 @@ Status: approved by the owner (2026-11-20), and built (Build order, steps 1-8). 
 ## What exists today
 
 - A task action is a key on a row: one `BindingSpec` in `taskActions`
-  (`src/keymap.ts`), one `Commands.*` id, and one handler in
+  (`packages/tui/src/keymap.ts`), one `Commands.*` id, and one handler in
   `useActions().taskActions` (`components/actions.tsx`) that asks the desk.
   Adding one touches four places; nothing is data.
 - Moves (`core/moves.ts`) are the other-process bus: one registry, verb + args
@@ -48,7 +48,7 @@ and when it runs by itself. So:
 
 - Built-in recipes ship as skills in aug's own plugin (`aug:summarize`,
   later `aug:guide`, `aug:quiz`), embedded in the binary (`with { type:
-  "text" }`, `contrib/aug-plugin/`) and written under `AUG_HOME/plugin`
+  "text" }`, `packages/core/plugin/`) and written under `AUG_HOME/plugin`
   whenever a run needs it, so headless runs load it with `--plugin-dir` and
   need no install step. `aug install actions` (an `install.ts` entry, with
   the `pane` step) will put it in the user's Claude Code plugins too, for
@@ -159,7 +159,7 @@ matched by plain rules (no model call), in the noise rules' shape:
 - An action with `key` gets its own binding: `buildKeymap` adds one
   `BindingSpec` per action in the `rail` and `task` scopes (`cmd:
   action:<name>`, `relevant` from `kinds` and `needs`), so the footer and `?`
-  list it only where it runs. `test/keymap.test.ts` rejects an action key
+  list it only where it runs. `packages/tui/test/keymap.test.ts` rejects an action key
   that clashes with a built-in key for the same row. Keys are read at start,
   as `keys` already are.
 - The palette lists every registered action that applies to the row under

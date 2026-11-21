@@ -4,8 +4,8 @@ AUG-0102. The owner drives aug away from the terminal by writing in a Slack
 conversation only they are in. aug hears each line as if it was typed in
 Home, and posts the Assistant's answer back in that message's thread.
 
-Code: `src/core/slack/remote.ts` (what is heard, what is answered),
-`src/core/slack/remote-links.ts` (token and claude-mcp reads and posts),
+Code: `packages/core/src/slack/remote.ts` (what is heard, what is answered),
+`packages/core/src/slack/remote-links.ts` (token and claude-mcp reads and posts),
 `Engine.startRemote` / `pollRemote`.
 
 ## Which conversation
@@ -79,7 +79,7 @@ an hour gets a short "no answer" note.
 
 ## Confirmations
 
-Code: `src/core/slack/confirm.ts`, the gate in `runMove` (`core/moves.ts`).
+Code: `packages/core/src/slack/confirm.ts`, the gate in `runMove` (`core/moves.ts`).
 
 An Assistant turn that answers a Slack line asks for moves as
 `assistant via Slack` (`AUG_ASKED_BY`), not `assistant`. From that asker,

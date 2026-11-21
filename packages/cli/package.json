@@ -1,0 +1,16 @@
+{
+  "name": "@aug/cli",
+  "version": "0.0.1",
+  "description": "What runs aug from a shell: aug-tools, the compiled entry, the dev launcher and the compile script.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@aug/core": "workspace:*",
+    "@aug/tui": "workspace:*",
+    "@opentui/solid": "0.5.12",
+    "citty": "^0.2.2"
+  }
+}

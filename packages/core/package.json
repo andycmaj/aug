@@ -1,0 +1,14 @@
+{
+  "name": "@aug/core",
+  "version": "0.0.1",
+  "description": "aug's domain: the store, triage, the agent pool, the engine and the desk. No UI.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./test/*": "./test/*.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "libtmux": "0.1.2"
+  }
+}

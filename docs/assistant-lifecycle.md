@@ -109,11 +109,11 @@ it, so it waits for the idle hour or the size bound.
 
 - The stream's first `system`/`init` line lists `tools`, `mcp_servers` (with
   status) and plugins: what the call really had.
-- `AUG_REAL_CLAUDE=1 bun test test/no-connectors-real.test.ts` reads only the
+- `AUG_REAL_CLAUDE=1 bun test packages/core/test/no-connectors-real.test.ts` reads only the
   init line for the Assistant, ungranted (no server) and with `slack.read`
   (Slack connected). It costs next to nothing.
-- `test/propose-doc-real.test.ts` runs a whole Assistant turn under its real
-  allow list; `test/docs-grant-real.test.ts` checks Docs grants for task Q/A.
+- `packages/core/test/propose-doc-real.test.ts` runs a whole Assistant turn under its real
+  allow list; `packages/core/test/docs-grant-real.test.ts` checks Docs grants for task Q/A.
 - Per-request usage, cache writes split 1h and 5m, and the exact messages
   sent are in the session's jsonl under `~/.claude/projects/` (Knowledge #37,
   `docs/assistant-cost-analysis.md`).

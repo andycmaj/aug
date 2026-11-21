@@ -1,0 +1,14 @@
+{
+  "name": "@aug/fixtures",
+  "version": "0.0.1",
+  "description": "aug's offline worlds: the demo day, the GitHub simulator and a fake claude.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@aug/core": "workspace:*",
+    "citty": "^0.2.2"
+  }
+}

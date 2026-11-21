@@ -1,5 +1,9 @@
 # No global `preload` here on purpose: it would load the Solid JSX transform for
 # every `bun run`, including plain scripts. `dev`/`debug` pass it themselves.
 
+[install]
+# The Solid preload and compile.ts resolve opentui from the root node_modules.
+linker = "hoisted"
+
 [test]
-preload = ["./test/solid-preload.ts"]
+preload = ["./packages/tui/test/solid-preload.ts", "./packages/core/test/support/preload.ts"]

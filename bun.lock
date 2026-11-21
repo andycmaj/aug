@@ -4,20 +4,50 @@
   "workspaces": {
     "": {
       "name": "@andycmaj/aug",
-      "dependencies": {
-        "@andycmaj/opentui-app": "^0.5.10",
-        "@opentui/core": "0.5.12",
-        "@opentui/solid": "0.5.12",
-        "citty": "^0.2.2",
-        "ghostty-opentui": "1.5.0",
-        "libtmux": "0.1.2",
-        "solid-js": "1.9.12",
-      },
       "devDependencies": {
         "@types/bun": "latest",
         "@types/node": "25.2.0",
         "prettier": "3.8.1",
         "typescript": "5.9.3",
+      },
+    },
+    "packages/cli": {
+      "name": "@aug/cli",
+      "version": "0.0.1",
+      "dependencies": {
+        "@aug/core": "workspace:*",
+        "@aug/tui": "workspace:*",
+        "@opentui/solid": "0.5.12",
+        "citty": "^0.2.2",
+      },
+    },
+    "packages/core": {
+      "name": "@aug/core",
+      "version": "0.0.1",
+      "dependencies": {
+        "libtmux": "0.1.2",
+      },
+    },
+    "packages/fixtures": {
+      "name": "@aug/fixtures",
+      "version": "0.0.1",
+      "dependencies": {
+        "@aug/core": "workspace:*",
+        "citty": "^0.2.2",
+      },
+    },
+    "packages/tui": {
+      "name": "@aug/tui",
+      "version": "0.0.1",
+      "dependencies": {
+        "@andycmaj/opentui-app": "^0.5.10",
+        "@aug/core": "workspace:*",
+        "@aug/fixtures": "workspace:*",
+        "@opentui/core": "0.5.12",
+        "@opentui/solid": "0.5.12",
+        "citty": "^0.2.2",
+        "ghostty-opentui": "1.5.0",
+        "solid-js": "1.9.12",
       },
     },
   },
@@ -27,6 +57,14 @@
     "@andycmaj/opentui-app": ["@andycmaj/opentui-app@0.5.10", "", { "dependencies": { "@ansi-tools/parser": "^1.1.0", "@opentui/keymap": "0.5.12", "marked": "^17.0.1" }, "peerDependencies": { "@opentui/core": "0.5.12", "@opentui/solid": "0.5.12", "solid-js": "1.9.12" } }, "sha512-P0JBIYoIHBt1D59iuQg1OIqC6XS8/s2vAdmE+V03tbBfID60DTpRPen8UQarwPvYOPg9NyOcQGlc2ScaScxwWg=="],
 
     "@ansi-tools/parser": ["@ansi-tools/parser@1.1.0", "", {}, "sha512-jPLW4AF9KkhinubLrc5yQt8aE3cbXQ7qzVCffmrCEDCe0XnRmW7/QmljKItg9G6j7/LeJ++xT5bQFgZLny7HnQ=="],
+
+    "@aug/cli": ["@aug/cli@workspace:packages/cli"],
+
+    "@aug/core": ["@aug/core@workspace:packages/core"],
+
+    "@aug/fixtures": ["@aug/fixtures@workspace:packages/fixtures"],
+
+    "@aug/tui": ["@aug/tui@workspace:packages/tui"],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 
