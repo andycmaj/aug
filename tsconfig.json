@@ -14,11 +14,8 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "customConditions": ["browser"],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "customConditions": ["browser"]
   },
-  "include": ["src/**/*", "test/**/*"],
-  "exclude": ["node_modules", "script"]
+  "include": ["packages/*/src/**/*", "packages/*/test/**/*", "packages/*/script/**/*"],
+  "exclude": ["node_modules"]
 }

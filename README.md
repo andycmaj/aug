@@ -23,7 +23,7 @@ Requirements: [bun](https://bun.sh), the [`claude`](https://docs.claude.com/en/d
 
 ```sh
 export SLACK_TOKEN=xoxp-...   # optional: a Slack *user* token
-bun dev                       # or: bin/aug
+bun dev                       # or: bun packages/cli/script/aug.ts
 ```
 
 - **GitHub** uses your `gh` login. The inbox is your participating
@@ -50,7 +50,7 @@ bun dev                       # or: bin/aug
 State lives in `~/.aug` (`AUG_HOME` overrides): `aug.db` (SQLite), `config.json`,
 `docs/`, and each general agent's scratch folder under `work/`.
 
-`docs/` holds the brain docs, seeded from this repo's `docs/defaults/`:
+`docs/` holds the brain docs, seeded from this repo's `packages/core/defaults/`:
 
 - **Yours** (`PERSONA.md`: red lines and how aug speaks to you; `JOB.md`;
   `STYLE.md`): templates. A short interview with the Assistant drafts them
@@ -257,7 +257,7 @@ looks like a write (send, post, update, delete, add, …) or isn't a plain name
 (a glob, say) is dropped with a warning in the log. The one exception is
 `docs.write`'s own Docs writes, and only on the Claude Docs connector: an
 override can narrow them or add `delete`, never add another write. The mapping
-lives in `src/core/capabilities.ts`.
+lives in `packages/core/src/capabilities.ts`.
 
 ### Task actions
 

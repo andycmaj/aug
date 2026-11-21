@@ -147,7 +147,7 @@ This replaces today's silent `head()` cuts of SOUL, JOB and STYLE.
 - `core/moves.ts`: `onboard`.
 - `core/desk.ts`: accept, reject, take, keep.
 - `components/`: System section, keys, revdiff view.
-- `docs/defaults/`: PERSONA.md, drop SOUL and COUNSEL.
+- `packages/core/defaults/`: PERSONA.md, drop SOUL and COUNSEL.
 - README, AGENTS.md.
 
 Tests in `test/` use `freshHome()` and `fakeBrain()`.

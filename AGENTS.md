@@ -1,7 +1,5 @@
 # Agents
 
-## Architecture
-
 A TUI clone of Taskuary's Chat and Board views, with GitHub and Slack as the
 only connections. The app shell is
 [`@andycmaj/opentui-app`](https://github.com/andycmaj/opentui-app) (boot,
@@ -9,23 +7,64 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 `tilt-tui` and `kube-tui`, and the embedded terminal is copied from
 `kube-tui/src/terminal`.
 
-- **`src/core/` is the domain, with no opentui/solid imports.** It holds the
+## Packages
+
+A bun workspace (`packages/*`, hoisted installs). A package imports another
+by name, `@aug/core/store`, from its `src/` (each `exports` `"./*":
+"./src/*.ts"`), never by relative path across packages; nothing is built.
+One root `tsconfig.json` and one `bun test` cover them all. Dependencies run
+one way: cli → tui → fixtures → core → code-review-plannotator.
+
+- **`@aug/core`**: the domain (below: `core/x.ts` means
+  `packages/core/src/x.ts`), its embedded text (`defaults/`, aug's plugin
+  `plugin/`, `contrib/revdiff/`) and the test helpers other packages' tests
+  import (`@aug/core/test/support/helpers`: `freshHome()`, `fakeBrain()`,
+  `fake-mux`).
+- **`@aug/code-review-plannotator`**: the guided review as a library, runnable
+  without aug: the patch (`patchFor`, origin/<base> merge base), batches of
+  related files (`planBatches`), the calls with an injected `ask`
+  (`reviewInBatches`), fitting the guide to the patch, the Plannotator
+  snapshot, import and live comments, and the job instructions
+  (`skill/SKILL.md`, which aug's plugin ships as `aug:guide`). It knows
+  nothing of aug: warnings go to `setGuideLog`, which aug points at
+  aug.log. Without aug, `review()` runs it end to end with any `ask`;
+  `claudeAsk` is one on a fresh read-only `claude -p` that keeps each
+  call's cost and tokens; `bun packages/code-review-plannotator/src/cli.ts
+  review [--model] [--batch-chars] [--no-plannotator] [--open]` writes
+  guide.json, guide-findings.json and usage.json (what evals compare).
+- **`@aug/fixtures`**: the demo day, the offline GitHub sim and a fake
+  claude.
+- **`@aug/tui`**: the UI (`index.tsx`, app, components, context, terminal,
+  keymap, palette) and `cli.ts`, the `aug` argv parser.
+- **`@aug/cli`**: what a shell runs. `src/aug.ts` is the one entry (`bun
+  run demo|sim`, the dev launcher, the compiled binary; `aug tools ...` is
+  aug-tools) and `src/aug-tools.ts`; `script/aug.ts` is the dev launcher
+  (`bun dev`: runs from anywhere, restarts on `RESTART_CODE`) and
+  `script/compile.ts` builds `dist/aug`. The entry tells core where
+  aug-tools is (`setToolsEntry`, `core/self.ts`); core never reaches up for
+  it.
+
+Tests live beside their package (`packages/<name>/test/`).
+
+## Architecture
+
+- **`packages/core/src/` is the domain, with no opentui/solid imports.** It holds the
   store (`bun:sqlite`, `~/.aug/aug.db`), triage, the agent pool, hooks,
   outbound, ingest, learning, the Assistant, the Advisor and the engine that
-  ties them together. Unit-test it in `test/` with `freshHome()` and
-  `fakeBrain()`.
+  ties them together. Unit-test it in `packages/core/test/` with
+  `freshHome()` and `fakeBrain()`.
 - **The brain is `claude -p`** (`core/brain.ts`), swappable with `setBrain` for
   tests and fixtures. User settings are skipped (`--setting-sources ""`) so the
   user's hooks never leak into what triage reads back.
 - **Coding agents run as interactive `claude` in tmux**, one window per task
   in its project's session (`core/projects.ts`), in a worktree made by `wt`.
   `core/agents.ts` builds the command line and the brief. The Canvas embeds a
-  grouped viewer session in a PTY. Hooks call `src/bin/aug-tools.ts`, which is
+  grouped viewer session in a PTY. Hooks call `packages/cli/src/aug-tools.ts`, which is
   plain TS and needs no Solid preload. Those hooks write to SQLite, and the TUI
   notices through `PRAGMA data_version`.
 - **`core/mux.ts` is the only door to tmux and wt**, and the only importer of
   `libtmux` (alpha, pinned exactly). Identity is the `@aug_project` /
-  `@aug_task` user options, never names. Tests use `test/fake-mux.ts`; real
+  `@aug_task` user options, never names. Tests use `packages/core/test/support/fake-mux.ts`; real
   tmux checks use a private server (`-L`), never the default one.
 - **Where a repo is checked out is `core/repos.ts`**: `github.repos` in
   config is the owner's one path per repo; `core/checkouts.ts` (behind the
@@ -35,7 +74,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 - **A terminal program an agent opens (a diff viewer) splits its own
   window**: `aug-tools pane [--zoom] [--wait] -- cmd`, so it shows in the
   viewer instead of a window of its own. `tagWindow` also sets `@aug_tools`
-  (how to call aug-tools) for scripts in that pane; `contrib/revdiff/` is
+  (how to call aug-tools) for scripts in that pane; `packages/core/contrib/revdiff/` is
   revdiff's user-layer launcher that does this.
 - **What aug writes outside its home is `core/install.ts`**: one registry
   (`hooks`, `statusline`, `revdiff`) of idempotent install, uninstall and
@@ -80,7 +119,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   rest sit on the aug context. Each read names the tables it queries, and
   re-runs only when one of them changes: triggers bump a counter per table
   in `table_versions`, so a write from any process says what it touched. A
-  new read is one entry in `reads()`; `test/read-model.test.ts` fails if its
+  new read is one entry in `reads()`; `packages/core/test/read-model.test.ts` fails if its
   SQL touches a table it does not name. Pure row helpers (`taskRef`,
   `turnSteps`) are `core/rows.ts`.
 - **The rail has a cursor and a selection** (`cursorKey` and `selectedKey`
@@ -157,7 +196,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `pr_status` and `task_blockers`: `phaseOf`), the agent's state, rail
   grouping (`laneOf` in `core/lanes.ts`, whose order is the rule) and tags
   (priority, watching, Wins). A new lane gets a filter pill in
-  `RAIL_FILTERS` or a place in `UNFILTERED_LANES`; `test/rail.test.ts`
+  `RAIL_FILTERS` or a place in `UNFILTERED_LANES`; `packages/core/test/rail.test.ts`
   fails otherwise.
 - **A task's agent is behind `core/driver.ts`.** `ChatDriver` (the pool's
   `claude -p` turns) and `TmuxDriver` (`projects.ts`) implement `start`,
@@ -167,13 +206,14 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   start still needs comes back as `needs: repo | path | branch`.
 - **Task actions are skills aug runs on one task** (`core/task-actions.ts`,
   `docs/task-actions-design.md`). Built-ins (`summarize`) are registered
-  there and their skills ship in aug's own plugin (`contrib/aug-plugin`,
+  there and their skills ship in aug's own plugin (`packages/core/plugin`,
   written under `AUG_HOME/plugin`); config `actions` changes, turns off or
   adds one. `desk.runAction` runs it headless or on a fork of the agent's
   session (`core/run-action.ts`), and its answer is a `TurnRole.action` turn,
   never the agent's; `pane` (the quiz) runs interactive claude in a split
   of the agent's window. `guide` saves its answer into Plannotator
-  (`core/guide.ts`). `.` opens the picker; the palette lists each one;
+  (`@aug/code-review-plannotator`; aug's words for its turn are
+  `core/guide-turn.ts`). `.` opens the picker; the palette lists each one;
   `actions.<name>.key` binds one at start.
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `aug-tools move <verb>`, the Assistant's
@@ -257,11 +297,11 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   reads, the TUI's refresh fan-out, engine ticks, every real `mux.*` call,
   frames). Names and numbers only, never content. `aug-tools perf` reports
   p50/p95/max per op.
-- `src/keymap.ts` is the single binding table. Each mode (Chat, Board) has its
+- `packages/tui/src/keymap.ts` is the single binding table. Each mode (Chat, Board) has its
   own `FocusProvider`. `TerminalsProvider` sits above both, so PTYs survive the
   switch. A key that means different things by row (`x`, `e`) gets one
   command per meaning, each `relevant` to its rows and declining the others,
-  so the footer names the one that applies; `test/keymap.test.ts` checks a key
+  so the footer names the one that applies; `packages/tui/test/keymap.test.ts` checks a key
   means one thing for any row. A view's own `KeyHints` use the footer's words.
 - The footer and the `?` help (`components/focus-help.tsx`) show the same
   thing: the bindings reachable from the focused pane, through
@@ -269,7 +309,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   binding per key; only the `terminal` scope while one is attached). A
   binding that applies only sometimes says so with `relevant`, or both will
   list it where it does nothing. The Board's tab is `HelpCtx.board`.
-  The `:` palette lists the same set (`src/palette.ts`: one entry per
+  The `:` palette lists the same set (`packages/tui/src/palette.ts`: one entry per
   command, movement left out, a binding about the row is the one whose
   `relevant` declines with no row) plus the moves with no key, and runs a
   key's command through `keymap.dispatchCommand` on the pane under it.
@@ -303,12 +343,12 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 ## Testing the TUI
 
 - One aug runs per `AUG_HOME` (`core/home-lock.ts`), so a worktree's
-  `bin/aug` on the real home is refused while the owner's aug runs. Try a
+  `bun dev` on the real home is refused while the owner's aug runs. Try a
   change with `bun run demo` or a scratch `AUG_HOME`.
 - `bun run demo` runs the fixture day. Drive it in tmux with a unique session
   name and `tmux capture-pane -p`.
 - `bun run sim [review-cycle|review-ask] [--brain fake|haiku]` is the real
-  TUI on a scratch home against an offline GitHub (`src/fixtures/sim/`):
+  TUI on a scratch home against an offline GitHub (`packages/fixtures/src/sim/`):
   the engine's `github.api`/`github.prs` seam reads a JSON state file, Send
   writes to it, so triage, `pr_status`, the rail, `aug-tools feedback` and
   nudges run unchanged with no GitHub call. From another terminal,
@@ -318,7 +358,7 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   repo `sim/aug` is a remote-less clone of aug whose PR branches are real
   commits, so a task on one starts in a worktree with a real diff; the
   seeded coding task's `--mine` PR is linked to it. A scenario is a list of
-  events in `SCENARIOS` (`events.ts`); `test/sim.test.ts` reads the fake
+  events in `SCENARIOS` (`events.ts`); `packages/fixtures/test/sim.test.ts` reads the fake
   through `pollGithub` and `readPrBatch`, so it cannot drift from them.
 - `bun test` covers the core. Reproduce a bug in a test before fixing it.
 - Real-mode checks cost tokens: use `haiku` in a scratch `AUG_HOME`.

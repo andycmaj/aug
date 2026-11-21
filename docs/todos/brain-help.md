@@ -14,16 +14,16 @@ doc, see what it does, and open it in `$EDITOR`.
 
 ### Where they live
 
-- The shipped defaults are in `docs/defaults/*.md` in the repo. They are
+- The shipped defaults are in `packages/core/defaults/*.md` in the repo. They are
   templates only.
 - The live copies are in `~/.aug/docs/` (`$AUG_HOME/docs/`). Every prompt reads
   these.
 - On first start, `engine.start()` calls `ensureDocs()`
-  (`src/core/engine.ts:114`), which copies each default into place if that
+  (`packages/core/src/engine.ts:114`), which copies each default into place if that
   file isn't there yet. Existing files are never overwritten, so editing a
   default later doesn't change a home that already has a copy.
 - If a home copy is missing when it's needed, `readDoc()` returns the repo
-  default instead (`src/core/docs.ts:54`).
+  default instead (`packages/core/src/docs.ts:54`).
 - The demo fixture also calls `ensureDocs()`.
 
 ### When they are read
@@ -47,11 +47,11 @@ readers in that row. Text past the limit is dropped silently.
 
 ## Today
 
-- `D` (`Commands.DOCS_OPEN`, `src/keymap.ts:218`) opens a chooser, "Docs: what
-  the models are told" (`actions.docs()`, `src/components/actions.tsx:762`).
+- `D` (`Commands.DOCS_OPEN`, `packages/tui/src/keymap.ts:218`) opens a chooser, "Docs: what
+  the models are told" (`actions.docs()`, `packages/tui/src/components/actions.tsx:762`).
   It lists the eight docs, each with its one-line `DOC_PURPOSE`, and opens the
   chosen one in `$EDITOR` in an embedded terminal.
-- The palette has `Edit <NAME>.md` entries too (`src/components/shell.tsx:136`).
+- The palette has `Edit <NAME>.md` entries too (`packages/tui/src/components/shell.tsx:136`).
 
 What's missing: the chooser says what each doc is for in one line, but not who
 reads it, when, the size limit, or whether my copy differs from the default.
@@ -78,7 +78,7 @@ Keys:
 ## Notes
 
 - Keep the help text next to the code. Grow `DOC_PURPOSE` into a record per
-  doc (`purpose`, `readers`, `limit`) in `src/core/docs.ts`, and have
+  doc (`purpose`, `readers`, `limit`) in `packages/core/src/docs.ts`, and have
   `triage.ts`, `agents.ts`, `assistant.ts` and `advisor.ts` take their `head()`
   limits from it, so the screen can't drift from what the prompts do.
 - LEARNED.md writes itself. Say so in its detail pane, and explain the

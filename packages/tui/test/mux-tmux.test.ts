@@ -1,0 +1,357 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { TmuxMux, viewerMayHang } from "@aug/core/mux";
+import { PtySession } from "../src/terminal/pty-session";
+import { terminalReplies } from "../src/terminal/replies";
+
+// Real tmux on private servers. Clients need a terminal, so a second server
+// ("host") gives each one a pane to run in.
+const hasTmux = Bun.spawnSync(["tmux", "-V"]).exitCode === 0;
+const servers: string[] = [];
+
+function tmux(socket: string, ...args: string[]): string {
+  const run = Bun.spawnSync(["tmux", "-L", socket, "-f", "/dev/null", ...args], {
+    env: { ...process.env, TMUX: "" },
+  });
+  return run.stdout.toString().trim();
+}
+
+function server(tag: string): string {
+  const name = `aug-test-${tag}-${process.pid}`;
+  servers.push(name);
+  return name;
+}
+
+async function until(check: () => boolean): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    if (check()) return;
+    await Bun.sleep(50);
+  }
+  throw new Error("timed out");
+}
+
+function clients(socket: string): { name: string; session: string }[] {
+  return tmux(socket, "list-clients", "-F", "#{client_name} #{session_name}")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [name = "", session = ""] = line.split(" ");
+      return { name, session };
+    });
+}
+
+afterEach(() => {
+  for (const s of servers.splice(0)) tmux(s, "kill-server");
+});
+
+function windows(socket: string): string[] {
+  return tmux(socket, "list-windows", "-a", "-F", "#{session_name} #{window_id}")
+    .split("\n")
+    .filter(Boolean);
+}
+
+// A project session with two windows, and aug's viewer on the first.
+async function withViewer() {
+  const s = server("s");
+  const host = server("host");
+  tmux(s, "new-session", "-d", "-s", "proj");
+  tmux(s, "new-window", "-t", "proj:");
+  tmux(s, "new-session", "-d", "-s", "outer");
+  const projId = tmux(s, "display", "-p", "-t", "proj:", "#{session_id}");
+  const outerId = tmux(s, "display", "-p", "-t", "outer:", "#{session_id}");
+  const windowId = tmux(s, "display", "-p", "-t", "proj:0", "#{window_id}");
+
+  const argv = new TmuxMux(s).viewerArgv("aug-view-test", projId, windowId);
+  // The host runs a shell-command string through sh, so quote each arg.
+  const shell = argv.map((a) => `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
+  tmux(host, "new-session", "-d", "-x", "100", "-y", "30", "-s", "aug", shell);
+  await until(() => windows(s).includes(`aug-view-test ${windowId}`));
+  return { s, host, projId, outerId, windowId };
+}
+
+describe.skipIf(!hasTmux)("viewer session", () => {
+  test("holds the task's window and nothing else, outside any group", async () => {
+    const { s, windowId } = await withViewer();
+    expect(windows(s).filter((w) => w.startsWith("aug-view-test "))).toEqual([
+      `aug-view-test ${windowId}`,
+    ]);
+    // tmux 3.7's choose-tree draws an empty tree while any group exists.
+    expect(tmux(s, "list-sessions", "-F", "#{session_grouped}").split("\n")).not.toContain("1");
+  });
+
+  test("only aug's own client stays in it; anyone else lands in the project", async () => {
+    const { s, host } = await withViewer();
+    const augClient = clients(s)[0]?.name;
+
+    const attach = `env -u TMUX tmux -L ${s} attach -t`;
+    tmux(host, "new-window", "-t", "aug:", `${attach} aug-view-test`);
+    tmux(host, "new-window", "-t", "aug:", `${attach} outer`);
+    await until(() => clients(s).length === 3);
+    const other = clients(s).find((c) => c.session === "outer")?.name ?? "";
+    // aug's client is the viewer's most recent one; a hook's own client is
+    // not the one that came in.
+    tmux(host, "send-keys", "-t", "aug:0", "x");
+    await Bun.sleep(50);
+    tmux(s, "switch-client", "-c", other, "-t", "aug-view-test");
+
+    await until(() => clients(s).filter((c) => c.session === "proj").length === 2);
+    expect(clients(s).find((c) => c.name === augClient)?.session).toBe("aug-view-test");
+    expect(tmux(s, "show-options", "-v", "-t", "proj:", "prefix")).toBe("");
+  });
+
+  test("jumping to a viewed window lands in the project, not the viewer", async () => {
+    const { s, host, projId, windowId } = await withViewer();
+    tmux(host, "new-window", "-t", "aug:", `env -u TMUX tmux -L ${s} attach -t outer`);
+    await until(() => clients(s).length === 2);
+    const other = clients(s).find((c) => c.session === "outer")?.name ?? "";
+
+    // Unscoped, tmux picks the newest session holding the window: the
+    // viewer, with no prefix and no status bar.
+    await new TmuxMux(s).switchClient(projId, windowId);
+
+    await until(() => clients(s).find((c) => c.name === other)?.session !== "outer");
+    expect(clients(s).find((c) => c.name === other)?.session).toBe("proj");
+    expect(tmux(s, "display", "-p", "-c", other, "#{window_id}")).toBe(windowId);
+  });
+
+  test("moving a viewed window takes it out of the project, not the viewer", async () => {
+    const { s, projId, outerId, windowId } = await withViewer();
+    await new TmuxMux(s).moveWindow(windowId, projId, outerId);
+    const holders = windows(s)
+      .filter((w) => w.endsWith(` ${windowId}`))
+      .map((w) => w.split(" ")[0]);
+    expect(holders.sort()).toEqual(["aug-view-test", "outer"]);
+  });
+
+  // nvim's OSC 52 paste waits 10s for an answer, and on tmux's defaults it
+  // gets one only while tmux holds a paste buffer. Through aug's viewer, tmux
+  // asks aug's terminal, which answers from the clipboard.
+  test("a pane's clipboard query is answered by aug's terminal", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const projId = tmux(s, "display", "-p", "-t", "proj:", "#{session_id}");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const argv = new TmuxMux(s).viewerArgv("aug-view-test", projId, windowId);
+    const decoder = new TextDecoder();
+    const viewer = new PtySession(argv, {
+      cols: 100,
+      rows: 30,
+      env: { TMUX: "" },
+      onData: (data) => {
+        const replies = terminalReplies(decoder.decode(data, { stream: true }), {
+          cursor: [0, 0],
+          foreground: "#ffffff",
+          background: "#000000",
+          clipboard: () => "hello",
+        });
+        if (replies) viewer.write(replies);
+      },
+      onExit: () => {},
+    });
+    try {
+      await until(() => windows(s).includes(`aug-view-test ${windowId}`));
+      expect(tmux(s, "show-options", "-sv", "set-clipboard")).toBe("on");
+      expect(tmux(s, "show-options", "-sv", "get-clipboard")).toBe("request");
+
+      const out = `${tmpdir()}/aug-osc52-${process.pid}`;
+      rmSync(out, { force: true });
+      const ask = `stty raw -echo; printf '\\033]52;c;?\\033\\\\'; dd bs=1 count=17 of=${out} 2>/dev/null`;
+      tmux(s, "respawn-pane", "-k", "-t", windowId, "sh", "-c", ask);
+      await until(() => (readText(out) ?? "").length >= 17);
+      expect(readText(out)).toBe(`\x1b]52;c;${btoa("hello")}\x1b\\`);
+      rmSync(out, { force: true });
+    } finally {
+      viewer.kill();
+    }
+  });
+
+  test("clipboard settings you chose are left alone", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    tmux(s, "set-option", "-s", "get-clipboard", "off");
+    tmux(s, "set-option", "-s", "set-clipboard", "off");
+    const projId = tmux(s, "display", "-p", "-t", "proj:", "#{session_id}");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const argv = new TmuxMux(s).viewerArgv("aug-view-test", projId, windowId);
+    const host = server("host");
+    const shell = argv.map((a) => `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
+    tmux(host, "new-session", "-d", "-x", "100", "-y", "30", "-s", "aug", shell);
+    await until(() => windows(s).includes(`aug-view-test ${windowId}`));
+    expect(tmux(s, "show-options", "-sv", "get-clipboard")).toBe("off");
+    expect(tmux(s, "show-options", "-sv", "set-clipboard")).toBe("off");
+  });
+});
+
+function readText(file: string): string | null {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+describe.skipIf(!hasTmux)("split pane", () => {
+  test("a diff viewer splits the viewed window, so the viewer shows it", async () => {
+    const { s, windowId } = await withViewer();
+    const claude = tmux(s, "display", "-p", "-t", windowId, "#{pane_id}");
+    const mux = new TmuxMux(s);
+
+    const paneId = await mux.splitPane({ paneId: claude, cwd: "/tmp", argv: ["cat"], zoom: true });
+    expect(tmux(s, "display", "-p", "-t", "aug-view-test:", "#{pane_id} #{window_zoomed_flag}")).toBe(
+      `${paneId} 1`,
+    );
+    expect(windows(s).filter((w) => w.endsWith(` ${windowId}`))).toHaveLength(2);
+    expect(await mux.paneAlive(paneId)).toBe(true);
+
+    // aug's lines still reach claude, not the viewer that has focus.
+    await mux.sendLine(windowId, "hello");
+    await until(() => tmux(s, "capture-pane", "-p", "-t", claude).includes("hello"));
+    expect(tmux(s, "capture-pane", "-p", "-t", paneId)).not.toContain("hello");
+
+    tmux(s, "kill-pane", "-t", paneId);
+    expect(await mux.paneAlive(paneId)).toBe(false);
+    expect(tmux(s, "display", "-p", "-t", windowId, "#{window_panes} #{window_zoomed_flag}")).toBe("1 0");
+  });
+
+  test("the exit code reaches the file a waiting caller reads", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const claude = tmux(s, "display", "-p", "-t", "proj:", "#{pane_id}");
+    const exitFile = `${tmpdir()}/aug-pane-exit-${process.pid}`;
+    const mux = new TmuxMux(s);
+
+    const paneId = await mux.splitPane({ paneId: claude, cwd: "/tmp", argv: ["sh", "-c", "exit 10"], zoom: false, exitFile });
+    await until(() => !tmux(s, "list-panes", "-a", "-F", "#{pane_id}").split("\n").includes(paneId));
+    expect(readFileSync(exitFile, "utf8").trim()).toBe("10");
+    rmSync(exitFile, { force: true });
+  });
+
+  test("a tagged window says how to reach aug-tools", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    await new TmuxMux(s).tagWindow(windowId, 7);
+    expect(tmux(s, "display", "-p", "-t", windowId, "#{@aug_task}")).toBe("7");
+    expect(tmux(s, "display", "-p", "-t", windowId, "#{@aug_tools}")).toContain("aug-tools.ts");
+  });
+});
+
+describe.skipIf(!hasTmux)("window panes", () => {
+  test("lists a window's panes, and nothing for a window that is gone", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const pane = tmux(s, "display", "-p", "-t", "proj:", "#{pane_id}");
+    const mux = new TmuxMux(s);
+    expect(await mux.windowPanes(windowId)).toEqual([pane]);
+    tmux(s, "new-window", "-t", "proj:");
+    tmux(s, "kill-window", "-t", windowId);
+    expect(await mux.windowPanes(windowId)).toBeNull();
+  });
+});
+
+describe.skipIf(!hasTmux)("strict state", () => {
+  test("no server is empty, strict or not", async () => {
+    const mux = new TmuxMux(server("none"));
+    expect(await mux.state({ strict: true })).toEqual({ sessions: [], windows: [] });
+  });
+});
+
+describe.skipIf(!hasTmux)("host window", () => {
+  function inPane(s: string, pane: string): Record<string, string> {
+    const pid = tmux(s, "display", "-p", "-t", pane, "#{pid}");
+    return { TMUX: `/tmp/whatever,${pid},0`, TMUX_PANE: pane };
+  }
+
+  async function hostWith(env: Record<string, string>, s: string): Promise<string | null> {
+    const saved = { TMUX: process.env.TMUX, TMUX_PANE: process.env.TMUX_PANE };
+    Object.assign(process.env, env);
+    try {
+      return await new TmuxMux(s).hostWindow();
+    } finally {
+      for (const [k, v] of Object.entries(saved))
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+    }
+  }
+
+  test("names the window aug's own pane is in", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const pane = tmux(s, "display", "-p", "-t", "proj:", "#{pane_id}");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    expect(await hostWith(inPane(s, pane), s)).toBe(windowId);
+  });
+
+  test("is nothing when aug runs on another server, even with a pane id that exists here", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const pane = tmux(s, "display", "-p", "-t", "proj:", "#{pane_id}");
+    expect(await hostWith({ TMUX: "/tmp/other,1,0", TMUX_PANE: pane }, s)).toBeNull();
+    expect(await hostWith({ TMUX: "", TMUX_PANE: "" }, s)).toBeNull();
+  });
+});
+
+describe.skipIf(!hasTmux)("paneInfo", () => {
+  test("names the pane's session and process, and nothing for a pane that is gone", async () => {
+    const s = server("s");
+    tmux(s, "new-session", "-d", "-s", "mine");
+    const pane = tmux(s, "display", "-p", "-t", "mine:", "#{pane_id}");
+    const pid = Number(tmux(s, "display", "-p", "-t", "mine:", "#{pane_pid}"));
+    const info = await new TmuxMux(s).paneInfo(pane);
+    expect(info?.sessionName).toBe("mine");
+    expect(info?.panePid).toBe(pid);
+    expect(await new TmuxMux(s).paneInfo("%999")).toBeNull();
+  });
+});
+
+// tmux 3.7 loops in its pane status drawing on a split window shown to two
+// clients of different sizes (it hung the owner's server for good). This
+// pins viewerMayHang to the tmux the tests run on, either way round.
+describe.skipIf(!hasTmux)("viewer beside a terminal of another size", () => {
+  // null when tmux did not answer in time: a hung server never does.
+  function within(socket: string, ms: number, ...args: string[]): string | null {
+    const run = Bun.spawnSync(["tmux", "-L", socket, ...args], {
+      env: { ...process.env, TMUX: "" },
+      timeout: ms,
+      killSignal: "SIGKILL",
+    });
+    return run.exitCode === 0 ? run.stdout.toString().trim() : null;
+  }
+
+  test("hangs the server exactly when viewerMayHang says so", async () => {
+    const s = server("s");
+    const host = server("host");
+    tmux(s, "new-session", "-d", "-s", "proj", "-x", "200", "-y", "50", "cat");
+    tmux(s, "set-option", "-g", "pane-border-status", "top");
+    tmux(s, "split-window", "-h", "-t", "proj", "cat");
+    const serverPid = Number(tmux(s, "display", "-p", "#{pid}"));
+    const projId = tmux(s, "display", "-p", "-t", "proj:", "#{session_id}");
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const mux = new TmuxMux(s);
+    const version = await mux.version();
+
+    // Your terminal on the project, then aug's viewer at the sizes that hung.
+    const attach = ["env", "-u", "TMUX", "tmux", "-L", s, "attach", "-t", "proj"];
+    const quote = (argv: string[]) =>
+      argv.map((a) => `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
+    tmux(host, "new-session", "-d", "-x", "115", "-y", "51", "-s", "you", quote(attach));
+    await until(() => (within(s, 1000, "list-clients") ?? "").split("\n").length === 1);
+    const viewer = mux.viewerArgv("aug-view-test", projId, windowId);
+    tmux(host, "new-session", "-d", "-x", "68", "-y", "48", "-s", "aug", quote(viewer));
+    await Bun.sleep(1500);
+
+    const answered = within(s, 2000, "list-clients", "-F", "#{client_width}x#{client_height}");
+    try {
+      expect({ version, hung: answered === null }).toEqual({
+        version,
+        hung: viewerMayHang(version),
+      });
+      if (answered !== null) expect(answered.split("\n").sort()).toEqual(["115x51", "68x48"]);
+    } finally {
+      // kill-server needs the server to answer; a hung one has to be killed.
+      if (answered === null) process.kill(serverPid, "SIGKILL");
+    }
+  }, 20_000);
+});
