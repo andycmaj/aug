@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testRender } from "@opentui/solid";
 import { App } from "../src/app";
-import { installFixture } from "@aug/fixtures/demo";
+import { installFixture } from "@riker/fixtures/demo";
 
 let destroy: (() => void) | undefined;
 let home: string | undefined;
@@ -17,8 +17,8 @@ afterEach(() => {
 });
 
 async function boot() {
-  home = mkdtempSync(join(tmpdir(), "aug-go-to-"));
-  process.env.AUG_HOME = home;
+  home = mkdtempSync(join(tmpdir(), "riker-go-to-"));
+  process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
   const setup = await testRender(() => <App engine={engine} />, {
     width: 160,

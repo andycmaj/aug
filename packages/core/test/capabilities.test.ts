@@ -25,11 +25,11 @@ import {
 import {
   DEFAULT_CONFIG,
   mergeConfig,
-  type AugConfig,
+  type RikerConfig,
 } from "../src/config";
 import { TurnRole, type TurnRow } from "../src/types";
 
-function withCaps(caps: Partial<AugConfig["capabilities"]>): AugConfig {
+function withCaps(caps: Partial<RikerConfig["capabilities"]>): RikerConfig {
   return {
     ...DEFAULT_CONFIG,
     capabilities: {
@@ -242,7 +242,7 @@ function skill(dir: string, path: string, frontmatter: string): void {
 
 // A fake ~/.claude with one installed plugin.
 function fakeClaudeDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "aug-claude-"));
+  const dir = mkdtempSync(join(tmpdir(), "riker-claude-"));
   const install = join(dir, "plugins", "cache", "revdiff", "0.8.24");
   mkdirSync(install, { recursive: true });
   writeFileSync(
@@ -356,7 +356,7 @@ describe("plugin and command capabilities", () => {
   });
 
   test("a plugin loads only when its skills take nothing ungranted", () => {
-    const dir = mkdtempSync(join(tmpdir(), "aug-plugin-"));
+    const dir = mkdtempSync(join(tmpdir(), "riker-plugin-"));
     mkdirSync(join(dir, ".claude-plugin"));
     writeFileSync(
       join(dir, ".claude-plugin", "plugin.json"),
@@ -414,7 +414,7 @@ describe("plugin and command capabilities", () => {
 
 describe("Claude Docs grants", () => {
   const DOCS = "mcp__claude_ai_Claude_Docs__";
-  const FILE = "/home/me/.aug/config.json";
+  const FILE = "/home/me/.riker/config.json";
 
   test("docs.read reads only; docs.write adds batch, create and update but not delete", () => {
     expect(
@@ -498,7 +498,7 @@ describe("Claude Docs grants", () => {
     );
     expect(
       grantHint("mcp__claude_ai_Slack__slack_send_message", "general", none, FILE),
-    ).toContain("no capability in aug grants it");
+    ).toContain("no capability in Riker grants it");
     expect(grantHint("Bash", "general", none, FILE)).toBeNull();
     expect(grantHint("mcp__someone_else__thing", "general", none, FILE)).toBeNull();
   });
@@ -527,7 +527,7 @@ describe("Claude Docs grants", () => {
     expect(note).toContain("the owner has not granted them");
     expect(note).toContain(`- ${DOCS}batch\n`);
     expect(note).toContain(`add "docs.write" to capabilities.grants.general in ${FILE}`);
-    expect(note).toContain("never edit aug's config yourself");
+    expect(note).toContain("never edit Riker's config yourself");
     expect(note).not.toContain("did not match an allowed command");
     expect(refusalLines(steps)).toEqual([
       `denied ${DOCS}batch {"container":{}}`,

@@ -1,4 +1,4 @@
-// Declarative keymap: framework base bindings plus aug's own, keyed by scope.
+// Declarative keymap: framework base bindings plus Riker's own, keyed by scope.
 // "app" applies anywhere in a mode's pane layout; the rest while focus is
 // within that pane. The footer and the ? help both show only what is
 // reachable from the focused pane and `relevant` to what is under it
@@ -13,8 +13,8 @@ import {
   type KeymapTable,
 } from "@andycmaj/opentui-app";
 import { Commands } from "./commands";
-import type { NavKeys } from "@aug/core/config";
-import { RAIL_FILTERS } from "@aug/core/rail";
+import type { NavKeys } from "@riker/core/config";
+import { RAIL_FILTERS } from "@riker/core/rail";
 
 // What the footer needs to know to show only the moves that apply.
 export interface HelpCtx {
@@ -33,7 +33,7 @@ export interface HelpCtx {
   typing?: boolean;
   // The rail's status filter hides some rows.
   filtered?: boolean;
-  // An embedded terminal owns the keyboard: only its scope's keys reach aug.
+  // An embedded terminal owns the keyboard: only its scope's keys reach Riker.
   attached?: boolean;
   // The Board's tab, while focus is on the Board.
   board?: BoardTab;
@@ -158,7 +158,7 @@ const railFilters: BindingSpec<HelpCtx>[] = [
 
 const isTask = (c: HelpCtx) => c.item === "task";
 // Home is a task row but not work: no done, later, kind or priority. Nor is
-// a System task (aug asking about its docs): it has its own keys.
+// a System task (Riker asking about its docs): it has its own keys.
 const isWork = (c: HelpCtx) =>
   isTask(c) && c.kind !== "home" && c.kind !== "system";
 const isSystem = (c: HelpCtx) => isTask(c) && c.kind === "system";
@@ -347,7 +347,7 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   {
     key: "shift+i",
     cmd: Commands.INFO,
-    desc: "everything aug knows about it",
+    desc: "everything Riker knows about it",
     help: "info",
     relevant: (c) => c.item !== null,
   },
@@ -405,7 +405,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     {
       key: "/",
       cmd: Commands.SEARCH_OPEN,
-      desc: "search the rail: words, AUG-23, #412, @someone",
+      desc: "search the rail: words, RIKER-23, #412, @someone",
       help: "search",
       // The Inbox's / searches the Inbox.
       relevant: (c) => c.board !== BoardTab.inbox,
@@ -429,7 +429,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "forward again (history)",
     },
     { key: "shift+n", cmd: Commands.NEW_TASK, desc: "new task" },
-    // Raw mode turns off the terminal's suspend, so ctrl+z reaches aug. An
+    // Raw mode turns off the terminal's suspend, so ctrl+z reaches Riker. An
     // attached agent still gets it (not in the terminal scope), and the
     // chat box keeps it (quietWhileTyping).
     {
@@ -767,7 +767,7 @@ export const actionCommand = (name: string) => `${Commands.ACTIONS}.${name}`;
 // The scopes an action key lands in, and the app scope above them both.
 const ACTION_KEY_SCOPES = ["app", "rail", "canvas"];
 
-// Which asked-for keys are bound. A key aug already uses where the rows are
+// Which asked-for keys are bound. A key Riker already uses where the rows are
 // (on the rail, the Canvas or app-wide), or one an earlier action took, is
 // refused rather than shadowing a move: the action stays in the . picker.
 export function actionKeys(

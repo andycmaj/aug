@@ -1,7 +1,7 @@
-// What aug puts in your files outside its home: hooks for claudes you start
+// What Riker puts in your files outside its home: hooks for claudes you start
 // by hand, the task in Claude Code's status line, revdiff's launcher. One
-// registry feeds `aug install`, `aug uninstall` and the engine's refresh at
-// start, so a machine is set up by one command and stays current after aug
+// registry feeds `riker install`, `riker uninstall` and the engine's refresh at
+// start, so a machine is set up by one command and stays current after Riker
 // moves; a new one goes here, nowhere else. Each install is idempotent and
 // touches only what it marked as its own.
 
@@ -28,7 +28,8 @@ import {
   uninstallHooks,
   writeSettings,
 } from "./adopt";
-import { ensureHome, paths } from "./paths";
+import { CMD, envName, LEGACY, NAME } from "./brand";
+import { ensureHome, homeAliases, paths } from "./paths";
 import { shellQuote, toolsArgv } from "./self";
 
 export const InstallState = {
@@ -44,7 +45,7 @@ export interface Installable {
   // Why it cannot go in here: the tool it extends is absent.
   unavailable(): string | null;
   state(): Exclude<InstallState, "unavailable">;
-  // Installed for this aug home. A scratch AUG_HOME (a test, a real-mode
+  // Installed for this Riker home. A scratch RIKER_HOME (a test, a real-mode
   // check) must never take over the real one's setup.
   here(): boolean;
   // One line each of what was written or removed.
@@ -52,7 +53,9 @@ export interface Installable {
   uninstall(): string | null;
 }
 
-const BACKUP = ".before-aug";
+const BACKUP = `.before-${CMD}`;
+// What aug (Riker before the rename) moved aside; uninstall puts it back too.
+const LEGACY_BACKUP = `.before-${LEGACY.cmd}`;
 
 function readText(file: string): string | null {
   try {
@@ -72,44 +75,64 @@ function present(file: string): boolean {
   }
 }
 
-// A file aug owns outright. Someone else's is moved aside once (a symlink is
+// Ours: marked by this Riker, or by aug before the rename (ours, but stale).
+function owned(file: string, name: string): boolean {
+  const text = readText(file) ?? "";
+  return text.includes(markerOf(name)) || text.includes(legacyMarkerOf(name));
+}
+
+// A file Riker owns outright. Someone else's is moved aside once (a symlink is
 // moved, never written through) and put back by uninstall.
-function writeOwned(file: string, text: string, marker: string): void {
+function writeOwned(file: string, text: string, name: string): void {
   mkdirSync(dirname(file), { recursive: true });
-  if (present(file) && !(readText(file) ?? "").includes(marker)) {
-    if (present(file + BACKUP)) rmSync(file);
+  if (present(file) && !owned(file, name)) {
+    if (present(file + BACKUP) || present(file + LEGACY_BACKUP)) rmSync(file);
     else renameSync(file, file + BACKUP);
   } else if (present(file)) rmSync(file);
   writeFileSync(file, text);
   chmodSync(file, 0o755);
 }
 
-function removeOwned(file: string, marker: string): boolean {
-  if (!(readText(file) ?? "").includes(marker)) return false;
+function removeOwned(file: string, name: string): boolean {
+  if (!owned(file, name)) return false;
   rmSync(file);
-  if (present(file + BACKUP)) renameSync(file + BACKUP, file);
+  const backup = [BACKUP, LEGACY_BACKUP].find((b) => present(file + b));
+  if (backup) renameSync(file + backup, file);
   return true;
 }
 
 function marked(script: string, name: string): string {
-  const marker = `${markerOf(name)} for ${homeMark()} removed by \`aug uninstall ${name}\`.`;
+  const marker = `${markerOf(name)} for ${homeMark()} removed by \`${CMD} uninstall ${name}\`.`;
   const [shebang, ...rest] = script.split("\n");
   return [shebang, marker, ...rest].join("\n");
 }
 
-const markerOf = (name: string) => `# Installed by \`aug install ${name}\``;
+const markerOf = (name: string) => `# Installed by \`${CMD} install ${name}\``;
+const legacyMarkerOf = (name: string) => `# Installed by \`${LEGACY.cmd} install ${name}\``;
 // Ends in ";" so one home is never a prefix match for another.
-const homeMark = () => `aug home ${paths.home()};`;
+const homeMark = () => `${CMD} home ${paths.home()};`;
+// This home as an earlier install may have named it: aug's marker, and
+// ~/.aug for the default home it moved from.
+const homeMarks = () =>
+  homeAliases().flatMap((home) => [`${CMD} home ${home};`, `${LEGACY.cmd} home ${home};`]);
 
 // ── statusline ───────────────────────────────────────────────────────────
 
 const STATUS = "statusline";
 export const STARSHIP_PROFILE = "claude-code";
-export const STARSHIP_MODULE = "${custom.aug_task}";
+export const STARSHIP_MODULE = `\${custom.${CMD}_task}`;
+const LEGACY_MODULE = `\${custom.${LEGACY.cmd}_task}`;
 const STARSHIP_DEFAULT = "$claude_model$claude_context$claude_cost";
-const BLOCK_START = "# >>> aug statusline >>>";
-const BLOCK_END = "# <<< aug statusline <<<";
-const ADDED = "# added by aug install statusline";
+const BLOCK_START = `# >>> ${CMD} statusline >>>`;
+const BLOCK_END = `# <<< ${CMD} statusline <<<`;
+const ADDED = `# added by ${CMD} install statusline`;
+// aug's block and profile line from before the rename: found as ours but
+// stale, replaced by install and taken out by uninstall.
+const LEGACY_BLOCK: [string, string] = [
+  `# >>> ${LEGACY.cmd} statusline >>>`,
+  `# <<< ${LEGACY.cmd} statusline <<<`,
+];
+const LEGACY_ADDED = `# added by ${LEGACY.cmd} install statusline`;
 const PROFILE_LINE = new RegExp(
   `^(\\s*"?${STARSHIP_PROFILE}"?\\s*=\\s*)(["'])(.*)$`,
   "m",
@@ -121,21 +144,24 @@ export function starshipConfigPath(): string {
   );
 }
 
+const STATUS_HELPER = "statusline.sh";
+
 export function statusHelperPath(): string {
-  return join(paths.home(), "statusline.sh");
+  return join(paths.home(), STATUS_HELPER);
 }
 
 // Claude Code runs the status line inside the agent's process, so the task
-// comes from its env (or its window's tag, in aug-tools). An aug-tools too old
+// comes from its env (or its window's tag, in riker-tools). A riker-tools too old
 // to know `statusline` prints usage and fails; that is dropped, not shown.
 export function statusHelper(): string {
   const tools = toolsArgv().map(shellQuote).join(" ");
   return marked(
     [
       "#!/bin/sh",
-      "# The aug task this Claude session works, for starship's [custom.aug_task].",
-      '[ -n "$AUG_TASK_ID$TMUX_PANE" ] || exit 0',
-      `out=$(AUG_HOME="\${AUG_HOME:-${paths.home()}}" ${tools} statusline 2>/dev/null) && printf '%s' "$out"`,
+      `# The ${NAME} task this Claude session works, for starship's [custom.${CMD}_task].`,
+      // An agent aug started before the rename has only AUG_*.
+      `[ -n "$${envName("TASK_ID")}$${LEGACY.envPrefix}TASK_ID$TMUX_PANE" ] || exit 0`,
+      `out=$(${envName("HOME")}="\${${envName("HOME")}:-${paths.home()}}" ${tools} statusline 2>/dev/null) && printf '%s' "$out"`,
       "exit 0",
       "",
     ].join("\n"),
@@ -148,13 +174,13 @@ export function statusHelper(): string {
 function starshipBlock(withProfile: boolean): string {
   return [
     BLOCK_START,
-    "[custom.aug_task]",
+    `[custom.${CMD}_task]`,
     `command = ${JSON.stringify(statusHelperPath())}`,
     "when = true",
     'format = "([$output]($style)[ │ ](fg:244))"',
     'style = "bold fg:178"',
     'shell = ["sh"]',
-    'description = "aug task this Claude session works"',
+    `description = "${NAME} task this Claude session works"`,
     ...(withProfile
       ? [
           "",
@@ -166,32 +192,35 @@ function starshipBlock(withProfile: boolean): string {
   ].join("\n");
 }
 
-function blockOf(toml: string): string | null {
-  const start = toml.indexOf(BLOCK_START);
-  const end = toml.indexOf(BLOCK_END);
-  return start < 0 || end < start
-    ? null
-    : toml.slice(start, end + BLOCK_END.length);
+function blockOf(toml: string, [first, last] = [BLOCK_START, BLOCK_END]): string | null {
+  const start = toml.indexOf(first);
+  const end = toml.indexOf(last);
+  return start < 0 || end < start ? null : toml.slice(start, end + last.length);
 }
 
 function withoutBlock(toml: string): string {
-  const start = toml.indexOf(BLOCK_START);
-  const end = toml.indexOf(BLOCK_END);
-  if (start < 0 || end < start) return toml;
-  const before = toml.slice(0, start).replace(/\n+$/, "\n");
-  const after = toml.slice(end + BLOCK_END.length).replace(/^\n+/, "");
-  return before + after;
+  for (const [first, last] of [[BLOCK_START, BLOCK_END], LEGACY_BLOCK]) {
+    const start = toml.indexOf(first);
+    const end = toml.indexOf(last);
+    if (start < 0 || end < start) continue;
+    const before = toml.slice(0, start).replace(/\n+$/, "\n");
+    const after = toml.slice(end + last.length).replace(/^\n+/, "");
+    toml = before + after;
+  }
+  return toml;
 }
 
 function withoutProfile(toml: string): string {
   return toml
     .split("\n")
-    .filter((l) => !l.endsWith(ADDED))
+    .filter((l) => !l.endsWith(ADDED) && !l.endsWith(LEGACY_ADDED))
     .join("\n")
-    .replace(PROFILE_LINE, (line) => line.replace(STARSHIP_MODULE, ""));
+    .replace(PROFILE_LINE, (line) =>
+      line.replace(STARSHIP_MODULE, "").replace(LEGACY_MODULE, ""),
+    );
 }
 
-// Your claude-code profile gets the module in front; one aug adds is marked
+// Your claude-code profile gets the module in front; one Riker adds is marked
 // so uninstall can take the whole line back out.
 export function withStatusline(toml: string): string {
   let rest = withoutProfile(withoutBlock(toml));
@@ -220,7 +249,7 @@ export function withoutStatusline(toml: string): string {
 const STATUS_COMMAND = `starship statusline ${STARSHIP_PROFILE}`;
 
 const statusline: Installable = {
-  help: "the aug task in Claude Code's status line (a starship module)",
+  help: "the Riker task in Claude Code's status line (a starship module)",
   unavailable: () =>
     Bun.which("starship", { PATH: process.env.PATH ?? "" })
       ? null
@@ -228,25 +257,29 @@ const statusline: Installable = {
   state() {
     const toml = readText(starshipConfigPath()) ?? "";
     const block = blockOf(toml);
-    if (!block) return InstallState.missing;
+    if (!block)
+      return blockOf(toml, LEGACY_BLOCK) ? InstallState.stale : InstallState.missing;
     const current =
       block === starshipBlock(block.includes("\n[profiles]\n")) &&
       Boolean(PROFILE_LINE.exec(toml)?.[0].includes(STARSHIP_MODULE)) &&
       readText(statusHelperPath()) === statusHelper();
     return current ? InstallState.installed : InstallState.stale;
   },
-  here: () =>
-    blockOf(readText(starshipConfigPath()) ?? "")?.includes(
-      JSON.stringify(statusHelperPath()),
-    ) ?? false,
+  here: () => {
+    const toml = readText(starshipConfigPath()) ?? "";
+    const block = blockOf(toml) ?? blockOf(toml, LEGACY_BLOCK) ?? "";
+    return homeAliases().some((home) =>
+      block.includes(JSON.stringify(join(home, STATUS_HELPER))),
+    );
+  },
   install() {
     ensureHome();
-    writeOwned(statusHelperPath(), statusHelper(), markerOf(STATUS));
+    writeOwned(statusHelperPath(), statusHelper(), STATUS);
     const file = starshipConfigPath();
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, withStatusline(readText(file) ?? ""));
     const lines = [
-      `${file} [custom.aug_task] in the ${STARSHIP_PROFILE} profile`,
+      `${file} [custom.${CMD}_task] in the ${STARSHIP_PROFILE} profile`,
     ];
     // A status line you already set is yours; say when it is not the one
     // that shows the module.
@@ -269,8 +302,8 @@ const statusline: Installable = {
   uninstall() {
     const file = starshipConfigPath();
     const toml = readText(file);
-    const removed = removeOwned(statusHelperPath(), markerOf(STATUS));
-    if (toml === null || !toml.includes(BLOCK_START))
+    const removed = removeOwned(statusHelperPath(), STATUS);
+    if (toml === null || !(blockOf(toml) ?? blockOf(toml, LEGACY_BLOCK)))
       return removed ? statusHelperPath() : null;
     writeFileSync(file, withoutStatusline(toml));
     return `${file} (Claude's statusLine left as is)`;
@@ -319,7 +352,7 @@ export function revdiffScript(): string {
 }
 
 const revdiff: Installable = {
-  help: "revdiff opens in a split of the task's window, inside aug's viewer",
+  help: "revdiff opens in a split of the task's window, inside Riker's viewer",
   unavailable: () =>
     revdiffTargets().length
       ? null
@@ -328,21 +361,26 @@ const revdiff: Installable = {
     const texts = revdiffTargets().map(readText);
     if (texts.every((t) => t === revdiffScript()))
       return InstallState.installed;
-    return texts.some((t) => t?.includes(markerOf(REVDIFF)))
+    return texts.some(
+      (t) => t?.includes(markerOf(REVDIFF)) || t?.includes(legacyMarkerOf(REVDIFF)),
+    )
       ? InstallState.stale
       : InstallState.missing;
   },
   here: () =>
-    revdiffTargets().some((file) => readText(file)?.includes(homeMark())),
+    revdiffTargets().some((file) => {
+      const text = readText(file) ?? "";
+      return homeMarks().some((mark) => text.includes(mark));
+    }),
   install() {
     const targets = revdiffTargets();
     for (const file of targets)
-      writeOwned(file, revdiffScript(), markerOf(REVDIFF));
+      writeOwned(file, revdiffScript(), REVDIFF);
     return targets.join("\n");
   },
   uninstall() {
     const removed = revdiffTargets().filter((file) =>
-      removeOwned(file, markerOf(REVDIFF)),
+      removeOwned(file, REVDIFF),
     );
     return removed.length ? removed.join("\n") : null;
   },
@@ -374,7 +412,7 @@ export function installState(name: string): InstallState {
 }
 
 // At start: what you installed is rewritten when it no longer matches this
-// aug (a moved checkout, a new hook event), and nothing new goes in.
+// Riker (a moved checkout, a new hook event), and nothing new goes in.
 export function refreshInstalls(): string[] {
   const refreshed: string[] = [];
   for (const [name, item] of Object.entries(INSTALLS)) {

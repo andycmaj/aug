@@ -172,7 +172,7 @@ function placeOf(
   lane: Lane,
   onYou: Section,
 ): Section | null {
-  // aug asking about its own docs: on you until answered, never later.
+  // Riker asking about its own docs: on you until answered, never later.
   if (task.kind === Kind.system)
     return task.status === TaskStatus.open || task.status === TaskStatus.later
       ? Section.system

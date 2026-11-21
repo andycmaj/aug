@@ -1,11 +1,11 @@
 // Every render error goes to the log; the framework's crash screen shows the
 // message but keeps no record. Out of text buffers, the crash screen itself
-// can't draw, so aug asks the dev launcher for a fresh process instead of freezing.
+// can't draw, so Riker asks the dev launcher for a fresh process instead of freezing.
 
 import { ErrorBoundary, type ParentProps } from "solid-js";
 import { useRenderer } from "@opentui/solid";
-import { logger } from "@aug/core/log";
-import { isOutOfTextBuffers, requestRestart } from "@aug/core/restart";
+import { logger } from "@riker/core/log";
+import { isOutOfTextBuffers, requestRestart } from "@riker/core/restart";
 
 const log = logger("ui");
 

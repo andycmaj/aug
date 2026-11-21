@@ -2,9 +2,10 @@
 // task. tmux owns the processes; this module makes and tags them, keeps the
 // DB in step with what tmux reports, and never trusts a name over a tag.
 
+import { ENV_FLAG, envName } from "./brand";
 import { homedir } from "node:os";
 import { codingCwd, codingLaunch, type CodingLaunch } from "./agents";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { EndReason, sessionEnded, sessionStarted } from "./lifecycle";
 import { logger } from "./log";
 import { mux, VIEWER_PREFIX, viewerMayHang, type MuxSession, type MuxState } from "./mux";
@@ -39,19 +40,19 @@ export function freeSessionName(base: string, taken: Set<string>): string {
   for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
 }
 
-// The env contract: every command aug spawns for a task carries these, so
-// your own wt and tmux hooks can test $AUG and skip what aug already does.
-export function augEnv(
+// The env contract: every command Riker spawns for a task carries these, so
+// your own wt and tmux hooks can test $RIKER and skip what Riker already does.
+export function rikerEnv(
   task: TaskRow,
   project: ProjectRow | null,
   branch: string | null,
 ): Record<string, string> {
   return {
-    AUG: "1",
-    AUG_HOME: paths.home(),
-    AUG_TASK_ID: String(task.id),
-    ...(project ? { AUG_PROJECT: String(project.id) } : {}),
-    ...(branch ? { AUG_BRANCH: branch } : {}),
+    [ENV_FLAG]: "1",
+    [envName("HOME")]: paths.home(),
+    [envName("TASK_ID")]: String(task.id),
+    ...(project ? { [envName("PROJECT")]: String(project.id) } : {}),
+    ...(branch ? { [envName("BRANCH")]: branch } : {}),
   };
 }
 
@@ -63,7 +64,7 @@ function liveSessionFor(state: MuxState, projectId: number): MuxSession | null {
   );
 }
 
-export async function createProject(config: AugConfig, opts: {
+export async function createProject(config: RikerConfig, opts: {
   name: string;
   repo?: string | null;
   solo?: boolean;
@@ -92,7 +93,7 @@ export async function createProject(config: AugConfig, opts: {
   return project;
 }
 
-// Live sessions that are not projects yet and not aug's own viewers.
+// Live sessions that are not projects yet and not Riker's own viewers.
 export async function adoptableSessions(): Promise<MuxSession[]> {
   const state = await mux().state();
   return state.sessions.filter((s) => !s.viewer && s.projectId === null);
@@ -120,7 +121,7 @@ export async function adoptSession(sessionId: string): Promise<ProjectRow> {
 
 // The project's live session, made again (and re-tagged) if you killed it.
 async function ensureSession(
-  config: AugConfig,
+  config: RikerConfig,
   project: ProjectRow,
 ): Promise<MuxSession> {
   const state = await mux().state();
@@ -165,7 +166,7 @@ export function defaultBranch(task: TaskRow): string {
 }
 
 export async function startTask(
-  config: AugConfig,
+  config: RikerConfig,
   taskId: number,
   opts: StartOptions = {},
 ): Promise<StartResult> {
@@ -222,7 +223,7 @@ export async function startTask(
         repoPath: path,
         branch,
         create: !existing,
-        env: augEnv(task, project, branch),
+        env: rikerEnv(task, project, branch),
       });
       cwd = made.path;
       branch = made.branch ?? branch;
@@ -241,7 +242,7 @@ export async function startTask(
       sessionId: session.id,
       name: branch ?? store.taskRef(task.id),
       cwd: launch.cwd,
-      env: { ...augEnv(task, project, branch), ...launch.env },
+      env: { ...rikerEnv(task, project, branch), ...launch.env },
       argv: launch.argv,
     });
     await mux().tagWindow(window.id, task.id);
@@ -339,7 +340,7 @@ export interface CloseResult {
 // dirty tree and keeps an unmerged branch), and archive a project-of-one
 // left empty.
 export async function closeTask(
-  config: AugConfig,
+  config: RikerConfig,
   taskId: number,
 ): Promise<CloseResult> {
   const task = store.getTask(taskId);
@@ -407,11 +408,11 @@ async function archive(project: ProjectRow, state: MuxState): Promise<void> {
   store.archiveProject(project.id);
 }
 
-// A window aug did not make becomes the task's: tagged, and moved into the
-// project's session, which is where aug looks for a task's window and where
+// A window Riker did not make becomes the task's: tagged, and moved into the
+// project's session, which is where Riker looks for a task's window and where
 // a hand-started claude's hooks find their project.
 export async function takeWindow(
-  config: AugConfig,
+  config: RikerConfig,
   taskId: number,
   windowId: string,
 ): Promise<void> {
@@ -427,7 +428,7 @@ export async function takeWindow(
 
 // Moving a task keeps its claude running: the window moves with it.
 export async function moveTask(
-  config: AugConfig,
+  config: RikerConfig,
   taskId: number,
   projectId: number,
 ): Promise<void> {
@@ -445,11 +446,11 @@ export async function moveTask(
     await archive(from, await mux().state());
 }
 
-// What a jump did: moved your client, found no window, or (aug not in a
+// What a jump did: moved your client, found no window, or (Riker not in a
 // client of this server) the line to run in a terminal of your own.
 export type Jump = "jumped" | "gone" | { attach: string };
 
-// switch-client moves the client aug runs in. Outside tmux (or on another
+// switch-client moves the client Riker runs in. Outside tmux (or on another
 // server) there is none, and tmux would move whichever client it likes.
 async function jumpTo(sessionId: string, windowId?: string): Promise<Jump> {
   if (!(await mux().hostWindow()))
@@ -475,7 +476,7 @@ export async function nudge(taskId: number, text: string): Promise<boolean> {
 // One viewer per task: each is a session holding just that task's window,
 // so several agents of one project can be viewed at once.
 export async function jumpToProject(
-  config: AugConfig,
+  config: RikerConfig,
   projectId: number,
 ): Promise<Jump> {
   const project = store.getProject(projectId);
@@ -494,10 +495,10 @@ export async function viewerArgv(taskId: number): Promise<Viewer | null> {
   const state = await mux().state();
   const window = state.windows.find((w) => w.taskId === taskId);
   if (!window) return null;
-  // aug started in a pane of this very window would embed itself.
+  // Riker started in a pane of this very window would embed itself.
   if (window.id === (await mux().hostWindow()))
     return {
-      refused: `aug is running in ${store.taskRef(taskId)}'s own tmux window, so it can't show it here. Run aug from another window.`,
+      refused: `Riker is running in ${store.taskRef(taskId)}'s own tmux window, so it can't show it here. Run riker from another window.`,
     };
   // Strays land in the tagged project session, not whichever session listed it.
   const projectId = store.getTask(taskId)?.project_id;
@@ -532,7 +533,7 @@ function markGone(session: SessionRow, reason: string = EndReason.window): void 
   sessionEnded({ taskId: session.task_id, sessionId: session.id }, reason);
 }
 
-// Live reconcile: tmux events, debounced, while aug runs. The watch ends
+// Live reconcile: tmux events, debounced, while Riker runs. The watch ends
 // when the server does (or never starts without one); the caller's poll
 // starts it again.
 export function watchTmux(

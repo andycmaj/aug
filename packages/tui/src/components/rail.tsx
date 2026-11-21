@@ -24,8 +24,8 @@ import {
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { FILTER_COMMANDS } from "../keymap";
-import { useAug } from "../context/aug";
-import { Lane, LANE_META } from "@aug/core/lanes";
+import { useRiker } from "../context/riker";
+import { Lane, LANE_META } from "@riker/core/lanes";
 import {
   ageLabel,
   baseKey,
@@ -33,10 +33,10 @@ import {
   SECTION_TITLES,
   TAG_MARK,
   type RailItem,
-} from "@aug/core/rail";
-import { prChip, prQueueWord } from "@aug/core/pr";
-import { taskRef } from "@aug/core/rows";
-import { AgentState, Kind, TaskStatus, type ProjectRow } from "@aug/core/types";
+} from "@riker/core/rail";
+import { prChip, prQueueWord } from "@riker/core/pr";
+import { taskRef } from "@riker/core/rows";
+import { AgentState, Kind, TaskStatus, type ProjectRow } from "@riker/core/types";
 import { CHANNEL_WORD, priorityColor, toneColor, useLaneMeta } from "./ui";
 import { ConnectorLine } from "./connector-line";
 import type { TaskActions } from "./task-actions";
@@ -72,7 +72,7 @@ interface RowView {
 }
 
 export function Rail(props: { actions: TaskActions }) {
-  const aug = useAug();
+  const riker = useRiker();
   const theme = useTheme();
   const { isPaneFocused, setActivePane } = useFocus();
   const focused = () => isPaneFocused("rail");
@@ -82,21 +82,21 @@ export function Rail(props: { actions: TaskActions }) {
   // First visit: the first row is selected. A cursor whose row left the rail
   // comes back to the selected row, if the rail shows it.
   createEffect(() => {
-    const list = aug.shownItems();
+    const list = riker.shownItems();
     if (list.length === 0) return;
     const shown = (key: string | null) => list.some((i) => i.key === key);
-    if (!aug.selectedKey()) aug.select(list[0].key);
-    else if (!shown(aug.cursorKey()))
-      aug.moveCursor(aug.selectedRowKey() ?? list[0].key);
+    if (!riker.selectedKey()) riker.select(list[0].key);
+    else if (!shown(riker.cursorKey()))
+      riker.moveCursor(riker.selectedRowKey() ?? list[0].key);
   });
 
   const cursorIndex = () =>
-    aug.shownItems().findIndex((i) => i.key === aug.cursorKey());
+    riker.shownItems().findIndex((i) => i.key === riker.cursorKey());
 
   function rowOf(key: string | null): { top: number; height: number } {
     let row = 0;
     let first = true;
-    for (const section of aug.shownRail()) {
+    for (const section of riker.shownRail()) {
       row += first ? 1 : 2;
       first = false;
       for (const item of section.items) {
@@ -108,7 +108,7 @@ export function Rail(props: { actions: TaskActions }) {
   }
 
   createEffect(
-    on([aug.cursorKey, aug.shownRail], ([key]) => {
+    on([riker.cursorKey, riker.shownRail], ([key]) => {
       if (!scrollRef) return;
       const { top, height } = rowOf(key);
       const view = scrollRef.viewport.height ?? 10;
@@ -123,30 +123,30 @@ export function Rail(props: { actions: TaskActions }) {
   // A filter that hides the cursor's row, or leaves it on Home (which every
   // filter keeps), lands it on the first task the filter left.
   function landCursor() {
-    const list = aug.shownItems();
-    const at = list.find((i) => i.key === aug.cursorKey());
+    const list = riker.shownItems();
+    const at = list.find((i) => i.key === riker.cursorKey());
     if (at && !(at.type === "task" && at.task.kind === Kind.home)) return;
     const first =
       list.find((i) => i.type === "task" && i.task.kind !== Kind.home) ??
       list[0];
-    if (first) aug.moveCursor(first.key);
+    if (first) riker.moveCursor(first.key);
   }
 
   const filterHandlers = Object.fromEntries(
     RAIL_FILTERS.map((f, i) => [
       FILTER_COMMANDS[i],
       () => {
-        aug.toggleFilter(f.filter);
+        riker.toggleFilter(f.filter);
         landCursor();
       },
     ]),
   );
 
   function move(next: (i: number, n: number) => number) {
-    const list = aug.shownItems();
+    const list = riker.shownItems();
     if (list.length === 0) return;
     const i = Math.max(0, cursorIndex());
-    aug.moveCursor(
+    riker.moveCursor(
       list[Math.min(list.length - 1, Math.max(0, next(i, list.length)))].key,
     );
   }
@@ -161,19 +161,19 @@ export function Rail(props: { actions: TaskActions }) {
       // enter selects the row under the cursor; a project's view
       // has nothing to type into, so the rail keeps focus.
       [Commands.OPEN]: () => {
-        const item = aug.cursorItem();
-        aug.select(aug.cursorKey());
+        const item = riker.cursorItem();
+        riker.select(riker.cursorKey());
         if (item?.type !== "project") setActivePane("canvas");
       },
       [Commands.FOLD]: () => {
-        const item = aug.cursorItem();
-        if (item?.type === "project") aug.toggleFold(item.project.id);
+        const item = riker.cursorItem();
+        if (item?.type === "project") riker.toggleFold(item.project.id);
       },
       [Commands.FILTER_CYCLE]: () => {
-        aug.cycleFilter();
+        riker.cycleFilter();
         landCursor();
       },
-      [Commands.FILTER_CLEAR]: () => aug.clearFilter(),
+      [Commands.FILTER_CLEAR]: () => riker.clearFilter(),
       ...filterHandlers,
       ...props.actions,
     },
@@ -195,7 +195,7 @@ export function Rail(props: { actions: TaskActions }) {
         flexGrow={1}
         stickyScroll={false}
       >
-        <Show when={aug.shownRail().length > 0} fallback={<EmptyRail />}>
+        <Show when={riker.shownRail().length > 0} fallback={<EmptyRail />}>
           {/* Index, not For: the rail is rebuilt with fresh objects on every
               store write, and For would recreate every row (thousands of
               native text buffers) each time. By position, rows are reused
@@ -203,7 +203,7 @@ export function Rail(props: { actions: TaskActions }) {
               each, so a slot never turns from one into the other: a row
               behind a <Match> whose own memos ran before the Switch dropped
               it threw "Stale read from <Match>". */}
-          <Index each={aug.shownRail()}>
+          <Index each={riker.shownRail()}>
             {(section, index) => (
               <>
                 <box
@@ -222,11 +222,11 @@ export function Rail(props: { actions: TaskActions }) {
                     <RailRow
                       item={item()}
                       nested={isNested(item())}
-                      cursor={aug.cursorKey() === item().key}
-                      onTable={aug.selectedRowKey() === item().key}
+                      cursor={riker.cursorKey() === item().key}
+                      onTable={riker.selectedRowKey() === item().key}
                       twin={
-                        aug.selectedRowKey() !== item().key &&
-                        aug.selectedKey() === baseKey(item().key)
+                        riker.selectedRowKey() !== item().key &&
+                        riker.selectedKey() === baseKey(item().key)
                       }
                       focused={focused()}
                       theme={theme}
@@ -251,9 +251,9 @@ export function Rail(props: { actions: TaskActions }) {
 // badge (ideas and messages wait on the Board's Inbox) rides at its end, and
 // wraps under the pills when all nine are lit.
 function FilterBar() {
-  const aug = useAug();
+  const riker = useRiker();
   const theme = useTheme();
-  const anyOn = () => aug.railFilter().size > 0;
+  const anyOn = () => riker.railFilter().size > 0;
   return (
     <box
       flexDirection="row"
@@ -266,8 +266,8 @@ function FilterBar() {
     >
       <For each={RAIL_FILTERS}>
         {(f) => {
-          const on = () => aug.railFilter().has(f.filter);
-          const count = () => aug.filterCounts()[f.filter];
+          const on = () => riker.railFilter().has(f.filter);
+          const count = () => riker.filterCounts()[f.filter];
           const color = () => toneColor(theme, f.tone);
           const fg = () =>
             on()
@@ -286,8 +286,8 @@ function FilterBar() {
           );
         }}
       </For>
-      <Show when={aug.inboxCount() > 0}>
-        <text fg={theme.warning}>{` inbox ${aug.inboxCount()} `}</text>
+      <Show when={riker.inboxCount() > 0}>
+        <text fg={theme.warning}>{` inbox ${riker.inboxCount()} `}</text>
       </Show>
     </box>
   );
@@ -318,7 +318,7 @@ function RailRow(props: {
   focused: boolean;
   theme: Theme;
 }) {
-  const aug = useAug();
+  const riker = useRiker();
   const metaOf = useLaneMeta();
   const theme = () => props.theme;
   const lit = () => (props.focused ? props.cursor : props.onTable);
@@ -332,11 +332,11 @@ function RailRow(props: {
   // block it, why its agent stopped, that it landed while its agent works.
   const laneWord = (item: Extract<RailItem, { type: "task" }>) => {
     if (item.lane === Lane.blocked) {
-      const by = aug.blockers(item.task.id);
+      const by = riker.blockers(item.task.id);
       if (by.length) return `blocked by ${by.map(taskRef).join(", ")}`;
     }
     if (item.lane === Lane.stopped) {
-      const why = aug.latestSession(item.task.id)?.end_reason;
+      const why = riker.latestSession(item.task.id)?.end_reason;
       if (why) return `stopped: ${why}`;
     }
     // What review means here: read what it closed, or close it yourself.
@@ -351,14 +351,14 @@ function RailRow(props: {
       return "merged, agent working";
     // Past review: its PR waits in GitHub's merge queue, or was put out.
     if (item.lane === Lane.review) {
-      const queued = prQueueWord(aug.prStatus(item.task.id));
+      const queued = prQueueWord(riker.prStatus(item.task.id));
       if (queued) return queued;
     }
     return LANE_META[item.lane].word;
   };
   const view = createMemo((): RowView => {
     const item = props.item;
-    const now = aug.now();
+    const now = riker.now();
     switch (item.type) {
       case "task": {
         if (item.task.kind === Kind.home) {
@@ -366,7 +366,7 @@ function RailRow(props: {
           return {
             bar: theme().primary,
             bar2: theme().borderSubtle ?? theme().textMuted,
-            mark: working ? aug.spinner() : "⌂",
+            mark: working ? riker.spinner() : "⌂",
             markColor: theme().primary,
             title: "Home",
             titleColor: theme().text,
@@ -383,10 +383,10 @@ function RailRow(props: {
             ? ageLabel(item.task.remind_at, now)
             : ageLabel(item.at, now);
         // The last read only: finding the PR anew is a few queries a row.
-        const status = aug.prStatus(item.task.id);
+        const status = riker.prStatus(item.task.id);
         const chip = status ? prChip(status) : null;
         const project = projectChip(
-          item.task.project_id ? aug.project(item.task.project_id) : null,
+          item.task.project_id ? riker.project(item.task.project_id) : null,
         );
         return {
           bar: item.slipped ? theme().error : toneColor(theme(), meta.tone),
@@ -394,7 +394,7 @@ function RailRow(props: {
             priorityColor(theme(), item.priority) ??
             theme().borderSubtle ??
             theme().textMuted,
-          mark: working ? aug.spinner() : meta.mark,
+          mark: working ? riker.spinner() : meta.mark,
           markColor: toneColor(theme(), meta.tone),
           title: item.task.title,
           titleColor: item.priority === "urgent" ? theme().error : theme().text,
@@ -419,13 +419,13 @@ function RailRow(props: {
         };
       }
       case "project": {
-        const folded = aug.folded().has(item.project.id);
+        const folded = riker.folded().has(item.project.id);
         // Folded, what its hidden tasks want from you still shows here.
         let asks = 0;
         let review = 0;
         let ready = 0;
         if (folded)
-          for (const i of aug.items()) {
+          for (const i of riker.items()) {
             if (i.type !== "task" || i.group !== item.project.id) continue;
             if (i.lane === Lane.waiting) asks++;
             if (i.lane === Lane.ready) review++;
@@ -434,7 +434,7 @@ function RailRow(props: {
         return {
           bar: item.working ? theme().info : theme().secondary,
           bar2: theme().borderSubtle ?? theme().textMuted,
-          mark: item.working ? aug.spinner() : folded ? "⊞" : "⊟",
+          mark: item.working ? riker.spinner() : folded ? "⊞" : "⊟",
           markColor: item.working ? theme().info : theme().secondary,
           title: item.project.name,
           titleColor: theme().text,

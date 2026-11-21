@@ -1,5 +1,5 @@
-// When aug can't go on but a fresh process would be fine, it exits with
-// RESTART_CODE and the dev launcher (@aug/cli script/aug.ts) starts it again.
+// When Riker can't go on but a fresh process would be fine, it exits with
+// RESTART_CODE and the dev launcher (@riker/cli script/riker.ts) starts it again.
 
 // EX_TEMPFAIL: try again.
 export const RESTART_CODE = 75;

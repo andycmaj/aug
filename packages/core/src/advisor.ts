@@ -5,7 +5,7 @@
 
 import { createHash } from "node:crypto";
 import { think } from "./brain";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { docsBlock } from "./prompts";
 import { isSlipped } from "./rail";
 import { capReached } from "./spend";
@@ -29,7 +29,7 @@ const IDEAS_SCHEMA = {
           },
           task: {
             type: "string",
-            description: "the AUG-#### it is about, or empty",
+            description: "the RIKER-#### it is about, or empty",
           },
         },
         required: ["title", "body"],
@@ -96,7 +96,7 @@ export interface AdvisorRun {
 // Unchanged work gets the same ideas back, so the model is asked only when
 // the picture moved (or the owner asked for a run: force).
 export async function runAdvisor(
-  config: AugConfig,
+  config: RikerConfig,
   at = new Date(),
   force = false,
 ): Promise<AdvisorRun> {
@@ -114,7 +114,7 @@ export async function runAdvisor(
   const result = await think({
     prompt: `${picture}\n\nIdeas already in the Inbox:\n${existing.join("\n") || "(none)"}\n\nToday is ${at.toISOString().slice(0, 10)}.`,
     system: [
-      "You are the Advisor in aug, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas, none repeating one already in the Inbox. Fewer is better; zero is fine.",
+      "You are the Advisor in Riker, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas, none repeating one already in the Inbox. Fewer is better; zero is fine.",
       docsBlock(config, { persona: true, job: true, learned: true }),
     ].join("\n\n"),
     schema: IDEAS_SCHEMA,

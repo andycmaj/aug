@@ -112,10 +112,10 @@ describe("search", () => {
         channel: "owner",
       });
     const want = store.listTasks().find((t) => t.id === 23)!.title;
-    for (const q of ["AUG-0023", "aug-23", "aug23", "23", "0023"])
+    for (const q of ["RIKER-0023", "riker-23", "riker23", "23", "0023"])
       expect(titles(q)[0]).toBe(want);
-    // Explicit AUG-: only refs, never a number in the words.
-    expect(titles("aug-23")).toEqual([want]);
+    // Explicit RIKER-: only refs, never a number in the words.
+    expect(titles("riker-23")).toEqual([want]);
   });
 
   test("tasks off the open list (For later, watching) are found too, once", () => {
@@ -251,7 +251,7 @@ describe("search", () => {
     expect(find("deel").map((h) => h.why)).toEqual(['you: "what about Deel?"']);
   });
 
-  test("aug's own notes in the chat are not searched", () => {
+  test("Riker's own notes in the chat are not searched", () => {
     const t = store.createTask({
       title: "Payroll",
       kind: Kind.general,

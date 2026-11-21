@@ -3,7 +3,7 @@
 // Sending never closes the task: Mark done does.
 
 import type { TurnAnswer } from "./agents";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { draftSent } from "./lifecycle";
 import { logger } from "./log";
 import { messageMeta } from "./meta";
@@ -18,7 +18,7 @@ import {
 
 export type Sender = (
   action: DraftAction,
-  config: AugConfig,
+  config: RikerConfig,
 ) => Promise<string>;
 
 export function lastIncoming(taskId: number): MessageRow | null {
@@ -102,7 +102,7 @@ export function setSlackSender(next: SlackSend): void {
 
 async function githubSend(
   action: Extract<DraftAction, { type: "github_comment" }>,
-  config: AugConfig,
+  config: RikerConfig,
 ): Promise<string> {
   const ref = `${action.repo}#${action.number}`;
   switch (action.close) {
@@ -160,7 +160,7 @@ async function githubSend(
 
 async function realSend(
   action: DraftAction,
-  config: AugConfig,
+  config: RikerConfig,
 ): Promise<string> {
   return action.type === "slack_reply"
     ? slackSend(action)
@@ -196,7 +196,7 @@ const log = logger("outbound");
 
 // Sends the pending action on a task. A refused act sends nothing and says why.
 export async function sendPending(
-  config: AugConfig,
+  config: RikerConfig,
   taskId: number,
 ): Promise<string> {
   const pending = store.pendingAction(taskId);

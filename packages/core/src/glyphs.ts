@@ -5,7 +5,7 @@
 import { readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 
 const FONT_DIRS = [
   join(homedir(), "Library", "Fonts"),
@@ -42,6 +42,6 @@ export function nerdFontInstalled(dirs = FONT_DIRS): boolean {
   return installed;
 }
 
-export function nerdFont(config: Pick<AugConfig, "nerdFont">): boolean {
+export function nerdFont(config: Pick<RikerConfig, "nerdFont">): boolean {
   return config.nerdFont ?? nerdFontInstalled();
 }

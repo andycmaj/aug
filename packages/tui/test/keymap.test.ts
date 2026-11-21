@@ -5,7 +5,7 @@ import {
   getScopeBindings,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../src/commands";
-import { RAIL_FILTERS } from "@aug/core/rail";
+import { RAIL_FILTERS } from "@riker/core/rail";
 import {
   BoardTab,
   actionCommand,

@@ -1,5 +1,5 @@
 {
-  "name": "@aug/code-review-plannotator",
+  "name": "@riker/code-review-plannotator",
   "version": "0.0.1",
   "description": "A guided code review of a branch, in batches of related files, with findings pinned to their lines, saved into Plannotator.",
   "type": "module",

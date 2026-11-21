@@ -3,14 +3,14 @@
 
 import { createEffect } from "solid-js";
 import { useToast } from "@andycmaj/opentui-app";
-import { useAug } from "../context/aug";
+import { useRiker } from "../context/riker";
 import { useTerminals, type TermState } from "../context/terminals";
-import { taskRef } from "@aug/core/rows";
-import { inTmux } from "@aug/core/driver";
+import { taskRef } from "@riker/core/rows";
+import { inTmux } from "@riker/core/driver";
 
 // Both modes mount the actions; one viewer attach per task at a time.
 const attaching = new Set<number>();
-// Tasks whose window aug runs in (no viewer for those), told once.
+// Tasks whose window Riker runs in (no viewer for those), told once.
 const refused = new Set<number>();
 
 export const viewerId = (taskId: number) => `view-${taskId}`;
@@ -33,10 +33,10 @@ export function viewersToClose(
 }
 
 export function useViewer() {
-  const aug = useAug();
+  const riker = useRiker();
   const terminals = useTerminals();
   const { showToast } = useToast();
-  const desk = aug.desk;
+  const desk = riker.desk;
 
   async function attachViewer(taskId: number): Promise<boolean> {
     if (terminals.forTask(taskId)?.running) return true;
@@ -70,15 +70,15 @@ export function useViewer() {
   // Keeps the Canvas's terminal in step with tmux: a live claude on the
   // selected task gets a viewer, and every other viewer goes.
   createEffect(() => {
-    const item = aug.selected();
+    const item = riker.selected();
     const task = item?.type === "task" ? item.task : null;
     const live = (taskId: number) => {
-      const row = aug.task(taskId);
-      return Boolean(row && aug.isLive(row));
+      const row = riker.task(taskId);
+      return Boolean(row && riker.isLive(row));
     };
     for (const id of viewersToClose(terminals.list(), task?.id ?? null, live))
       terminals.close(id);
-    if (task && inTmux(task) && aug.isLive(task))
+    if (task && inTmux(task) && riker.isLive(task))
       void attachViewer(task.id);
   });
 

@@ -14,7 +14,7 @@ beforeEach(() => {
   setBrain(async (call) => {
     calls.push(call);
     return {
-      text: "Made AUG-0002 in aug-mvp.",
+      text: "Made RIKER-0002 in riker-mvp.",
       structured: null,
       sessionId: call.sessionId ?? call.resume ?? null,
       durationMs: 1,
@@ -49,7 +49,7 @@ describe("Home", () => {
     expect(rail.map((s) => s.section)).toEqual(["home", "tasks"]);
   });
 
-  test("a turn is the Assistant: aug-tools and gh reads, who is asking, the named task read in", async () => {
+  test("a turn is the Assistant: riker-tools and gh reads, who is asking, the named task read in", async () => {
     const home = store.homeTask();
     const job = store.createTask({
       title: "JOB.md is empty",
@@ -57,28 +57,28 @@ describe("Home", () => {
       kind: Kind.general,
       channel: "owner",
     });
-    say(home.id, `make a coding task for @${store.taskRef(job.id)} in aug-mvp`);
+    say(home.id, `make a coding task for @${store.taskRef(job.id)} in riker-mvp`);
     await new AgentPool({ config: withLimit(4) }).request(home.id, "the owner typed", "owner");
 
     const call = calls[0];
     expect(call.tools).toContain("Bash");
     const shell = call.allow!.filter((a) => a.startsWith("Bash(") && !a.startsWith("Bash(gh "));
     expect(shell).toHaveLength(3);
-    expect(shell).toContain("Bash(aug-tools:*)");
-    expect(shell.some((a) => a.startsWith("Bash(bun /") && a.endsWith("aug-tools.ts:*)"))).toBe(true);
-    expect(call.env).toMatchObject({ AUG_ASKED_BY: "assistant" });
-    expect(call.env!.PATH).toStartWith(`${process.env.AUG_HOME}/bin:`);
+    expect(shell).toContain("Bash(riker-tools:*)");
+    expect(shell.some((a) => a.startsWith("Bash(bun /") && a.endsWith("riker-tools.ts:*)"))).toBe(true);
+    expect(call.env).toMatchObject({ RIKER_ASKED_BY: "assistant" });
+    expect(call.env!.PATH).toStartWith(`${process.env.RIKER_HOME}/bin:`);
     expect(call.schema).toBeUndefined();
     expect(call.system).toContain("move new");
     expect(call.prompt).toContain("## Tasks the owner named");
     expect(call.prompt).toContain("Summary: Fill it in");
-    expect(call.prompt).toContain("make a coding task for @AUG-0002");
+    expect(call.prompt).toContain("make a coding task for @RIKER-0002");
 
     const answer = store.turnsForTask(home.id).at(-1)!;
     expect(answer).toMatchObject({
       role: TurnRole.agent,
-      author: "aug",
-      did: "Made AUG-0002 in aug-mvp.",
+      author: "riker",
+      did: "Made RIKER-0002 in riker-mvp.",
     });
   });
 
@@ -106,34 +106,34 @@ describe("Home", () => {
   test("a general agent's tools know which task is asking", async () => {
     const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
     await new AgentPool({ config: withLimit(4) }).request(task.id, "go", "owner");
-    expect(calls[0].env).toMatchObject({ AUG_TASK_ID: String(task.id) });
-    expect(calls[0].env!.PATH).toStartWith(`${process.env.AUG_HOME}/bin:`);
+    expect(calls[0].env).toMatchObject({ RIKER_TASK_ID: String(task.id) });
+    expect(calls[0].env!.PATH).toStartWith(`${process.env.RIKER_HOME}/bin:`);
   });
 });
 
-test("a general agent may run aug's lookups and the agent moves, nothing else", async () => {
+test("a general agent may run Riker's lookups and the agent moves, nothing else", async () => {
   const { generalAllow } = await import("../src/agents");
-  const bash = generalAllow(config()).filter((r) => r.includes("aug-tools.ts"));
-  expect(bash.some((r) => r.endsWith("aug-tools.ts move new:*)"))).toBe(true);
-  expect(bash.some((r) => r.endsWith("aug-tools.ts projects:*)"))).toBe(true);
-  expect(bash.some((r) => r.endsWith("aug-tools.ts move project_new:*)"))).toBe(true);
+  const bash = generalAllow(config()).filter((r) => r.includes("riker-tools.ts"));
+  expect(bash.some((r) => r.endsWith("riker-tools.ts move new:*)"))).toBe(true);
+  expect(bash.some((r) => r.endsWith("riker-tools.ts projects:*)"))).toBe(true);
+  expect(bash.some((r) => r.endsWith("riker-tools.ts move project_new:*)"))).toBe(true);
   expect(
     bash.some((r) => ["move done", "move start", "move project_archive"].some((m) => r.includes(m))),
   ).toBe(false);
 });
 
-test("a general agent's aug-tools rules match the bun path written either way", async () => {
+test("a general agent's riker-tools rules match the bun path written either way", async () => {
   const { generalAllow } = await import("../src/agents");
   const { toolsCommand, toolsEntry } = await import("../src/self");
   const allow = generalAllow(config());
-  expect(allow).toContain("Bash(aug-tools move project:*)");
+  expect(allow).toContain("Bash(riker-tools move project:*)");
   expect(allow).toContain(`Bash(${toolsCommand("move", "project")}:*)`);
   expect(allow).toContain(`Bash(bun ${toolsEntry()} move project:*)`);
 });
 
-test("aug-tools on a headless agent's PATH runs aug-tools", async () => {
+test("riker-tools on a headless agent's PATH runs riker-tools", async () => {
   const { toolsEnv } = await import("../src/self");
-  const run = Bun.spawnSync(["aug-tools", "projects"], { env: { ...process.env, ...toolsEnv() } });
+  const run = Bun.spawnSync(["riker-tools", "projects"], { env: { ...process.env, ...toolsEnv() } });
   expect(run.exitCode).toBe(0);
   expect(run.stdout.toString()).toContain("no projects");
 });
@@ -147,7 +147,7 @@ test("a general agent is told it has gh and how to write shell commands that are
 });
 
 test("a denied call is kept on the turn, and the next turn is told not to repeat it", async () => {
-  const denied = 'Bash B=/bin/bun; $B aug-tools.ts move link AUG-0001 "u"';
+  const denied = 'Bash B=/bin/bun; $B riker-tools.ts move link RIKER-0001 "u"';
   setBrain(async (call) => {
     calls.push(call);
     return {
@@ -169,7 +169,7 @@ test("a denied call is kept on the turn, and the next turn is told not to repeat
   await pool.request(task.id, "again", "owner");
   await Bun.sleep(10);
   expect(calls[1].prompt).toContain(`- ${denied}`);
-  expect(calls[1].prompt).toContain("aug-tools <command>");
+  expect(calls[1].prompt).toContain("riker-tools <command>");
   // The denied session is left behind for a new one, which is then resumed.
   expect(calls[1].resume).toBeUndefined();
   expect(calls[1].sessionId).not.toBe(calls[0].sessionId);

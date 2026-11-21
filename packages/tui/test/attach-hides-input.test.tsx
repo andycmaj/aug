@@ -7,8 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testRender } from "@opentui/solid";
 import { App } from "../src/app";
-import { installFixture } from "@aug/fixtures/demo";
-import * as store from "@aug/core/store";
+import { installFixture } from "@riker/fixtures/demo";
+import * as store from "@riker/core/store";
 
 let destroy: (() => void) | undefined;
 let home: string | undefined;
@@ -25,8 +25,8 @@ const AGENT = [
 ];
 
 async function boot() {
-  home = mkdtempSync(join(tmpdir(), "aug-attach-"));
-  process.env.AUG_HOME = home;
+  home = mkdtempSync(join(tmpdir(), "riker-attach-"));
+  process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
   const csv = store
     .listTasks()

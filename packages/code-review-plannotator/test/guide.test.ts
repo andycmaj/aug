@@ -47,8 +47,8 @@ describe("fitted to the patch", () => {
     // On its line when a hunk shows it; on its file, naming the line, when not.
     expect(comments).toEqual([
       {
-        source: "aug-guide",
-        author: "aug guide",
+        source: "riker-guide",
+        author: "riker guide",
         scope: "line",
         filePath: "math.ts",
         lineStart: 6,
@@ -58,8 +58,8 @@ describe("fitted to the patch", () => {
         text: "Bug: b of 0 gives Infinity.",
       },
       {
-        source: "aug-guide",
-        author: "aug guide",
+        source: "riker-guide",
+        author: "riker guide",
         scope: "file",
         filePath: "math.ts",
         type: "comment",
@@ -128,11 +128,11 @@ describe("what the review sends back", () => {
 });
 
 describe("posting the comments", () => {
-  test("aug's earlier comments are cleared before posting, so they are there once", async () => {
+  test("Riker's earlier comments are cleared before posting, so they are there once", async () => {
     const review = fakeReview();
     const comment: ReviewComment = {
-      source: "aug-guide",
-      author: "aug guide",
+      source: "riker-guide",
+      author: "riker guide",
       scope: "file",
       filePath: "math.ts",
       type: "comment",
@@ -142,8 +142,10 @@ describe("posting the comments", () => {
     await postComments(review.server.port!, [comment], { waitMs: 3000, everyMs: 50 });
     void review.server.stop(true);
     expect(review.calls).toEqual([
+      "DELETE /api/external-annotations?source=riker-guide",
       "DELETE /api/external-annotations?source=aug-guide",
       "POST /api/external-annotations",
+      "DELETE /api/external-annotations?source=riker-guide",
       "DELETE /api/external-annotations?source=aug-guide",
       "POST /api/external-annotations",
     ]);
@@ -153,7 +155,7 @@ describe("posting the comments", () => {
   test("waits for the review to come up, then posts them as one batch", async () => {
     const port = freePort();
     const got: unknown[] = [];
-    // Plannotator starts a moment after aug begins posting.
+    // Plannotator starts a moment after Riker begins posting.
     let server: ReturnType<typeof Bun.serve> | null = null;
     setTimeout(() => {
       server = Bun.serve({
@@ -169,8 +171,8 @@ describe("posting the comments", () => {
       });
     }, 150);
     const comment = {
-      source: "aug-guide",
-      author: "aug guide",
+      source: "riker-guide",
+      author: "riker guide",
       scope: "file" as const,
       filePath: "math.ts",
       type: "comment" as const,

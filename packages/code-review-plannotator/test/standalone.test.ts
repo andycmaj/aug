@@ -23,7 +23,7 @@ function fakeClaude(result: Record<string, unknown>): { bin: string; dir: string
 
 const GUIDE_TEXT = `\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\``;
 
-describe("the instructions without aug", () => {
+describe("the instructions without riker", () => {
   test("the skill's body and tools come from its own file", () => {
     expect(skillBody().startsWith("---")).toBe(false);
     expect(skillBody()).toContain("job: whole");

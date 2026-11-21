@@ -10,7 +10,7 @@ import { testRender } from "@opentui/solid";
 import type { HelpBinding } from "@andycmaj/opentui-app";
 import { App } from "../src/app";
 import { Commands } from "../src/commands";
-import { installFixture } from "@aug/fixtures/demo";
+import { installFixture } from "@riker/fixtures/demo";
 import type { HelpCtx } from "../src/keymap";
 import { PaletteGroup, paletteEntries } from "../src/palette";
 
@@ -98,8 +98,8 @@ afterEach(() => {
 });
 
 async function boot(size = { width: 160, height: 45 }) {
-  home = mkdtempSync(join(tmpdir(), "aug-palette-"));
-  process.env.AUG_HOME = home;
+  home = mkdtempSync(join(tmpdir(), "riker-palette-"));
+  process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
   const setup = await testRender(() => <App engine={engine} />, size);
   destroy = () => setup.renderer.destroy();
@@ -134,9 +134,9 @@ test("the palette opens on the row's own actions, flat, named for the row", asyn
   const { type, frame } = await boot();
   await type(":");
   const shown = frame();
-  expect(shown).toMatch(/Commands · AUG-\d+ Home/);
+  expect(shown).toMatch(/Commands · RIKER-\d+ Home/);
   expect(shown).toContain(CONTEXT_ON);
-  expect(shown).toContain("Everything aug knows about it");
+  expect(shown).toContain("Everything Riker knows about it");
   // App-wide moves and movement are not about this row.
   expect(shown).not.toContain("Keyboard help");
   expect(shown).not.toContain("Command palette");
@@ -184,7 +184,7 @@ test("the mode is kept for the session, across Chat and Board", async () => {
   await type(":");
   expect(frame()).toContain("All commands");
   await tab();
-  expect(frame()).toMatch(/Commands · Board: |Commands · AUG-\d+ /);
+  expect(frame()).toMatch(/Commands · Board: |Commands · RIKER-\d+ /);
 });
 
 test("in a short terminal the toggle stays on screen", async () => {
@@ -199,10 +199,10 @@ test("in a short terminal the toggle stays on screen", async () => {
 test("a row's entry runs on the row the palette was opened over", async () => {
   const { type, enter, frame } = await boot();
   await type(":");
-  await type("everything aug knows");
+  await type("everything Riker knows");
   await enter();
   // I, from the rail, on its first row (Home).
-  expect(frame()).toMatch(/AUG-\d+ · Home\s/);
+  expect(frame()).toMatch(/RIKER-\d+ · Home\s/);
 });
 
 test("an extra about the row (a task action) sits with the row's keys", () => {

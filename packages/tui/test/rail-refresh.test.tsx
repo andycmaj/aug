@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testRender } from "@opentui/solid";
 import { App } from "../src/app";
-import { installFixture } from "@aug/fixtures/demo";
-import * as store from "@aug/core/store";
+import { installFixture } from "@riker/fixtures/demo";
+import * as store from "@riker/core/store";
 
 let destroy: (() => void) | undefined;
 let home: string | undefined;
@@ -20,15 +20,15 @@ const ID = 5;
 const TITLE = "September overtime";
 
 async function boot() {
-  home = mkdtempSync(join(tmpdir(), "aug-rail-refresh-"));
-  process.env.AUG_HOME = home;
+  home = mkdtempSync(join(tmpdir(), "riker-rail-refresh-"));
+  process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
   const setup = await testRender(() => <App engine={engine} />, {
     width: 140,
     height: 45,
   });
   destroy = () => setup.renderer.destroy();
-  // Writes redraw once their burst is over (aug.tsx coalesces bumps); a
+  // Writes redraw once their burst is over (riker.tsx coalesces bumps); a
   // write from another process is seen on the 400ms data_version poll.
   const settle = async (ms = 40) => {
     await Bun.sleep(ms);
@@ -56,13 +56,13 @@ test("a row's lane follows writes from this process and from another", async () 
   expect(row()[0]).toContain("◇");
   expect(row()[1]).toContain("agent idle");
 
-  // As an agent's hook through aug-tools would: its own connection.
+  // As an agent's hook through riker-tools would: its own connection.
   const proc = Bun.spawnSync(
     [
       process.execPath,
       "-e",
       `import { Database } from "bun:sqlite";
-       new Database(process.env.AUG_HOME + "/aug.db")
+       new Database(process.env.RIKER_HOME + "/riker.db")
          .query("UPDATE tasks SET agent_state = 'waiting' WHERE id = ${ID}").run();`,
     ],
     { env: { ...process.env } },
@@ -70,7 +70,8 @@ test("a row's lane follows writes from this process and from another", async () 
   expect(proc.exitCode).toBe(0);
   await settle(600);
   expect(row()[0]).toContain("◆");
-  expect(row()[1]).toContain("agent waiting");
+  // RIKER-0005 is two wider than AUG-0005 was: the word is clipped.
+  expect(row()[1]).toContain("agent wait");
 });
 
 // AUG-0123: the selected row drew ▸ where its mark goes, so the task you

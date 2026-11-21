@@ -80,7 +80,7 @@ describe("blocked on another task", () => {
     const ref = store.taskRef;
     const by = `agent ${ref(waits.id)}`;
     expect((await move("block_on", { task: ref(waits.id), on: ref(blocker.id) }, by)).status).toBe("done");
-    store.createSession({ id: "s", taskId: blocker.id, kind: SessionKind.tmux, cwd: "/", startedBy: "aug" });
+    store.createSession({ id: "s", taskId: blocker.id, kind: SessionKind.tmux, cwd: "/", startedBy: "riker" });
     handleDone({ taskId: blocker.id, sessionId: "s" }, { summary: "api shipped" });
     expect(store.blockersOf(waits.id)).toEqual([]);
     expect(triggers(waits.id).at(-1)).toContain("nothing blocks this now");

@@ -54,7 +54,7 @@ describe("csv", () => {
 
 describe("what a turn made", () => {
   test("only new or rewritten files count", () => {
-    const dir = mkdtempSync(join(tmpdir(), "aug-files-"));
+    const dir = mkdtempSync(join(tmpdir(), "riker-files-"));
     writeFileSync(join(dir, "old.md"), "x");
     const before = snapshotDir(dir);
     writeFileSync(join(dir, "new.csv"), "a,b");

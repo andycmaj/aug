@@ -1,10 +1,10 @@
-// The operator documents: plain Markdown under ~/.aug/docs that the models are
+// The operator documents: plain Markdown under ~/.riker/docs that the models are
 // actually told. Each is a file the owner may edit. Owner docs (PERSONA, JOB,
 // STYLE) start as templates the onboarding interview fills in; shipped docs
-// (TRIAGE, ASSISTANT, CODING) come with aug and are kept up to date until the
+// (TRIAGE, ASSISTANT, CODING) come with Riker and are kept up to date until the
 // owner edits them (core/doc-sync.ts); LEARNED.md writes itself.
 //
-// Nothing here keeps a history. An aug write over an existing doc copies the
+// Nothing here keeps a history. A Riker write over an existing doc copies the
 // old file to .trash first, and that is the only way back.
 
 import {
@@ -20,10 +20,10 @@ import {
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 
 // All a doc's budget reads from config.
-export type BudgetConfig = Pick<AugConfig, "docBudgets">;
+export type BudgetConfig = Pick<RikerConfig, "docBudgets">;
 import { paths, ensureHome } from "./paths";
 import assistant from "../defaults/ASSISTANT.md" with { type: "text" };
 import coding from "../defaults/CODING.md" with { type: "text" };
@@ -45,11 +45,11 @@ export const DocName = {
 export type DocName = (typeof DocName)[keyof typeof DocName];
 
 export const DocClass = {
-  // Yours: aug ships a template and drafts it with you, never updates it.
+  // Yours: Riker ships a template and drafts it with you, never updates it.
   owner: "owner",
-  // aug's: updated with aug until you edit it.
+  // Riker's: updated with Riker until you edit it.
   shipped: "shipped",
-  // aug writes it from corrections; you may edit it.
+  // Riker writes it from corrections; you may edit it.
   learned: "learned",
 } as const;
 export type DocClass = (typeof DocClass)[keyof typeof DocClass];
@@ -65,9 +65,9 @@ export const DOC_CLASS: Record<DocName, DocClass> = {
 };
 
 export const DOC_PURPOSE: Record<DocName, string> = {
-  "PERSONA.md": "red lines that outrank everything, and how aug speaks to you",
+  "PERSONA.md": "red lines that outrank everything, and how Riker speaks to you",
   "JOB.md": "what your job is; weighs importance, never intent",
-  "STYLE.md": "your voice in the drafts aug writes for you",
+  "STYLE.md": "your voice in the drafts Riker writes for you",
   "TRIAGE.md": "what makes something a task, a reply, a watch or an FYI",
   "ASSISTANT.md": "how a general agent works a task",
   "CODING.md": "how a coding agent works and closes out",
@@ -75,7 +75,7 @@ export const DOC_PURPOSE: Record<DocName, string> = {
 };
 
 // Characters each doc may take in a prompt; LEARNED's counts only the lines
-// in use. Over it, aug proposes a shrink; over twice it, the prompt gets a cut
+// in use. Over it, Riker proposes a shrink; over twice it, the prompt gets a cut
 // that says so. Config's docBudgets overrides any of them.
 export const DOC_BUDGET: Record<DocName, number> = {
   "PERSONA.md": 1500,
@@ -151,7 +151,7 @@ export function writeDoc(name: DocName, text: string): void {
   writeFileSync(docPath(name), text);
 }
 
-// ── the trash: the one way back from an aug write ─────────────────────────
+// ── the trash: the one way back from a Riker write ─────────────────────────
 
 const TRASH_DAYS = 30;
 
@@ -159,7 +159,7 @@ export function trashDir(): string {
   return join(paths.docs(), ".trash");
 }
 
-// A copy of the file as it is now, before aug writes over it.
+// A copy of the file as it is now, before Riker writes over it.
 export function trashDoc(name: string, at = new Date()): string | null {
   const file = docPath(name);
   if (!existsSync(file)) return null;
@@ -183,7 +183,7 @@ export function pruneTrash(at = new Date()): number {
   return pruned;
 }
 
-// An aug write over a doc the owner may have touched: the old one goes to
+// A Riker write over a doc the owner may have touched: the old one goes to
 // the trash first. Lessons LEARNED.md writes as it goes do not come here.
 export function replaceDoc(name: DocName, text: string): string | null {
   const copy = trashDoc(name);

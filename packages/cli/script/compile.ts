@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Compile aug to one standalone binary for this machine: dist/aug.
+// Compile Riker to one standalone binary for this machine: dist/riker.
 // Adapted from kube-tui's script/build.ts (itself from opencode's).
 
 import solidPlugin from "@opentui/solid/bun-plugin";
@@ -9,12 +9,12 @@ import { join, resolve } from "node:path";
 const root = resolve(import.meta.dir, "../../..");
 process.chdir(root);
 
-const outfile = join(root, "dist", "aug");
+const outfile = join(root, "dist", "riker");
 // opentui's tree-sitter parser runs in a worker, loaded by path at runtime.
 const parserWorker = realpathSync(join(root, "node_modules/@opentui/core/parser.worker.js"));
 
 const result = await Bun.build({
-  entrypoints: ["./packages/cli/src/aug.ts", parserWorker],
+  entrypoints: ["./packages/cli/src/riker.ts", parserWorker],
   conditions: ["browser"],
   tsconfig: "./tsconfig.json",
   plugins: [solidPlugin],

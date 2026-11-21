@@ -1,7 +1,7 @@
-// Claudes you start by hand inside a project's tmux session. aug-launched
+// Claudes you start by hand inside a project's tmux session. riker-launched
 // claudes get their hooks through --settings; these get them from your user
 // settings, through a guard script that exits before bun starts unless the
-// pane's session is a project and the claude is not one of aug's own. The
+// pane's session is a project and the claude is not one of Riker's own. The
 // first hook from an untagged window makes it a task in that project.
 
 import {
@@ -22,7 +22,8 @@ import {
 } from "./hooks";
 import { logger } from "./log";
 import { mux } from "./mux";
-import { ensureHome, paths } from "./paths";
+import { CMD, envName, LEGACY, legacyOption, option } from "./brand";
+import { ensureHome, homeAliases, paths } from "./paths";
 import { toolsArgv, shellQuote } from "./self";
 import * as store from "./store";
 import { Channel, Kind, SessionKind, TurnRole } from "./types";
@@ -138,7 +139,7 @@ export async function adoptHook(
   return env;
 }
 
-// For aug-tools run by hand inside an adopted window: the task comes from
+// For riker-tools run by hand inside an adopted window: the task comes from
 // the window's tag, the session from its newest live claude.
 export async function paneEnv(paneId: string): Promise<HookEnv | null> {
   const pane = await mux().paneInfo(paneId);
@@ -151,7 +152,7 @@ export async function paneEnv(paneId: string): Promise<HookEnv | null> {
 
 // ── user settings ────────────────────────────────────────────────────────
 
-const HOOK_EVENTS: [claudeEvent: string, augEvent: string, matcher?: string][] = [
+const HOOK_EVENTS: [claudeEvent: string, rikerEvent: string, matcher?: string][] = [
   ["UserPromptSubmit", "prompt"],
   ["PreToolUse", "tool", "*"],
   ["PostToolUse", "made", ARTIFACT_TOOLS],
@@ -180,11 +181,12 @@ export function guardScript(): string {
   const tools = toolsArgv().map(shellQuote).join(" ");
   return [
     "#!/bin/sh",
-    "# Installed by `aug install hooks`; removed by `aug uninstall hooks`.",
-    '[ -n "$AUG_TASK_ID" ] && exit 0',
+    `# Installed by \`${CMD} install hooks\`; removed by \`${CMD} uninstall hooks\`.`,
+    // Riker's own agents, and aug's from before the rename.
+    `[ -n "$${envName("TASK_ID")}$${LEGACY.envPrefix}TASK_ID" ] && exit 0`,
     '[ -n "$TMUX_PANE" ] || exit 0',
-    '[ -n "$(tmux show-options -qv -t "$TMUX_PANE" @aug_project 2>/dev/null)" ] || exit 0',
-    `AUG_HOME=${shellQuote(paths.home())} exec ${tools} adopt-hook "$1"`,
+    `[ -n "$(tmux display-message -p -t "$TMUX_PANE" '#{${option("project")}}#{${legacyOption("project")}}' 2>/dev/null)" ] || exit 0`,
+    `${envName("HOME")}=${shellQuote(paths.home())} exec ${tools} adopt-hook "$1"`,
     "",
   ].join("\n");
 }
@@ -232,26 +234,29 @@ export function hooksInstalled(file = claudeSettingsPath()): boolean {
   }
 }
 
-function ourGroup(augEvent: string, matcher?: string): HookGroup {
+function ourGroup(rikerEvent: string, matcher?: string): HookGroup {
   return {
     ...(matcher ? { matcher } : {}),
-    hooks: [{ type: "command", command: `sh ${shellQuote(guardPath())} ${augEvent}` }],
+    hooks: [{ type: "command", command: `sh ${shellQuote(guardPath())} ${rikerEvent}` }],
   };
 }
 
-// Ours and calling this aug home's guard (not a scratch home's).
+// Ours and calling this Riker home's guard (not a scratch home's).
+// ~/.aug's guard counts for the default home it moved to (core/paths.ts).
 export function hooksHere(file = claudeSettingsPath()): boolean {
   try {
-    const guard = shellQuote(guardPath());
+    const guards = homeAliases().map((home) => shellQuote(join(home, GUARD_NAME)));
     return Object.values(readSettings(file).hooks ?? {}).some((groups) =>
-      groups.some((g) => g.hooks.some((h) => isOurs(h) && h.command.includes(guard))),
+      groups.some((g) =>
+        g.hooks.some((h) => isOurs(h) && guards.some((guard) => h.command.includes(guard))),
+      ),
     );
   } catch {
     return false;
   }
 }
 
-// Installed as this aug would install them: an older aug's (an event it did
+// Installed as this Riker would install them: an older Riker's (an event it did
 // not hook yet, a guard calling a moved checkout) is out of date.
 export function hooksCurrent(file = claudeSettingsPath()): boolean {
   try {
@@ -259,9 +264,9 @@ export function hooksCurrent(file = claudeSettingsPath()): boolean {
     const ours = Object.values(hooks).flatMap((groups) =>
       groups.filter((g) => g.hooks.some(isOurs)),
     );
-    const want = HOOK_EVENTS.map(([claudeEvent, augEvent, matcher]) => ({
+    const want = HOOK_EVENTS.map(([claudeEvent, rikerEvent, matcher]) => ({
       claudeEvent,
-      group: JSON.stringify(ourGroup(augEvent, matcher)),
+      group: JSON.stringify(ourGroup(rikerEvent, matcher)),
     }));
     return (
       ours.length === want.length &&
@@ -284,16 +289,18 @@ export function installHooks(file = claudeSettingsPath()): string {
   writeFileSync(guardPath(), guardScript());
   chmodSync(guardPath(), 0o755);
   const hooks = { ...(settings.hooks ?? {}) };
-  for (const [claudeEvent, augEvent, matcher] of HOOK_EVENTS)
-    hooks[claudeEvent] = [...(hooks[claudeEvent] ?? []), ourGroup(augEvent, matcher)];
+  for (const [claudeEvent, rikerEvent, matcher] of HOOK_EVENTS)
+    hooks[claudeEvent] = [...(hooks[claudeEvent] ?? []), ourGroup(rikerEvent, matcher)];
   writeSettings(file, { ...settings, hooks });
   return file;
 }
 
 // The first write keeps a copy of the file as it was.
 export function writeSettings(file: string, settings: Settings): void {
-  const backup = `${file}.before-aug`;
-  if (existsSync(file) && !existsSync(backup)) copyFileSync(file, backup);
+  const backup = `${file}.before-${CMD}`;
+  // aug kept one before the rename: that is the file as it was.
+  const kept = existsSync(backup) || existsSync(`${file}.before-${LEGACY.cmd}`);
+  if (existsSync(file) && !kept) copyFileSync(file, backup);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
 }

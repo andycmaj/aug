@@ -52,9 +52,9 @@ afterEach(() => engine.stop());
 describe("the inbox survives a crash", () => {
   test("a message inserted but never triaged, or left mid-triage, is triaged at start", async () => {
     const calls = fakeBrain(() => verdict("fyi"));
-    // aug died after the insert, before triage.
+    // Riker died after the insert, before triage.
     const never = insert(1, "Is the vendor call still on?", { thread: "slack:C1:1.0" });
-    // aug died mid-triage: claimed, never settled.
+    // Riker died mid-triage: claimed, never settled.
     const midway = insert(2, "Why is the March export short?", { thread: "slack:C1:2.0" });
     expect(store.claimMessage(midway.id)).toBe(true);
     expect(store.getMessage(midway.id)!.state).toBe(MessageState.triaging);

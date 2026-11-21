@@ -1,6 +1,8 @@
 // The domain, as stored. Row shapes mirror the SQLite tables one to one so the
 // store can hand them out without mapping.
 
+import { SELF } from "./brand";
+
 export const Channel = {
   github: "github",
   slack: "slack",
@@ -27,7 +29,7 @@ export const Kind = {
   task: "task",
   // The one Home thread: you and the Assistant. Not work, never closes.
   home: "home",
-  // aug asking about its own install: a brain doc proposal, a shipped doc
+  // Riker asking about its own install: a brain doc proposal, a shipped doc
   // you did not get, the onboarding offer. No agent; accept or reject.
   system: "system",
 } as const;
@@ -130,7 +132,7 @@ export type MoveStatus = (typeof MoveStatus)[keyof typeof MoveStatus];
 export interface MoveRow {
   id: number;
   verb: string;
-  // JSON object of string args, as aug-tools passed them.
+  // JSON object of string args, as riker-tools passed them.
   args: string;
   asked_by: string;
   status: MoveStatus;
@@ -139,8 +141,8 @@ export interface MoveRow {
   finished_at: string | null;
 }
 
-// One tmux session. The session carries @aug_project; tmux_session is only
-// the name it had when aug last looked.
+// One tmux session. The session carries @riker_project; tmux_session is only
+// the name it had when Riker last looked.
 export interface ProjectRow {
   id: number;
   name: string;
@@ -218,7 +220,7 @@ export const TurnRole = {
   incoming: "in",
   // What the owner typed into the task's chat.
   you: "you",
-  // Short notes aug itself adds ("Sent the reply", "Reminded today").
+  // Short notes Riker itself adds ("Sent the reply", "Reminded today").
   trigger: "trigger",
   agent: "agent",
   // A task action's answer (core/task-actions.ts): not the agent's turn.
@@ -291,7 +293,7 @@ export interface SessionRow {
   says: string | null;
   // The tool the agent touched last, for "what is it doing right now".
   last_tool: string | null;
-  started_by: "owner" | "aug";
+  started_by: "owner" | typeof SELF;
   started_at: string;
   last_event_at: string;
   ended_at: string | null;
@@ -328,7 +330,7 @@ export interface TaskLinkRow {
   task_id: number;
   url: string;
   title: string | null;
-  // "you", "assistant", or "agent AUG-0012".
+  // "you", "assistant", or "agent RIKER-0012".
   added_by: string;
   created_at: string;
 }
@@ -581,7 +583,7 @@ export const TaskEventKind = {
   reopened: "reopened",
   merged: "merged",
   unmerged: "unmerged",
-  // Its agent said it was done (aug-tools done); detail is the summary.
+  // Its agent said it was done (riker-tools done); detail is the summary.
   finished: "finished",
 } as const;
 export type TaskEventKind = (typeof TaskEventKind)[keyof typeof TaskEventKind];
@@ -594,3 +596,4 @@ export interface TaskEventRow {
   detail: string | null;
   at: string;
 }
+

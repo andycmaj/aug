@@ -4,7 +4,7 @@ declare module "*.md" {
   export default text;
 }
 
-// Shell scripts aug installs (core/install.ts), embedded the same way so a
+// Shell scripts Riker installs (core/install.ts), embedded the same way so a
 // compiled binary carries them.
 declare module "*.sh" {
   const text: string;

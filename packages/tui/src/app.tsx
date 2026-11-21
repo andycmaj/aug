@@ -11,28 +11,28 @@ import {
   ToastProvider,
   type ThemeName,
 } from "@andycmaj/opentui-app";
-import { AugProvider, useAug, ViewMode } from "./context/aug";
+import { RikerProvider, useRiker, ViewMode } from "./context/riker";
 import { TerminalsProvider } from "./context/terminals";
-import type { Engine } from "@aug/core/engine";
+import type { Engine } from "@riker/core/engine";
 import { BoardMode } from "./components/board-mode";
 import { ChatMode } from "./components/chat-mode";
-import { logger } from "@aug/core/log";
-import { keyedActions } from "@aug/core/task-actions";
+import { logger } from "@riker/core/log";
+import { keyedActions } from "@riker/core/task-actions";
 import { actionKeys, BOARD_PANES, buildKeymap, CHAT_PANES } from "./keymap";
 import type { KeymapTable } from "@andycmaj/opentui-app";
 
 const log = logger("app");
 
 function Modes() {
-  const aug = useAug();
+  const riker = useRiker();
   return (
     <Switch>
-      <Match when={aug.mode() === ViewMode.chat}>
+      <Match when={riker.mode() === ViewMode.chat}>
         <FocusProvider panes={CHAT_PANES}>
           <ChatMode />
         </FocusProvider>
       </Match>
-      <Match when={aug.mode() === ViewMode.board}>
+      <Match when={riker.mode() === ViewMode.board}>
         <FocusProvider panes={BOARD_PANES}>
           <BoardMode />
         </FocusProvider>
@@ -50,7 +50,7 @@ export function App(props: { engine: Engine; theme?: ThemeName }) {
     log.warn("action key refused", r);
   return (
     <ThemeProvider name={props.theme}>
-      <AugProvider engine={props.engine}>
+      <RikerProvider engine={props.engine}>
         <TerminalsProvider>
           <ToastProvider>
             <KeymapProvider keymap={keymap as KeymapTable}>
@@ -59,7 +59,7 @@ export function App(props: { engine: Engine; theme?: ThemeName }) {
             </KeymapProvider>
           </ToastProvider>
         </TerminalsProvider>
-      </AugProvider>
+      </RikerProvider>
     </ThemeProvider>
   );
 }

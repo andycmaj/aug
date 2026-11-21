@@ -77,7 +77,7 @@ describe("perf", () => {
     const { slowest } = perfReport({ since: hourAgo() });
     expect(slowest.map((e) => e.ms)).toEqual([900, 700, 300, 200, 150]);
     expect(slowest[0]!.fields).toEqual({ by: "tmux" });
-    expect(slowest[0]!.proc).toBe("aug");
+    expect(slowest[0]!.proc).toBe("riker");
   });
 
   test("an example keeps names and numbers, cut short", () => {
@@ -98,7 +98,7 @@ describe("perf", () => {
     );
     const old = new Date(Date.now() - 48 * 3600_000).toISOString().slice(0, 16);
     db.run(
-      "INSERT INTO perf_minutes (minute, proc, pid, op, unit, count, total, max, buckets) VALUES (?, 'aug', 1, 'mux.state', 'ms', 2, 8, 5, ?)",
+      "INSERT INTO perf_minutes (minute, proc, pid, op, unit, count, total, max, buckets) VALUES (?, 'riker', 1, 'mux.state', 'ms', 2, 8, 5, ?)",
       [old, buckets],
     );
     timing("mux.state", 10);
@@ -135,7 +135,7 @@ describe("perf", () => {
   test("log.time feeds perf, numbers only", () => {
     freshHome(on);
     resetPerf();
-    startPerf({ proc: "aug-tools" });
+    startPerf({ proc: "riker-tools" });
     const done = logger("engine").time("github poll", { text: "secret body" });
     done({ fresh: 2 });
     flushPerf();

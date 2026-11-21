@@ -6,7 +6,7 @@ import { setBrain, type BrainCall, type BrainResult } from "../../src/brain";
 import {
   DEFAULT_CONFIG,
   fixedConfig,
-  type AugConfig,
+  type RikerConfig,
   type ConfigSource,
 } from "../../src/config";
 import { ensureDocs } from "../../src/docs";
@@ -15,8 +15,8 @@ import { configureLog } from "../../src/log";
 let current: ConfigSource = fixedConfig();
 
 // A new home, and the config its engine is handed (in memory, never a file).
-export function freshHome(config: Partial<AugConfig> = {}): ConfigSource {
-  process.env.AUG_HOME = mkdtempSync(join(tmpdir(), "aug-test-"));
+export function freshHome(config: Partial<RikerConfig> = {}): ConfigSource {
+  process.env.RIKER_HOME = mkdtempSync(join(tmpdir(), "riker-test-"));
   useDb(openDb(":memory:"));
   const source = fixedConfig({ ...DEFAULT_CONFIG, ...config });
   current = source;
@@ -31,7 +31,7 @@ export function testConfig(): ConfigSource {
   return current;
 }
 
-export function config(): AugConfig {
+export function config(): RikerConfig {
   return current.get();
 }
 

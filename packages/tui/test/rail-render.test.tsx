@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { ErrorBoundary } from "solid-js";
 import { testRender } from "@opentui/solid";
 import { App } from "../src/app";
-import { installFixture } from "@aug/fixtures/demo";
-import * as store from "@aug/core/store";
+import { installFixture } from "@riker/fixtures/demo";
+import * as store from "@riker/core/store";
 
 let destroy: (() => void) | undefined;
 let home: string | undefined;
@@ -19,8 +19,8 @@ afterEach(() => {
 // row turns that slot from a task row into a heading, and the row must go
 // without reading the item it no longer has ("Stale read from <Match>").
 test("the rail survives a write that turns a task row into a heading", async () => {
-  home = mkdtempSync(join(tmpdir(), "aug-rail-render-"));
-  process.env.AUG_HOME = home;
+  home = mkdtempSync(join(tmpdir(), "riker-rail-render-"));
+  process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
   const errors: unknown[] = [];
   const setup = await testRender(
@@ -39,7 +39,7 @@ test("the rail survives a write that turns a task row into a heading", async () 
   destroy = () => setup.renderer.destroy();
   await setup.renderOnce();
 
-  // Each write redraws once its burst is over (aug.tsx coalesces bumps).
+  // Each write redraws once its burst is over (riker.tsx coalesces bumps).
   const settle = async () => {
     await Bun.sleep(40);
     await setup.renderOnce();
@@ -55,8 +55,8 @@ test("the rail survives a write that turns a task row into a heading", async () 
 // One header over the rail: the filter pills, with the inbox badge at the
 // end. A second row repeating the pills' counts said the same thing twice.
 test("the rail's only header is the filter pills and the inbox badge", async () => {
-  home = mkdtempSync(join(tmpdir(), "aug-rail-render-"));
-  process.env.AUG_HOME = home;
+  home = mkdtempSync(join(tmpdir(), "riker-rail-render-"));
+  process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
   const setup = await testRender(() => <App engine={engine} />, {
     width: 140,

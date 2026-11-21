@@ -3,10 +3,10 @@
 
 import { For } from "solid-js";
 import { useTheme, type Theme, type ThemeColor } from "@andycmaj/opentui-app";
-import { useAug } from "../context/aug";
-import type { ConnectorState } from "@aug/core/engine";
-import { localDay } from "@aug/core/rail";
-import { dailyCap, usd } from "@aug/core/spend";
+import { useRiker } from "../context/riker";
+import type { ConnectorState } from "@riker/core/engine";
+import { localDay } from "@riker/core/rail";
+import { dailyCap, usd } from "@riker/core/spend";
 
 export function stateGlyph(state: ConnectorState): string {
   return state === "ok"
@@ -28,8 +28,8 @@ export function stateColor(theme: Theme, state: ConnectorState): ThemeColor {
         : theme.textMuted;
 }
 
-// Today's spend on aug's own model calls, against the cap when one is on:
-// warning from 80% of it, error once reached (aug's own turns wait then).
+// Today's spend on Riker's own model calls, against the cap when one is on:
+// warning from 80% of it, error once reached (Riker's own turns wait then).
 export function spendWords(
   spent: number,
   cap: number | null,
@@ -45,20 +45,20 @@ export function spendWords(
 }
 
 export function ConnectorLine() {
-  const aug = useAug();
+  const riker = useRiker();
   const theme = useTheme();
   // const spend = () =>
   //   spendWords(
-  //     aug.spendOn(localDay(aug.now())).cost,
-  //     dailyCap(aug.desk.config()),
+  //     riker.spendOn(localDay(riker.now())).cost,
+  //     dailyCap(riker.desk.config()),
   //   );
   const rows = () => [
-    { name: "github", s: aug.status().github },
-    { name: "slack", s: aug.status().slack },
+    { name: "github", s: riker.status().github },
+    { name: "slack", s: riker.status().slack },
     // Shown once it is turned on.
-    ...(aug.status().remote.state === "off"
+    ...(riker.status().remote.state === "off"
       ? []
-      : [{ name: "remote", s: aug.status().remote }]),
+      : [{ name: "remote", s: riker.status().remote }]),
   ];
   return (
     <box

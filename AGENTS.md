@@ -10,38 +10,38 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 ## Packages
 
 A bun workspace (`packages/*`, hoisted installs). A package imports another
-by name, `@aug/core/store`, from its `src/` (each `exports` `"./*":
+by name, `@riker/core/store`, from its `src/` (each `exports` `"./*":
 "./src/*.ts"`), never by relative path across packages; nothing is built.
 One root `tsconfig.json` and one `bun test` cover them all. Dependencies run
 one way: cli → tui → fixtures → core → code-review-plannotator.
 
-- **`@aug/core`**: the domain (below: `core/x.ts` means
-  `packages/core/src/x.ts`), its embedded text (`defaults/`, aug's plugin
+- **`@riker/core`**: the domain (below: `core/x.ts` means
+  `packages/core/src/x.ts`), its embedded text (`defaults/`, Riker's plugin
   `plugin/`, `contrib/revdiff/`) and the test helpers other packages' tests
-  import (`@aug/core/test/support/helpers`: `freshHome()`, `fakeBrain()`,
+  import (`@riker/core/test/support/helpers`: `freshHome()`, `fakeBrain()`,
   `fake-mux`).
-- **`@aug/code-review-plannotator`**: the guided review as a library, runnable
-  without aug: the patch (`patchFor`, origin/<base> merge base), batches of
+- **`@riker/code-review-plannotator`**: the guided review as a library, runnable
+  without Riker: the patch (`patchFor`, origin/<base> merge base), batches of
   related files (`planBatches`), the calls with an injected `ask`
   (`reviewInBatches`), fitting the guide to the patch, the Plannotator
   snapshot, import and live comments, and the job instructions
-  (`skill/SKILL.md`, which aug's plugin ships as `aug:guide`). It knows
-  nothing of aug: warnings go to `setGuideLog`, which aug points at
-  aug.log. Without aug, `review()` runs it end to end with any `ask`;
+  (`skill/SKILL.md`, which Riker's plugin ships as `riker:guide`). It knows
+  nothing of Riker: warnings go to `setGuideLog`, which Riker points at
+  riker.log. Without Riker, `review()` runs it end to end with any `ask`;
   `claudeAsk` is one on a fresh read-only `claude -p` that keeps each
   call's cost and tokens; `bun packages/code-review-plannotator/src/cli.ts
   review [--model] [--batch-chars] [--no-plannotator] [--open]` writes
   guide.json, guide-findings.json and usage.json (what evals compare).
-- **`@aug/fixtures`**: the demo day, the offline GitHub sim and a fake
+- **`@riker/fixtures`**: the demo day, the offline GitHub sim and a fake
   claude.
-- **`@aug/tui`**: the UI (`index.tsx`, app, components, context, terminal,
-  keymap, palette) and `cli.ts`, the `aug` argv parser.
-- **`@aug/cli`**: what a shell runs. `src/aug.ts` is the one entry (`bun
-  run demo|sim`, the dev launcher, the compiled binary; `aug tools ...` is
-  aug-tools) and `src/aug-tools.ts`; `script/aug.ts` is the dev launcher
+- **`@riker/tui`**: the UI (`index.tsx`, app, components, context, terminal,
+  keymap, palette) and `cli.ts`, the `riker` argv parser.
+- **`@riker/cli`**: what a shell runs. `src/riker.ts` is the one entry (`bun
+  run demo|sim`, the dev launcher, the compiled binary; `riker tools ...` is
+  riker-tools) and `src/riker-tools.ts`; `script/riker.ts` is the dev launcher
   (`bun dev`: runs from anywhere, restarts on `RESTART_CODE`) and
-  `script/compile.ts` builds `dist/aug`. The entry tells core where
-  aug-tools is (`setToolsEntry`, `core/self.ts`); core never reaches up for
+  `script/compile.ts` builds `dist/riker`. The entry tells core where
+  riker-tools is (`setToolsEntry`, `core/self.ts`); core never reaches up for
   it.
 
 Tests live beside their package (`packages/<name>/test/`).
@@ -49,7 +49,7 @@ Tests live beside their package (`packages/<name>/test/`).
 ## Architecture
 
 - **`packages/core/src/` is the domain, with no opentui/solid imports.** It holds the
-  store (`bun:sqlite`, `~/.aug/aug.db`), triage, the agent pool, hooks,
+  store (`bun:sqlite`, `~/.riker/riker.db`), triage, the agent pool, hooks,
   outbound, ingest, learning, the Assistant, the Advisor and the engine that
   ties them together. Unit-test it in `packages/core/test/` with
   `freshHome()` and `fakeBrain()`.
@@ -59,12 +59,12 @@ Tests live beside their package (`packages/<name>/test/`).
 - **Coding agents run as interactive `claude` in tmux**, one window per task
   in its project's session (`core/projects.ts`), in a worktree made by `wt`.
   `core/agents.ts` builds the command line and the brief. The Canvas embeds a
-  grouped viewer session in a PTY. Hooks call `packages/cli/src/aug-tools.ts`, which is
+  grouped viewer session in a PTY. Hooks call `packages/cli/src/riker-tools.ts`, which is
   plain TS and needs no Solid preload. Those hooks write to SQLite, and the TUI
   notices through `PRAGMA data_version`.
 - **`core/mux.ts` is the only door to tmux and wt**, and the only importer of
-  `libtmux` (alpha, pinned exactly). Identity is the `@aug_project` /
-  `@aug_task` user options, never names. Tests use `packages/core/test/support/fake-mux.ts`; real
+  `libtmux` (alpha, pinned exactly). Identity is the `@riker_project` /
+  `@riker_task` user options, never names. Tests use `packages/core/test/support/fake-mux.ts`; real
   tmux checks use a private server (`-L`), never the default one.
 - **Where a repo is checked out is `core/repos.ts`**: `github.repos` in
   config is the owner's one path per repo; `core/checkouts.ts` (behind the
@@ -72,14 +72,14 @@ Tests live beside their package (`packages/<name>/test/`).
   start checks the path first, and `needs: path` carries what is wrong and
   what was found. Nothing is mapped unless the owner picks it.
 - **A terminal program an agent opens (a diff viewer) splits its own
-  window**: `aug-tools pane [--zoom] [--wait] -- cmd`, so it shows in the
-  viewer instead of a window of its own. `tagWindow` also sets `@aug_tools`
-  (how to call aug-tools) for scripts in that pane; `packages/core/contrib/revdiff/` is
+  window**: `riker-tools pane [--zoom] [--wait] -- cmd`, so it shows in the
+  viewer instead of a window of its own. `tagWindow` also sets `@riker_tools`
+  (how to call riker-tools) for scripts in that pane; `packages/core/contrib/revdiff/` is
   revdiff's user-layer launcher that does this.
-- **What aug writes outside its home is `core/install.ts`**: one registry
+- **What Riker writes outside its home is `core/install.ts`**: one registry
   (`hooks`, `statusline`, `revdiff`) of idempotent install, uninstall and
-  state, behind `aug install|uninstall [name] [--check]`. The engine rewrites
-  stale ones at start, but only those made for its own `AUG_HOME`. Scripts
+  state, behind `riker install|uninstall [name] [--check]`. The engine rewrites
+  stale ones at start, but only those made for its own `RIKER_HOME`. Scripts
   it writes are embedded (`with { type: "text" }`) so the compiled binary
   carries them. Setup a user would otherwise do by hand goes here.
 - **A task's PR is `core/pr.ts`**: found from its linked threads (the PR
@@ -88,12 +88,12 @@ Tests live beside their package (`packages/<name>/test/`).
   into `pr_status` on the GitHub clock, 25 PRs to one GraphQL query; the rail and the Canvas's
   header show it (marked stale when the last read failed), and `P` opens
   ghdash on it in the Canvas (`components/use-pr-dash.tsx`).
-- **When aug may call GitHub is `core/github-gate.ts`**: a rate limit
+- **When Riker may call GitHub is `core/github-gate.ts`**: a rate limit
   pauses that budget (REST or GraphQL) until its reset, kept in `kv` across
   restarts; a failed poll backs off (doubling, jittered, capped); a PR that
   keeps failing backs off alone; under `GRAPHQL_RESERVE` points PR status
   waits for the reset. The engine's GitHub status line says each of these.
-- **Claudes started outside aug are `core/strays.ts`**: found through Claude
+- **Claudes started outside Riker are `core/strays.ts`**: found through Claude
   Code's own `~/.claude/sessions/<pid>.json` (pid, session id, cwd, tmux
   pane). The `adopt` move and `A` on the Board's Columns make one a coding task: one in
   tmux keeps running and its window moves into the project's session; one in
@@ -111,19 +111,19 @@ Tests live beside their package (`packages/<name>/test/`).
   opt-in (`remote.enabled`), separate from the triage poller. It reads one
   conversation only the owner is in (self-DM or a private channel), hears
   the owner's own plain lines into Home (author `SLACK_AUTHOR`) and posts
-  the Assistant's answer in the thread, marked `[aug]`. A turn answering
+  the Assistant's answer in the thread, marked `[riker]`. A turn answering
   Slack asks as `SLACK_ASKER`; `runMove` holds the moves in `CONFIRM_MOVES`
   for the owner's yes in that thread (`core/slack/confirm.ts`).
 - **Views read through the read model** (`core/read-model.ts`), never the
-  store: `aug.task(id)`, `aug.turns(id)`, `aug.pendingAction(id)` and the
-  rest sit on the aug context. Each read names the tables it queries, and
+  store: `riker.task(id)`, `riker.turns(id)`, `riker.pendingAction(id)` and the
+  rest sit on the Riker context. Each read names the tables it queries, and
   re-runs only when one of them changes: triggers bump a counter per table
   in `table_versions`, so a write from any process says what it touched. A
   new read is one entry in `reads()`; `packages/core/test/read-model.test.ts` fails if its
   SQL touches a table it does not name. Pure row helpers (`taskRef`,
   `turnSteps`) are `core/rows.ts`.
 - **The rail has a cursor and a selection** (`cursorKey` and `selectedKey`
-  in `context/aug.tsx`). The selected row shows on the Canvas
+  in `context/riker.tsx`). The selected row shows on the Canvas
   (`components/canvas.tsx`, focus pane `canvas`), Chat's main pane. Say "the
   Canvas" and "selected", never "the table", "content" or "on the table".
   Task actions (`components/task-actions.ts`, the key handlers on a row) act
@@ -183,10 +183,10 @@ Tests live beside their package (`packages/<name>/test/`).
   re-read when its mtime changes), tests (`freshHome()`, `testConfig()`) and
   the fixture day a `fixedConfig()`. The engine gives it to its pool,
   drivers and desk, which call `get()` each time they use a setting, so an
-  edit applies without a restart; functions below them take the `AugConfig`
+  edit applies without a restart; functions below them take the `RikerConfig`
   value, and components read `desk.config()`. Writes (`noise`, a repo
   mapped mid-start) are `update()` on the desk. `loadConfig()` is one read
-  for an entry point that has no source (aug-tools' log and tmux server).
+  for an entry point that has no source (riker-tools' log and tmux server).
 - **The agent lifecycle is `core/lifecycle.ts`.** Every change to a task's
   `agent_state` or a session's state is one of its named transitions
   (`sessionStarted`, `sessionActivity`, `sessionEnded`, `turnFinished`,
@@ -204,20 +204,20 @@ Tests live beside their package (`packages/<name>/test/`).
   `inTmux(task)` (coding, and the onboarding interview's System task) and
   nothing above the driver branches on it. What a coding
   start still needs comes back as `needs: repo | path | branch`.
-- **Task actions are skills aug runs on one task** (`core/task-actions.ts`,
+- **Task actions are skills Riker runs on one task** (`core/task-actions.ts`,
   `docs/task-actions-design.md`). Built-ins (`summarize`) are registered
-  there and their skills ship in aug's own plugin (`packages/core/plugin`,
-  written under `AUG_HOME/plugin`); config `actions` changes, turns off or
+  there and their skills ship in Riker's own plugin (`packages/core/plugin`,
+  written under `RIKER_HOME/plugin`); config `actions` changes, turns off or
   adds one. `desk.runAction` runs it headless or on a fork of the agent's
   session (`core/run-action.ts`), and its answer is a `TurnRole.action` turn,
   never the agent's; `pane` (the quiz) runs interactive claude in a split
   of the agent's window. `guide` saves its answer into Plannotator
-  (`@aug/code-review-plannotator`; aug's words for its turn are
+  (`@riker/code-review-plannotator`; Riker's words for its turn are
   `core/guide-turn.ts`). `.` opens the picker; the palette lists each one;
   `actions.<name>.key` binds one at start.
 - **Other processes ask for moves through `core/moves.ts`.** One registry
-  (verb, args, help, run) feeds `aug-tools move <verb>`, the Assistant's
-  prompt and the engine's dispatch, which runs each on the desk. aug-tools
+  (verb, args, help, run) feeds `riker-tools move <verb>`, the Assistant's
+  prompt and the engine's dispatch, which runs each on the desk. riker-tools
   inserts a `moves` row and waits; the engine claims it on `data_version`,
   runs it, and writes one line back. A new verb goes in the registry, nowhere
   else. A move that would open a dialog answers `needs ...` in words instead.
@@ -232,16 +232,16 @@ Tests live beside their package (`packages/<name>/test/`).
   wraps itself in `cannot(what, why, ...)`, and a verb that reached no
   recording desk method is kept as one by `runMove`, so ctrl+z names it
   rather than reaching past it. A new desk method that changes a task
-  goes through `onTask`; one that writes outside aug's rows, `cannot`.
+  goes through `onTask`; one that writes outside Riker's rows, `cannot`.
 - **A project carries a brief, goals and docs** (`projects.brief`,
   `project_goals`, `project_links`; a task's `goal_id`). `lookup.projectContext`
   puts them in every brief of a task in the project, so a task's own brief
   need not repeat them; `core/project-doc.ts` is the one file the owner edits
   them in. A goal is met only by the owner's say, never by its tasks closing.
-- **The brain docs are `core/docs.ts`** (files under `~/.aug/docs`, budgets,
+- **The brain docs are `core/docs.ts`** (files under `~/.riker/docs`, budgets,
   the trash, LEARNED.md's header and sections), kept at start by
   `core/doc-sync.ts` (the SOUL rename, notify-only shipped updates by one
-  hash per doc in `kv`, the onboarding offer). Every aug edit to a doc the
+  hash per doc in `kv`, the onboarding offer). Every Riker edit to a doc the
   owner has not asked for is a proposal on a `kind: system` task
   (`core/proposals.ts`, `doc_proposals`): the Advisor's daily
   `core/doc-pass.ts`, the onboarding interview (`core/onboard.ts`, the
@@ -255,7 +255,7 @@ Tests live beside their package (`packages/<name>/test/`).
   drafts to `drafts/docs` and hands them in with `propose_doc --file`.
 - **Home is a `kind: home` task** (`store.homeTask()`), and its agent is the
   Assistant (`core/assistant.ts`): a resumed `claude -p` allowed only
-  `aug-tools`. `listTasks()` never returns it, so nothing that lists work
+  `riker-tools`. `listTasks()` never returns it, so nothing that lists work
   sees it. A turn's path, its command line and what it costs in the prompt
   cache are `docs/assistant-lifecycle.md`.
 - **What a headless agent may call is `core/capabilities.ts`.** Config
@@ -268,19 +268,19 @@ Tests live beside their package (`packages/<name>/test/`).
   `docs.write`'s own Claude Docs writes. A denied connector call gets a
   `grant:` step naming the config key (`grantHint`), and `connectorNote`
   tells every headless agent where grants live.
-- **Logging is `core/log.ts`**: `logger(scope)` writes lines to `aug.log`
-  under `AUG_HOME`, never to the terminal (the TUI owns it). It is off unless
-  `AUG_LOG`, `log.enabled` in config, or `AUG_DEV` (set by `bun run dev`)
+- **Logging is `core/log.ts`**: `logger(scope)` writes lines to `riker.log`
+  under `RIKER_HOME`, never to the terminal (the TUI owns it). It is off unless
+  `RIKER_LOG`, `log.enabled` in config, or `RIKER_DEV` (set by `bun run dev`)
   turns it on. Log where an error is swallowed into a status line, and use
   `log.time()` for timings.
 - **What model calls cost is `core/spend.ts`**: `think()` records each
   call's `total_cost_usd` and tokens in `spend` (local day, task, role from
   the call's `spend` tag); the Slack reader's persistent session reports a
   running total, so it records the difference per turn. `config.spend` caps
-  the day: past it the pool queues `by: "aug"` turns with the reason and the
+  the day: past it the pool queues `by: "riker"` turns with the reason and the
   Advisor and doc pass skip; the owner's turns and coding Starts still run.
   The sidebar's status line, the table header, the Board's Cost tab and
-  `aug-tools spend` show it. A resumed general turn sends only the turns
+  `riker-tools spend` show it. A resumed general turn sends only the turns
   since its last finished answer (`unheard`), and the coding brief only the
   last `CODING_BRIEF_TURNS`; the Advisor asks only when `workPicture()`'s
   hash moved. A chat turn leaves a session idle past the prompt cache's
@@ -291,11 +291,11 @@ Tests live beside their package (`packages/<name>/test/`).
   line) against what that session last heard (`heardWhere`, in `kv`).
 - **Perf counters are `core/perf.ts`**, on with the log (off again with
   `log.perf: false`): per-minute histograms per op plus the slowest examples
-  past `log.slowMs` (default 50), in `perf.db` under `AUG_HOME` (its own
-  file, so a flush never moves aug.db's `data_version`). `log.time()` feeds
+  past `log.slowMs` (default 50), in `perf.db` under `RIKER_HOME` (its own
+  file, so a flush never moves riker.db's `data_version`). `log.time()` feeds
   it; hot paths call `timing`/`measure`/`perfStart` directly (read-model
   reads, the TUI's refresh fan-out, engine ticks, every real `mux.*` call,
-  frames). Names and numbers only, never content. `aug-tools perf` reports
+  frames). Names and numbers only, never content. `riker-tools perf` reports
   p50/p95/max per op.
 - `packages/tui/src/keymap.ts` is the single binding table. Each mode (Chat, Board) has its
   own `FocusProvider`. `TerminalsProvider` sits above both, so PTYs survive the
@@ -315,7 +315,7 @@ Tests live beside their package (`packages/<name>/test/`).
   key's command through `keymap.dispatchCommand` on the pane under it.
   It opens on Context (the pane's and the row's, flat, titled for the row:
   each view's `subject`); tab shows All (app-wide and keyless too,
-  grouped). The mode is `paletteMode` on the aug context, one per session.
+  grouped). The mode is `paletteMode` on the Riker context, one per session.
 - Keymap layers run before a focused `<input>`. Any handler reachable while the
   chat box has focus must decline (`unlessTyping`).
 - A key listed in the `terminal` scope gets past an attached agent (the
@@ -325,7 +325,7 @@ Tests live beside their package (`packages/<name>/test/`).
   shows or hides the rail and stays attached (the agent loses them; a
   terminal with no agent gets them). `buildKeymap` swaps config's navigation
   keys in at start.
-- Navigation history is `core/nav-history.ts`, held by the aug context:
+- Navigation history is `core/nav-history.ts`, held by the Riker context:
   every change of the selected row or the view is a visit (recorded once per
   handler, so a switch plus a select is one), `[`/`]` go back and forward,
   and the go-to list puts the recent rows first.
@@ -342,23 +342,23 @@ Tests live beside their package (`packages/<name>/test/`).
 
 ## Testing the TUI
 
-- One aug runs per `AUG_HOME` (`core/home-lock.ts`), so a worktree's
-  `bun dev` on the real home is refused while the owner's aug runs. Try a
-  change with `bun run demo` or a scratch `AUG_HOME`.
+- One Riker runs per `RIKER_HOME` (`core/home-lock.ts`), so a worktree's
+  `bun dev` on the real home is refused while the owner's Riker runs. Try a
+  change with `bun run demo` or a scratch `RIKER_HOME`.
 - `bun run demo` runs the fixture day. Drive it in tmux with a unique session
   name and `tmux capture-pane -p`.
 - `bun run sim [review-cycle|review-ask] [--brain fake|haiku]` is the real
   TUI on a scratch home against an offline GitHub (`packages/fixtures/src/sim/`):
   the engine's `github.api`/`github.prs` seam reads a JSON state file, Send
-  writes to it, so triage, `pr_status`, the rail, `aug-tools feedback` and
+  writes to it, so triage, `pr_status`, the rail, `riker-tools feedback` and
   nudges run unchanged with no GitHub call. From another terminal,
   `bun run sim:do pr-open [--mine] | comment | mention | review --verdict
   approve|changes|comment --comments N | ci fail|pass | push | merge |
   play <scenario> | state` changes it, and the sim polls on the write. Its
-  repo `sim/aug` is a remote-less clone of aug whose PR branches are real
+  repo `sim/riker` is a remote-less clone of Riker whose PR branches are real
   commits, so a task on one starts in a worktree with a real diff; the
   seeded coding task's `--mine` PR is linked to it. A scenario is a list of
   events in `SCENARIOS` (`events.ts`); `packages/fixtures/test/sim.test.ts` reads the fake
   through `pollGithub` and `readPrBatch`, so it cannot drift from them.
 - `bun test` covers the core. Reproduce a bug in a test before fixing it.
-- Real-mode checks cost tokens: use `haiku` in a scratch `AUG_HOME`.
+- Real-mode checks cost tokens: use `haiku` in a scratch `RIKER_HOME`.

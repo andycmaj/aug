@@ -3,13 +3,13 @@
 // dialog here, and the answer starts again. Nothing here decides the order.
 
 import { useFocus, useToast } from "@andycmaj/opentui-app";
-import { useAug, ViewMode } from "../context/aug";
+import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
-import { inTmux, type StartOptions } from "@aug/core/driver";
-import { errorMessage } from "@aug/core/log";
-import { describeProblem, type PathNeed } from "@aug/core/repos";
-import { taskRef } from "@aug/core/rows";
-import { Kind, type TaskRow } from "@aug/core/types";
+import { inTmux, type StartOptions } from "@riker/core/driver";
+import { errorMessage } from "@riker/core/log";
+import { describeProblem, type PathNeed } from "@riker/core/repos";
+import { taskRef } from "@riker/core/rows";
+import { Kind, type TaskRow } from "@riker/core/types";
 import type { Dialogs } from "./actions";
 import { ChoiceModal, PromptModal } from "./modals";
 import { useRepos } from "./use-repos";
@@ -18,22 +18,22 @@ export function useAgentStart(
   dialogs: Dialogs,
   attachViewer: (taskId: number) => Promise<boolean>,
 ) {
-  const aug = useAug();
+  const riker = useRiker();
   const terminals = useTerminals();
   const { setActivePane } = useFocus();
   const { showToast } = useToast();
-  const desk = aug.desk;
+  const desk = riker.desk;
   const { pathChoices } = useRepos(dialogs);
 
   function showTask(taskId: number) {
-    if (aug.mode() === ViewMode.chat) {
-      aug.selectTask(taskId);
+    if (riker.mode() === ViewMode.chat) {
+      riker.selectTask(taskId);
       setActivePane("canvas");
     }
   }
 
   async function startAgent(taskId: number, opts: StartOptions = {}) {
-    const task = aug.task(taskId);
+    const task = riker.task(taskId);
     if (!task) return;
     const coding = inTmux(task);
     if (coding && terminals.forTask(taskId)?.running) return showTask(taskId);

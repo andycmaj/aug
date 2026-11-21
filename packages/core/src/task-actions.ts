@@ -1,8 +1,8 @@
 // Task actions: a skill run on one task at the owner's word (docs/
-// task-actions-design.md). The recipe is a skill; what aug adds is which
+// task-actions-design.md). The recipe is a skill; what Riker adds is which
 // rows it applies to, how it runs and where its answer goes. Built-ins are
-// registered here and their skills ship in aug's own plugin (core's
-// plugin/, written under AUG_HOME at start); config.json `actions`
+// registered here and their skills ship in Riker's own plugin (core's
+// plugin/, written under RIKER_HOME at start); config.json `actions`
 // changes one field by field, turns one off (false) or registers another.
 //
 // An action is not the task's agent: it never touches agent_state, and its
@@ -19,11 +19,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import guideSkill from "@aug/code-review-plannotator/SKILL.md" with { type: "text" };
+import guideSkill from "@riker/code-review-plannotator/SKILL.md" with { type: "text" };
 import quizSkill from "../plugin/skills/quiz/SKILL.md" with { type: "text" };
 import summarizeSkill from "../plugin/skills/summarize/SKILL.md" with { type: "text" };
 import { claudeDir, declaredRules, pluginSkillFiles } from "./capabilities";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
+import { envName, LEGACY, PLUGIN } from "./brand";
 import { logger } from "./log";
 import { paths } from "./paths";
 import { taskPr } from "./pr";
@@ -55,7 +56,7 @@ export const ActionOutput = {
   // The skill does its own output (a pane the owner talks in).
   none: "none",
   // The answer is Plannotator guide JSON: saved into Plannotator, opened in
-  // `plannotator review`, its findings listed on the turn (@aug/code-review-plannotator).
+  // `plannotator review`, its findings listed on the turn (@riker/code-review-plannotator).
   guide: "guide",
 } as const;
 export type ActionOutput = (typeof ActionOutput)[keyof typeof ActionOutput];
@@ -97,7 +98,7 @@ export interface ActionSpec {
   name: string;
   // The picker's label.
   title: string;
-  // "plugin:name" (aug's own plugin is "aug") or a bare skill name.
+  // "plugin:name" (Riker's own plugin is "Riker") or a bare skill name.
   skill: string;
   // Passed after the skill: {ref} {title} {worktree} {branch} {base} {pr}.
   args?: string;
@@ -121,14 +122,14 @@ const WORK_KINDS: Kind[] = [Kind.general, Kind.coding, Kind.reply, Kind.task];
 export const BUILTIN_ACTIONS: Record<string, Omit<ActionSpec, "name">> = {
   summarize: {
     title: "Summarize the work so far",
-    skill: "aug:summarize",
+    skill: "riker:summarize",
     args: "task {ref} ({title}); checkout {worktree}; base {base}",
     via: ActionVia.fork,
     output: ActionOutput.turn,
   },
   guide: {
     title: "Guided review, with review notes",
-    skill: "aug:guide",
+    skill: "riker:guide",
     args: "task {ref} ({title}); base {base}; pull request {pr}",
     via: ActionVia.fork,
     kinds: [Kind.coding],
@@ -137,7 +138,7 @@ export const BUILTIN_ACTIONS: Record<string, Omit<ActionSpec, "name">> = {
   },
   quiz: {
     title: "Quiz me on the change",
-    skill: "aug:quiz",
+    skill: "riker:quiz",
     // No {title}: it can come from Slack or GitHub, and this one runs
     // interactive claude with the owner's own settings.
     args: "task {ref}; base {base}; 5 questions",
@@ -148,34 +149,41 @@ export const BUILTIN_ACTIONS: Record<string, Omit<ActionSpec, "name">> = {
   },
 };
 
-// The skills of aug's own plugin, by name, as shipped.
-const AUG_SKILLS: Record<string, string> = {
+// The skills of Riker's own plugin, by name, as shipped.
+const RIKER_SKILLS: Record<string, string> = {
   summarize: summarizeSkill,
   guide: guideSkill,
   quiz: quizSkill,
 };
 
-export const AUG_PLUGIN = "aug";
+export const RIKER_PLUGIN = PLUGIN;
 
-export function augPluginDir(): string {
+// A config written before the rename names aug's plugin (aug:summarize): the
+// same skills are Riker's now.
+export function currentSkill(skill: string): string {
+  const prefix = `${LEGACY.plugin}:`;
+  return skill.startsWith(prefix) ? `${RIKER_PLUGIN}:${skill.slice(prefix.length)}` : skill;
+}
+
+export function rikerPluginDir(): string {
   return join(paths.home(), "plugin");
 }
 
-// aug's plugin under AUG_HOME, rewritten when a shipped skill changed. Its
+// Riker's plugin under RIKER_HOME, rewritten when a shipped skill changed. Its
 // own home, so no install step: headless runs load it with --plugin-dir.
-export function ensureAugPlugin(dir = augPluginDir()): string {
+export function ensureRikerPlugin(dir = rikerPluginDir()): string {
   const manifest = join(dir, ".claude-plugin", "plugin.json");
   const want = JSON.stringify(
     {
-      name: AUG_PLUGIN,
+      name: RIKER_PLUGIN,
       version: "1.0.0",
-      description: "aug's task actions (summarize, ...), as skills.",
+      description: "Riker's task actions (summarize, ...), as skills.",
     },
     null,
     2,
   );
   writeIfChanged(manifest, `${want}\n`);
-  for (const [name, text] of Object.entries(AUG_SKILLS))
+  for (const [name, text] of Object.entries(RIKER_SKILLS))
     writeIfChanged(join(dir, "skills", name, "SKILL.md"), text);
   return dir;
 }
@@ -186,13 +194,13 @@ function writeIfChanged(file: string, text: string): void {
     mkdirSync(join(file, ".."), { recursive: true });
     writeFileSync(file, text);
   } catch (err) {
-    log.warn("could not write aug's plugin", { file, err });
+    log.warn("could not write Riker's plugin", { file, err });
   }
 }
 
 // Built-ins, then config's changes and additions. An entry without a skill
 // or a via is left out (and logged), never guessed.
-export function registeredActions(config: AugConfig): ActionSpec[] {
+export function registeredActions(config: RikerConfig): ActionSpec[] {
   const out: ActionSpec[] = [];
   const names = new Set([
     ...Object.keys(BUILTIN_ACTIONS),
@@ -209,7 +217,7 @@ export function registeredActions(config: AugConfig): ActionSpec[] {
     out.push({
       name,
       title: merged.title ?? name,
-      skill: merged.skill,
+      skill: currentSkill(merged.skill),
       args: merged.args,
       via: merged.via,
       capability: merged.capability,
@@ -240,7 +248,7 @@ function isVia(v: string): v is ActionVia {
 }
 
 export function actionNamed(
-  config: AugConfig,
+  config: RikerConfig,
   name: string,
 ): ActionSpec | undefined {
   return registeredActions(config).find((a) => a.name === name);
@@ -269,7 +277,7 @@ export function whyNot(spec: ActionSpec, task: TaskRow): string | null {
 // and they apply to it. A pane action needs the owner at the keyboard, so
 // nothing runs one by itself.
 export function triggeredBy(
-  config: AugConfig,
+  config: RikerConfig,
   event: ActionEvent,
   task: TaskRow,
   message?: MessageRow | null,
@@ -312,7 +320,7 @@ function regexMatch(pattern: string | undefined, value: string | null | undefine
 
 // The actions that ask for a key of their own (bound at start).
 export function keyedActions(
-  config: AugConfig,
+  config: RikerConfig,
 ): { name: string; key: string; title: string }[] {
   return registeredActions(config).flatMap((a) =>
     a.key ? [{ name: a.name, key: a.key, title: a.title }] : [],
@@ -320,7 +328,7 @@ export function keyedActions(
 }
 
 // The actions the picker offers for a task.
-export function actionsFor(config: AugConfig, task: TaskRow): ActionSpec[] {
+export function actionsFor(config: RikerConfig, task: TaskRow): ActionSpec[] {
   return registeredActions(config).filter((a) => whyNot(a, task) === null);
 }
 
@@ -360,7 +368,7 @@ export function invocation(
 }
 
 // Where a headless run loads a skill from, and the name it is invoked by:
-// aug's own plugin, the plugin the action's capability grants, or a bare
+// Riker's own plugin, the plugin the action's capability grants, or a bare
 // user skill (~/.claude/skills/<name>) wrapped in a plugin of its own, since
 // headless claude skips the user's settings. `wrapped` says the skill's
 // allowed-tools were not vetted by a capability.
@@ -377,8 +385,8 @@ export function skillSource(
   const [plugin, name] = spec.skill.includes(":")
     ? (spec.skill.split(":", 2) as [string, string])
     : [null, spec.skill];
-  if (plugin === AUG_PLUGIN) {
-    const dir = ensureAugPlugin();
+  if (plugin === RIKER_PLUGIN) {
+    const dir = ensureRikerPlugin();
     return existsSync(join(dir, "skills", name))
       ? { dir, as: spec.skill, wrapped: false }
       : null;
@@ -395,14 +403,14 @@ export function skillSource(
   return dir ? { dir, as: spec.skill, wrapped: false } : null;
 }
 
-export const WRAP_PLUGIN = "aug-user";
+export const WRAP_PLUGIN = "riker-user";
 
 export function userSkillDir(name: string): string {
   return join(claudeDir(), "skills", name);
 }
 
 // A plugin folder holding one user skill (linked, so an edit to the skill
-// applies), under AUG_HOME. Made once and kept while its link still points
+// applies), under RIKER_HOME. Made once and kept while its link still points
 // at the skill, so two runs at once never pull it from under each other.
 export function wrapUserSkill(name: string): string | null {
   if (!/^[A-Za-z0-9_-]+$/.test(name)) return null;
@@ -414,7 +422,7 @@ export function wrapUserSkill(name: string): string | null {
     const target = realpathSync(source);
     writeIfChanged(
       join(dir, ".claude-plugin", "plugin.json"),
-      `${JSON.stringify({ name: WRAP_PLUGIN, version: "1.0.0", description: `Your ${name} skill, for aug's headless runs.` }, null, 2)}\n`,
+      `${JSON.stringify({ name: WRAP_PLUGIN, version: "1.0.0", description: `Your ${name} skill, for Riker's headless runs.` }, null, 2)}\n`,
     );
     if (linkTarget(link) !== target) {
       rmSync(link, { recursive: true, force: true });
@@ -437,9 +445,9 @@ function linkTarget(path: string): string | null {
 }
 
 // The interactive claude a pane action runs: the skill as its first prompt,
-// with aug's plugin (or the capability's) loaded; a bare user skill needs
-// nothing, since interactive claude loads the user's settings. AUG_TASK_ID
-// without a session id keeps aug's hooks off it: it is not the task's agent.
+// with Riker's plugin (or the capability's) loaded; a bare user skill needs
+// nothing, since interactive claude loads the user's settings. RIKER_TASK_ID
+// without a session id keeps Riker's hooks off it: it is not the task's agent.
 export function paneCommand(
   spec: ActionSpec,
   task: TaskRow,
@@ -451,11 +459,11 @@ export function paneCommand(
     const source = skillSource(spec, capabilityDirs);
     // A plugin the user installed loads with their settings anyway.
     if (source) dirs = [source.dir];
-    else if (plugin === AUG_PLUGIN) return { error: `skill ${spec.skill} not found in aug's plugin` };
+    else if (plugin === RIKER_PLUGIN) return { error: `skill ${spec.skill} not found in Riker's plugin` };
   } else if (!existsSync(join(userSkillDir(spec.skill), "SKILL.md"))) {
     return { error: `skill ${spec.skill} not found in ${userSkillDir(spec.skill)}` };
   }
-  const env = { AUG_TASK_ID: String(task.id) };
+  const env = { [envName("TASK_ID")]: String(task.id) };
   return {
     argv: [
       "env",
@@ -469,10 +477,10 @@ export function paneCommand(
   };
 }
 
-// The rules aug's own skills declare: trusted, since aug wrote them.
-export function augSkillRules(spec: ActionSpec): string[] {
+// The rules Riker's own skills declare: trusted, since Riker wrote them.
+export function rikerSkillRules(spec: ActionSpec): string[] {
   const [plugin, name] = spec.skill.split(":", 2);
-  if (plugin !== AUG_PLUGIN || !name) return [];
-  const text = AUG_SKILLS[name];
+  if (plugin !== RIKER_PLUGIN || !name) return [];
+  const text = RIKER_SKILLS[name];
   return text ? (declaredRules(text) ?? []) : [];
 }

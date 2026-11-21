@@ -2,15 +2,16 @@
 // Kept apart from the store so the views can use them without reaching for
 // the database.
 
+import { REF_PREFIX, refNumber } from "./brand";
 import type { NoteRow, ProjectRow, TurnRow } from "./types";
 
 export function taskRef(id: number): string {
-  return `AUG-${String(id).padStart(4, "0")}`;
+  return `${REF_PREFIX}${String(id).padStart(4, "0")}`;
 }
 
 export function parseTaskRef(ref: string): number | null {
-  const m = ref.trim().match(/^@?(?:aug-)?0*(\d+)$/i);
-  return m ? Number(m[1]) : null;
+  // AUG- too: refs written before the rename never go away.
+  return refNumber(ref);
 }
 
 export function goalRef(id: number): string {

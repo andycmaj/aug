@@ -303,8 +303,11 @@ export interface ReviewComment {
 
 // Who the comments are from, so the owner can tell them from their own, and
 // a re-run can clear them by source.
-export const COMMENT_SOURCE = "aug-guide";
-const COMMENT_AUTHOR = "aug guide";
+export const COMMENT_SOURCE = "riker-guide";
+// What the guide's comments were from before Riker was renamed from aug: a
+// draft saved then and brought back still carries them.
+const LEGACY_COMMENT_SOURCE = "aug-guide";
+const COMMENT_AUTHOR = "riker guide";
 
 // Bug and Risk are concerns; Test and Nit are comments.
 function commentType(text: string): ReviewComment["type"] {
@@ -371,10 +374,12 @@ export async function postComments(
       }
       // Our comments from before (a review reused, a draft brought back)
       // go first, so the findings are there once.
-      const cleared = await fetch(`${base}/api/external-annotations?source=${COMMENT_SOURCE}`, {
-        method: "DELETE",
-      });
-      if (!cleared.ok) log.warn("old comments not cleared", { port, status: cleared.status });
+      for (const source of [COMMENT_SOURCE, LEGACY_COMMENT_SOURCE]) {
+        const cleared = await fetch(`${base}/api/external-annotations?source=${source}`, {
+          method: "DELETE",
+        });
+        if (!cleared.ok) log.warn("old comments not cleared", { port, source, status: cleared.status });
+      }
       const res = await fetch(`${base}/api/external-annotations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

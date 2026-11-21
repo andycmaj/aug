@@ -4,22 +4,23 @@
 // run starts from a fresh scratch home, so its changes reset when you quit.
 
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { envVar, inAgentEnv } from "@riker/core/brand";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { setBrain, type BrainCall, type BrainResult } from "@aug/core/brain";
-import { DEFAULT_CONFIG, fixedConfig } from "@aug/core/config";
-import { localDay } from "@aug/core/rail";
-import { reviewBrief } from "@aug/core/triage";
-import { openDb, useDb } from "@aug/core/db";
-import { DocName, ensureDocs, readDoc, writeDoc } from "@aug/core/docs";
-import { Engine } from "@aug/core/engine";
-import type { MadeFile } from "@aug/core/files";
-import { setMux, TmuxMux } from "@aug/core/mux";
-import { setSender } from "@aug/core/outbound";
-import { defaultHome, paths } from "@aug/core/paths";
-import { recordSpend } from "@aug/core/spend";
-import * as store from "@aug/core/store";
+import { setBrain, type BrainCall, type BrainResult } from "@riker/core/brain";
+import { DEFAULT_CONFIG, fixedConfig } from "@riker/core/config";
+import { localDay } from "@riker/core/rail";
+import { reviewBrief } from "@riker/core/triage";
+import { openDb, useDb } from "@riker/core/db";
+import { DocName, ensureDocs, readDoc, writeDoc } from "@riker/core/docs";
+import { Engine } from "@riker/core/engine";
+import type { MadeFile } from "@riker/core/files";
+import { setMux, TmuxMux } from "@riker/core/mux";
+import { setSender } from "@riker/core/outbound";
+import { defaultHome, paths } from "@riker/core/paths";
+import { recordSpend } from "@riker/core/spend";
+import * as store from "@riker/core/store";
 import {
   AgentState,
   Kind,
@@ -29,7 +30,7 @@ import {
   TurnRole,
   type Channel,
   type Priority,
-} from "@aug/core/types";
+} from "@riker/core/types";
 
 const ago = (minutes: number) =>
   new Date(Date.now() - minutes * 60_000).toISOString();
@@ -111,7 +112,7 @@ function endedSession(id: string, taskId: number): void {
     taskId,
     kind: SessionKind.chat,
     cwd: "/tmp",
-    startedBy: "aug",
+    startedBy: "riker",
   });
   store.updateSession(id, { state: AgentState.ready, ended_at: ago(30) });
 }
@@ -384,7 +385,7 @@ export function seedDemo(): void {
       taskId: csv,
       kind: SessionKind.tmux,
       cwd: "/tmp",
-      startedBy: "aug",
+      startedBy: "riker",
     });
     store.updateSession(`demo-pty-${csv}`, {
       state: AgentState.ready,
@@ -651,13 +652,13 @@ export function seedDemo(): void {
     );
 
     store.addNote(
-      "agent AUG-0006",
+      "agent RIKER-0006",
       "ready to push",
       "CSV BOM fix on fix/csv-bom, 14 tests green - safe to build on",
       csv,
     );
     store.addNote(
-      "agent AUG-0006",
+      "agent RIKER-0006",
       "note",
       "the bank feed keeps inter-company transfers; the export drops them. That is the 4,180.",
       csv,
@@ -671,13 +672,13 @@ export function seedDemo(): void {
       "ledger",
       "Bank CSVs carry a UTF-8 BOM",
       "The bank's CSV export starts with a byte-order mark. Strip it before reading the header (`encoding='utf-8-sig'`), or the first column is named `\\ufeffdate`.",
-      "agent AUG-0006",
+      "agent RIKER-0006",
     );
     store.addKnowledge(
       "ledger",
       "Inter-company transfers",
       "Transfers between Northwind entities post on both sides. The GL export must keep them; the consolidation step removes the pair.",
-      "agent AUG-0006",
+      "agent RIKER-0006",
     );
 
     // A project holding both ledger fixes, so the rail has one to show.
@@ -786,7 +787,7 @@ export async function demoBrain(call: BrainCall): Promise<BrainResult> {
       about: asked
         ? `You said: "${asked.slice(0, 80)}"`
         : "The ask on this thread.",
-      did: "This is the demo: there is no AI behind it, so this turn is canned. In your own aug the agent reads the thread, does the research, and answers here.",
+      did: "This is the demo: there is no AI behind it, so this turn is canned. In your own riker the agent reads the thread, does the research, and answers here.",
       next: replyOwed ? "A reply is set up below." : "Nothing left to do here.",
       state: replyOwed ? "ready" : "done",
       ...(replyOwed
@@ -800,17 +801,17 @@ export async function demoBrain(call: BrainCall): Promise<BrainResult> {
     });
   }
   // Home: the Assistant answers in words, after looking things up.
-  if (call.env?.AUG_ASKED_BY === "assistant") {
-    const named = [...call.prompt.matchAll(/^(AUG-\d{4}) \[[^\]]*\] (.+?)(?: \(project .+\))?$/gm)];
+  if (call.env?.RIKER_ASKED_BY === "assistant") {
+    const named = [...call.prompt.matchAll(/^(RIKER-\d{4}) \[[^\]]*\] (.+?)(?: \(project .+\))?$/gm)];
     const asked = call.prompt.includes("## Tasks the owner named")
       ? call.prompt.split("## Tasks the owner named\n")[1].split("\n")[0]
       : null;
-    for (const step of ["Bash aug-tools tasks", ...(asked ? [`Bash aug-tools task ${asked.slice(0, 8)}`] : [])]) {
+    for (const step of ["Bash riker-tools tasks", ...(asked ? [`Bash riker-tools task ${asked.slice(0, 8)}`] : [])]) {
       await sleep(600);
       call.onStep?.(step);
     }
     const text = asked
-      ? `This is the demo, so I answer from a script. You named **${asked}**. In your own aug I'd read it, answer, and move it if you asked: make a coding task from it, put it in a project, start its agent.`
+      ? `This is the demo, so I answer from a script. You named **${asked}**. In your own riker I'd read it, answer, and move it if you asked: make a coding task from it, put it in a project, start its agent.`
       : `This is the demo, so I answer from a script. There are ${named.length} open tasks. Name one with @ and ask me about it, or tell me to make, move, start or close something.`;
     return { ...done(null), text };
   }
@@ -835,28 +836,28 @@ export async function demoBrain(call: BrainCall): Promise<BrainResult> {
   return done(null);
 }
 
-// A scratch home unless you named one. An agent's window carries aug's own
-// AUG_HOME (for aug-tools); a demo run there would reconcile aug's live
+// A scratch home unless you named one. An agent's window carries Riker's own
+// RIKER_HOME (for riker-tools); a demo run there would reconcile Riker's live
 // sessions against the empty demo tmux server and mark every claude gone.
 // Your real home is never the demo's either.
 export function demoHome(
   env: Record<string, string | undefined> = process.env,
-  prefix = "aug-demo-",
+  prefix = "riker-demo-",
 ): string {
-  const named = env.AUG_HOME;
-  if (named && !env.AUG && resolve(named) !== resolve(defaultHome())) return named;
+  const named = envVar("HOME", env);
+  if (named && !inAgentEnv(env) && resolve(named) !== resolve(defaultHome())) return named;
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
 export function installFixture(name: string): Engine {
   if (name !== "demo") throw new Error(`unknown fixture "${name}" (try: demo)`);
-  process.env.AUG_HOME = demoHome();
+  process.env.RIKER_HOME = demoHome();
   useDb(openDb());
   // Coding agents run on a private tmux server, never your own.
   const config = fixedConfig({
     ...DEFAULT_CONFIG,
     autostart: false,
-    tmuxSocket: "aug-demo",
+    tmuxSocket: "riker-demo",
   });
   setMux(new TmuxMux(config.get().tmuxSocket));
   ensureDocs();
@@ -867,7 +868,7 @@ export function installFixture(name: string): Engine {
   setBrain(demoBrain);
   setSender(async () => {
     await sleep(300);
-    return "the demo: nothing was sent (in your own aug this is where it goes)";
+    return "the demo: nothing was sent (in your own riker this is where it goes)";
   });
   const fake = fileURLToPath(new URL("./fake-claude.ts", import.meta.url));
   return new Engine({

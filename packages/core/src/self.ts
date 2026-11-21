@@ -1,18 +1,19 @@
-// How an agent (or a Claude Code hook it fires) calls back into aug. The tools
+// How an agent (or a Claude Code hook it fires) calls back into Riker. The tools
 // entry is plain TypeScript, so it runs under bare `bun` without the Solid
 // preload the TUI needs.
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { augHome } from "./paths";
+import { ENTRYPOINT, LEGACY, TOOLS_NAME } from "./brand";
+import { rikerHome } from "./paths";
 
 // A compiled binary (`bun run compile`) has no script on disk to hand bun; it
-// is aug-tools itself under the `tools` subcommand (@aug/cli's aug.ts).
+// is riker-tools itself under the `tools` subcommand (@riker/cli's riker.ts).
 const COMPILED = import.meta.url.includes("/$bunfs/");
 export const TOOLS_SUBCOMMAND = "tools";
 
-// aug-tools lives in @aug/cli, which depends on core: the entry point that
-// starts aug (or aug-tools itself) says where it is.
+// riker-tools lives in @riker/cli, which depends on core: the entry point that
+// starts Riker (or riker-tools itself) says where it is.
 let entry: string | null = null;
 
 export function setToolsEntry(path: string): void {
@@ -20,7 +21,7 @@ export function setToolsEntry(path: string): void {
 }
 
 export function toolsEntry(): string {
-  if (!entry) throw new Error("aug-tools entry not set: the entry point calls setToolsEntry");
+  if (!entry) throw new Error("riker-tools entry not set: the entry point calls setToolsEntry");
   return entry;
 }
 
@@ -40,13 +41,16 @@ export function toolsCommand(...args: string[]): string {
 // What a headless agent is told to type. Handed the long bun and script paths,
 // models abbreviate them (`B=...; T=...; $B $T move ...`), which no allow rule
 // can match; a short name on PATH leaves nothing to abbreviate.
-export const TOOLS_NAME = "aug-tools";
+export { TOOLS_NAME };
 
+// aug-tools beside it, until the compat window closes: agents started before
+// the rename are allowed `aug-tools ...` and find it on this PATH.
 export function toolsBin(): string {
-  const dir = join(augHome(), "bin");
-  const file = join(dir, TOOLS_NAME);
+  const dir = join(rikerHome(), "bin");
   const script = `#!/bin/sh\nexec ${toolsArgv().map(shellQuote).join(" ")} "$@"\n`;
-  if (!existsSync(file) || readFileSync(file, "utf8") !== script) {
+  for (const name of [TOOLS_NAME, LEGACY.toolsName]) {
+    const file = join(dir, name);
+    if (existsSync(file) && readFileSync(file, "utf8") === script) continue;
     mkdirSync(dir, { recursive: true });
     writeFileSync(file, script);
     chmodSync(file, 0o755);
@@ -58,7 +62,7 @@ export function toolsEnv(): Record<string, string> {
   return { PATH: `${toolsBin()}:${process.env.PATH ?? ""}` };
 }
 
-// Bash allow rules for an aug-tools command: the short name, and the full
+// Bash allow rules for a riker-tools command: the short name, and the full
 // paths spelled either way in case a model writes them out anyway.
 export function toolsRules(...args: string[]): string[] {
   const tail = args.map(shellQuote).join(" ");
@@ -72,12 +76,12 @@ export function toolsRules(...args: string[]): string[] {
   ].map((c) => `Bash(${c}:*)`);
 }
 
-// The environment for a claude aug runs itself. TMUX_PANE goes: aug may run
+// The environment for a claude Riker runs itself. TMUX_PANE goes: Riker may run
 // in a pane of a task's window, and a claude that loads user settings would
-// have its hooks adopt it into that task (and aug-tools would take the pane's
+// have its hooks adopt it into that task (and riker-tools would take the pane's
 // task for its own).
 export function claudeEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
-  // The Slack token stays with aug: an agent's shell never sees it.
+  // The Slack token stays with Riker: an agent's shell never sees it.
   const { TMUX_PANE: _, SLACK_TOKEN: _token, ...env } = process.env;
-  return { ...env, ...extra, CLAUDE_CODE_ENTRYPOINT: "aug" };
+  return { ...env, ...extra, CLAUDE_CODE_ENTRYPOINT: ENTRYPOINT };
 }

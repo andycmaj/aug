@@ -1,11 +1,11 @@
-// What aug's own model calls cost, and the daily cap on them. Every headless
+// What Riker's own model calls cost, and the daily cap on them. Every headless
 // call (think(), and the Slack reader's persistent session) records one row
 // by local day, task and role; the cap (config.spend) holds back the turns
-// aug starts by itself once the day's total reaches it. The owner's own
-// presses always run. Coding agents in tmux report no cost to aug and are
+// Riker starts by itself once the day's total reaches it. The owner's own
+// presses always run. Coding agents in tmux report no cost to Riker and are
 // not counted.
 
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { logger } from "./log";
 import { localDay } from "./rail";
 import * as store from "./store";
@@ -65,19 +65,19 @@ export function spentToday(at = new Date()): SpendTotal {
 }
 
 // The cap in force, or null when it is off.
-export function dailyCap(config: AugConfig): number | null {
+export function dailyCap(config: RikerConfig): number | null {
   return config.spend.capEnabled && config.spend.dailyUsd > 0
     ? config.spend.dailyUsd
     : null;
 }
 
-export function capReached(config: AugConfig, at = new Date()): boolean {
+export function capReached(config: RikerConfig, at = new Date()): boolean {
   const cap = dailyCap(config);
   return cap !== null && spentToday(at).cost >= cap;
 }
 
 // The queue reason a held turn carries.
-export function capReason(config: AugConfig, at = new Date()): string {
+export function capReason(config: RikerConfig, at = new Date()): string {
   return `daily spend cap reached (${usd(spentToday(at).cost)} of ${usd(dailyCap(config) ?? 0)}); runs tomorrow or when you start it`;
 }
 
@@ -99,7 +99,7 @@ export function tokens(n: number): string {
   return String(n);
 }
 
-// The whole picture, for aug-tools spend and the Board's Cost tab.
+// The whole picture, for riker-tools spend and the Board's Cost tab.
 export interface SpendReport {
   day: string;
   today: SpendTotal;
@@ -110,7 +110,7 @@ export interface SpendReport {
   tasksWeek: SpendByTask[];
 }
 
-export function spendReport(config: AugConfig, at = new Date()): SpendReport {
+export function spendReport(config: RikerConfig, at = new Date()): SpendReport {
   const day = localDay(at);
   const weekStart = dayBefore(at, 6);
   return {
@@ -128,7 +128,7 @@ export function reportLines(report: SpendReport): string[] {
   const capLine =
     report.cap === null
       ? "no daily cap (spend.capEnabled is off)"
-      : `cap ${usd(report.cap)}/day${report.today.cost >= report.cap ? " - REACHED: turns aug starts by itself wait" : ""}`;
+      : `cap ${usd(report.cap)}/day${report.today.cost >= report.cap ? " - REACHED: turns Riker starts by itself wait" : ""}`;
   const task = (t: SpendByTask) =>
     `  ${store.taskRef(t.task_id).padEnd(9)} ${usd(t.cost).padStart(8)}  ${String(t.calls).padStart(4)} calls  ${store.getTask(t.task_id)?.title ?? "(gone)"}`;
   return [

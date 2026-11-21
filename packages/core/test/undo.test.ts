@@ -214,7 +214,7 @@ describe("ctrl+z undoes the last move", () => {
   test("a task deleted since cannot be undone", async () => {
     const t = task();
     engine.desk.setPriority(t.id, Priority.urgent);
-    // Nothing in aug deletes a task row; a raw delete stands in, past the
+    // Nothing in Riker deletes a task row; a raw delete stands in, past the
     // rows that point at it.
     db().run("PRAGMA foreign_keys = OFF");
     db().run("DELETE FROM tasks WHERE id = ?", [t.id]);

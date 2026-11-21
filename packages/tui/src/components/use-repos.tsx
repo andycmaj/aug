@@ -1,11 +1,11 @@
-// Repos and where they are checked out: the Repos list (every repo aug
+// Repos and where they are checked out: the Repos list (every repo Riker
 // knows, its checkout's state, checkouts on disk it has no path for), and
 // the choices for one repo's checkout, which a coding Start offers too when
 // the checkout will not do. Nothing is mapped unless the owner picks it.
 
 import { useToast } from "@andycmaj/opentui-app";
-import { useAug } from "../context/aug";
-import { errorMessage } from "@aug/core/log";
+import { useRiker } from "../context/riker";
+import { errorMessage } from "@riker/core/log";
 import {
   describeProblem,
   problemFix,
@@ -13,7 +13,7 @@ import {
   type Candidate,
   type CheckoutProblem,
   type RepoState,
-} from "@aug/core/repos";
+} from "@riker/core/repos";
 import type { Dialogs } from "./actions";
 import { ChoiceModal, PromptModal, type Choice } from "./modals";
 
@@ -27,9 +27,9 @@ export interface PathPick {
 }
 
 export function useRepos(dialogs: Dialogs) {
-  const aug = useAug();
+  const riker = useRiker();
   const { showToast } = useToast();
-  const desk = aug.desk;
+  const desk = riker.desk;
 
   // What can be done about one repo's checkout. `done` runs after a change
   // took (a Start starts again, the Repos list shows again).
@@ -164,7 +164,7 @@ export function useRepos(dialogs: Dialogs) {
     dialogs.show(() => (
       <ChoiceModal
         title="Repos"
-        hint="! needs a checkout. + is on disk with no path in aug: pick it to add it."
+        hint="! needs a checkout. + is on disk with no path in Riker: pick it to add it."
         choices={choices}
         wide
         onClose={dialogs.close}

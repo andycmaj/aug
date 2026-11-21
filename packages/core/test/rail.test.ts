@@ -496,7 +496,7 @@ describe("status model (docs/rail-status-design.md)", () => {
 
   test("a blocked row never slips", () => {
     const t = coding();
-    store.updateTask(t.id, { waiting_on: "AUG-0001" });
+    store.updateTask(t.id, { waiting_on: "RIKER-0001" });
     const task = store.getTask(t.id)!;
     expect(isSlipped(task, at(0), new Date())).toBe(true);
     expect(isSlipped(task, at(0), new Date(), true)).toBe(false);

@@ -9,7 +9,7 @@ import * as store from "../src/store";
 import { TurnRole, TurnStatus } from "../src/types";
 import { freshHome, withLimit } from "./support/helpers";
 
-// Another process (an agent's hook, aug-tools) holding the write lock, as
+// Another process (an agent's hook, riker-tools) holding the write lock, as
 // it does while the owner replies in a chat. It lets go after `holdMs`, or
 // when its stdin closes. A busy wait blocks this process's event loop, so
 // only the holder's own timer can end a lock this process is waiting on.
@@ -45,7 +45,7 @@ let file: string;
 
 beforeEach(() => {
   freshHome({ log: { enabled: true, level: "debug" } });
-  file = join(process.env.AUG_HOME!, "aug.db");
+  file = join(process.env.RIKER_HOME!, "riker.db");
   useDb(openDb(file));
   setBrain(async (call) => ({
     text: "On it.",

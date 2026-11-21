@@ -1,6 +1,6 @@
 // `/`: find any row on the rail, folded ones and For later included. Three
 // kinds of words get their own reading, because they are how work is named
-// out loud: a task number (AUG-0023, 23), a GitHub number (#123), and a
+// out loud: a task number (RIKER-0023, 23), a GitHub number (#123), and a
 // person (@jane: whoever wrote on the thread in Slack or GitHub, or whom it
 // waits on). Everything else matches the title first, then the content,
 // then the task's chat (what you typed, what its agent answered) last: agents
@@ -263,9 +263,9 @@ function wordMatch(doc: SearchDoc, raw: string): Match | null {
     return doc.taskId === n ? { score: 1, why: null } : null;
   }
 
-  // AUG-0023, aug23, 23: the task number. A bare number may also be a
+  // RIKER-0023, AUG-0023, riker23, 23: the task number. A bare number may also be a
   // GitHub number or just a number in the words.
-  const ref = word.match(/^(aug-?)?0*(\d+)$/);
+  const ref = word.match(/^((?:riker|aug)-?)?0*(\d+)$/);
   let match: Match | null = null;
   if (ref) {
     const id = doc.taskId === null ? "" : String(doc.taskId);

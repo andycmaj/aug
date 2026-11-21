@@ -126,12 +126,12 @@ describe("general agent turns", () => {
     expect(task.agent_says).toBe("Which licence tier?");
   });
 
-  test("aug-started turns queue past Agents at once; owner-started ones never wait", async () => {
+  test("riker-started turns queue past Agents at once; owner-started ones never wait", async () => {
     const ids = [slackTask(), slackTask(), slackTask()];
     fakeBrain(() => ({ about: "a", did: "b", next: "c", state: "done" }));
     const pool = new AgentPool({ config: withLimit(1) });
-    const first = pool.request(ids[0], "x", "aug");
-    expect(pool.request(ids[1], "x", "aug")).toBeNull();
+    const first = pool.request(ids[0], "x", "riker");
+    expect(pool.request(ids[1], "x", "riker")).toBeNull();
     expect(store.getTask(ids[1])!.agent_state).toBe(AgentState.queued);
     expect(pool.request(ids[2], "x", "owner")).not.toBeNull();
     await first;
@@ -182,7 +182,7 @@ describe("coding agent", () => {
     const launch = codingLaunch(config(), t);
     expect(launch.argv[0]).toBe("claude");
     expect(launch.argv).toContain("--settings");
-    expect(launch.env.AUG_TASK_ID).toBe(String(t.id));
+    expect(launch.env.RIKER_TASK_ID).toBe(String(t.id));
     const hooks = hookSettings().hooks as Record<string, unknown>;
     expect(Object.keys(hooks)).toEqual([
       "UserPromptSubmit",
@@ -205,7 +205,7 @@ describe("coding agent", () => {
       taskId: t.id,
       kind: SessionKind.tmux,
       cwd: "/tmp",
-      startedBy: "aug",
+      startedBy: "riker",
     });
     const env = { taskId: t.id, sessionId: "s1" };
     handleHook("prompt", {}, env);
@@ -229,7 +229,7 @@ describe("coding agent", () => {
     handleDone(env, { summary: "Export keeps transfers; 14 tests green" });
     const task = store.getTask(t.id)!;
     expect(task.agent_state).toBe(AgentState.ready);
-    // nobody asked from outside, aug started it: done, and unread until read
+    // nobody asked from outside, Riker started it: done, and unread until read
     expect(task.status).toBe(TaskStatus.done);
     expect(task.unread_result).toBe(1);
     handleHook("end", {}, env);
@@ -247,7 +247,7 @@ describe("turn signals", () => {
       taskId: t.id,
       kind: SessionKind.tmux,
       cwd: "/tmp",
-      startedBy: "aug",
+      startedBy: "riker",
     });
     return { taskId: t.id, sessionId: "s1" };
   }
@@ -270,7 +270,7 @@ describe("turn signals", () => {
 
   test("the question is read from the transcript when the payload has none", () => {
     const env = live();
-    const path = join(process.env.AUG_HOME!, "t.jsonl");
+    const path = join(process.env.RIKER_HOME!, "t.jsonl");
     writeFileSync(
       path,
       [

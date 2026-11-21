@@ -1,4 +1,4 @@
-// The simulator's repository: a scratch clone of aug itself, so a PR's diff
+// The simulator's repository: a scratch clone of Riker itself, so a PR's diff
 // is real code an agent can read. It shares the source's objects (cheap)
 // and has no remote, so nothing in it can be pushed. main sits a few
 // commits back; each PR branch is one of the commits after it.
@@ -34,7 +34,7 @@ export function repoRoot(from: string): string {
 }
 
 export function makeCheckout(source: string, home: string): SimCheckout {
-  const path = join(home, "repos", "aug");
+  const path = join(home, "repos", "riker");
   mkdirSync(dirname(path), { recursive: true });
   const run = (args: string[]) => git(path, args);
   Bun.spawnSync([

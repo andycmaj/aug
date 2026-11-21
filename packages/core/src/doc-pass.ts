@@ -7,10 +7,10 @@
 // something is new since the last pass (a lesson went in use, a correction
 // came in) or a doc is over budget. Shipped docs are never proposed to: an
 // edit would stop their updates, so a lesson that belongs in one becomes an
-// Advisor idea to change aug instead.
+// Advisor idea to change Riker instead.
 
 import { think } from "./brain";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import {
   archiveLearned,
   DOC_PURPOSE,
@@ -83,7 +83,7 @@ const PASS_SCHEMA = {
         required: ["title", "body"],
       },
       description:
-        "lessons that belong in one of aug's shipped docs (TRIAGE, ASSISTANT, CODING): what to change in aug",
+        "lessons that belong in one of Riker's shipped docs (TRIAGE, ASSISTANT, CODING): what to change in Riker",
     },
   },
   required: ["edits"],
@@ -145,7 +145,7 @@ function sinceLastPass(): string {
   return fresh.length ? fresh.join("\n\n") : "(none)";
 }
 
-function docSection(config: AugConfig, name: Editable): string {
+function docSection(config: RikerConfig, name: Editable): string {
   const size = docSize(name);
   const budget = docBudget(config, name);
   return [
@@ -155,7 +155,7 @@ function docSection(config: AugConfig, name: Editable): string {
 }
 
 export async function runDocPass(
-  config: AugConfig,
+  config: RikerConfig,
   at = new Date(),
   force = false,
 ): Promise<{ proposed: number; ideas: number; archived: number; skipped?: string }> {
@@ -179,12 +179,12 @@ export async function runDocPass(
       `Today is ${at.toISOString().slice(0, 10)}.`,
     ].join("\n\n"),
     system: [
-      "You keep aug's brain docs. aug is the owner's work manager; these docs go into every prompt it runs, so each word costs on every call. LEARNED.md is what aug learned from the owner's corrections; PERSONA, JOB and STYLE are the owner's own docs, written as the owner speaking.",
+      "You keep Riker's brain docs. Riker is the owner's work manager; these docs go into every prompt it runs, so each word costs on every call. LEARNED.md is what Riker learned from the owner's corrections; PERSONA, JOB and STYLE are the owner's own docs, written as the owner speaking.",
       "Propose an edit only when it earns its place:",
       "- A lesson in use in LEARNED.md that is settled and belongs in PERSONA, JOB or STYLE: fold it in, in the owner's voice, and list the LEARNED.md lines it absorbs.",
       "- A doc marked OVER BUDGET: a shorter text that keeps every rule. For LEARNED.md, merge and drop lines and list the dropped ones under absorbs.",
       "Each text is the whole doc, under its budget. Never touch a line the owner wrote in LEARNED.md (one with no [s:...] tag) except to absorb it into their own doc. Never record a secret.",
-      "A lesson that is about how aug itself triages or how its agents work belongs in aug's shipped docs, not here: say it as an idea instead.",
+      "A lesson that is about how Riker itself triages or how its agents work belongs in Riker's shipped docs, not here: say it as an idea instead.",
       "Zero edits is the usual answer.",
     ].join("\n"),
     schema: PASS_SCHEMA,
@@ -223,7 +223,7 @@ export async function runDocPass(
   const open = store.openIdeas().map((i) => i.title.toLowerCase());
   for (const idea of answer?.ideas ?? []) {
     if (open.includes(idea.title.toLowerCase())) continue;
-    store.addIdea(idea.title, `${idea.body}\n\n(A change to aug's shipped docs: an AUG-MISC task.)`, null);
+    store.addIdea(idea.title, `${idea.body}\n\n(A change to Riker's shipped docs: an AUG-MISC task.)`, null);
     ideas++;
   }
   store.kvSet(SEEN, signature());

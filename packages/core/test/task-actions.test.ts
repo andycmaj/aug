@@ -23,8 +23,8 @@ import { setMux } from "../src/mux";
 import * as store from "../src/store";
 import {
   actionsFor,
-  augPluginDir,
-  ensureAugPlugin,
+  rikerPluginDir,
+  ensureRikerPlugin,
   fillArgs,
   invocation,
   registeredActions,
@@ -87,11 +87,11 @@ describe("the registry", () => {
   test("config turns one off, changes one field by field, adds one", () => {
     const c = withActions({
       summarize: { model: "haiku" },
-      recap: { skill: "aug:summarize", via: "headless", title: "Recap" },
+      recap: { skill: "riker:summarize", via: "headless", title: "Recap" },
     });
     const byName = Object.fromEntries(registeredActions(c).map((a) => [a.name, a]));
     expect(byName.summarize!.model).toBe("haiku");
-    expect(byName.summarize!.skill).toBe("aug:summarize");
+    expect(byName.summarize!.skill).toBe("riker:summarize");
     expect(byName.recap!.title).toBe("Recap");
     expect(byName.recap!.output).toBe("turn");
 
@@ -119,7 +119,7 @@ describe("which rows an action applies to", () => {
 
   test("kinds and needs say why not", () => {
     const c = withActions({
-      review: { skill: "aug:summarize", via: "headless", kinds: ["coding"], needs: ["worktree"] },
+      review: { skill: "riker:summarize", via: "headless", kinds: ["coding"], needs: ["worktree"] },
     });
     const review = registeredActions(c).find((a) => a.name === "review")!;
     expect(whyNot(review, task(Kind.general))).toContain("coding");
@@ -137,24 +137,24 @@ describe("which rows an action applies to", () => {
 
 describe("args", () => {
   test("the task fills the template", () => {
-    const t = task(Kind.coding, { worktree: "/w/aug", branch: "fix-build" });
+    const t = task(Kind.coding, { worktree: "/w/riker", branch: "fix-build" });
     const ref = store.taskRef(t.id);
     expect(fillArgs("{ref} {title} {worktree} {branch} {base} {pr} {other}", t)).toBe(
-      `${ref} Fix the build /w/aug fix-build main none {other}`,
+      `${ref} Fix the build /w/riker fix-build main none {other}`,
     );
     const summarize = registeredActions(config()).find((a) => a.name === "summarize")!;
-    expect(invocation(summarize, t)).toStartWith(`/aug:summarize task ${ref}`);
+    expect(invocation(summarize, t)).toStartWith(`/riker:summarize task ${ref}`);
   });
 });
 
-describe("aug's plugin", () => {
-  test("is written under AUG_HOME with its skills", () => {
-    const dir = ensureAugPlugin();
-    expect(dir).toBe(augPluginDir());
+describe("Riker's plugin", () => {
+  test("is written under RIKER_HOME with its skills", () => {
+    const dir = ensureRikerPlugin();
+    expect(dir).toBe(rikerPluginDir());
     const manifest = JSON.parse(
       readFileSync(join(dir, ".claude-plugin", "plugin.json"), "utf8"),
     ) as { name: string };
-    expect(manifest.name).toBe("aug");
+    expect(manifest.name).toBe("riker");
     expect(readFileSync(join(dir, "skills", "summarize", "SKILL.md"), "utf8")).toContain(
       "name: summarize",
     );
@@ -177,8 +177,8 @@ describe("running one", () => {
     expect(turn.body).toContain("**Goal**");
 
     const call = calls.at(-1)!;
-    expect(call.prompt).toContain("/aug:summarize");
-    expect(call.pluginDirs).toContain(augPluginDir());
+    expect(call.prompt).toContain("/riker:summarize");
+    expect(call.pluginDirs).toContain(rikerPluginDir());
     expect(call.allow).toContain("Bash(git log:*)");
     expect(call.resume).toBeUndefined();
     // Not the agent: its state is untouched.
@@ -187,7 +187,7 @@ describe("running one", () => {
 
   test("fork: resumes a copy of the agent's session in its folder", async () => {
     const t = task();
-    const cwd = mkdtempSync(join(tmpdir(), "aug-wt-"));
+    const cwd = mkdtempSync(join(tmpdir(), "riker-wt-"));
     sessionStarted({
       id: "sess-1",
       taskId: t.id,
@@ -260,11 +260,11 @@ describe("what agents read back", () => {
 
 describe("a pane action (quiz)", () => {
   function codingTask() {
-    const wt = mkdtempSync(join(tmpdir(), "aug-wt-"));
+    const wt = mkdtempSync(join(tmpdir(), "riker-wt-"));
     return task(Kind.coding, { worktree: wt });
   }
 
-  test("no agent window: interactive claude on the Canvas, aug's plugin loaded", async () => {
+  test("no agent window: interactive claude on the Canvas, Riker's plugin loaded", async () => {
     const t = codingTask();
     const started = engine.desk.runAction(t.id, "quiz");
     if ("error" in started) throw new Error(started.error);
@@ -272,13 +272,13 @@ describe("a pane action (quiz)", () => {
     expect(result.ok).toBe(true);
     const run = result.terminal!;
     expect(run.argv[0]).toBe("claude");
-    expect(run.argv).toContain(augPluginDir());
-    expect(run.argv.at(-1)).toStartWith("/aug:quiz task ");
+    expect(run.argv).toContain(rikerPluginDir());
+    expect(run.argv.at(-1)).toStartWith("/riker:quiz task ");
     // A title can come from Slack or GitHub: kept out of an interactive session.
     expect(run.argv.at(-1)).not.toContain(t.title);
     expect(run.cwd).toBe(t.worktree!);
     // Its hooks see a task but no session: not taken for the agent.
-    expect(run.env).toEqual({ AUG_TASK_ID: String(t.id) });
+    expect(run.env).toEqual({ RIKER_TASK_ID: String(t.id) });
     expect(calls).toHaveLength(0);
     const turn = store.turnsForTask(t.id).find((x) => x.role === TurnRole.action)!;
     expect(turn.status).toBe("done");
@@ -304,11 +304,11 @@ describe("a pane action (quiz)", () => {
     const split = mux.splits.at(-1)!;
     expect(split.paneId).toBe("@7");
     expect(split.zoom).toBe(true);
-    expect(split.argv.slice(0, 2)).toEqual(["env", `AUG_TASK_ID=${t.id}`]);
+    expect(split.argv.slice(0, 2)).toEqual(["env", `RIKER_TASK_ID=${t.id}`]);
   });
 
   test("pointed at a user skill that is not there, it says where it looked", async () => {
-    const claude = mkdtempSync(join(tmpdir(), "aug-claude-"));
+    const claude = mkdtempSync(join(tmpdir(), "riker-claude-"));
     process.env.CLAUDE_CONFIG_DIR = claude;
     try {
       const c = withActions({ quiz: { skill: "quiz-me" } });
@@ -323,7 +323,7 @@ describe("a pane action (quiz)", () => {
 
 describe("a bare user skill, headless", () => {
   function userSkill(name: string, allowed: string) {
-    const claude = mkdtempSync(join(tmpdir(), "aug-claude-"));
+    const claude = mkdtempSync(join(tmpdir(), "riker-claude-"));
     mkdirSync(join(claude, "skills", name), { recursive: true });
     writeFileSync(
       join(claude, "skills", name, "SKILL.md"),
@@ -375,7 +375,7 @@ describe("as a move", () => {
   });
 
   test("a pane action needs the TUI; an agent cannot run one", async () => {
-    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "aug-wt-")) });
+    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "riker-wt-")) });
     const ref = store.taskRef(t.id);
     const quiz = await runMove(engine.desk, "action", { task: ref, name: "quiz" });
     expect(quiz.ok).toBe(false);
@@ -453,7 +453,7 @@ describe("triggers", () => {
   test("ready is the agent's finished work; merged is the merge", async () => {
     const e = engineWith({
       summarize: { on: [{ event: "ready" }] },
-      recap: { skill: "aug:summarize", via: "headless", on: [{ event: "merged" }] },
+      recap: { skill: "riker:summarize", via: "headless", on: [{ event: "merged" }] },
     });
     e.fireEventActions();
     const t = task(Kind.general);
@@ -485,7 +485,7 @@ describe("triggers", () => {
     const quiz = registeredActions(c).find((a) => a.name === "quiz")!;
     expect(quiz.on!.map((t) => t.event)).toEqual(["triaged"]);
     const e = new Engine({ config: { ...testConfig(), get: () => c } });
-    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "aug-wt-")) });
+    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "riker-wt-")) });
     expect(e.desk.fireActions("triaged", t.id, reviewAsk)).toEqual([]);
   });
 });

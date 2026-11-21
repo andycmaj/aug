@@ -18,15 +18,15 @@ import {
   useListNavigation,
   type BindingSpec,
 } from "@andycmaj/opentui-app";
-import { useAug } from "../context/aug";
-import { paths } from "@aug/core/paths";
-import type { InfoSection } from "@aug/core/info";
-import { actionText, describeAction } from "@aug/core/outbound";
-import type { RailItem } from "@aug/core/rail";
-import { goToList, searchIndex, type SearchHit } from "@aug/core/search";
+import { useRiker } from "../context/riker";
+import { paths } from "@riker/core/paths";
+import type { InfoSection } from "@riker/core/info";
+import { actionText, describeAction } from "@riker/core/outbound";
+import type { RailItem } from "@riker/core/rail";
+import { goToList, searchIndex, type SearchHit } from "@riker/core/search";
 import { INBOX_KEY } from "./board-tab";
-import { taskRef } from "@aug/core/rows";
-import { Kind, type DraftAction } from "@aug/core/types";
+import { taskRef } from "@riker/core/rows";
+import { Kind, type DraftAction } from "@riker/core/types";
 import { stateColor, stateGlyph } from "./connector-line";
 import { dayClock } from "./ui";
 
@@ -221,13 +221,13 @@ export function StatusModal(props: {
   onPoll: () => void;
 }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const rows = () =>
     [
-      ["GitHub", aug.status().github],
-      ["Slack", aug.status().slack],
-      ["Slack remote", aug.status().remote],
-      ["Advisor", aug.status().advisor],
+      ["GitHub", riker.status().github],
+      ["Slack", riker.status().slack],
+      ["Slack remote", riker.status().remote],
+      ["Advisor", riker.status().advisor],
     ] as const;
   return (
     <Modal
@@ -285,7 +285,7 @@ export function StatusModal(props: {
 
 export type { InputRenderable };
 
-// I: what aug knows about a row. j/k pick a line, c copies its value
+// I: what Riker knows about a row. j/k pick a line, c copies its value
 // (a session id, a thread key, a path), enter opens a link line.
 export function InfoModal(props: {
   title: string;
@@ -436,7 +436,7 @@ export function SearchModal(props: {
   onClose: () => void;
 }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const dims = useTerminalDimensions();
   let scrollRef: ScrollBoxRenderable | undefined;
   // Read once: list navigation takes a fixed page size.
@@ -446,11 +446,11 @@ export function SearchModal(props: {
   );
   // Re-read only when the store moves, not on every keystroke.
   const docs = createMemo(() => {
-    const sections = aug.rail();
+    const sections = riker.rail();
     const ids = sections
       .flatMap((s) => s.items)
       .flatMap((i) => (i.type === "task" ? [i.task.id] : []));
-    return searchIndex(sections, aug.searchSources(ids));
+    return searchIndex(sections, riker.searchSources(ids));
   });
   const nav = useListNavigation({
     itemCount: () => hits().length,
@@ -459,7 +459,7 @@ export function SearchModal(props: {
     visibleItems: listRows - 1,
   });
   // Read once: what was recent when the list opened.
-  const recentKeys = aug.recent().map((i) => i.key);
+  const recentKeys = riker.recent().map((i) => i.key);
   // The Inbox is no rail row, but the go-to list reaches it too: first when
   // nothing is typed, or when what is typed starts its name.
   const showInbox = () => "inbox".startsWith(nav.filter().trim().toLowerCase());
@@ -488,7 +488,7 @@ export function SearchModal(props: {
       <ModalHeader title="Go to" hint="↵ open · esc" />
       <ModalFilterInput
         onInput={nav.setFilter}
-        placeholder="words, AUG-23, #412, @someone (Slack or GitHub)"
+        placeholder="words, RIKER-23, #412, @someone (Slack or GitHub)"
       />
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
@@ -526,7 +526,7 @@ export function SearchModal(props: {
                       </text>
                     </box>
                     <text flexShrink={0} fg={fg() ?? theme.textMuted}>
-                      {aug.inboxCount() ? `${aug.inboxCount()} need you` : "messages and ideas"}
+                      {riker.inboxCount() ? `${riker.inboxCount()} need you` : "messages and ideas"}
                     </text>
                   </box>
                 );

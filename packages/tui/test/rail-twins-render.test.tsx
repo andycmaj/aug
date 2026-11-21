@@ -7,10 +7,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testRender } from "@opentui/solid";
 import { App } from "../src/app";
-import { installFixture } from "@aug/fixtures/demo";
-import { localDay } from "@aug/core/rail";
-import * as store from "@aug/core/store";
-import { Kind } from "@aug/core/types";
+import { installFixture } from "@riker/fixtures/demo";
+import { localDay } from "@riker/core/rail";
+import * as store from "@riker/core/store";
+import { Kind } from "@riker/core/types";
 
 let destroy: (() => void) | undefined;
 let home: string | undefined;
@@ -22,8 +22,8 @@ afterEach(() => {
 const RAIL = 46;
 
 async function boot() {
-  home = mkdtempSync(join(tmpdir(), "aug-rail-twins-"));
-  process.env.AUG_HOME = home;
+  home = mkdtempSync(join(tmpdir(), "riker-rail-twins-"));
+  process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
   const project = store.createProject({
     name: "twins",

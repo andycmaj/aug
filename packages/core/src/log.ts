@@ -1,21 +1,22 @@
-// aug's file log: what happened while you were not looking. Connections
+// Riker's file log: what happened while you were not looking. Connections
 // coming and going, errors that only ever reached a status line, a trace of
 // every model call, and how long things took. The TUI owns the terminal, so
-// nothing prints; it all goes to one file under AUG_HOME (paths.log()), which
-// `tail -f` reads while aug runs.
+// nothing prints; it all goes to one file under RIKER_HOME (paths.log()), which
+// `tail -f` reads while Riker runs.
 //
 // Off unless something turns it on, first match wins:
-//   AUG_LOG=<level>|on|off   (env; "on" means debug)
+//   RIKER_LOG=<level>|on|off   (env; "on" means debug)
 //   log.enabled in config    (level from log.level, default info)
-//   AUG_DEV=1                (`bun run dev` sets it; level debug)
+//   RIKER_DEV=1                (`bun run dev` sets it; level debug)
 //
 // Writes are synchronous appends so a line survives the crash that follows
-// it, and the TUI and every aug-tools hook can share one file. Logging never
+// it, and the TUI and every riker-tools hook can share one file. Logging never
 // throws: a full disk must not take the app down with it.
 
 import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
+import { envVar } from "./brand";
 import { dirname } from "node:path";
-import { DEFAULT_CONFIG, type AugConfig } from "./config";
+import { DEFAULT_CONFIG, type RikerConfig } from "./config";
 import { paths } from "./paths";
 
 export const LogLevel = {
@@ -42,7 +43,7 @@ const isLevel = (value: string): value is LogLevelName => value in LogLevel;
 const truthy = (value: string | undefined) =>
   !!value && !/^(0|false|off|no)$/i.test(value);
 
-type LogConfig = AugConfig["log"];
+type LogConfig = RikerConfig["log"];
 
 // The log is a process-wide sink, so its config is the one thing set once
 // per process: each entry point says where the log section comes from, read
@@ -60,13 +61,13 @@ export function resolveLogSettings(
 ): LogSettings | null {
   const file = config.file ?? paths.log();
   const maxBytes = config.maxBytes ?? DEFAULT_MAX_BYTES;
-  const fromEnv = env.AUG_LOG?.trim().toLowerCase();
+  const fromEnv = envVar("LOG", env)?.trim().toLowerCase();
   if (fromEnv) {
     if (!truthy(fromEnv)) return null;
     return { level: isLevel(fromEnv) ? fromEnv : "debug", file, maxBytes };
   }
   if (config.enabled) return { level: config.level, file, maxBytes };
-  if (truthy(env.AUG_DEV)) return { level: "debug", file, maxBytes };
+  if (truthy(envVar("DEV", env))) return { level: "debug", file, maxBytes };
   return null;
 }
 

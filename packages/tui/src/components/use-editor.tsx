@@ -3,21 +3,21 @@
 // handed to the desk.
 
 import { useFocus, useToast } from "@andycmaj/opentui-app";
-import { useAug, ViewMode } from "../context/aug";
+import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
-import { draftFile, readDraft, removeDraft, writeDraft } from "@aug/core/drafts";
-import { actionText } from "@aug/core/outbound";
-import { taskRef } from "@aug/core/rows";
-import type { TaskRow } from "@aug/core/types";
+import { draftFile, readDraft, removeDraft, writeDraft } from "@riker/core/drafts";
+import { actionText } from "@riker/core/outbound";
+import { taskRef } from "@riker/core/rows";
+import type { TaskRow } from "@riker/core/types";
 
 export const EDITOR_ID = "editor";
 
 export function useEditor() {
-  const aug = useAug();
+  const riker = useRiker();
   const terminals = useTerminals();
   const { setActivePane } = useFocus();
   const { showToast } = useToast();
-  const desk = aug.desk;
+  const desk = riker.desk;
 
   // done runs when the editor exits, before the Canvas comes back.
   function openEditor(
@@ -25,7 +25,7 @@ export function useEditor() {
     title: string,
     done?: (code: number | null) => void,
   ) {
-    aug.setMode(ViewMode.chat);
+    riker.setMode(ViewMode.chat);
     terminals.close(EDITOR_ID);
     const editor = process.env.VISUAL ?? process.env.EDITOR ?? "vi";
     terminals.open({
@@ -45,7 +45,7 @@ export function useEditor() {
   }
 
   function editDraft(task: TaskRow): false | void {
-    const pending = aug.pendingAction(task.id);
+    const pending = riker.pendingAction(task.id);
     if (!pending) return false;
     const ref = taskRef(task.id);
     const file = draftFile(ref);

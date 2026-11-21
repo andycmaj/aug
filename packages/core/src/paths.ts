@@ -1,35 +1,49 @@
-// Where aug keeps its state. Everything lives under one home so a fixture run
-// (or a test) can point AUG_HOME at a scratch dir and touch nothing real.
+// Where Riker keeps its state. Everything lives under one home so a fixture run
+// (or a test) can point RIKER_HOME at a scratch dir and touch nothing real.
 
 import { mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { CMD, envVar, HOME_DIR, LEGACY } from "./brand";
 
 export function defaultHome(): string {
-  return join(homedir(), ".aug");
+  return join(homedir(), HOME_DIR);
 }
 
-export function augHome(): string {
-  return process.env.AUG_HOME ?? defaultHome();
+// Where aug kept the default home before the rename (core/migrate-home.ts
+// moves it and leaves a symlink).
+export function legacyHome(): string {
+  return join(homedir(), LEGACY.homeDir);
+}
+
+// What this home was called before the rename, for things written then that
+// name it (installed hooks, the statusline block): a home named .riker was
+// the .aug beside it (core/migrate-home.ts); any other home kept its path.
+export function homeAliases(home = rikerHome()): string[] {
+  return basename(home) === HOME_DIR ? [home, join(dirname(home), LEGACY.homeDir)] : [home];
+}
+
+export function rikerHome(): string {
+  return envVar("HOME") ?? defaultHome();
 }
 
 export const paths = {
-  home: () => augHome(),
-  db: () => join(augHome(), "aug.db"),
-  config: () => join(augHome(), "config.json"),
-  docs: () => join(augHome(), "docs"),
+  home: () => rikerHome(),
+  db: () => join(rikerHome(), `${CMD}.db`),
+  config: () => join(rikerHome(), "config.json"),
+  docs: () => join(rikerHome(), "docs"),
   // A general agent's scratch folder: it may read and write there, and
   // nowhere that matters.
-  work: (taskId: number) => join(augHome(), "work", String(taskId)),
-  drafts: () => join(augHome(), "drafts"),
+  work: (taskId: number) => join(rikerHome(), "work", String(taskId)),
+  drafts: () => join(rikerHome(), "drafts"),
   // Where the Assistant writes a whole doc before `move propose_doc --file`:
   // a doc's Markdown headings cannot go on a Bash line (see propose_doc).
-  docDrafts: () => join(augHome(), "drafts", "docs"),
-  log: () => join(augHome(), "aug.log"),
+  docDrafts: () => join(rikerHome(), "drafts", "docs"),
+  log: () => join(rikerHome(), `${CMD}.log`),
   // Perf counters (core/perf.ts): its own file, so recording them never
-  // moves aug.db's data_version and wakes the TUI or the engine.
-  perfDb: () => join(augHome(), "perf.db"),
-  lock: () => join(augHome(), "aug.pid"),
+  // moves riker.db's data_version and wakes the TUI or the engine.
+  perfDb: () => join(rikerHome(), "perf.db"),
+  lock: () => join(rikerHome(), `${CMD}.pid`),
 };
 
 export function ensureHome(): void {

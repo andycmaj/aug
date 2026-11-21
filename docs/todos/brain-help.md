@@ -4,7 +4,7 @@ Status: idea, not started. Part of it exists already (see "Today").
 
 ## Problem
 
-aug's models are steered by eight Markdown docs. I can edit them, but nothing
+Riker's models are steered by eight Markdown docs. I can edit them, but nothing
 in the app tells me which model reads which doc, when it reads it, how much of
 it gets through, or whether my copy still matches the shipped default. I had
 to read the code to find out. I want one place in the app where I can pick a
@@ -16,7 +16,7 @@ doc, see what it does, and open it in `$EDITOR`.
 
 - The shipped defaults are in `packages/core/defaults/*.md` in the repo. They are
   templates only.
-- The live copies are in `~/.aug/docs/` (`$AUG_HOME/docs/`). Every prompt reads
+- The live copies are in `~/.riker/docs/` (`$RIKER_HOME/docs/`). Every prompt reads
   these.
 - On first start, `engine.start()` calls `ensureDocs()`
   (`packages/core/src/engine.ts:114`), which copies each default into place if that

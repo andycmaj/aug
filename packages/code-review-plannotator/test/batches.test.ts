@@ -32,7 +32,7 @@ function write(dir: string, files: Record<string, string>) {
 // A repo on main with `base`, then a feature branch with one commit per
 // entry of `commits`.
 function repo(base: Record<string, string>, commits: Record<string, string>[]): string {
-  const dir = mkdtempSync(join(tmpdir(), "aug-batches-"));
+  const dir = mkdtempSync(join(tmpdir(), "riker-batches-"));
   git(dir, "init", "-q", "-b", "main");
   write(dir, { "README.md": "# r\n", ...base });
   git(dir, "add", ".");
@@ -146,7 +146,7 @@ describe("the base", () => {
   function cloned(): { dir: string; origin: string } {
     const origin = repo({ "a.ts": "a\n" }, []);
     git(origin, "checkout", "-q", "main");
-    const dir = mkdtempSync(join(tmpdir(), "aug-clone-"));
+    const dir = mkdtempSync(join(tmpdir(), "riker-clone-"));
     sh(dir, "git", "clone", "-q", origin, ".");
     write(origin, { "merged.ts": "someone else's work\n" });
     git(origin, "add", ".");
@@ -202,7 +202,7 @@ describe("the guide's calls", () => {
     };
     const plan = planBatches(patch, dir, { budget: 100 });
     expect(plan.batches).toHaveLength(2);
-    const ran = await reviewInBatches({ plan, prompt: (job) => `/aug:guide; job: ${job}`, commits: "abc step", ask });
+    const ran = await reviewInBatches({ plan, prompt: (job) => `/riker:guide; job: ${job}`, commits: "abc step", ask });
     if ("error" in ran) throw new Error(ran.error);
 
     expect(prompts.map((p) => p.label)).toEqual(["batch 1/2", "batch 2/2", "chapters"]);

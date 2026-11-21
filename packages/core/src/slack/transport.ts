@@ -1,12 +1,12 @@
-// Which way aug talks to Slack, from slack.transport in config.
+// Which way Riker talks to Slack, from slack.transport in config.
 
-import { slackToken, type AugConfig } from "../config";
+import { slackToken, type RikerConfig } from "../config";
 import { ClaudeMcpTransport } from "./claude-mcp";
 import { McpTransport } from "./mcp";
 import type { SlackTransport } from "./shared";
 import { TokenTransport } from "./token";
 
-export function slackTransport(config: AugConfig): SlackTransport {
+export function slackTransport(config: RikerConfig): SlackTransport {
   switch (config.slack.transport) {
     case "claude-mcp":
       return new ClaudeMcpTransport({

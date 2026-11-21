@@ -4,8 +4,9 @@
 // engine, the moves and the TUI ask the task's driver to start, stop, close
 // or tell it, and never branch on the kind themselves.
 
+import { SELF } from "./brand";
 import type { AgentPool, CodingLaunch } from "./agents";
-import type { AugConfig, ConfigSource } from "./config";
+import type { RikerConfig, ConfigSource } from "./config";
 import { startCancelled } from "./lifecycle";
 import { logger } from "./log";
 import * as projects from "./projects";
@@ -54,10 +55,10 @@ export interface AgentDriver {
   // Hands the task's pending owner lines to the agent. True when it has
   // them now; false when they wait for the next start.
   deliver(task: TaskRow): Promise<boolean>;
-  // Something arrived on the thread: aug runs the agent by itself, within
+  // Something arrived on the thread: Riker runs the agent by itself, within
   // the pool's limit. A coding agent reads its thread when it asks to.
   wake(task: TaskRow, reason: string): void;
-  // Whether an agent is at work on it right now, as far as aug knows
+  // Whether an agent is at work on it right now, as far as Riker knows
   // without asking tmux.
   isLive(task: TaskRow): boolean;
   // The session a Start would continue, if there is one.
@@ -135,7 +136,7 @@ export class ChatDriver implements AgentDriver {
   }
 
   wake(task: TaskRow, reason: string): void {
-    void this.pool.request(task.id, reason, "aug");
+    void this.pool.request(task.id, reason, SELF);
   }
 
   isLive(task: TaskRow): boolean {
@@ -162,7 +163,7 @@ export class TmuxDriver implements AgentDriver {
     return this.options.pool;
   }
 
-  private config(): AugConfig {
+  private config(): RikerConfig {
     return this.options.config.get();
   }
 
@@ -300,7 +301,7 @@ export class TmuxDriver implements AgentDriver {
     return false;
   }
 
-  // Its thread reaches it through `aug-tools feedback`, on the owner's nudge.
+  // Its thread reaches it through `riker-tools feedback`, on the owner's nudge.
   wake(): void {}
 
   isLive(task: TaskRow): boolean {

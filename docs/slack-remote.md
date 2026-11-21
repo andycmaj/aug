@@ -1,7 +1,7 @@
 # Talking to the Assistant from Slack
 
-AUG-0102. The owner drives aug away from the terminal by writing in a Slack
-conversation only they are in. aug hears each line as if it was typed in
+AUG-0102. The owner drives Riker away from the terminal by writing in a Slack
+conversation only they are in. Riker hears each line as if it was typed in
 Home, and posts the Assistant's answer back in that message's thread.
 
 Code: `packages/core/src/slack/remote.ts` (what is heard, what is answered),
@@ -12,14 +12,14 @@ Code: `packages/core/src/slack/remote.ts` (what is heard, what is answered),
 
 Either of these works:
 
-- **Your self-DM** (the "you" DM in Slack). With a token, aug finds it on its
+- **Your self-DM** (the "you" DM in Slack). With a token, Riker finds it on its
   own (`conversations.open` with your own id). Under claude-mcp, put its id
   (`D...`) in `remote.channel`.
 - **A private channel with only you in it.** Make it, leave it with one
   member, and put its id in `remote.channel`. It is easier to find on a phone
-  than the self-DM, and it keeps aug's answers apart from notes to self.
+  than the self-DM, and it keeps Riker's answers apart from notes to self.
 
-aug checks the members on every read. If anyone else is in it, or it is a
+Riker checks the members on every read. If anyone else is in it, or it is a
 public channel (anyone can join), it hears nothing and the status line says
 why. Adding someone turns the remote off until they leave.
 
@@ -42,8 +42,8 @@ bot and a public or tunnelled endpoint or an app-level token, and a bot is not
 told about your self-DM. Polling one conversation is cheap and needs nothing
 new.
 
-Both links post as the owner, so a read sees aug's answers under the owner's
-own id. Every answer starts with `[aug]`, and aug remembers the ts of what it
+Both links post as the owner, so a read sees Riker's answers under the owner's
+own id. Every answer starts with `[riker]`, and Riker remembers the ts of what it
 posted (token), so it never hears itself.
 
 ## What is heard
@@ -54,7 +54,7 @@ Only lines that pass every gate:
 - written by the owner's own user id;
 - not a bot or app message, no subtype (joins, edits, file shares), except
   a thread reply also sent to the channel;
-- not empty, not starting with `[aug]`;
+- not empty, not starting with `[riker]`;
 - newer than the moment the remote first listened: turning it on never
   replays an old "yes".
 
@@ -65,7 +65,7 @@ the log.
 
 A heard line goes through `desk.say` to Home, author `you via Slack`, so it is
 the owner talking to the Assistant: the same `claude -p` session, the same
-tools (aug-tools and gh reads), the same rules (it never sends anything to
+tools (riker-tools and gh reads), the same rules (it never sends anything to
 anyone, asks before anything that ends work). The transcript tells the
 Assistant the line came from Slack, so it answers in a few short lines.
 
@@ -82,7 +82,7 @@ an hour gets a short "no answer" note.
 Code: `packages/core/src/slack/confirm.ts`, the gate in `runMove` (`core/moves.ts`).
 
 An Assistant turn that answers a Slack line asks for moves as
-`assistant via Slack` (`AUG_ASKED_BY`), not `assistant`. From that asker,
+`assistant via Slack` (`RIKER_ASKED_BY`), not `assistant`. From that asker,
 `start`, `stop`, `done`, `ignore` and `project_archive` do not run: the
 move answers "held for the owner's yes in Slack", and the hold is kept (kv
 `slack.remote.confirm`) with the turn that asked for it. Every other move
@@ -129,7 +129,7 @@ outbox in the remote's state until Slack takes them.
 
 ## Setup
 
-`~/.aug/config.json`:
+`~/.riker/config.json`:
 
 ```json
 {
@@ -141,7 +141,7 @@ outbox in the remote's state until Slack takes them.
 }
 ```
 
-- `enabled`: off by default. Turning it on needs a restart of aug; turning
+- `enabled`: off by default. Turning it on needs a restart of Riker; turning
   it off takes effect on the next tick.
 - `channel`: the self-DM or private channel. Optional with a token.
 - `pollSeconds`: 15 with a token, 60 under claude-mcp.

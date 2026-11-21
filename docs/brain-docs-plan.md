@@ -5,24 +5,24 @@ docs) is folded in here.
 
 ## The docs
 
-Seven docs in `~/.aug/docs`, down from eight:
+Seven docs in `~/.riker/docs`, down from eight:
 
 | Doc | Holds | Who writes it |
 | --- | --- | --- |
-| PERSONA.md | red lines that outrank everything, and how aug speaks to you | owner (onboarding drafts it) |
+| PERSONA.md | red lines that outrank everything, and how Riker speaks to you | owner (onboarding drafts it) |
 | JOB.md | what your job is; weighs importance | owner (onboarding drafts it) |
 | STYLE.md | your voice in drafts sent for you | owner (onboarding drafts it) |
 | TRIAGE.md | what makes a task, reply, watch, FYI | shipped |
 | ASSISTANT.md | how a general agent works | shipped |
 | CODING.md | how a coding agent works | shipped |
-| LEARNED.md | lessons from corrections | aug, automatically |
+| LEARNED.md | lessons from corrections | Riker, automatically |
 
 SOUL.md becomes PERSONA.md and absorbs COUNSEL.md. Every doc stays a plain
 file the owner can edit.
 
 ## Shipped updates: notify, never merge
 
-No version history, no merge. Per doc, aug keeps one value in `kv`:
+No version history, no merge. Per doc, Riker keeps one value in `kv`:
 `doc.shipped.<NAME>` = hash of the shipped text it last saw.
 
 On engine start, for each doc whose shipped text hash differs from the
@@ -42,21 +42,21 @@ differs from the shipped text on the first run after this ships counts as
 edited: one notice, no guessing at older shipped versions.
 
 LEARNED.md is the exception. Its header and section list come from code
-(`LEARNED_SECTIONS`). The header is rendered at prompt time, not stored. aug
+(`LEARNED_SECTIONS`). The header is rendered at prompt time, not stored. Riker
 adds a missing section and never touches a line.
 
 ## Safety net
 
-Before any aug write to an existing doc (take shipped, an accepted proposal,
+Before any Riker write to an existing doc (take shipped, an accepted proposal,
 compaction, the rename migration), the old file is copied to
-`~/.aug/docs/.trash/<NAME>.<stamp>.md`. That copy is never injected and is
+`~/.riker/docs/.trash/<NAME>.<stamp>.md`. That copy is never injected and is
 pruned after 30 days. Restore by copying it back.
 
 ## SYSTEM tasks
 
-`Kind.system` is a new task kind with its own rail section. It covers aug
+`Kind.system` is a new task kind with its own rail section. It covers Riker
 asking about its own install: shipped updates you didn't get, the onboarding
-offer, doc proposals, compaction. It is not AUG-MISC (coding work on aug).
+offer, doc proposals, compaction. It is not AUG-MISC (coding work on Riker).
 
 A proposal's task carries the old and proposed text. Its view key opens
 revdiff in the viewer on `git diff --no-index old new`, or the plain diff in
@@ -92,7 +92,7 @@ Skipping leaves the templates in place.
   or new corrections came in. It proposes edits to PERSONA, JOB and STYLE, at
   most one open proposal per doc, and a new pass updates the open one. An
   accepted proposal moves the LEARNED lines it absorbed to the archive.
-- aug never proposes edits to shipped docs, because an edit would stop that
+- Riker never proposes edits to shipped docs, because an edit would stop that
   doc's updates. A lesson that fits one becomes an AUG-MISC idea instead,
   e.g. "change shipped CODING.md to say X".
 
@@ -124,7 +124,7 @@ This replaces today's silent `head()` cuts of SOUL, JOB and STYLE.
 2. Rename SOUL.md to PERSONA.md and append COUNSEL.md's text under a heading.
    Delete COUNSEL.md.
 3. Rewrite the literal `SOUL.md` to `PERSONA.md` inside every doc. This is the
-   one time aug edits owner text, and it changes only that name.
+   one time Riker edits owner text, and it changes only that name.
 
 ## Out of scope
 

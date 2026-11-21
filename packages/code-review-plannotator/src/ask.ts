@@ -1,4 +1,4 @@
-// A GuideAsk on `claude -p`, for running a review without aug (the CLI,
+// A GuideAsk on `claude -p`, for running a review without Riker (the CLI,
 // evals). Each call is fresh and read-only: no user settings or hooks, no
 // MCP servers, no saved session, only the skill's own tools. What each call
 // cost is kept, so runs at different models and batch sizes compare.

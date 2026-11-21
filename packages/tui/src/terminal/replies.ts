@@ -9,7 +9,7 @@ export interface ReplyContext {
   background: string;
   // Read only when a program asks (OSC 52 "?"): nvim's OSC 52 paste waits
   // up to 10s for an answer, and tmux forwards the question to its most
-  // recent client, which is aug's while you type in the viewer.
+  // recent client, which is Riker's while you type in the viewer.
   clipboard: () => string;
 }
 

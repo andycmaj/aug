@@ -2,7 +2,7 @@
 
 The Assistant is Home's agent (`kind: home`, `store.homeTask()`): a headless
 `claude -p` turn per thing the owner says, resumed by session id, with
-`aug-tools` as its hands. This doc follows one turn from the owner's line to
+`riker-tools` as its hands. This doc follows one turn from the owner's line to
 the answer, and says what each turn carries into the prompt cache, which is
 where its cost goes.
 
@@ -11,7 +11,7 @@ where its cost goes.
 1. **Asked.** The owner's line in Home (the chat box, or a Slack remote line
    with author `SLACK_AUTHOR`, `core/slack/remote.ts`) is a turn row. The
    ChatDriver asks the pool for a turn: `AgentPool.request(taskId, reason,
-   by)` in `core/agents.ts`. The owner's turns run now; `by: "aug"` turns
+   by)` in `core/agents.ts`. The owner's turns run now; `by: "Riker"` turns
    wait when the pool is full or the day's spend cap is reached
    (`config.spend`, `core/spend.ts`).
 2. **Session.** `chatResume` picks the session the turn continues: the
@@ -23,7 +23,7 @@ where its cost goes.
    `config.chat.homeMaxTokens` (60k, `sessions.context_tokens`). No session
    means a new `--session-id`.
 3. **Call.** `assistantCall` (`core/assistant.ts`) builds it:
-   - `system`: `assistantSystem(config)`, the role, the aug-tools commands,
+   - `system`: `assistantSystem(config)`, the role, the riker-tools commands,
      the moves, grants (`grantedNote`, `connectorNote`, `docsNote`) and the
      brain docs (PERSONA, JOB, LEARNED).
    - `prompt`: `assistantPrompt`, where things stand (a snapshot of open
@@ -32,14 +32,14 @@ where its cost goes.
      said since the last answer.
    - `tools`: `ASSISTANT_TOOLS` (Bash, Write, reads) plus `Skill` when a
      granted capability is a plugin.
-   - `allow`: `assistantAllow(config)`, aug-tools and gh reads, the reads,
+   - `allow`: `assistantAllow(config)`, riker-tools and gh reads, the reads,
      Write in the doc drafts folder, and `capabilityAllow("assistant")`.
    - `model`: `config.brain.assistantModel` (sonnet by default).
-   - `env`: `AUG_ASKED_BY` is `SLACK_ASKER` when the turn answers Slack, so
+   - `env`: `RIKER_ASKED_BY` is `SLACK_ASKER` when the turn answers Slack, so
      the moves that start or end work wait for the owner's yes there.
 4. **Run.** `think()` (`core/brain.ts`) runs `claude` with `claudeArgs(call)`
    and `brainEnv(call)`, in `paths.work(taskId)`. Steps stream onto the turn
-   row as they come. A move the Assistant makes goes through `aug-tools move`
+   row as they come. A move the Assistant makes goes through `riker-tools move`
    to the engine (`core/moves.ts`), which runs it on the desk.
 5. **Finish.** The answer lands on the turn. Denied calls become `denied:`
    steps plus a `grant:` step naming the config key (`grantSteps`), and the
@@ -66,7 +66,7 @@ permission rules and plugins out (Knowledge #26).
 claude.ai connectors (Slack, Claude Docs; Notion when connected on
 claude.ai) load in a headless call even with `--setting-sources ""`. What
 happens to them depends on the Assistant's grant
-(`capabilities.grants.assistant` in `~/.aug/config.json`):
+(`capabilities.grants.assistant` in `~/.riker/config.json`):
 
 - **No `mcp__` rule** (no connector capability granted): `claudeArgs` passes
   `--strict-mcp-config`, and no MCP server loads. The init line lists no
@@ -86,7 +86,7 @@ again at the 1h cache-write price. That was 49 of the 70 dollars spent on
 2026-11-15 and 16 (AUG-0160).
 
 Measured on claude 2.1.322, haiku, four resumed Assistant turns of one
-`aug-tools` call each (two requests per turn), tokens per turn:
+`riker-tools` call each (two requests per turn), tokens per turn:
 
 | Setup | mcp tools at init | Turn 1 read / write | Turns 2–4 write | Turns 2–4 read |
 |---|---|---|---|---|
@@ -109,7 +109,7 @@ it, so it waits for the idle hour or the size bound.
 
 - The stream's first `system`/`init` line lists `tools`, `mcp_servers` (with
   status) and plugins: what the call really had.
-- `AUG_REAL_CLAUDE=1 bun test packages/core/test/no-connectors-real.test.ts` reads only the
+- `RIKER_REAL_CLAUDE=1 bun test packages/core/test/no-connectors-real.test.ts` reads only the
   init line for the Assistant, ungranted (no server) and with `slack.read`
   (Slack connected). It costs next to nothing.
 - `packages/core/test/propose-doc-real.test.ts` runs a whole Assistant turn under its real

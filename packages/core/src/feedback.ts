@@ -1,5 +1,5 @@
 // What came back on a coding task's threads (reviews, comments, CI) since its
-// agent last looked. The agent pulls it with `aug-tools feedback`; aug only
+// agent last looked. The agent pulls it with `riker-tools feedback`; Riker only
 // ever nudges it, one press at a time, never pastes it in.
 
 import { toolsCommand } from "./self";

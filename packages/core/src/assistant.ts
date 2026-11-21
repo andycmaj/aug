@@ -1,9 +1,10 @@
 // The Assistant: the Home thread's agent, and the owner's main way to drive
-// aug. Each turn is a `claude -p` resumed by session id with aug-tools as its
+// Riker. Each turn is a `claude -p` resumed by session id with riker-tools as its
 // hands: the read commands to look things up, `move` to change things, which
 // the running engine makes. It never sends: a Send is only ever the owner's
 // press.
 
+import { envName } from "./brand";
 import {
   capabilityAllow,
   capabilityGrant,
@@ -14,7 +15,7 @@ import {
   grantedNote,
   SHELL_HOWTO,
 } from "./capabilities";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { mentionedProjects, mentionedTasks } from "./mentions";
 import { docsBlock } from "./prompts";
 import { findTasks, projectBrief, projectLine, taskDetail } from "./lookup";
@@ -45,9 +46,9 @@ export function docDraftsRule(): string {
   return `Edit(/${docDraftsDir()}/**)`;
 }
 
-// aug-tools and gh's reads on the shell; a headless call cannot ask, so
+// riker-tools and gh's reads on the shell; a headless call cannot ask, so
 // anything else is denied unasked.
-export function assistantAllow(config: AugConfig): string[] {
+export function assistantAllow(config: RikerConfig): string[] {
   return [
     ...toolsRules(),
     ...GH_READS,
@@ -61,7 +62,7 @@ export function assistantAllow(config: AugConfig): string[] {
 export function movesHelp(): string {
   return Object.entries(MOVES)
     .map(([verb, spec]) => {
-      const positional = `${spec.task ? " AUG-0000" : ""}${spec.positional ? ` <${spec.positional}>` : ""}`;
+      const positional = `${spec.task ? " RIKER-0000" : ""}${spec.positional ? ` <${spec.positional}>` : ""}`;
       const flags = Object.entries(spec.args)
         .filter(([name]) => name !== spec.positional)
         .map(([name, arg]) =>
@@ -73,22 +74,22 @@ export function movesHelp(): string {
     .join("\n");
 }
 
-export function assistantSystem(config: AugConfig): string {
+export function assistantSystem(config: RikerConfig): string {
   const tools = TOOLS_NAME;
   return [
-    "You are the Assistant in aug, the owner's work manager in a terminal. This is Home: one long conversation where the owner asks about any of their work and tells you to change it. You run aug for them: you look things up, make tasks and projects, start and stop agents, and move work around.",
+    "You are the Assistant in Riker, the owner's work manager in a terminal. This is Home: one long conversation where the owner asks about any of their work and tells you to change it. You run Riker for them: you look things up, make tasks and projects, start and stop agents, and move work around.",
     "",
-    "## Your hands: aug-tools",
+    "## Your hands: riker-tools",
     `Run them with Bash as: ${tools} <command>`,
-    "Look things up (read straight from aug):",
+    "Look things up (read straight from Riker):",
     "- tasks [words] [--all] [--project <name>]: open work, one line each",
-    "- task AUG-0000: one task in full, with its recent chat",
+    "- task RIKER-0000: one task in full, with its recent chat",
     "- projects [--all]: projects and their repos",
     "- project <name>: one project in full: its brief, goals and how far each has come, docs, open work",
-    "- repos [--scan]: every repo aug knows, where it is checked out and whether that checkout is good, and checkouts on disk with no path in aug. When the owner names a repo with no path, look here and offer what is on disk (move repo <owner/repo> --path <it>); never map one they did not pick.",
+    "- repos [--scan]: every repo Riker knows, where it is checked out and whether that checkout is good, and checkouts on disk with no path in Riker. When the owner names a repo with no path, look here and offer what is on disk (move repo <owner/repo> --path <it>); never map one they did not pick.",
     "- notes: the agents' live handoff board",
     "- knowledge search <words>: what agents learned",
-    "Change things (the running aug makes the move and prints one line back; a failure says why):",
+    "Change things (the running riker makes the move and prints one line back; a failure says why):",
     movesHelp(),
     "",
     "## GitHub",
@@ -101,13 +102,13 @@ export function assistantSystem(config: AugConfig): string {
     "",
     "## How you work",
     "- Look before you move: check a task or project exists rather than guess its ref or name.",
-    "- @AUG-0012 names a task and @aug-bootstrap a project: pass either as it is to tasks, task or a move.",
-    "- Do what the owner asked, then say in a line or two what you did, naming each task by its ref (AUG-0012).",
+    "- @RIKER-0012 names a task and @aug-bootstrap a project: pass either as it is to tasks, task or a move.",
+    "- Do what the owner asked, then say in a line or two what you did, naming each task by its ref (RIKER-0012).",
     "- A move that answers 'needs ...' wants something only the owner knows (a repo, a path). Ask them in plain words, then call again with the answer.",
     "- Ask before anything that ends work or cannot be undone: archiving a project, ignore, done on more than one task. Wait for a yes.",
     "- Start or stop an agent only when the owner asks. Agents cost money.",
     "- A coding task needs a brief its agent can work from: what to change, where, and why, with what the owner said.",
-    "- A project's brief, goals and docs reach every task in it, so a task's brief need not repeat them. When the project has goals, make its tasks with --goal G3 (or set one with goal AUG-0012 G3).",
+    "- A project's brief, goals and docs reach every task in it, so a task's brief need not repeat them. When the project has goals, make its tasks with --goal G3 (or set one with goal RIKER-0012 G3).",
     "- A goal is met when the owner says so: its tasks all done is a reason to ask, not to mark it.",
     "- You never send anything to anyone. A reply is drafted by a task's own agent; the owner presses Send.",
     "- Answer questions about the work from what the tools show. Keep it short: the owner reads this in a terminal.",
@@ -119,7 +120,7 @@ export function assistantSystem(config: AugConfig): string {
 }
 
 // Where things stand, as counts: the Assistant lists the rows with
-// `aug-tools tasks` when it needs them, and the tasks a turn names come in
+// `riker-tools tasks` when it needs them, and the tasks a turn names come in
 // full beside it. No clock in it, so it is the same text until the work
 // changes.
 export function whereThingsStand(): string {
@@ -231,7 +232,7 @@ export function assistantPrompt(
 // `resume` is the session this turn resumes; `where` is the picture it is
 // sent, which the caller remembers for that session once the turn finished.
 export function assistantCall(
-  config: AugConfig,
+  config: RikerConfig,
   turns: TurnRow[],
   reason: string,
   resume: string | undefined,
@@ -257,7 +258,7 @@ export function assistantCall(
     env: {
       // A turn answering Slack asks as SLACK_ASKER, so the moves that start
       // or end work wait for the owner's yes there (slack/confirm.ts).
-      AUG_ASKED_BY: fromSlack(turns) ? SLACK_ASKER : "assistant",
+      [envName("ASKED_BY")]: fromSlack(turns) ? SLACK_ASKER : "assistant",
       ...toolsEnv(),
     },
   };

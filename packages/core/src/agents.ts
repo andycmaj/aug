@@ -3,8 +3,9 @@
 // answer returned as three short sections plus, maybe, an action set up for
 // one press. A coding task's agent is interactive Claude Code in an embedded
 // terminal; this module builds its command line and brief, and the hooks it
-// fires (aug-tools hook) keep its state.
+// fires (riker-tools hook) keep its state.
 
+import { envName, SELF } from "./brand";
 import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { assistantCall, rememberWhere, whereThingsStand } from "./assistant";
@@ -22,7 +23,7 @@ import {
   lastDenials,
   SHELL_HOWTO,
 } from "./capabilities";
-import type { AugConfig, ConfigSource } from "./config";
+import type { RikerConfig, ConfigSource } from "./config";
 import { now, writeWhenFree } from "./db";
 import { DocName, forPrompt } from "./docs";
 import { docsBlock } from "./prompts";
@@ -139,7 +140,7 @@ export const GENERAL_ALLOW = [
   "Bash(cat:*)",
 ];
 
-// aug's own lookups, and the moves an agent may ask for (the engine checks
+// Riker's own lookups, and the moves an agent may ask for (the engine checks
 // which; see AGENT_MOVES).
 function agentToolRules(): string[] {
   return [
@@ -150,7 +151,7 @@ function agentToolRules(): string[] {
   ];
 }
 
-export function generalAllow(config: AugConfig): string[] {
+export function generalAllow(config: RikerConfig): string[] {
   return [
     ...GENERAL_ALLOW,
     ...agentToolRules(),
@@ -158,7 +159,7 @@ export function generalAllow(config: AugConfig): string[] {
   ];
 }
 
-export function turnSystem(config: AugConfig): string {
+export function turnSystem(config: RikerConfig): string {
   return [
     forPrompt(config, DocName.assistant),
     docsBlock(config, { persona: true, job: true, style: true, learned: true }),
@@ -168,13 +169,13 @@ export function turnSystem(config: AugConfig): string {
     "When a reply to the person who asked is owed, put the exact words in action.text; the owner presses Send. Never claim you sent anything.",
     "If the owner already answered the thread themselves, say so, leave no action, and recommend closing.",
     "",
-    `aug's own tools, on Bash as ${TOOLS_NAME} <command>:`,
-    "- tasks [words] | task AUG-0000 | projects | project <name>: look up the owner's work and projects (a project is a tmux session coding tasks run in, with its repos, brief, goals and docs).",
+    `Riker's own tools, on Bash as ${TOOLS_NAME} <command>:`,
+    "- tasks [words] | task RIKER-0000 | projects | project <name>: look up the owner's work and projects (a project is a tmux session coding tasks run in, with its repos, brief, goals and docs).",
     `- move new "<title>" --kind coding|general|task --brief "<what to do, with what the agent needs>" [--project <name>] [--repo owner/repo] --from <this task's ref>: make a task. When the owner asks for work done elsewhere (a coding task in a project, a follow-up), make it, then say its ref. The owner starts it.`,
     `- move project_new "<name>" [--repo owner/repo]: make a project, when the owner asks for one. Make it before a task that goes in it.`,
-    "- move retitle|project|wait_on|priority|remind|goal AUG-0000 ...: small edits to this task only (goal: the project goal it works toward, G3).",
+    "- move retitle|project|wait_on|priority|remind|goal RIKER-0000 ...: small edits to this task only (goal: the project goal it works toward, G3).",
     `- move project_link "<project>" --url <url> [--title "<what it is>"]: attach a doc to the project, for every task in it.`,
-    `- move link AUG-0000 <url> [--title "<what it is>"]: attach a doc, Slack thread or ticket to this task (unlink takes it off).`,
+    `- move link RIKER-0000 <url> [--title "<what it is>"]: attach a doc, Slack thread or ticket to this task (unlink takes it off).`,
     "A move that fails says why (no such project: it lists the ones there are). Report that to the owner rather than guessing.",
     "",
     "GitHub, private repos included: gh pr view|list|diff|checks|status, gh issue view|list|status, gh search, gh run view|list, gh repo view, and gh api for reads (a PR's reviews: gh api repos/owner/repo/pulls/N/reviews). Nothing that writes.",
@@ -187,7 +188,7 @@ export function turnSystem(config: AugConfig): string {
 }
 
 export function generalCall(
-  config: AugConfig,
+  config: RikerConfig,
   task: TaskRow,
   turns: TurnRow[],
   reason: string,
@@ -212,7 +213,7 @@ export function generalCall(
     tools: [...GENERAL_TOOLS, ...grant.tools],
     allow: generalAllow(config),
     pluginDirs: grant.pluginDirs,
-    env: { AUG_TASK_ID: String(task.id), ...toolsEnv() },
+    env: { [envName("TASK_ID")]: String(task.id), ...toolsEnv() },
   };
 }
 
@@ -277,7 +278,7 @@ interface Running {
 // Agents at once (maxActiveAgents) counts every agent at work: the chat
 // turns this pool runs, coding starts on their way, and any other task whose
 // agent is working (a coding claude in tmux, which the pool does not run).
-// Chat turns aug starts by itself and the owner's coding Starts wait their
+// Chat turns Riker starts by itself and the owner's coding Starts wait their
 // turn past it; chat turns the owner asks for are never held back.
 const log = logger("agents");
 
@@ -300,7 +301,7 @@ export function leaveSession(
   session: SessionRow,
   history: TurnRow[],
   home: boolean,
-  config: AugConfig,
+  config: RikerConfig,
   at = Date.now(),
 ): string | null {
   const { idleMinutes, homeMaxTokens } = config.chat;
@@ -373,7 +374,7 @@ export class AgentPool {
     return `waiting its turn (${this.limit()} agents at once)`;
   }
 
-  // The day's spend has reached config.spend's cap: turns aug starts by
+  // The day's spend has reached config.spend's cap: turns Riker starts by
   // itself wait; the owner's never do.
   private capped(): boolean {
     return capReached(this.options.config.get());
@@ -382,14 +383,14 @@ export class AgentPool {
   request(
     taskId: number,
     reason: string,
-    by: "owner" | "aug",
+    by: "owner" | typeof SELF,
   ): Promise<void> | null {
     if (this.running.has(taskId)) return null;
-    if (by === "aug" && this.capped()) {
+    if (by === SELF && this.capped()) {
       this.enqueue({ taskId, reason }, capReason(this.options.config.get()));
       return null;
     }
-    if (by === "aug" && this.full()) {
+    if (by === SELF && this.full()) {
       this.enqueue({ taskId, reason });
       return null;
     }
@@ -429,7 +430,7 @@ export class AgentPool {
   // the store changes, since a coding agent frees its slot from a hook.
   drain(): void {
     while (this.waiting.length > 0 && !this.full()) {
-      // Under the cap only the owner's coding Starts go; aug's chat turns
+      // Under the cap only the owner's coding Starts go; Riker's chat turns
       // stay queued until the day turns or the owner starts one.
       const at = this.capped()
         ? this.waiting.findIndex((w) => w.start)
@@ -457,7 +458,7 @@ export class AgentPool {
 
     const config = this.options.config.get();
     const history = store.turnsForTask(taskId);
-    // Home's agent is the Assistant: it talks, and runs aug with aug-tools.
+    // Home's agent is the Assistant: it talks, and runs Riker with riker-tools.
     const home = task.kind === Kind.home;
     const prior = chatResume(taskId, history);
     const priorRow = prior ? store.getSession(prior) : null;
@@ -466,7 +467,7 @@ export class AgentPool {
     const resume = left ? undefined : prior;
     const sessionId = resume ?? randomUUID();
     const ref = { taskId, sessionId };
-    const author = home ? "aug" : "agent";
+    const author = home ? SELF : "agent";
     let turn: TurnRow;
     try {
       turn = store.batch(() => {
@@ -475,7 +476,7 @@ export class AgentPool {
           taskId,
           kind: SessionKind.chat,
           cwd,
-          startedBy: "aug",
+          startedBy: SELF,
         });
         return store.addTurn({
           taskId,
@@ -673,7 +674,7 @@ export function hookSettings(): Record<string, unknown> {
   };
 }
 
-export function codingCwd(config: AugConfig, task: TaskRow): string {
+export function codingCwd(config: RikerConfig, task: TaskRow): string {
   // The interview writes its drafts there, so Write needs no other folder.
   if (task.kind === Kind.system) return docDraftsDir();
   const mapped = task.repo ? config.github.repos[task.repo] : undefined;
@@ -688,7 +689,7 @@ export function codingCwd(config: AugConfig, task: TaskRow): string {
 // transcript keeps only the latest turns.
 export const CODING_BRIEF_TURNS = 20;
 
-export function codingBrief(config: AugConfig, task: TaskRow): string {
+export function codingBrief(config: RikerConfig, task: TaskRow): string {
   const said = store
     .turnsForTask(task.id)
     .filter((t) => t.role !== TurnRole.agent);
@@ -699,7 +700,7 @@ export function codingBrief(config: AugConfig, task: TaskRow): string {
   return [
     forPrompt(config, DocName.coding),
     "",
-    `You are working aug task ${ref}. When the work is finished, run:`,
+    `You are working Riker task ${ref}. When the work is finished, run:`,
     `  ${toolsCommand("done", "--summary", "<one line: what you did>")} [--reply "<words to the person who asked>"]`,
     "Leave the live handoff board a note when you start, get blocked, or have something ready:",
     `  ${toolsCommand("note", "--label", "working on", "<what, which files>")}`,
@@ -711,7 +712,7 @@ export function codingBrief(config: AugConfig, task: TaskRow): string {
     `Work that belongs in a task of its own: ${toolsCommand("move", "new", "<title>", "--kind", "coding", "--brief", "<what to do>", "--from", ref)} (look up projects with ${toolsCommand("projects")}, one in full with ${toolsCommand("project", "<name>")}).`,
     `Search it: ${toolsCommand("knowledge", "search", "<words>")}`,
     `To show the owner a terminal program (a diff viewer), run it in a split of your own pane, not a new tmux window: ${toolsCommand("pane", "--zoom", "--wait", "--", "<command...>")}`,
-    "Do not edit the owner's dotfiles or Claude settings. Setup aug needs there is `aug install <name>` (`aug install --check` lists it); anything else, say in your done reply.",
+    "Do not edit the owner's dotfiles or Claude settings. Setup riker needs there is `riker install <name>` (`riker install --check` lists it); anything else, say in your done reply.",
     "",
     docsBlock(config, { learned: true }),
     "",
@@ -732,7 +733,7 @@ export function codingBrief(config: AugConfig, task: TaskRow): string {
 }
 
 export function codingLaunch(
-  config: AugConfig,
+  config: RikerConfig,
   task: TaskRow,
   opts: { resume?: string; note?: string } = {},
 ): CodingLaunch {
@@ -754,9 +755,9 @@ export function codingLaunch(
     argv,
     cwd: codingCwd(config, task),
     env: {
-      AUG_TASK_ID: String(task.id),
-      AUG_SESSION_ID: sessionId,
-      AUG_HOME: paths.home(),
+      [envName("TASK_ID")]: String(task.id),
+      [envName("SESSION_ID")]: sessionId,
+      [envName("HOME")]: paths.home(),
     },
     sessionId,
   };

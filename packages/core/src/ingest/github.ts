@@ -1,6 +1,6 @@
 // GitHub through the `gh` CLI, so whatever auth gh has works here. The
 // participating notifications feed is the inbox: review requests, mentions,
-// assignments, and comments on threads you are part of. Read-only: aug never
+// assignments, and comments on threads you are part of. Read-only: Riker never
 // marks a notification read.
 
 import { ghTrouble, GhTrouble } from "../github-gate";

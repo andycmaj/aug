@@ -11,7 +11,7 @@ import {
   type ThemeColor,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
-import { useAug } from "../context/aug";
+import { useRiker } from "../context/riker";
 import {
   BODY_CHARS,
   INBOX_FILTERS,
@@ -25,9 +25,9 @@ import {
   subjectOf,
   type InboxRow,
   type InboxRun,
-} from "@aug/core/inbox";
-import { taskRef } from "@aug/core/rows";
-import { StepDecision } from "@aug/core/types";
+} from "@riker/core/inbox";
+import { taskRef } from "@riker/core/rows";
+import { StepDecision } from "@riker/core/types";
 import type { HelpCtx } from "../keymap";
 import type { Actions, Dialogs } from "./actions";
 import { PromptModal } from "./modals";
@@ -46,8 +46,8 @@ export function useInboxTab(opts: {
   actions: Actions;
   dialogs: Dialogs;
 }) {
-  const aug = useAug();
-  const all = createMemo(() => (opts.active() ? aug.inbox() : []));
+  const riker = useRiker();
+  const all = createMemo(() => (opts.active() ? riker.inbox() : []));
   const rows = createMemo(() =>
     all().filter((r) => inFilter(r, filter()) && matchesQuery(r, query())),
   );
@@ -82,7 +82,7 @@ export function useInboxTab(opts: {
     const r = row();
     if (!opts.active() || !r) return null;
     const id = r.type === "message" ? r.taskId : r.idea.made_task_id;
-    return id === null ? null : aug.task(id);
+    return id === null ? null : riker.task(id);
   };
 
   const commands: Record<string, Handler> = {
@@ -160,7 +160,7 @@ export function useInboxTab(opts: {
       inboxRead: r.type === "message" && r.read,
       inboxMade: r.type === "message" && r.result === InboxResult.task,
       inboxWork: task() !== null,
-      live: Boolean(task() && aug.isLive(task()!)),
+      live: Boolean(task() && riker.isLive(task()!)),
     };
   };
 
@@ -222,7 +222,7 @@ function InboxView(props: {
   width: number;
 }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   let scrollRef: ScrollBoxRenderable | undefined;
 
   // Rows above the selected one are one line each (only the selected one
@@ -290,8 +290,8 @@ function InboxView(props: {
               const fg = (c: ThemeColor) => (sel() ? contrastingForeground(theme.primary) : c);
               const ref = () => {
                 if (row.taskId === null) return "";
-                const t = aug.task(row.taskId);
-                const project = t?.project_id ? aug.project(t.project_id)?.name : null;
+                const t = riker.task(row.taskId);
+                const project = t?.project_id ? riker.project(t.project_id)?.name : null;
                 // An idea's task is only what it is about until approving it
                 // makes one; a bare ref read as "the Advisor made a task".
                 const about = row.type === "idea" && row.idea.made_task_id === null;
@@ -301,7 +301,7 @@ function InboxView(props: {
                 <box flexDirection="column">
                   <box flexDirection="row" gap={1} backgroundColor={sel() ? theme.primary : undefined}>
                     <text fg={fg(theme.textMuted)} width={7} flexShrink={0}>
-                      {when(row.at, aug.now())}
+                      {when(row.at, riker.now())}
                     </text>
                     <text fg={fg(theme.secondary)} width={8} flexShrink={0}>
                       {row.source}
@@ -361,10 +361,10 @@ function readJson<T>(text: string | null): T | null {
 // the body (capped unless revealed) and the runs before this one.
 function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const width = () => Math.max(20, props.width - 8);
   const runs = createMemo((): InboxRun[] =>
-    props.row.type === "message" ? aug.inboxRuns(props.row.message.id) : [],
+    props.row.type === "message" ? riker.inboxRuns(props.row.message.id) : [],
   );
   const latest = () => runs()[0] ?? null;
 

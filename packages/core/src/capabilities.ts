@@ -1,6 +1,6 @@
-// Capabilities: names aug owns ("slack.read"), mapped to the concrete MCP tool
+// Capabilities: names Riker owns ("slack.read"), mapped to the concrete MCP tool
 // names claude is allowed to call. Agents and the Home assistant are granted
-// capabilities in ~/.aug/config.json; this is the one place that knows what a
+// capabilities in ~/.riker/config.json; this is the one place that knows what a
 // capability means for a given connector.
 //
 // Fail closed: only tools named by a capability are ever allowed, and any name
@@ -22,7 +22,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { logger } from "./log";
 import { paths } from "./paths";
 import { TOOLS_NAME } from "./self";
@@ -106,7 +106,7 @@ export const GH_READS = [
 // Rules match a command's prefix, and each part of `a && b` must match on its
 // own; `cd` into another folder never does. Said to every headless shell.
 export const SHELL_HOWTO =
-  `Run one command per Bash call, written out in full and starting with the command itself: no \`cd <dir> &&\` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). Keep each argument on one line: a quoted argument with a line starting with # (a Markdown heading) is denied, so long text goes in a file. Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout. A denied call means the command did not match, not that Bash is off: write it again that way (aug's tools as ${TOOLS_NAME} <command>) and try once more before giving up. Never ask the owner to allow a command: they cannot, aug sets what you may run.`;
+  `Run one command per Bash call, written out in full and starting with the command itself: no \`cd <dir> &&\` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). Keep each argument on one line: a quoted argument with a line starting with # (a Markdown heading) is denied, so long text goes in a file. Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout. A denied call means the command did not match, not that Bash is off: write it again that way (Riker's tools as ${TOOLS_NAME} <command>) and try once more before giving up. Never ask the owner to allow a command: they cannot, Riker sets what you may run.`;
 
 export const DENIED_STEP = "denied: ";
 // Said beside a denied connector call: what the owner sets to let it run.
@@ -171,7 +171,7 @@ export function deniedNote(turns: TurnRow[]): string {
           "Your last turn was denied these connector tools, because the owner has not granted them to you:",
           ...[...new Set(connector.map(deniedTool))].map((t) => `- ${t}`),
           ...grants.map((s) => `- ${s.slice(GRANT_STEP.length)}`),
-          "Do not call them again this turn. Tell the owner what you could not do and the config key above that would allow it; never edit aug's config yourself.",
+          "Do not call them again this turn. Tell the owner what you could not do and the config key above that would allow it; never edit Riker's config yourself.",
         ].join("\n")
       : "",
   ]
@@ -184,7 +184,7 @@ export type Role = "general" | "assistant";
 // MCP tool rules a capability grants.
 export function resolveCapability(
   name: string,
-  config: AugConfig["capabilities"],
+  config: RikerConfig["capabilities"],
 ): string[] {
   const base = CAPABILITIES[name];
   const server = config.servers[name] ?? base?.server;
@@ -246,7 +246,7 @@ const WRAPPERS = new Set([
 // writes.
 export function resolveCommands(
   name: string,
-  config: AugConfig["capabilities"],
+  config: RikerConfig["capabilities"],
 ): string[] {
   const allowed: string[] = [];
   for (const command of config.commands[name] ?? []) {
@@ -381,7 +381,7 @@ export function pluginWidens(dir: string, commands: string[]): string[] {
 
 export function resolvePlugin(
   name: string,
-  config: AugConfig["capabilities"],
+  config: RikerConfig["capabilities"],
 ): string | undefined {
   const ref = config.plugins[name];
   if (!ref) return undefined;
@@ -417,7 +417,7 @@ export interface Grant {
 
 export function capabilityGrant(
   role: Role,
-  config: AugConfig,
+  config: RikerConfig,
 ): Grant {
   const caps = config.capabilities;
   const granted = config.capabilities.grants[role] ?? [];
@@ -454,7 +454,7 @@ const MCP_TOOL = /^mcp__(.+?)__(.+)$/;
 export function grantHint(
   tool: string,
   role: Role,
-  config: AugConfig,
+  config: RikerConfig,
   file = paths.config(),
 ): string | null {
   const match = MCP_TOOL.exec(tool);
@@ -472,7 +472,7 @@ export function grantHint(
   const byDefault = candidates.find(([, spec]) => spec.tools.includes(bare));
   const byOverride = candidates.find(([, spec]) => spec.writes?.includes(bare));
   const found = byDefault ?? byOverride;
-  if (!found) return `${tool}: no capability in aug grants it (connector writes other than Claude Docs are never allowed).`;
+  if (!found) return `${tool}: no capability in Riker grants it (connector writes other than Claude Docs are never allowed).`;
   const [name] = found;
   if (granted.has(name)) {
     return `${tool}: "${name}" is in ${key}, but its tools leave "${bare}" out: list it in capabilities.tools["${name}"] in ${file}.`;
@@ -487,7 +487,7 @@ export function grantHint(
 export function grantSteps(
   denied: string[],
   role: Role,
-  config: AugConfig,
+  config: RikerConfig,
   file = paths.config(),
 ): string[] {
   const tools = [...new Set(denied.map(deniedTool))];
@@ -501,7 +501,7 @@ export function grantSteps(
 // enable X" gets the real answer.
 export function connectorNote(
   role: Role,
-  config: AugConfig,
+  config: RikerConfig,
   file = paths.config(),
 ): string {
   const granted = (config.capabilities.grants[role] ?? []).filter(
@@ -511,7 +511,7 @@ export function connectorNote(
     .map(([name, spec]) => `${name} (${spec.about})`)
     .join(", ");
   return [
-    `Connector tools (claude.ai Slack, Claude Docs, Notion) run only for capabilities the owner grants you in ${file} under capabilities.grants.${role}, for example "capabilities": {"grants": {"${role}": ["docs.read", "docs.write"]}}. aug offers: ${offered}. Granted to you now: ${granted.join(", ") || "none"}.`,
+    `Connector tools (claude.ai Slack, Claude Docs, Notion) run only for capabilities the owner grants you in ${file} under capabilities.grants.${role}, for example "capabilities": {"grants": {"${role}": ["docs.read", "docs.write"]}}. Riker offers: ${offered}. Granted to you now: ${granted.join(", ") || "none"}.`,
     "When the owner asks how to enable one, tell them that key and capability. Never edit that file yourself, and never ask the owner to approve a call: nothing can, only a grant.",
   ].join("\n");
 }
@@ -519,7 +519,7 @@ export function connectorNote(
 // How to work with Claude Docs headless, once a role may read or make them.
 export function docsNote(
   role: Role,
-  config: AugConfig,
+  config: RikerConfig,
 ): string {
   const caps = config.capabilities;
   const granted = (caps.grants[role] ?? []).filter(
@@ -529,8 +529,8 @@ export function docsNote(
   const writes = granted.includes("docs.write");
   const link =
     role === "general"
-      ? `aug links a doc you create to this task by itself; if it is not under Link, attach it with ${TOOLS_NAME} move link <this task's ref> "<url>" --title "<doc title>". Give the link in did.`
-      : `Attach it to the task it is for with ${TOOLS_NAME} move link AUG-0000 "<url>" --title "<doc title>", then give the owner the link.`;
+      ? `Riker links a doc you create to this task by itself; if it is not under Link, attach it with ${TOOLS_NAME} move link <this task's ref> "<url>" --title "<doc title>". Give the link in did.`
+      : `Attach it to the task it is for with ${TOOLS_NAME} move link RIKER-0000 "<url>" --title "<doc title>", then give the owner the link.`;
   return [
     "## Claude Docs",
     writes
@@ -548,7 +548,7 @@ export function docsNote(
 // Extra --allowedTools entries a role gets from its granted capabilities.
 export function capabilityAllow(
   role: Role,
-  config: AugConfig,
+  config: RikerConfig,
 ): string[] {
   return capabilityGrant(role, config).allow;
 }
@@ -556,7 +556,7 @@ export function capabilityAllow(
 // One prompt line naming the commands a role was granted.
 export function grantedNote(
   role: Role,
-  config: AugConfig,
+  config: RikerConfig,
 ): string {
   const { commands } = capabilityGrant(role, config);
   return commands.length

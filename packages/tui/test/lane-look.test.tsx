@@ -6,9 +6,9 @@ import { testRender } from "@opentui/solid";
 import { RGBA } from "@opentui/core";
 import { getTheme } from "@andycmaj/opentui-app";
 import { App } from "../src/app";
-import { installFixture } from "@aug/fixtures/demo";
-import { nerdFont, nerdFontInstalled } from "@aug/core/glyphs";
-import { Lane, LANE_META, laneMeta } from "@aug/core/lanes";
+import { installFixture } from "@riker/fixtures/demo";
+import { nerdFont, nerdFontInstalled } from "@riker/core/glyphs";
+import { Lane, LANE_META, laneMeta } from "@riker/core/lanes";
 import { toneColor } from "../src/components/ui";
 
 const GIT_MERGE = "";
@@ -46,7 +46,7 @@ describe("Nerd Font detection", () => {
   });
 
   test("unset, a Nerd Font installed is the guess", () => {
-    dir = mkdtempSync(join(tmpdir(), "aug-fonts-"));
+    dir = mkdtempSync(join(tmpdir(), "riker-fonts-"));
     writeFileSync(join(dir, "Inter-Regular.ttf"), "");
     expect(nerdFontInstalled([dir])).toBe(false);
     mkdirSync(join(dir, "caskaydia"));
@@ -60,7 +60,7 @@ describe("the rail's merged row", () => {
   let destroy: (() => void) | undefined;
   afterEach(() => {
     destroy?.();
-    const home = process.env.AUG_HOME;
+    const home = process.env.RIKER_HOME;
     if (home) rmSync(home, { recursive: true, force: true });
   });
 

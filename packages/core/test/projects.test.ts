@@ -70,7 +70,7 @@ describe("helpers", () => {
   test("window command quotes every argument and keeps a shell", () => {
     expect(shellQuote("it's")).toBe(`'it'\\''s'`);
     // What a hook command and a tmux window both pass bare.
-    expect(shellQuote("AUG-12@host%x+y=z:a,b./c-d_e")).toBe("AUG-12@host%x+y=z:a,b./c-d_e");
+    expect(shellQuote("RIKER-12@host%x+y=z:a,b./c-d_e")).toBe("RIKER-12@host%x+y=z:a,b./c-d_e");
     expect(shellQuote("a b")).toBe("'a b'");
     expect(windowCommand(["claude", "--append-system-prompt", "a b"])).toBe(
       `claude --append-system-prompt 'a b'; exec "\${SHELL:-/bin/sh}" -l`,
@@ -130,7 +130,7 @@ describe("projects", () => {
   test("only untagged, non-viewer sessions can be adopted", async () => {
     fake.sessions.push(
       { id: "$1", name: "home", projectId: null, viewer: false },
-      { id: "$2", name: "aug-view-1-1", projectId: null, viewer: true },
+      { id: "$2", name: "riker-view-1-1", projectId: null, viewer: true },
     );
     await createProject(config(), { name: "tagged" });
     expect((await adoptableSessions()).map((s) => s.name)).toEqual(["home"]);
@@ -148,7 +148,7 @@ describe("viewer", () => {
     expect(await viewerArgv(t.id)).toMatchObject({ argv: expect.any(Array) });
   });
 
-  test("aug never views the window it runs in, which would nest without end", async () => {
+  test("Riker never views the window it runs in, which would nest without end", async () => {
     const t = codingTask();
     await startTask(config(), t.id);
     fake.host = fake.windows[0].id;
@@ -180,16 +180,16 @@ describe("starting a task", () => {
       branch: "fix-login-redirect",
       create: true,
     });
-    expect(fake.worktrees[0].env.AUG).toBe("1");
+    expect(fake.worktrees[0].env.RIKER).toBe("1");
     const w = fake.windows[0];
     expect(w.taskId).toBe(t.id);
     expect(w.cwd).toBe("/src/api.fix-login-redirect");
     expect(w.env).toMatchObject({
-      AUG: "1",
-      AUG_TASK_ID: String(t.id),
-      AUG_PROJECT: String(p.id),
-      AUG_BRANCH: "fix-login-redirect",
-      AUG_SESSION_ID: r.session.id,
+      RIKER: "1",
+      RIKER_TASK_ID: String(t.id),
+      RIKER_PROJECT: String(p.id),
+      RIKER_BRANCH: "fix-login-redirect",
+      RIKER_SESSION_ID: r.session.id,
     });
     expect(w.argv[0]).toBe("claude");
 
@@ -359,7 +359,7 @@ describe("closing, moving, reconciling", () => {
     store.updateTask(t.id, { project_id: p.id });
     await startTask(config(), t.id);
     const session = fake.sessions.find((s) => s.projectId === p.id)!;
-    fake.sessions.push({ id: "$v", name: "aug-view-1-1", projectId: null, viewer: true });
+    fake.sessions.push({ id: "$v", name: "riker-view-1-1", projectId: null, viewer: true });
     await archiveProject(p.id);
     expect(fake.windows).toHaveLength(0);
     expect(fake.sessions.some((s) => s.id === session.id)).toBe(false);
@@ -390,15 +390,15 @@ describe("closing, moving, reconciling", () => {
   });
 
   // shift+t, and ctrl+t while attached (AUG-0148).
-  test("jump moves aug's own client; outside tmux it answers the attach line", async () => {
+  test("jump moves Riker's own client; outside tmux it answers the attach line", async () => {
     const t = codingTask();
     expect(await jump(t.id)).toBe("gone");
     await startTask(config(), t.id);
     const w = fake.windows[0];
-    // No host window: aug is not in a client of this server.
+    // No host window: Riker is not in a client of this server.
     expect(await jump(t.id)).toEqual({ attach: `tmux attach -t ${w.sessionId}:${w.id}` });
     expect(fake.switched).toEqual([]);
-    fake.host = "@aug";
+    fake.host = "@riker";
     expect(await jump(t.id)).toBe("jumped");
     expect(fake.switched).toEqual([w.id]);
   });

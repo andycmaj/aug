@@ -1,10 +1,10 @@
-// aug's words for a guide run (@aug/code-review-plannotator does the run):
+// Riker's words for a guide run (@riker/code-review-plannotator does the run):
 // the action's turn, and how the task's actions name reopening its review.
 
-import type { SavedGuide } from "@aug/code-review-plannotator/guide";
+import type { SavedGuide } from "@riker/code-review-plannotator/guide";
 
 // What the action's turn says: the chapters, then the findings by file.
-// `opened`: aug opens the review now; else (a trigger ran it) the owner
+// `opened`: Riker opens the review now; else (a trigger ran it) the owner
 // opens it from the task's actions. `denied`: calls the run was refused,
 // so no notes may mean it did not look, not that nothing stood out.
 export function guideMarkdown(
@@ -39,7 +39,7 @@ export function guideMarkdown(
     ...saved.lines,
     "",
     opened
-      ? `Saved in Plannotator (\`${saved.id}\`). The review aug opens has these notes as comments; its Agents tab lists the guide.`
+      ? `Saved in Plannotator (\`${saved.id}\`). The review Riker opens has these notes as comments; its Agents tab lists the guide.`
       : `Saved in Plannotator (\`${saved.id}\`). To see these notes as comments in its review, pick "${OPEN_REVIEW_TITLE}" from this task's actions (\`.\` or the palette).`,
   ]
     .filter((line, i, all) => line !== "" || all[i - 1] !== "")

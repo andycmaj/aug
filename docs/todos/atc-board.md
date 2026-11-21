@@ -56,13 +56,13 @@ its state changes. The rings take the place of the Board's columns:
 
 ## 2. Other ATC practice worth stealing
 
-Ordered roughly by how cheaply each could be built on what aug already has.
+Ordered roughly by how cheaply each could be built on what Riker already has.
 
 ### Flight progress strips → the Board's columns, with a "next logical action"
 
 Paper strips move bay to bay as a flight progresses. Electronic strip
 systems added a **Next Logical Action** button: one press does whatever
-naturally comes next for that strip in its current state. aug's columns are
+naturally comes next for that strip in its current state. Riker's columns are
 already strip bays.
 
 **Proposal:** a single key (`.`) that does the next logical move for the lane:
@@ -165,7 +165,7 @@ predictably.
 A pilot reads every clearance back, and the controller listens for errors.
 
 **Proposal:**
-- aug's Send confirm is already the readback for outbound words.
+- Riker's Send confirm is already the readback for outbound words.
 - Add the reverse: before a long coding run, the agent reads back its
   one-line understanding of the brief, and the owner acks it or corrects it.
 

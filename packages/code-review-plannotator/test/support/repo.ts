@@ -1,5 +1,5 @@
 // A git repo on a feature branch, and the guide a skill would answer for it:
-// shared by this package's tests and aug's guide action tests.
+// shared by this package's tests and Riker's guide action tests.
 
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,7 +13,7 @@ export function sh(cwd: string, ...args: string[]) {
 
 // A repo on a feature branch that adds div to math.ts and a README line.
 export function repo(): string {
-  const dir = mkdtempSync(join(tmpdir(), "aug-guide-"));
+  const dir = mkdtempSync(join(tmpdir(), "riker-guide-"));
   const git = (...a: string[]) =>
     sh(dir, "git", "-c", "user.email=t@t", "-c", "user.name=t", ...a);
   git("init", "-q", "-b", "main");

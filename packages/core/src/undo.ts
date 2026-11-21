@@ -2,12 +2,12 @@
 // changed. A move on a task keeps the task as it was before and after; undo
 // puts back only what the move changed, and only while the task still has
 // what the move left (anything newer is never overwritten). A move with
-// effects outside aug's own rows (an agent started, a draft sent, a project
+// effects outside Riker's own rows (an agent started, a draft sent, a project
 // archived) is kept as one that cannot be undone, so ctrl+z says so instead
 // of reaching past it to an older one. In memory: a restart starts empty.
 
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { holdForStart, holdReleased, HELD_FOR_START } from "./lifecycle";
 import * as projects from "./projects";
 import { briefEditable } from "./read-model";
@@ -219,7 +219,7 @@ function words(parts: Part[]): string {
 // Puts back what the newest move changed. Refused, with why, when it cannot
 // be undone or the task changed since; either way it leaves the stack, so
 // the next ctrl+z reaches the move before it.
-export async function revert(config: AugConfig, entry: UndoEntry): Promise<UndoResult> {
+export async function revert(config: RikerConfig, entry: UndoEntry): Promise<UndoResult> {
   const name = label(entry);
   if (entry.type === "cannot")
     return { ok: false, text: `Can't undo ${name}${whose(entry)}: ${entry.why}` };

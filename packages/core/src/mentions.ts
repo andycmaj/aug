@@ -1,6 +1,7 @@
 // `@` in a chat box: which tasks and projects it offers as you type, how a
 // pick is written into the text, and how the Assistant reads them back.
 
+import { REF_WORD } from "./brand";
 import { findProject, findTasks } from "./lookup";
 import * as store from "./store";
 import { ProjectStatus, type ProjectRow, type TaskRow } from "./types";
@@ -24,15 +25,15 @@ function nameScore(name: string, q: string): number | null {
   return at === q.length ? 4 : null;
 }
 
-// A number matches a task's ref and nothing else. "aug" alone may be a ref
+// A number matches a task's ref and nothing else. "riker" alone may be a ref
 // on its way or the start of a project's name; the name ranks first.
 function mentionScore(m: Mention, query: string): number | null {
   if (!query) return 0;
   if (m.type === "project") {
     const q = query.toLowerCase();
-    return /^(aug-?)?\d+$/.test(q) ? null : nameScore(m.project.name, q);
+    return /^((riker|aug)-?)?\d+$/.test(q) ? null : nameScore(m.project.name, q);
   }
-  const q = query.toLowerCase().replace(/^aug-?/, "");
+  const q = query.toLowerCase().replace(/^(riker|aug)-?/, "");
   if (!q) return 2;
   if (/^\d+$/.test(q))
     return String(m.task.id).startsWith(q.replace(/^0+/, "") || "0") ? 0 : null;
@@ -80,10 +81,11 @@ export function mentionAt(
   return { start: before.length - m[1].length - 1, query: m[1] };
 }
 
-// @AUG-0012 (or a bare AUG-0012) in what the owner typed.
+// @RIKER-0012 (or a bare RIKER-0012, or AUG-0012 from before the rename) in
+// what the owner typed.
 export function mentionedTasks(text: string): TaskRow[] {
   const ids = new Set<number>();
-  for (const m of text.matchAll(/@?\bAUG-(\d{1,6})\b/gi)) ids.add(Number(m[1]));
+  for (const m of text.matchAll(new RegExp(`@?\\b${REF_WORD}-(\\d{1,6})\\b`, "gi"))) ids.add(Number(m[1]));
   return [...ids]
     .map((id) => store.getTask(id))
     .filter((t): t is TaskRow => Boolean(t));

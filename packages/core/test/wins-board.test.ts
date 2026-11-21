@@ -49,7 +49,7 @@ describe("days", () => {
 describe("task events", () => {
   test("every writer is heard: made, closed, reopened, merged, finished", () => {
     const t = task("one");
-    store.createSession({ id: "s1", taskId: t.id, kind: SessionKind.tmux, cwd: "/", startedBy: "aug" });
+    store.createSession({ id: "s1", taskId: t.id, kind: SessionKind.tmux, cwd: "/", startedBy: "riker" });
     store.updateTask(t.id, { title: "renamed" });
     workFinished({ taskId: t.id, sessionId: "s1" }, { summary: "shipped it", closes: false });
     store.updateTask(t.id, { merged_at: new Date().toISOString() });
@@ -69,7 +69,7 @@ describe("task events", () => {
   });
 
   test("a database from before task_events is backfilled once from its columns", () => {
-    const file = join(mkdtempSync(join(tmpdir(), "aug-ev-")), "aug.db");
+    const file = join(mkdtempSync(join(tmpdir(), "riker-ev-")), "riker.db");
     const first = openDb(file);
     first.exec("DROP TRIGGER ev_task_created; DROP TRIGGER ev_task_status; DROP TRIGGER ev_task_merged");
     first.exec("DELETE FROM kv WHERE key = 'events.backfilled'");
@@ -136,7 +136,7 @@ describe("winsDay", () => {
     store.addTurn({ taskId: win.id, role: TurnRole.you, body: "go" });
     taskClosed(shipped.id, "you");
     store.addTurn({ taskId: store.homeTask().id, role: TurnRole.you, body: "home is not work" });
-    store.enqueueMove("note", { task: "AUG-0001" }, "assistant");
+    store.enqueueMove("note", { task: "RIKER-0001" }, "assistant");
 
     const d = winsDay(today(), now());
     expect(d.isToday).toBe(true);
@@ -189,10 +189,10 @@ describe("winDetail", () => {
     const yday = shiftDay(today(), -1);
     for (let i = 0; i < 8; i++) store.addTurn({ taskId: t.id, role: TurnRole.agent, body: `turn ${i}` });
     store.addTurn({ taskId: t.id, role: TurnRole.you, body: "yesterday", startedAt: noon(yday) });
-    store.enqueueMove("note", { task: "AUG-0001" }, "assistant");
-    store.enqueueMove("note", { task: "AUG-0099" }, "assistant");
+    store.enqueueMove("note", { task: "RIKER-0001" }, "assistant");
+    store.enqueueMove("note", { task: "RIKER-0099" }, "assistant");
     // Ran from yesterday noon to an hour past today's midnight.
-    store.createSession({ id: "s1", taskId: t.id, kind: SessionKind.tmux, cwd: "/", startedBy: "aug" });
+    store.createSession({ id: "s1", taskId: t.id, kind: SessionKind.tmux, cwd: "/", startedBy: "riker" });
     const { from } = dayBounds(today());
     db()
       .query("UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 's1'")

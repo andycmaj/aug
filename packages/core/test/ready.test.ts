@@ -33,7 +33,7 @@ function coding() {
   return store.createTask({ title: `c${++n}`, kind: Kind.coding, channel: "github" });
 }
 
-function start(taskId: number, startedBy: "aug" | "owner" = "aug") {
+function start(taskId: number, startedBy: "riker" | "owner" = "riker") {
   const id = `s${++n}`;
   sessionStarted({ id, taskId, kind: SessionKind.tmux, cwd: "/w", startedBy });
   return { taskId, sessionId: id };

@@ -1,4 +1,4 @@
-// Which repos aug knows and where they are checked out (github.repos in
+// Which repos Riker knows and where they are checked out (github.repos in
 // config), and the repo a task works in. The answers a coding start needs
 // before it can make a worktree live here: a path is checked (is it there, a
 // checkout, its own top, of this repo) before wt ever sees it, and what is
@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { FoundCheckout } from "./checkouts";
-import type { AugConfig, ConfigSource } from "./config";
+import type { RikerConfig, ConfigSource } from "./config";
 import { mux } from "./mux";
 import * as store from "./store";
 import { TaskStatus, type TaskRow } from "./types";
@@ -36,7 +36,7 @@ export function tildePath(path: string): string {
   return path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }
 
-export function repoPath(config: AugConfig, repo: string | null): string | null {
+export function repoPath(config: RikerConfig, repo: string | null): string | null {
   if (!repo) return null;
   return config.github.repos[repo] ?? null;
 }
@@ -83,7 +83,7 @@ export function checkPath(repo: string, path: string): CheckoutProblem | null {
   }
 }
 
-export function checkMapped(config: AugConfig, repo: string): CheckoutProblem | null {
+export function checkMapped(config: RikerConfig, repo: string): CheckoutProblem | null {
   const path = repoPath(config, repo);
   return path ? checkPath(repo, path) : { kind: "unmapped" };
 }
@@ -119,7 +119,7 @@ const DEFAULT_ROOTS = ["~/workspace", "~/src", "~/code", "~/projects", "~/dev", 
 const SCAN_DEPTH = 3;
 const SCAN_TTL_MS = 60_000;
 
-export function repoRoots(config: AugConfig): string[] {
+export function repoRoots(config: RikerConfig): string[] {
   return (config.repoRoots ?? DEFAULT_ROOTS)
     .map(expandHome)
     .filter((p) => existsSync(p));
@@ -128,7 +128,7 @@ export function repoRoots(config: AugConfig): string[] {
 // Kept a minute, per Mux (a test's fake never sees another's scan).
 let scanned: { by: object; at: number; found: FoundCheckout[] } | null = null;
 
-export async function findCheckouts(config: AugConfig, fresh = false): Promise<FoundCheckout[]> {
+export async function findCheckouts(config: RikerConfig, fresh = false): Promise<FoundCheckout[]> {
   const by = mux();
   if (!fresh && scanned?.by === by && Date.now() - scanned.at < SCAN_TTL_MS)
     return scanned.found;
@@ -150,7 +150,7 @@ export interface Candidate {
 // Checkouts of the repo on disk: by remote, then (no GitHub remote) by
 // folder name. The one already mapped is left out.
 export async function candidates(
-  config: AugConfig,
+  config: RikerConfig,
   repo: string,
   fresh = false,
 ): Promise<Candidate[]> {
@@ -168,7 +168,7 @@ export async function candidates(
 
 // Where Clone puts it: the first root, as owner/name (the layout
 // ~/workspace/andycmaj/aug already has).
-export function cloneDest(config: AugConfig, repo: string): string {
+export function cloneDest(config: RikerConfig, repo: string): string {
   const root = repoRoots(config)[0] ?? join(homedir(), "workspace");
   return join(root, ...repo.split("/"));
 }
@@ -183,7 +183,7 @@ export interface PathNeed {
 }
 
 export async function pathNeed(
-  config: AugConfig,
+  config: RikerConfig,
   repo: string,
   problem: CheckoutProblem,
 ): Promise<PathNeed> {
@@ -218,7 +218,7 @@ export function allowMismatch(repo: string, path: string): void {
   store.kvSet(anywayKey(repo), path);
 }
 
-// A repo renamed on GitHub (or mistyped): the new name everywhere aug keeps
+// A repo renamed on GitHub (or mistyped): the new name everywhere Riker keeps
 // it, the mapping, projects and open tasks. Closed tasks keep the old name
 // as history.
 export function renameRepo(config: ConfigSource, from: string, to: string): string {
@@ -256,7 +256,7 @@ export async function cloneRepo(
 
 // A coding task you made yourself has no repo yet: offer its project's repos
 // first, then every mapped one.
-export function repoChoices(config: AugConfig, task: TaskRow): string[] {
+export function repoChoices(config: RikerConfig, task: TaskRow): string[] {
   const project = task.project_id ? store.getProject(task.project_id) : null;
   const ours = project ? store.projectRepos(project) : [];
   const mapped = Object.keys(config.github.repos);
@@ -267,7 +267,7 @@ export function setTaskRepo(taskId: number, repo: string): void {
   store.updateTask(taskId, { repo: checkRepo(repo) });
 }
 
-// ── the whole picture, for the Repos list and aug-tools repos ─────────────
+// ── the whole picture, for the Repos list and riker-tools repos ─────────────
 
 export interface RepoState {
   repo: string;
@@ -281,11 +281,11 @@ export interface RepoState {
 
 export interface RepoReport {
   repos: RepoState[];
-  // GitHub checkouts on disk whose repo aug has no path for.
+  // GitHub checkouts on disk whose repo Riker has no path for.
   unmapped: FoundCheckout[];
 }
 
-export async function repoReport(config: AugConfig, fresh = false): Promise<RepoReport> {
+export async function repoReport(config: RikerConfig, fresh = false): Promise<RepoReport> {
   const mapped = config.github.repos;
   const projectsOf = new Map<string, string[]>();
   for (const p of store.listProjects())
@@ -304,7 +304,7 @@ export async function repoReport(config: AugConfig, fresh = false): Promise<Repo
     })),
   );
   const known = names.map((n) => n.toLowerCase());
-  // The owners of repos aug already knows come first: likely the owner's own.
+  // The owners of repos Riker already knows come first: likely the owner's own.
   const owners = new Set(known.map((n) => n.split("/")[0]));
   const ownFirst = (f: FoundCheckout) => (owners.has(f.repos[0].split("/")[0].toLowerCase()) ? 0 : 1);
   const unmapped = found

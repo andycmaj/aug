@@ -1,14 +1,14 @@
-// The Board's Cost tab: what aug's own model calls cost today and this week,
+// The Board's Cost tab: what Riker's own model calls cost today and this week,
 // by role and by task, against the daily cap (config.spend). The same
-// numbers as aug-tools spend.
+// numbers as riker-tools spend.
 
 import { For, Show } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { truncate, useTheme, type ThemeColor } from "@andycmaj/opentui-app";
-import { useAug } from "../context/aug";
-import { tokens, usd } from "@aug/core/spend";
-import { taskRef } from "@aug/core/rows";
-import type { SpendTotal } from "@aug/core/types";
+import { useRiker } from "../context/riker";
+import { tokens, usd } from "@riker/core/spend";
+import { taskRef } from "@riker/core/rows";
+import type { SpendTotal } from "@riker/core/types";
 
 const BAR = 16;
 
@@ -43,9 +43,9 @@ export function CostTab(props: {
   width: number;
   scrollRef: (r: ScrollBoxRenderable) => void;
 }) {
-  const aug = useAug();
+  const riker = useRiker();
   const theme = useTheme();
-  const report = () => aug.spendReport(aug.desk.config(), aug.now());
+  const report = () => riker.spendReport(riker.desk.config(), riker.now());
   const capped = () => {
     const r = report();
     return r.cap !== null && r.today.cost >= r.cap;
@@ -57,7 +57,7 @@ export function CostTab(props: {
   const tone = () =>
     capped() ? theme.error : near() ? theme.warning : theme.success;
   const max = (rows: SpendTotal[]) => Math.max(0, ...rows.map((r) => r.cost));
-  const title = (id: number) => aug.task(id)?.title ?? "(gone)";
+  const title = (id: number) => riker.task(id)?.title ?? "(gone)";
   const heading = (text: string) => (
     <text fg={theme.primary} attributes={1} marginTop={1}>
       {text}
@@ -90,7 +90,7 @@ export function CostTab(props: {
           </span>
           <span style={{ fg: capped() ? theme.error : theme.textMuted }}>
             {capped()
-              ? "  reached: turns aug starts by itself wait; yours still run"
+              ? "  reached: turns Riker starts by itself wait; yours still run"
               : `  ${usd(Math.max(0, (report().cap ?? 0) - report().today.cost))} left`}
           </span>
         </text>

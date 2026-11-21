@@ -124,7 +124,7 @@ describe("adoptHook", () => {
     expect(store.listTasks()).toHaveLength(0);
   });
 
-  test("aug-tools by hand in an adopted window finds its task and session", async () => {
+  test("riker-tools by hand in an adopted window finds its task and session", async () => {
     const { windowId } = await projectWindow();
     const env = await adoptHook("prompt", { session_id: "s1" }, windowId, probe);
     expect(await paneEnv(windowId)).toEqual(env);
@@ -133,7 +133,7 @@ describe("adoptHook", () => {
 
 describe("user settings", () => {
   test("install adds ours once, keeps yours, backs up; uninstall restores", () => {
-    const dir = mkdtempSync(join(tmpdir(), "aug-claude-"));
+    const dir = mkdtempSync(join(tmpdir(), "riker-claude-"));
     const file = join(dir, "settings.json");
     const mine = { model: "opus", hooks: { Stop: [{ hooks: [{ type: "command", command: "say hi" }] }] } };
     writeFileSync(file, JSON.stringify(mine));
@@ -150,24 +150,24 @@ describe("user settings", () => {
       { matcher: ARTIFACT_TOOLS, hooks: [{ type: "command", command: expect.stringContaining("adopt-hook.sh made") }] },
     ]);
     expect(hooksInstalled(file)).toBe(true);
-    expect(existsSync(`${file}.before-aug`)).toBe(true);
+    expect(existsSync(`${file}.before-riker`)).toBe(true);
     expect(uninstallHooks(file)).toBe(true);
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(mine);
     expect(uninstallHooks(file)).toBe(false);
   });
 
-  test("the guard skips aug's own claudes and non-project panes before bun", () => {
+  test("the guard skips Riker's own claudes and non-project panes before bun", () => {
     const script = guardScript();
     const lines = script.split("\n");
     const exec = lines.findIndex((l) => l.includes("exec"));
-    expect(lines.findIndex((l) => l.includes("AUG_TASK_ID"))).toBeLessThan(exec);
-    expect(lines.findIndex((l) => l.includes("@aug_project"))).toBeLessThan(exec);
+    expect(lines.findIndex((l) => l.includes("RIKER_TASK_ID"))).toBeLessThan(exec);
+    expect(lines.findIndex((l) => l.includes("@riker_project"))).toBeLessThan(exec);
     expect(script).toContain('adopt-hook "$1"');
   });
 });
 
-describe("aug's own claudes", () => {
-  // aug run in a pane of a task's window once had its Slack claude (which
+describe("Riker's own claudes", () => {
+  // Riker run in a pane of a task's window once had its Slack claude (which
   // loads user settings, so the guard) adopted as that task's newest
   // session; s then resumed an id claude had no conversation for.
   test("carry no pane, so the guard never adopts them", async () => {

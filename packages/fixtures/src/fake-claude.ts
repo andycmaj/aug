@@ -4,11 +4,12 @@
 // "done" to have it finish.
 
 import { createInterface } from "node:readline";
-import { handleDone, handleHook } from "@aug/core/hooks";
+import { envVar } from "@riker/core/brand";
+import { handleDone, handleHook } from "@riker/core/hooks";
 
 const env = {
-  taskId: Number(process.env.AUG_TASK_ID),
-  sessionId: process.env.AUG_SESSION_ID ?? "",
+  taskId: Number(envVar("TASK_ID")),
+  sessionId: envVar("SESSION_ID") ?? "",
 };
 const title = process.argv[2] ?? "the task";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -29,7 +30,7 @@ async function work(steps: [string, Record<string, unknown>][]) {
 }
 
 console.log(
-  orange("✻ Claude Code") + dim("  (aug demo - a fake agent; nothing runs)"),
+  orange("✻ Claude Code") + dim("  (riker demo - a fake agent; nothing runs)"),
 );
 console.log(dim(`  cwd: ${process.cwd()}`));
 console.log("");
@@ -37,7 +38,7 @@ console.log(`> Work: ${title}`);
 console.log("");
 
 await work([
-  ["Bash", { command: "aug-tools notes" }],
+  ["Bash", { command: "riker-tools notes" }],
   ["Read", { file_path: "tools/gl_export.py" }],
   ["Grep", { pattern: "inter_company" }],
 ]);
@@ -69,7 +70,7 @@ for await (const line of rl) {
         close: "issue",
       }),
     );
-    console.log(dim("finished - the reply waits for your Send in aug"));
+    console.log(dim("finished - the reply waits for your Send in Riker"));
     rl.close();
     break;
   }

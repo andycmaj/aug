@@ -206,12 +206,12 @@ describe("Agents at once (maxActiveAgents)", () => {
     expect(fake.windows).toHaveLength(2);
   });
 
-  test("working coding agents hold back chat turns aug starts by itself", async () => {
+  test("working coding agents hold back chat turns Riker starts by itself", async () => {
     const [a, b] = ["A", "B"].map(codingTask);
     await engine.desk.startAgent(a.id, { branch: "ba" });
     await engine.desk.startAgent(b.id, { branch: "bb" });
     const chat = engine.desk.newTask("Look into it", Kind.general);
-    expect(engine.pool.request(chat.id, "a reply came", "aug")).toBeNull();
+    expect(engine.pool.request(chat.id, "a reply came", "riker")).toBeNull();
     expect(store.getTask(chat.id)!.agent_state).toBe(AgentState.queued);
   });
 
