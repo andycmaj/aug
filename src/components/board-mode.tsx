@@ -204,6 +204,7 @@ export function BoardMode() {
       },
       [Commands.NUDGE]: onTask((t) => void shell.actions.nudge(t.id)),
       [Commands.DONE]: onTask(shell.actions.done),
+      [Commands.ACTIONS]: onTask(shell.actions.pickAction),
       [Commands.PR_DASH]: () => {
         const t = target();
         if (!t) return false;

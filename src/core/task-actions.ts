@@ -187,6 +187,15 @@ export function whyNot(spec: ActionSpec, task: TaskRow): string | null {
   return null;
 }
 
+// The actions that ask for a key of their own (bound at start).
+export function keyedActions(
+  config: AugConfig,
+): { name: string; key: string; title: string }[] {
+  return registeredActions(config).flatMap((a) =>
+    a.key ? [{ name: a.name, key: a.key, title: a.title }] : [],
+  );
+}
+
 // The actions the picker offers for a task.
 export function actionsFor(config: AugConfig, task: TaskRow): ActionSpec[] {
   return registeredActions(config).filter((a) => whyNot(a, task) === null);

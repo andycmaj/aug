@@ -695,6 +695,13 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     { key: "u", cmd: Commands.NUDGE, desc: "nudge the agent about new feedback", relevant: (c) => c.coding },
     { key: "d", cmd: Commands.DONE, desc: "mark done", help: "done", relevant: isWork },
     {
+      key: ".",
+      cmd: Commands.ACTIONS,
+      desc: "actions: summarize the work, ... (pick one)",
+      help: "actions",
+      relevant: isWork,
+    },
+    {
       key: "shift+m",
       cmd: Commands.MOVE_TO_PROJECT,
       desc: "move the task to a project",
@@ -707,8 +714,30 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
 
 // The binding table with config's navigation keys in place of the defaults, in every
 // scope that binds them (the go-to chord is in the terminal's too, which is
-// what lets it past an attached agent).
-export function buildKeymap(keys: NavKeys = {}): KeymapTable<HelpCtx> {
+// what lets it past an attached agent), and a key per task action that asks
+// for one (config.json `actions.<name>.key`), on the rail and the Canvas.
+export function buildKeymap(
+  keys: NavKeys = {},
+  actions: ActionKey[] = [],
+): KeymapTable<HelpCtx> {
+  const nav = withNavKeys(keys);
+  const { bound } = actionKeys(actions, nav);
+  if (bound.length === 0) return nav;
+  const specs: BindingSpec<HelpCtx>[] = bound.map((a) => ({
+    key: a.key,
+    cmd: actionCommand(a.name),
+    // No footer word: the footer stays the row's own keys; ? help lists it.
+    desc: `action: ${a.title}`,
+    relevant: isWork,
+  }));
+  return {
+    ...nav,
+    rail: [...(nav.rail ?? []), ...specs],
+    canvas: [...(nav.canvas ?? []), ...quietWhileTyping(specs)],
+  };
+}
+
+function withNavKeys(keys: NavKeys): KeymapTable<HelpCtx> {
   const byCmd = new Map<string, string>();
   for (const [field, cmd] of Object.entries(NAV_COMMANDS) as [keyof NavKeys, string][]) {
     const key = keys[field];
@@ -724,6 +753,43 @@ export function buildKeymap(keys: NavKeys = {}): KeymapTable<HelpCtx> {
       }),
     ]),
   );
+}
+
+// A task action's own key: what config asks for, by the action's name.
+export interface ActionKey {
+  name: string;
+  key: string;
+  title: string;
+}
+
+export const actionCommand = (name: string) => `${Commands.ACTIONS}.${name}`;
+
+// The scopes an action key lands in, and the app scope above them both.
+const ACTION_KEY_SCOPES = ["app", "rail", "canvas"];
+
+// Which asked-for keys are bound. A key aug already uses where the rows are
+// (on the rail, the Canvas or app-wide), or one an earlier action took, is
+// refused rather than shadowing a move: the action stays in the . picker.
+export function actionKeys(
+  actions: ActionKey[],
+  table: KeymapTable<HelpCtx> = defaultKeymap,
+): { bound: ActionKey[]; refused: { name: string; key: string; why: string }[] } {
+  const owner = new Map<string, string>();
+  for (const scope of ACTION_KEY_SCOPES)
+    for (const spec of table[scope] ?? [])
+      if (!owner.has(spec.key)) owner.set(spec.key, spec.desc);
+  const bound: ActionKey[] = [];
+  const refused: { name: string; key: string; why: string }[] = [];
+  for (const a of actions) {
+    const taken = owner.get(a.key);
+    if (taken) {
+      refused.push({ name: a.name, key: a.key, why: `${a.key} is taken (${taken})` });
+      continue;
+    }
+    owner.set(a.key, `action: ${a.title}`);
+    bound.push(a);
+  }
+  return { bound, refused };
 }
 
 export const keymap = defaultKeymap;

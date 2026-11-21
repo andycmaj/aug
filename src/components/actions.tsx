@@ -32,7 +32,8 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
-import { actionsFor } from "../core/task-actions";
+import { actionsFor, keyedActions } from "../core/task-actions";
+import { actionCommand, actionKeys, buildKeymap } from "../keymap";
 import type { NoiseRule } from "../core/config";
 import type { Jump } from "../core/desk";
 import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "../core/inbox";
@@ -438,6 +439,13 @@ export function useActions(dialogs: Dialogs) {
     );
   }
 
+  // The action keys bound at start (app.tsx builds the keymap from the same).
+  const keys = (() => {
+    const config = desk.config();
+    const { bound } = actionKeys(keyedActions(config), buildKeymap(config.keys));
+    return new Set(bound.map((a) => a.name));
+  })();
+
   // .: the actions that apply to this task.
   function pickAction(task: TaskRow): false | void {
     const offered = actionsFor(desk.config(), task);
@@ -451,7 +459,7 @@ export function useActions(dialogs: Dialogs) {
         hint="Each runs a skill on this task; its answer lands in the chat."
         choices={offered.map((a) => ({
           label: a.title,
-          hint: a.key ? `${a.name} · ${a.key}` : a.name,
+          hint: keys.has(a.name) ? `${a.name} · ${a.key}` : a.name,
           run: () => runAction(task, a.name),
         }))}
         onClose={dialogs.close}
@@ -920,6 +928,12 @@ export function useActions(dialogs: Dialogs) {
       },
       [Commands.PR_DASH]: onTask(togglePrDash),
       [Commands.ACTIONS]: onTask(pickAction),
+      ...Object.fromEntries(
+        [...keys].map((name) => [
+          actionCommand(name),
+          onTask((task) => runAction(task, name)),
+        ]),
+      ),
     };
   }
 
@@ -953,6 +967,7 @@ export function useActions(dialogs: Dialogs) {
     docs,
     taskActions,
     runAction,
+    pickAction,
     togglePrDash,
     editorId: editor.editorId,
   };
