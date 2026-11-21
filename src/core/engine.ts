@@ -39,6 +39,7 @@ import { drainMoves, runMove, type MoveOutcome } from "./moves";
 import * as projects from "./projects";
 import { setSlackSender } from "./outbound";
 import * as store from "./store";
+import { ActionEvent } from "./task-actions";
 import { settleStaleTurns } from "./turn-check";
 import { linkByBranch, type TriageEffect } from "./triage";
 import { triageNext } from "./triage-worker";
@@ -92,6 +93,16 @@ function pauseWords(what: string, p: Pause): string {
     ? `${what}rate limited until ${clockTime(p.until)}`
     : `${what}paused until ${clockTime(p.until)} (GraphQL budget low)`;
 }
+
+const EVENTS_CURSOR = "actions.events";
+
+// task_events kinds that are action triggers: an agent's finished work
+// (sessions.result, set only by workFinished) is ready for review.
+const EVENT_TRIGGERS: Record<string, ActionEvent> = {
+  finished: ActionEvent.ready,
+  merged: ActionEvent.merged,
+  done: ActionEvent.done,
+};
 
 const log = logger("engine");
 
@@ -193,6 +204,7 @@ export class Engine {
     wakeReminders();
     this.timers.push(setInterval(wakeReminders, 60_000));
     this.watchMoves();
+    this.timers.push(setInterval(() => this.fireEventActions(), 2_000));
     if (this.options.offline) {
       this.setStatus("github", off("fixture mode"));
       this.setStatus("slack", off("fixture mode"));
@@ -303,6 +315,26 @@ export class Engine {
     );
   }
 
+  // Task events since the last look, as action triggers. task_events is
+  // written by triggers, so an agent's `done` from another process is heard
+  // here. The first look starts at the newest event: history runs nothing.
+  fireEventActions(): number {
+    const cursor = store.kvGet(EVENTS_CURSOR);
+    if (cursor === null) {
+      store.kvSet(EVENTS_CURSOR, String(store.lastTaskEventId()));
+      return 0;
+    }
+    const events = store.taskEventsAfter(Number(cursor));
+    if (events.length === 0) return 0;
+    let queued = 0;
+    for (const e of events) {
+      const event = EVENT_TRIGGERS[e.kind];
+      if (event) queued += this.desk.fireActions(event, e.task_id).length;
+    }
+    store.kvSet(EVENTS_CURSOR, String(events.at(-1)!.id));
+    return queued;
+  }
+
   async drainMoves(): Promise<number> {
     this.draining = true;
     const done = perfStart("engine.drain_moves");
@@ -371,7 +403,8 @@ export class Engine {
             task: done.outcome.taskId,
             reason: done.outcome.reason,
           });
-          this.runEffects(done.outcome.effects);
+          // The chain ran on the latest of a burst: that one's words.
+          this.desk.afterTriage(done.outcome, store.getMessage(done.messages.at(-1)!));
         }
       } while (this.triageAgain);
       return ran;

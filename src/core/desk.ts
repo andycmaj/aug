@@ -35,12 +35,16 @@ import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
 import { startAction, type ActionResult } from "./run-action";
+import { capReached } from "./spend";
 import {
+  ActionEvent,
   ActionVia,
   actionNamed,
   invocation,
   registeredActions,
+  triggeredBy,
   whyNot,
+  type ActionSpec,
 } from "./task-actions";
 import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
 import {
@@ -62,11 +66,15 @@ import {
   TaskStatus,
   TurnRole,
   Verdict,
+  type MessageRow,
   type NoteLabel,
   type TaskRow,
 } from "./types";
+import { logger } from "./log";
 
 export type { Jump } from "./projects";
+
+const log = logger("desk");
 
 export type RetriageResult =
   | { ok: true; outcome: TriageOutcome }
@@ -305,19 +313,75 @@ export class Desk {
     }
     const why = whyNot(spec, task);
     if (why) return { error: why };
+    return this.startAction(config, task, spec);
+  }
+
+  private startAction(
+    config: AugConfig,
+    task: TaskRow,
+    spec: ActionSpec,
+    event?: ActionEvent,
+  ): { error: string } | { title: string; done: Promise<ActionResult> } {
     if (spec.via === ActionVia.agent) {
       const text = invocation(spec, task);
       return {
         title: spec.title,
-        done: this.say(taskId, text).then((ok) => ({
+        done: this.say(task.id, text).then((ok) => ({
           ok,
           text: ok ? `${spec.title}: told the agent` : `${spec.name}: the agent did not get it`,
         })),
       };
     }
-    const run = startAction(config, task, spec);
+    const run = startAction(config, task, spec, event);
     if ("error" in run) return run;
     return { title: spec.title, done: run.done };
+  }
+
+  // Actions an event runs by itself (their `on` triggers): each once per
+  // task, action and event, one at a time behind each other, and none past
+  // the day's spend cap. What it opens for the owner (the guide's review)
+  // waits for them to open it. Returns the names queued.
+  private autoRuns: Promise<void> = Promise.resolve();
+
+  fireActions(event: ActionEvent, taskId: number, message?: MessageRow | null): string[] {
+    const task = store.getTask(taskId);
+    if (!task || task.kind === Kind.home) return [];
+    const queued: string[] = [];
+    for (const spec of triggeredBy(this.config(), event, task, message)) {
+      if (!store.claimActionRun(taskId, spec.name, event)) continue;
+      queued.push(spec.name);
+      this.autoRuns = this.autoRuns
+        .then(async () => {
+          const config = this.config();
+          const fresh = store.getTask(taskId);
+          if (!fresh) return;
+          if (capReached(config)) {
+            log.info("auto action skipped: spend cap", { task: taskId, action: spec.name, event });
+            return;
+          }
+          const started = this.startAction(config, fresh, spec, event);
+          if ("error" in started) {
+            log.warn("auto action not started", { task: taskId, action: spec.name, event, error: started.error });
+            return;
+          }
+          await started.done;
+        })
+        .catch((err: unknown) => log.error("auto action failed", { task: taskId, action: spec.name, err }));
+    }
+    return queued;
+  }
+
+  // Waits for the auto actions queued so far (tests, shutdown).
+  actionsSettled(): Promise<void> {
+    return this.autoRuns;
+  }
+
+  // What a triage outcome sets off: its effects, and the actions it
+  // triggers. Not for the owner's own message on a thread.
+  afterTriage(outcome: TriageOutcome, message: MessageRow | null): void {
+    this.runEffects(outcome.effects);
+    if (outcome.taskId === null || outcome.verdict === "own") return;
+    this.fireActions(ActionEvent.triaged, outcome.taskId, message);
   }
 
   nudge(taskId: number): Promise<boolean> {
@@ -738,7 +802,7 @@ export class Desk {
       return { ok: false, why: "triage is running on it now" };
     try {
       const outcome = await triage(message, { config: this.config() });
-      this.runEffects(outcome.effects);
+      this.afterTriage(outcome, message);
       return { ok: true, outcome };
     } catch (err) {
       store.settleMessage(messageId, MessageState.failed);
@@ -761,7 +825,7 @@ export class Desk {
       const answer = heldVerdict(messageId);
       if (!answer) return this.fyiToTask(messageId);
       const outcome = taskFromHeld(message, answer, this.config());
-      this.runEffects(outcome.effects);
+      this.afterTriage(outcome, message);
       return outcome.taskId === null ? null : store.getTask(outcome.taskId);
     }, madeTask);
   }

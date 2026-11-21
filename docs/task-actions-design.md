@@ -142,21 +142,11 @@ matched by plain rules (no model call), in the noise rules' shape:
   goal, what changed (commits and diff against `{base}`), decisions and why,
   what is left, what is blocked, in under 15 lines. A non-coding task falls
   back to `headless` over the turns.
-- **guide** (`aug:guide`, `fork`, `capability: plannotator`). One run does
-  both the guided review and the agentic review: the skill writes the
-  chapters (core first, glue last) and pins each review finding to its lines
-  as a note. It writes a plannotator **snapshot, format v4**
-  (`guide.sections[].diffs[].notes`, at most 20 notes per file, 1000
-  characters each, each inside one hunk), then `plannotator guide import
-  --snapshot <file>` and opens `plannotator review` on the worktree, where it
-  is listed under Guides. Checked here: `guide export --snapshot` of a v4
-  file keeps the notes (the exported page is version 4 with the note in it);
-  `guide import --guide` drops them (exports as version 1), so it has to be
-  `--snapshot`. Not checked yet: that `plannotator review`'s Guides view
-  draws v4 notes (the format says they come from the Inbox's code review);
-  if it does not, the fallback is `guide export` to HTML and open that.
-  Output: a link on the task (the saved guide id) and a turn listing the
-  findings' count by file.
+- **guide** (`aug:guide`, `fork`, output `guide`). One run does both the
+  guided review and the agentic review: chapters, plus findings pinned to
+  their lines. As built, see Build order, step 6: Plannotator keeps notes
+  but draws them nowhere, so findings are also written into each chapter's
+  overview.
 - **quiz** (`aug:quiz`, shipped with aug, `pane`, `kinds: [coding]`). The
   skill and its `args` are configurable: point `skill` at your own quiz skill
   to use it instead.
@@ -262,9 +252,30 @@ a time, and an action takes minutes); a `pane` action answers that it
 needs the TUI. Not in `AGENT_MOVES`; from Slack it waits for the owner's
 yes (`CONFIRM_MOVES`), since it spends money. README: Task actions.
 
-Still to build:
+Done (step 7), triggers:
 
-7. Triggers: the `runAction` triage effect, lifecycle events, `action_runs`.
+- `on` in a registration, plain rules only (`ActionTrigger`): `kind`,
+  `channel`, `githubReason`, `author`, `title`, `body` (case-blind
+  regexes, as in `triage.noise`), `project`. An unknown event is left out
+  and logged. `triggeredBy` never picks a `pane` action: nobody is at the
+  keyboard.
+- `triaged`: not a new triage effect after all (every test that compares
+  `effects` would change): `desk.afterTriage(outcome, message)` runs the
+  effects and fires the actions, from the worker, a re-triage and `m` on a
+  held message. The owner's own message on a thread fires nothing.
+- `ready`, `merged`, `done`: the engine reads `task_events` past a cursor
+  (`kv` `actions.events`) every 2 s, so an agent's `done` from aug-tools in
+  another process is heard. `ready` is `finished` (sessions.result, which
+  only `workFinished` sets). The first look starts at the newest event, so
+  history runs nothing. No `pr` event yet: linking a PR writes no
+  task_event.
+- `action_runs(task_id, action, event)` makes each one once per task,
+  action and event. Auto runs go one at a time behind each other (not the
+  agents' pool), none past the day's spend cap; their turn says the event
+  ("Summarize the work so far (on done)"). A guide run by itself is saved
+  in Plannotator; its review waits for the owner to open it.
+
+All eight steps are built.
 
 ## Decisions (owner, 2026-11-20)
 

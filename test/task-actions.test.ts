@@ -32,7 +32,14 @@ import {
   WRAP_PLUGIN,
 } from "../src/core/task-actions";
 import { transcript } from "../src/core/transcript";
-import { Kind, SessionKind, TurnRole, type TaskRow } from "../src/core/types";
+import {
+  Kind,
+  SessionKind,
+  TaskStatus,
+  TurnRole,
+  type MessageRow,
+  type TaskRow,
+} from "../src/core/types";
 import { FakeMux } from "./fake-mux";
 import { config, freshHome, testConfig } from "./helpers";
 
@@ -374,5 +381,81 @@ describe("as a move", () => {
     const agent = await runMove(engine.desk, "action", { task: ref, name: "summarize" }, `agent ${ref}`);
     expect(agent.ok).toBe(false);
     expect(agent.result).toContain("owner's move");
+  });
+});
+
+describe("triggers", () => {
+  function engineWith(actions: Record<string, unknown>) {
+    const c = withActions(actions);
+    return new Engine({ config: { ...testConfig(), get: () => c } });
+  }
+
+  const reviewAsk = {
+    channel: "github",
+    author: "octocat",
+    author_name: "octocat",
+    title: "Add div",
+    body: "please review",
+    meta: JSON.stringify({ repo: "a/b", reason: "review_requested" }),
+  } as MessageRow;
+
+  test("triaged: plain rules on the message and the task pick the action, once", async () => {
+    const e = engineWith({
+      summarize: {
+        on: [{ event: "triaged", kind: "coding", channel: "github", githubReason: ["review_requested"] }],
+      },
+    });
+    const t = task();
+    const outcome = { verdict: "coding", taskId: t.id, reason: "", effects: [] } as never;
+    e.desk.afterTriage(outcome, reviewAsk);
+    e.desk.afterTriage(outcome, reviewAsk);
+    await e.desk.actionsSettled();
+    const turns = store.turnsForTask(t.id).filter((x) => x.role === TurnRole.action);
+    expect(turns).toHaveLength(1);
+    expect(turns[0]!.about).toBe("Summarize the work so far (on triaged)");
+
+    // Another reason, another kind: no match.
+    const other = task(Kind.general);
+    e.desk.afterTriage({ ...(outcome as object), taskId: other.id } as never, reviewAsk);
+    const mention = { ...reviewAsk, meta: JSON.stringify({ reason: "mention" }) } as MessageRow;
+    const t2 = task();
+    e.desk.afterTriage({ ...(outcome as object), taskId: t2.id } as never, mention);
+    await e.desk.actionsSettled();
+    expect(store.turnsForTask(other.id).some((x) => x.role === TurnRole.action)).toBe(false);
+    expect(store.turnsForTask(t2.id).some((x) => x.role === TurnRole.action)).toBe(false);
+  });
+
+  test("the owner's own message on a thread triggers nothing", async () => {
+    const e = engineWith({ summarize: { on: [{ event: "triaged" }] } });
+    const t = task(Kind.general);
+    e.desk.afterTriage({ verdict: "own", taskId: t.id, reason: "", effects: [] } as never, reviewAsk);
+    await e.desk.actionsSettled();
+    expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(false);
+  });
+
+  test("lifecycle: task events since the last look, history left alone", async () => {
+    const e = engineWith({ summarize: { on: [{ event: "done" }] } });
+    const before = task(Kind.general);
+    store.updateTask(before.id, { status: TaskStatus.done, closed_at: "2026-11-20T00:00:00Z" });
+    // The first look only sets the cursor.
+    expect(e.fireEventActions()).toBe(0);
+    const t = task(Kind.general);
+    store.updateTask(t.id, { status: TaskStatus.done, closed_at: "2026-11-20T00:00:00Z" });
+    expect(e.fireEventActions()).toBe(1);
+    expect(e.fireEventActions()).toBe(0);
+    await e.desk.actionsSettled();
+    expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(true);
+    expect(store.turnsForTask(before.id).some((x) => x.role === TurnRole.action)).toBe(false);
+  });
+
+  test("a pane action never runs by itself; an unknown event is left out", () => {
+    const c = withActions({
+      quiz: { on: [{ event: "triaged" }, { event: "someday" }] },
+    });
+    const quiz = registeredActions(c).find((a) => a.name === "quiz")!;
+    expect(quiz.on!.map((t) => t.event)).toEqual(["triaged"]);
+    const e = new Engine({ config: { ...testConfig(), get: () => c } });
+    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "aug-wt-")) });
+    expect(e.desk.fireActions("triaged", t.id, reviewAsk)).toEqual([]);
   });
 });

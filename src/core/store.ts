@@ -1231,6 +1231,30 @@ export function kvSet(key: string, value: string): void {
     .run(key, value);
 }
 
+// ── task actions an event ran ───────────────────────────────────────────
+
+// True for the first claim of (task, action, event); false ever after.
+export function claimActionRun(taskId: number, action: string, event: string): boolean {
+  const won = db()
+    .query(
+      "INSERT OR IGNORE INTO action_runs (task_id, action, event, at) VALUES (?, ?, ?, ?) RETURNING task_id",
+    )
+    .get(taskId, action, event, now());
+  return won != null;
+}
+
+// Task events after an id, oldest first: what the engine turns into
+// action triggers.
+export function taskEventsAfter(id: number): TaskEventRow[] {
+  return db()
+    .query<TaskEventRow, [number]>("SELECT * FROM task_events WHERE id > ? ORDER BY id LIMIT 200")
+    .all(id);
+}
+
+export function lastTaskEventId(): number {
+  return one<{ id: number | null }>("SELECT MAX(id) AS id FROM task_events")?.id ?? 0;
+}
+
 // ── spend (core/spend.ts decides; this keeps the rows) ───────────────────
 
 export interface SpendInput {

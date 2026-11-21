@@ -299,6 +299,19 @@ nothing to install):
 | `capability` | a capability loaded for this run only, e.g. a plugin that holds the skill                       |
 | `key`        | a key of its own on the rail and the Canvas, read at start; one aug already uses is refused     |
 | `model`, `title` | the model (default `brain.agentModel`) and the picker's label                                |
+| `on`         | events that run it by itself, once per task (below)                                             |
+
+`on` lists events, each with plain rules that must all match: `triaged`
+(triage made a task or added a message to one), `ready` (the agent said its
+work is done), `merged`, `done`; rules `kind`, `channel`, `githubReason`,
+`author`, `title`, `body` (case-blind regexes, as in `triage.noise`) and
+`project`. Runs it starts wait for each other, stop at the day's spend cap,
+and never open anything: a guide is saved for you to open.
+
+```json
+"guide": { "on": [{ "event": "triaged", "kind": "coding", "githubReason": ["review_requested"] }] },
+"summarize": { "on": [{ "event": "ready" }] }
+```
 
 A skill of yours runs headless only if its `allowed-tools` stay within
 read-only tools and what its `capability` grants; otherwise the run is

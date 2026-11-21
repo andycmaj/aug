@@ -143,6 +143,8 @@ export function startAction(
   config: AugConfig,
   task: TaskRow,
   spec: ActionSpec,
+  // The event that ran it by itself; none when the owner asked.
+  event?: string,
 ): ActionRun | { error: string } {
   if (spec.via === ActionVia.pane) return startPane(config, task, spec);
   if (spec.via !== ActionVia.headless && spec.via !== ActionVia.fork)
@@ -165,7 +167,7 @@ export function startAction(
 
   const session = spec.via === ActionVia.fork ? forkable(task) : null;
   const cwd = session?.cwd ?? cwdFor(task);
-  const turn = actionTurn(task, spec);
+  const turn = actionTurn(task, spec, event);
   running.add(key);
   log.info("action start", { task: task.id, action: spec.name, fork: !!session });
 
@@ -211,14 +213,14 @@ function notFound(spec: ActionSpec): string {
   return `skill ${spec.skill} not found in ${where}`;
 }
 
-function actionTurn(task: TaskRow, spec: ActionSpec): TurnRow {
+function actionTurn(task: TaskRow, spec: ActionSpec, event?: string): TurnRow {
   const turn = store.addTurn({
     taskId: task.id,
     role: TurnRole.action,
     author: spec.name,
     status: TurnStatus.running,
   });
-  store.updateTurn(turn.id, { about: spec.title });
+  store.updateTurn(turn.id, { about: event ? `${spec.title} (on ${event})` : spec.title });
   return turn;
 }
 

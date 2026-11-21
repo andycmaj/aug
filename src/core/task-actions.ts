@@ -28,7 +28,8 @@ import { logger } from "./log";
 import { paths } from "./paths";
 import { taskPr } from "./pr";
 import * as store from "./store";
-import { Kind, type TaskRow } from "./types";
+import { messageMeta } from "./meta";
+import { Kind, type MessageRow, type TaskRow } from "./types";
 
 const log = logger("task-actions");
 
@@ -66,6 +67,32 @@ export const ActionNeed = {
 } as const;
 export type ActionNeed = (typeof ActionNeed)[keyof typeof ActionNeed];
 
+// What runs an action without a key press (docs/task-actions-design.md,
+// Triggers). `triaged`: triage made a task or added a message to one.
+// The rest come from task_events, so a change in any process is heard:
+// `ready` (the agent said its work is done), `merged`, `done`.
+export const ActionEvent = {
+  triaged: "triaged",
+  ready: "ready",
+  merged: "merged",
+  done: "done",
+} as const;
+export type ActionEvent = (typeof ActionEvent)[keyof typeof ActionEvent];
+
+// Plain rules, no model: every field given must match. author, title and
+// body are case-blind regexes, as in triage.noise; title is the task's.
+export interface ActionTrigger {
+  event: ActionEvent;
+  kind?: Kind;
+  channel?: "github" | "slack";
+  githubReason?: string[];
+  author?: string;
+  title?: string;
+  body?: string;
+  // The task's project, by name.
+  project?: string;
+}
+
 export interface ActionSpec {
   name: string;
   // The picker's label.
@@ -84,6 +111,7 @@ export interface ActionSpec {
   // A key of its own on the rail and table (read at start).
   key?: string;
   model?: string;
+  on?: ActionTrigger[];
 }
 
 export type ActionConfig = Partial<Omit<ActionSpec, "name">> | false;
@@ -188,9 +216,21 @@ export function registeredActions(config: AugConfig): ActionSpec[] {
       output: merged.output ?? ActionOutput.turn,
       key: merged.key,
       model: merged.model,
+      on: triggers(name, merged.on),
     });
   }
   return out;
+}
+
+// A trigger with an unknown event is left out (and logged), never guessed.
+function triggers(name: string, on: unknown): ActionTrigger[] | undefined {
+  if (!Array.isArray(on)) return undefined;
+  const events = Object.values(ActionEvent) as string[];
+  return on.filter((t): t is ActionTrigger => {
+    const ok = typeof t === "object" && t !== null && events.includes((t as ActionTrigger).event);
+    if (!ok) log.warn("action trigger left out: unknown event", { name, trigger: t });
+    return ok;
+  });
 }
 
 function isVia(v: string): v is ActionVia {
@@ -218,6 +258,51 @@ export function whyNot(spec: ActionSpec, task: TaskRow): string | null {
       return `${spec.name} needs a pull request on the task`;
   }
   return null;
+}
+
+// The actions an event runs on this task: a trigger of theirs matches,
+// and they apply to it. A pane action needs the owner at the keyboard, so
+// nothing runs one by itself.
+export function triggeredBy(
+  config: AugConfig,
+  event: ActionEvent,
+  task: TaskRow,
+  message?: MessageRow | null,
+): ActionSpec[] {
+  return registeredActions(config).filter(
+    (spec) =>
+      spec.via !== ActionVia.pane &&
+      (spec.on ?? []).some((t) => t.event === event && triggerMatches(t, task, message ?? null)) &&
+      whyNot(spec, task) === null,
+  );
+}
+
+function triggerMatches(t: ActionTrigger, task: TaskRow, message: MessageRow | null): boolean {
+  if (t.kind && t.kind !== task.kind) return false;
+  if (t.channel && t.channel !== (message?.channel ?? task.channel)) return false;
+  if (t.githubReason) {
+    const meta = message ? messageMeta(message) : null;
+    const reason = meta?.channel === "github" ? meta.reason : null;
+    if (!reason || !t.githubReason.includes(reason)) return false;
+  }
+  if (!regexMatch(t.author, message?.author ?? message?.author_name)) return false;
+  if (!regexMatch(t.title, task.title)) return false;
+  if (!regexMatch(t.body, message?.body)) return false;
+  if (t.project) {
+    const project = task.project_id ? store.getProject(task.project_id) : null;
+    if (project?.name.toLowerCase() !== t.project.toLowerCase()) return false;
+  }
+  return true;
+}
+
+// A pattern that does not compile never matches.
+function regexMatch(pattern: string | undefined, value: string | null | undefined): boolean {
+  if (!pattern) return true;
+  try {
+    return new RegExp(pattern, "i").test(value ?? "");
+  } catch {
+    return false;
+  }
 }
 
 // The actions that ask for a key of their own (bound at start).
