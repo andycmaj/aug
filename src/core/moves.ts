@@ -12,6 +12,7 @@ import { DocName } from "./docs";
 import { docNamed, propose } from "./proposals";
 import { logger } from "./log";
 import { findProject, projectLine } from "./lookup";
+import { actionNamed, actionsFor, ActionVia } from "./task-actions";
 import { mux } from "./mux";
 import { docDraftsDir } from "./paths";
 import * as repos from "./repos";
@@ -475,6 +476,30 @@ export const MOVES: Record<string, MoveSpec> = {
     run(desk, task, args) {
       desk.retitle(task!.id, args.title);
       return `${ref(task)} is now: ${args.title.trim()}`;
+    },
+  },
+  action: {
+    help: "Run a task action (a skill on the task: summarize, guide, ...); its answer lands on the task. Without --name, lists the ones that apply",
+    task: true,
+    positional: "name",
+    args: { name: { help: "the action's name" } },
+    run(desk, task, args) {
+      const offered = actionsFor(desk.config(), task!);
+      const name = args.name?.trim();
+      if (!name)
+        return offered.length
+          ? `actions on ${ref(task)}: ${offered.map((a) => `${a.name} (${a.title})`).join("; ")}`
+          : `no action applies to ${ref(task)}`;
+      if (actionNamed(desk.config(), name)?.via === ActionVia.pane)
+        throw new MoveError(`${name} needs the TUI: press . on ${ref(task)}`);
+      const started = desk.runAction(task!.id, name);
+      if ("error" in started) throw new MoveError(started.error);
+      // Not awaited: moves run one at a time, and an action takes minutes.
+      void started.done.then(
+        (r) => log.info("action from a move", { task: task!.id, name, ok: r.ok }),
+        (err) => log.error("action from a move threw", { task: task!.id, name, err }),
+      );
+      return `started ${name} on ${ref(task)}: its answer lands on the task when done`;
     },
   },
   brief: {

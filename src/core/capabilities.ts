@@ -269,7 +269,7 @@ interface InstalledPlugins {
   plugins?: Record<string, { installPath?: string }[]>;
 }
 
-function claudeDir(): string {
+export function claudeDir(): string {
   return process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
 }
 

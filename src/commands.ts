@@ -61,6 +61,7 @@ export const Commands = {
   EDIT_FILE: "item.file.edit",
   MAKE_TASK: "item.task",
   INFO: "item.info",
+  ACTIONS: "task.actions",
   PR_DASH: "pr.dash",
   TYPE: "chat.type",
   DOC_ACCEPT: "docs.accept",

@@ -15,6 +15,7 @@ export const CONFIRM_MOVES: ReadonlySet<string> = new Set([
   "done",
   "ignore",
   "project_archive",
+  "action",
 ]);
 
 export const CONFIRM_MINUTES = 10;
@@ -27,6 +28,7 @@ const VERB_WORDS: Record<string, string> = {
   done: "mark done",
   ignore: "ignore",
   project_archive: "archive project",
+  action: "run an action on",
 };
 
 // The move in the owner's words: "stop the agent on AUG-0012 (fix the

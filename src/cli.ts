@@ -10,6 +10,8 @@ import { INSTALLS, InstallState, installState } from "./core/install";
 export interface CLIConfig {
   // A built-in fixture name: no network, no AI, a fictional day.
   fixture?: string;
+  // The offline GitHub simulator (src/fixtures/sim): `aug sim [scenario]`.
+  sim?: { scenario?: string; brain: "fake" | "haiku" };
 }
 
 let config: CLIConfig | undefined;
@@ -110,7 +112,27 @@ const uninstall = defineCommand({
   },
 });
 
-const SUBCOMMANDS = { hooks, install, uninstall };
+// The real TUI on a scratch home, polling a fake GitHub (bun run sim).
+const sim = defineCommand({
+  meta: {
+    name: "sim",
+    description: "Run on a scratch home against an offline, simulated GitHub (bun run sim:do makes things happen)",
+  },
+  args: {
+    scenario: { type: "positional", required: false, description: "play one: review-cycle, review-ask" },
+    brain: { type: "string", default: "fake", description: "fake (canned, free) | haiku (real claude, cheap)" },
+  },
+  run({ args }) {
+    const brain = args.brain === "haiku" ? "haiku" : "fake";
+    if (args.brain !== brain) {
+      console.error(`aug sim: --brain is fake or haiku, not ${args.brain}`);
+      process.exit(2);
+    }
+    config = { sim: { brain, scenario: args.scenario ? String(args.scenario) : undefined } };
+  },
+});
+
+const SUBCOMMANDS = { hooks, install, uninstall, sim };
 
 const main = defineCommand({
   meta: {

@@ -221,6 +221,8 @@ export const TurnRole = {
   // Short notes aug itself adds ("Sent the reply", "Reminded today").
   trigger: "trigger",
   agent: "agent",
+  // A task action's answer (core/task-actions.ts): not the agent's turn.
+  action: "action",
 } as const;
 export type TurnRole = (typeof TurnRole)[keyof typeof TurnRole];
 
@@ -547,6 +549,7 @@ export const SpendRole = {
   assistant: "assistant",
   general: "general",
   slack: "slack",
+  action: "action",
   other: "other",
 } as const;
 export type SpendRole = (typeof SpendRole)[keyof typeof SpendRole];

@@ -204,3 +204,31 @@ test("a row's entry runs on the row the palette was opened over", async () => {
   // I, from the rail, on its first row (Home).
   expect(frame()).toMatch(/AUG-\d+ · Home\s/);
 });
+
+test("an extra about the row (a task action) sits with the row's keys", () => {
+  const entries = paletteEntries(
+    [
+      binding({ cmd: Commands.VIEW_TOGGLE, keys: "v", scope: "app", desc: "switch Chat / Board" }),
+      binding({ cmd: Commands.OPEN_URL, keys: "o", desc: "open the link" }),
+      binding({ cmd: Commands.DONE, keys: "d", desc: "mark done", relevant: isTask }),
+    ],
+    taskCtx,
+    [
+      { id: "advisor", group: "Connections", label: "Run the Advisor now", run: () => {} },
+      {
+        id: "action-summarize",
+        group: PaletteGroup.row,
+        label: "Action: Summarize the work so far",
+        inContext: true,
+        run: () => {},
+      },
+    ],
+  );
+  expect(entries.map((e) => [e.label, e.inContext])).toEqual([
+    ["Mark done", true],
+    ["Action: Summarize the work so far", true],
+    ["Open the link", true],
+    ["Switch Chat / Board", false],
+    ["Run the Advisor now", false],
+  ]);
+});

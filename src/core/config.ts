@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { dirname } from "node:path";
 import { paths } from "./paths";
+import type { ActionConfig } from "./task-actions";
 
 // A message triage files as FYI without asking a model. Every field set must
 // match; author, title and body are case-insensitive regexes.
@@ -180,6 +181,9 @@ export interface AugConfig {
     commands: Record<string, string[]>;
     grants: { general?: string[]; assistant?: string[] };
   };
+  // Task actions by name (core/task-actions.ts): a built-in changed field by
+  // field, turned off with false, or a new one registered.
+  actions?: Record<string, ActionConfig>;
 }
 
 export const DEFAULT_CONFIG: AugConfig = {
@@ -282,6 +286,7 @@ export function mergeConfig(
       commands: { ...raw.capabilities?.commands },
       grants: { ...raw.capabilities?.grants },
     },
+    actions: { ...raw.actions },
   } as AugConfig;
 }
 

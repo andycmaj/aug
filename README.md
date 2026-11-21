@@ -259,6 +259,67 @@ looks like a write (send, post, update, delete, add, …) or isn't a plain name
 override can narrow them or add `delete`, never add another write. The mapping
 lives in `src/core/capabilities.ts`.
 
+### Task actions
+
+An action is a skill aug runs on one task, at your word: `.` on a row picks
+one, the palette lists them, and `aug-tools move action AUG-0012 summarize`
+runs one (the Assistant can too; from Slack it waits for your yes). Its
+answer is an entry of its own on the task, never the agent's. Three ship
+with aug, as skills in aug's own plugin (written under `~/.aug/plugin`, so
+nothing to install):
+
+- `summarize`: the work so far (goal, done, decisions, left, blocked), on a
+  copy of the agent's session, so the agent is not disturbed.
+- `guide` (coding, with a checkout): a guided review of the branch in
+  chapters, with review findings, saved into Plannotator and opened in
+  `plannotator review` with each finding as a comment on its lines (from
+  "aug guide"). The comments you keep, and yours, go to the agent when you
+  send feedback. Needs `plannotator` on your PATH.
+- `quiz` (coding, with a checkout): quizzes you on the change, one question
+  at a time, in interactive claude beside the agent (or on the Canvas when
+  it has no window).
+
+`actions` in config changes one field by field, turns one off, or adds one:
+
+```json
+"actions": {
+  "summarize": { "model": "haiku", "key": "shift+u" },
+  "quiz": { "skill": "quiz-me", "args": "10 questions" },
+  "guide": false,
+  "recap": { "skill": "recap", "via": "headless", "title": "Recap for standup" }
+}
+```
+
+| field        | meaning                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------ |
+| `skill`      | `plugin:name` (aug's own are `aug:summarize`, `aug:guide`, `aug:quiz`) or a skill of yours in `~/.claude/skills` |
+| `args`       | text after the skill, with `{ref}` `{title}` `{worktree}` `{branch}` `{base}` `{pr}` filled in |
+| `via`        | `fork` (a copy of the agent's session; headless when it has none), `headless`, `agent` (typed to the agent) or `pane` (interactive, beside the agent) |
+| `output`     | `turn`, `file` (also under What it made), `none`, or `guide`                                     |
+| `kinds`, `needs` | the rows it applies to: kinds of task, and `worktree`, `session` or `pr`                     |
+| `capability` | a capability loaded for this run only, e.g. a plugin that holds the skill                       |
+| `key`        | a key of its own on the rail and the Canvas, read at start; one aug already uses is refused     |
+| `model`, `title` | the model (default `brain.agentModel`) and the picker's label                                |
+| `on`         | events that run it by itself, once per task (below)                                             |
+
+`on` lists events, each with plain rules that must all match: `triaged`
+(triage made a task or added a message to one), `ready` (the agent said its
+work is done), `merged`, `done`; rules `kind`, `channel`, `githubReason`,
+`author`, `title`, `body` (case-blind regexes, as in `triage.noise`) and
+`project`. Runs it starts wait for each other, stop at the day's spend cap,
+and never open anything: a guide is saved for you to open.
+
+```json
+"guide": { "on": [{ "event": "triaged", "kind": "coding", "githubReason": ["review_requested"] }] },
+"summarize": { "on": [{ "event": "ready" }] }
+```
+
+A skill of yours runs headless only if its `allowed-tools` stay within
+read-only tools and what its `capability` grants; otherwise the run is
+refused with the tools it asked for. In a pane, interactive claude loads
+your skills as usual. Changes apply on the next run, keys on the next start.
+The design is [`docs/task-actions-design.md`](docs/task-actions-design.md).
+
 ### Logging
 
 aug can write a file log to `~/.aug/aug.log`: connector status changes (Slack,
@@ -419,10 +480,10 @@ If one of your hooks opens a tmux window for every new worktree, guard it with
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Anywhere        | `n`/`b` walk next/back · `/` search the rail (words, `AUG-23`, `#412`, `@someone` in Slack or GitHub) · `a` Home (the Assistant) · `v` Chat/Board · `N` new · `D` docs · `C` connections · `^r` check now · `:` palette · `?` help · `Tab` pane · `q` quit                                                                                                                                                                                                                                                                                                                                      |
 | Rail            | `j`/`k` move the cursor · `enter` select the row · `space` on a project: fold / unfold its tasks. Moves act on the row under the cursor.                                                                                                                                                                                                                                                                                                                                                               |
-| Rail and Canvas | `y` send (asks first) · `e` edit draft in `$EDITOR` (before an agent starts: edit the brief) · `E` redraft · `s` start/continue agent · `S` stop and save · `d` done · `r` remind me · `w` watch · `x` ignore / read · `m` make it a task · `p` priority · `t` kind · `W` waiting on someone · `o` open the link or a file the agent made · `O` edit a made file in `$EDITOR` · `i` type · `I` info (everything aug knows about the row; `c` copies a value) · coding: `T` jump to its tmux window · `u` nudge about feedback · `M` move to a project |
+| Rail and Canvas | `y` send (asks first) · `e` edit draft in `$EDITOR` (before an agent starts: edit the brief) · `E` redraft · `s` start/continue agent · `S` stop and save · `d` done · `r` remind me · `w` watch · `x` ignore / read · `m` make it a task · `p` priority · `t` kind · `W` waiting on someone · `o` open the link or a file the agent made · `O` edit a made file in `$EDITOR` · `i` type · `I` info (everything aug knows about the row; `c` copies a value) · `.` actions (summarize, guided review, quiz) · coding: `T` jump to its tmux window · `u` nudge about feedback · `M` move to a project |
 | Chat box        | `enter` send to the agent · `@` name a task (`tab`/`enter` takes it, `↑`/`↓` pick) · `esc` leave                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Agent terminal  | everything goes to the agent · `^]` detach · `^\` go to · `^t` detach and jump your tmux client to the agent's window (`prefix L` comes back; the agent never gets `^t`) · `^e` show or hide the rail, still attached (the agent never gets `^e`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Board           | `1`–`5` Wins / Columns / Knowledge / Inbox / Cost · `j k` move · `h l` column (Columns) or day (Wins) · `enter` open (Wins, Inbox: show details) · `t` go to task · `c` write a Knowledge entry · `A` adopt a tmux session (Columns) · `M` move a task                                                                                                                                                                                                                                                                                          |
+| Board           | `1`–`5` Wins / Columns / Knowledge / Inbox / Cost · `j k` move · `h l` column (Columns) or day (Wins) · `enter` open (Wins, Inbox: show details) · `t` go to task · `c` write a Knowledge entry · `A` adopt a tmux session (Columns) · `M` move a task · `.` actions                                                                                                                                                                                                                                                                                          |
 
 ## What changed for a terminal
 

@@ -5,7 +5,7 @@
 // embedded viewer each have a hook of their own beside this one.
 
 import { createSignal, type Accessor, type JSX } from "solid-js";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
@@ -32,6 +32,10 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
+import { postComments } from "../core/guide";
+import type { ActionResult } from "../core/run-action";
+import { actionsFor, keyedActions } from "../core/task-actions";
+import { actionCommand, actionKeys, buildKeymap } from "../keymap";
 import type { NoiseRule } from "../core/config";
 import type { Jump } from "../core/desk";
 import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "../core/inbox";
@@ -43,7 +47,7 @@ import {
   InfoModal,
   PromptModal,
 } from "./modals";
-import type { TaskActions } from "./task-actions";
+import { actionTermId, type TaskActions } from "./task-actions";
 import { useAgentStart } from "./use-agent-start";
 import { useEditor } from "./use-editor";
 import { useDocReview } from "./use-doc-review";
@@ -79,6 +83,7 @@ export function useActions(dialogs: Dialogs) {
   const aug = useAug();
   const terminals = useTerminals();
   const { showToast } = useToast();
+  const { setActivePane } = useFocus();
   const desk = aug.desk;
   const editor = useEditor();
   const { attachViewer } = useViewer();
@@ -421,6 +426,99 @@ export function useActions(dialogs: Dialogs) {
     const next = order[(order.indexOf(task.priority) + 1) % order.length];
     desk.setPriority(task.id, next);
     showToast(`${taskRef(task.id)} is ${next}`);
+  }
+
+  // A task action: started now, its answer a turn on the task; the toast
+  // says when it is back.
+  function runAction(task: TaskRow, name: string) {
+    const started = desk.runAction(task.id, name);
+    if ("error" in started) {
+      showToast(started.error, 5000, "error");
+      return;
+    }
+    showToast(`${started.title}: running on ${taskRef(task.id)}`, 3000);
+    void started.done.then((r) => {
+      showToast(r.text, r.ok ? 4000 : 6000, r.ok ? "info" : "error");
+      // A pane action: shown where the owner can answer it.
+      if (r.terminal) openActionTerminal(task, started.title, r.terminal);
+      else if (r.pane) {
+        goToTask(task.id);
+        void attachViewer(task.id);
+      }
+    });
+  }
+
+  // A pane action with no agent window: interactive claude on the Canvas,
+  // closed when it exits.
+  function openActionTerminal(
+    task: TaskRow,
+    title: string,
+    run: NonNullable<ActionResult["terminal"]>,
+  ) {
+    const id = actionTermId(task.id);
+    goToTask(task.id);
+    terminals.close(id);
+    terminals.open({
+      id,
+      title: `${taskRef(task.id)} ${title}`,
+      kind: "review",
+      taskId: task.id,
+      argv: run.argv,
+      cwd: run.cwd,
+      env: run.env,
+      onExit: () => {
+        terminals.close(id);
+        if (aug.selectedKey() === `t${task.id}`) setActivePane("canvas");
+        if (run.feedback) sendReviewNotes(task, run.feedback);
+      },
+    });
+    setTimeout(() => setActivePane("canvas"), 0);
+    if (run.comments)
+      void postComments(run.comments.port, run.comments.list).then((r) => {
+        if ("error" in r) showToast(`Review notes not posted to Plannotator: ${r.error}`, 6000, "error");
+      });
+  }
+
+  // What the owner sent from plannotator review goes to the agent, as if
+  // typed; an approval or a closed tab sends nothing. It carries aug's
+  // comments the owner kept, unlabelled, so the message says so.
+  function sendReviewNotes(task: TaskRow, file: string) {
+    const notes = existsSync(file) ? readFileSync(file, "utf8").trim() : "";
+    if (!notes || /^The user approved\.?$/i.test(notes)) return;
+    desk
+      .say(task.id, `My notes from the guided review in Plannotator (with the review findings aug posted there that I kept):\n\n${notes}`)
+      .then(
+        () => showToast(`Your review notes went to ${taskRef(task.id)}'s agent`, 4000),
+        (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),
+      );
+  }
+
+  // The action keys bound at start (app.tsx builds the keymap from the same).
+  const keys = (() => {
+    const config = desk.config();
+    const { bound } = actionKeys(keyedActions(config), buildKeymap(config.keys));
+    return new Set(bound.map((a) => a.name));
+  })();
+
+  // .: the actions that apply to this task.
+  function pickAction(task: TaskRow): false | void {
+    const offered = actionsFor(desk.config(), task);
+    if (offered.length === 0) {
+      showToast("No actions apply here (config.json \"actions\")");
+      return;
+    }
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Actions · ${taskRef(task.id)}`}
+        hint="Each runs a skill on this task; its answer lands in the chat."
+        choices={offered.map((a) => ({
+          label: a.title,
+          hint: keys.has(a.name) ? `${a.name} · ${a.key}` : a.name,
+          run: () => runAction(task, a.name),
+        }))}
+        onClose={dialogs.close}
+      />
+    ));
   }
 
   function changeKind(task: TaskRow) {
@@ -883,6 +981,13 @@ export function useActions(dialogs: Dialogs) {
         info(item);
       },
       [Commands.PR_DASH]: onTask(togglePrDash),
+      [Commands.ACTIONS]: onTask(pickAction),
+      ...Object.fromEntries(
+        [...keys].map((name) => [
+          actionCommand(name),
+          onTask((task) => runAction(task, name)),
+        ]),
+      ),
     };
   }
 
@@ -915,6 +1020,8 @@ export function useActions(dialogs: Dialogs) {
     noiseFilter,
     docs,
     taskActions,
+    runAction,
+    pickAction,
     togglePrDash,
     editorId: editor.editorId,
   };

@@ -30,6 +30,8 @@ export interface BrainCall {
   // Start a persisted session under this id, or resume one.
   sessionId?: string;
   resume?: string;
+  // With resume: run on a copy of that session, leaving it as it was.
+  fork?: boolean;
   // Built-in tools the call may use; omitted means none.
   tools?: string[];
   // Permission rules for those tools; anything else is denied, not asked.
@@ -159,7 +161,9 @@ export function claudeArgs(call: BrainCall): string[] {
   if (call.model) args.push("--model", call.model);
   if (call.system) args.push("--append-system-prompt", call.system);
   if (call.schema) args.push("--json-schema", JSON.stringify(call.schema));
-  if (call.resume) args.push("--resume", call.resume);
+  if (call.resume && call.fork)
+    args.push("--resume", call.resume, "--fork-session", "--no-session-persistence");
+  else if (call.resume) args.push("--resume", call.resume);
   else if (call.sessionId) args.push("--session-id", call.sessionId);
   else args.push("--no-session-persistence");
   // A plugin brings its hooks along; they'd reopen what skipping user

@@ -13,6 +13,8 @@ import { Canvas } from "./canvas";
 import { AugFooter } from "./footer";
 import { Rail, RAIL_WIDTH } from "./rail";
 import { useShell } from "./shell";
+import { PaletteGroup, type PaletteExtra } from "../palette";
+import { actionsFor } from "../core/task-actions";
 
 export function ChatMode() {
   const aug = useAug();
@@ -20,7 +22,26 @@ export function ChatMode() {
   const terminals = useTerminals();
   const dims = useTerminalDimensions();
   const { sidebarVisible, isPaneFocused, setActivePane } = useFocus();
-  const shell = useShell({ typing: () => isPaneFocused("input") });
+  const shell = useShell({
+    typing: () => isPaneFocused("input"),
+    extraPalette: () => taskActionEntries(),
+  });
+
+  // Every action that applies to the row the keys act on, one entry each.
+  const taskActionEntries = (): PaletteExtra[] => {
+    const item = isPaneFocused("rail") ? aug.cursorItem() : aug.selected();
+    if (item?.type !== "task") return [];
+    const task = aug.task(item.task.id);
+    if (!task) return [];
+    return actionsFor(aug.desk.config(), task).map((a) => ({
+      id: `action-${a.name}`,
+      group: PaletteGroup.row,
+      label: `Action: ${a.title}`,
+      hint: a.key ?? ".",
+      inContext: true,
+      run: () => shell.actions.runAction(task, a.name),
+    }));
+  };
 
   // `a` from anywhere (the Board too) lands in Home's box.
   createEffect(() => {

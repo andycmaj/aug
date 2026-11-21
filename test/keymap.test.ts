@@ -8,6 +8,8 @@ import { Commands } from "../src/commands";
 import { RAIL_FILTERS } from "../src/core/rail";
 import {
   BoardTab,
+  actionCommand,
+  actionKeys,
   buildKeymap,
   helpBindings,
   keymap,
@@ -337,3 +339,23 @@ function base(): HelpCtx {
     pr: false,
   };
 }
+
+test("an action with a key gets it on the rail and the Canvas, never over a move", () => {
+  const table = buildKeymap({}, [
+    { name: "summarize", key: "shift+u", title: "Summarize" },
+    { name: "clash", key: "d", title: "Takes done's key" },
+    { name: "twice", key: "shift+u", title: "Takes summarize's key" },
+  ]);
+  const cmd = actionCommand("summarize");
+  expect(keyFor(table, "rail", cmd)).toEqual(["shift+u"]);
+  expect(keyFor(table, "canvas", cmd)).toEqual(["shift+u"]);
+  expect(keyFor(table, "rail", actionCommand("clash"))).toEqual([]);
+  expect(keyFor(table, "rail", actionCommand("twice"))).toEqual([]);
+
+  const { refused } = actionKeys([
+    { name: "summarize", key: "shift+u", title: "Summarize" },
+    { name: "clash", key: "d", title: "x" },
+  ]);
+  expect(refused.map((r) => r.name)).toEqual(["clash"]);
+  expect(refused[0]!.why).toContain("d is taken");
+});

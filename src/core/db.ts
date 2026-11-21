@@ -325,6 +325,16 @@ CREATE TABLE IF NOT EXISTS task_events (
 );
 CREATE INDEX IF NOT EXISTS task_events_at ON task_events(at);
 CREATE INDEX IF NOT EXISTS task_events_task ON task_events(task_id);
+
+-- A task action an event ran by itself, once per task, action and event,
+-- so a re-triaged message or a reopen-and-close does not run it again.
+CREATE TABLE IF NOT EXISTS action_runs (
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  action TEXT NOT NULL,
+  event TEXT NOT NULL,
+  at TEXT NOT NULL,
+  PRIMARY KEY (task_id, action, event)
+);
 `;
 
 let shared: Database | undefined;
@@ -367,6 +377,7 @@ export const Table = {
   triageSteps: "triage_steps",
   spend: "spend",
   taskEvents: "task_events",
+  actionRuns: "action_runs",
 } as const;
 export type Table = (typeof Table)[keyof typeof Table];
 
