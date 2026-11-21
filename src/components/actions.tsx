@@ -32,7 +32,7 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { baseKey, neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
-import { postComments } from "../core/guide";
+import { OPEN_REVIEW_TITLE, postComments } from "../core/guide";
 import type { ActionResult } from "../core/run-action";
 import { actionsFor, keyedActions } from "../core/task-actions";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
@@ -452,6 +452,17 @@ export function useActions(dialogs: Dialogs) {
     });
   }
 
+  // The last guide's review, with its findings posted again: no model run.
+  function openGuideReview(task: TaskRow) {
+    const opened = desk.guideReview(task.id);
+    if ("error" in opened) {
+      showToast(opened.error, 5000, "error");
+      return;
+    }
+    showToast(opened.text, 4000);
+    if (opened.terminal) openActionTerminal(task, OPEN_REVIEW_TITLE, opened.terminal);
+  }
+
   // A pane action with no agent window: interactive claude on the Canvas,
   // closed when it exits.
   function openActionTerminal(
@@ -507,7 +518,8 @@ export function useActions(dialogs: Dialogs) {
   // .: the actions that apply to this task.
   function pickAction(task: TaskRow): false | void {
     const offered = actionsFor(desk.config(), task);
-    if (offered.length === 0) {
+    const review = desk.hasGuideReview(task.id);
+    if (offered.length === 0 && !review) {
       showToast("No actions apply here (config.json \"actions\")");
       return;
     }
@@ -519,7 +531,11 @@ export function useActions(dialogs: Dialogs) {
           label: a.title,
           hint: keys.has(a.name) ? `${a.name} · ${a.key}` : a.name,
           run: () => runAction(task, a.name),
-        }))}
+        })).concat(
+          review
+            ? [{ label: OPEN_REVIEW_TITLE, hint: "the last guide, no run", run: () => openGuideReview(task) }]
+            : [],
+        )}
         onClose={dialogs.close}
       />
     ));
@@ -1026,6 +1042,7 @@ export function useActions(dialogs: Dialogs) {
     taskActions,
     runAction,
     pickAction,
+    openGuideReview,
     togglePrDash,
     editorId: editor.editorId,
   };

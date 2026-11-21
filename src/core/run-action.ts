@@ -37,7 +37,15 @@ import {
   skillSource,
   type ActionSpec,
 } from "./task-actions";
-import { freePort, guideMarkdown, type ReviewComment, saveGuide } from "./guide";
+import {
+  freePort,
+  guideMarkdown,
+  patchFor,
+  readFindings,
+  reviewComments,
+  saveGuide,
+  type ReviewComment,
+} from "./guide";
 import { transcript } from "./transcript";
 import {
   SpendRole,
@@ -173,7 +181,7 @@ export function startAction(
   running.add(key);
   log.info("action start", { task: task.id, action: spec.name, fork: !!session });
 
-  const done = run(config, task, spec, turn, {
+  const done = run(config, task, spec, turn, event, {
     cwd,
     session: session?.id,
     as: source.as,
@@ -282,6 +290,7 @@ async function run(
   task: TaskRow,
   spec: ActionSpec,
   turn: TurnRow,
+  event: string | undefined,
   shape: RunShape,
 ): Promise<ActionResult> {
   const steps: string[] = [];
@@ -312,7 +321,7 @@ async function run(
     }
     if (result.isError) throw new BrainError(result.text || "claude failed");
     if (spec.output === ActionOutput.guide)
-      return await finishGuide(task, spec, turn, result.text, timing);
+      return await finishGuide(task, spec, turn, result.text, event, timing);
     const text = result.text.trim();
     const files =
       spec.output === ActionOutput.file ? writeOutput(task, spec, text) : [];
@@ -341,14 +350,16 @@ async function run(
   }
 }
 
-// The guide's answer saved into Plannotator; its review opened on the
-// Canvas. A guide Plannotator refuses fails the run, with the answer kept
-// as a file so nothing is lost.
+// The guide's answer saved into Plannotator, its findings kept beside it;
+// its review opened on the Canvas when the owner ran it (one a trigger ran
+// waits for them: guideReview). A guide Plannotator refuses fails the run,
+// with the answer kept as a file so nothing is lost.
 async function finishGuide(
   task: TaskRow,
   spec: ActionSpec,
   turn: TurnRow,
   answer: string,
+  event: string | undefined,
   timing: (fields?: Record<string, unknown>) => void,
 ): Promise<ActionResult> {
   const cwd = task.worktree ?? cwdFor(task);
@@ -366,33 +377,70 @@ async function finishGuide(
   }
   store.updateTurn(turn.id, {
     status: TurnStatus.done,
-    body: guideMarkdown(saved),
-    did: `${saved.guide.title}: ${saved.findings} review notes`,
+    body: guideMarkdown(saved, !event),
+    did: `${saved.guide.title}: ${saved.findings.length} review notes`,
     finished_at: now(),
     files: JSON.stringify([
       { path: saved.file, name: "guide.json", bytes: Bun.file(saved.file).size },
     ]),
   });
   timing({ ok: true });
-  const feedback = join(dir, "guide-feedback.md");
-  const port = freePort();
+  if (event) return { ok: true, text: `${spec.title}: saved, its review waits for you` };
   return {
     ok: true,
     text: `${spec.title}: saved, opening Plannotator`,
-    terminal: {
-      argv: [
-        "sh",
-        "-c",
-        'rm -f "$2"; plannotator review --base "$1" | tee "$2"',
-        "plannotator",
-        saved.patch.base,
-        feedback,
-      ],
-      cwd,
-      env: { PLANNOTATOR_UPDATE_CHECK: "0", PLANNOTATOR_PORT: String(port) },
+    terminal: reviewTerminal(cwd, dir, saved.patch.base, saved.comments),
+  };
+}
+
+// The task's last guide has findings saved to open a review with.
+export function hasGuideReview(task: TaskRow): boolean {
+  return readFindings(paths.work(task.id)) !== null;
+}
+
+// The last guide's review, with no model run: its findings refit to the
+// patch as it is now, to be posted once the review is up.
+export function guideReview(task: TaskRow): ActionResult | { error: string } {
+  const dir = paths.work(task.id);
+  const kept = readFindings(dir);
+  if (!kept) return { error: `${store.taskRef(task.id)} has no saved guide: run the guide first` };
+  const cwd = task.worktree ?? cwdFor(task);
+  if (!existsSync(cwd)) return { error: `${cwd} is gone` };
+  const patch = patchFor(cwd, kept.base);
+  if ("error" in patch) return patch;
+  const { comments, dropped } = reviewComments(kept.findings, patch.text);
+  log.info("guide review", { task: task.id, comments: comments.length, dropped });
+  return {
+    ok: true,
+    text: `${kept.title || "Guide"}: opening Plannotator${dropped ? ` (${dropped} note${dropped === 1 ? "" : "s"} on files no longer changed left out)` : ""}`,
+    terminal: reviewTerminal(cwd, dir, patch.base, comments),
+  };
+}
+
+// `plannotator review` on a port aug picks, so it can post the findings;
+// what the owner sends lands in guide-feedback.md.
+function reviewTerminal(
+  cwd: string,
+  dir: string,
+  base: string,
+  comments: ReviewComment[],
+): NonNullable<ActionResult["terminal"]> {
+  mkdirSync(dir, { recursive: true });
+  const feedback = join(dir, "guide-feedback.md");
+  const port = freePort();
+  return {
+    argv: [
+      "sh",
+      "-c",
+      'rm -f "$2"; plannotator review --base "$1" | tee "$2"',
+      "plannotator",
+      base,
       feedback,
-      comments: { port, list: saved.comments },
-    },
+    ],
+    cwd,
+    env: { PLANNOTATOR_UPDATE_CHECK: "0", PLANNOTATOR_PORT: String(port) },
+    feedback,
+    comments: { port, list: comments },
   };
 }
 

@@ -246,10 +246,38 @@ Done (step 6), the guide:
   owner's Send Feedback carries every comment still there, unlabelled, so
   the message to the agent says it includes the findings the owner kept.
   An earlier build wrote findings into each chapter's overview instead.
-- Gaps: a guide a trigger saved has no review aug opened, so no comments
-  (running the action again does post them); the review offers the last
-  session's comments as a recovered draft, so restoring it after a re-run
-  doubles them.
+- Gaps (closed by AUG-0185, below): a guide a trigger saved had no review
+  aug opened, so no comments; the review offers the last session's
+  comments as a recovered draft, so restoring it after a re-run doubled
+  them.
+- Plannotator cannot hold the findings for a review opened later (checked
+  in the 0.29.1 source): drafts are written by the browser page, a comment
+  with a `source` is not counted as the reviewer's, `/api/draft` is
+  internal, and the external-annotation store lives only as long as the
+  review process. So aug keeps them (AUG-0185, the owner's pick over
+  keeping a background review alive):
+  - `saveGuide` writes `guide-findings.json` beside `guide.json`: the
+    guide's id, title, base and each finding as its file and note, as the
+    skill wrote it (not yet fitted, so a later patch can place it again).
+  - **Open the guide's review** in the `.` picker and the palette, on a
+    task with saved findings (`desk.hasGuideReview`, `desk.guideReview`):
+    no model run. It takes the patch as it is now, refits the findings
+    (`reviewComments`: on their lines when one hunk shows them, else on
+    their file naming the lines; a file no longer in the change has nowhere
+    to show one, so its findings are left out and the toast counts them),
+    and opens `plannotator review` on a port aug picks, as after a run.
+  - Every post first clears aug's own (`DELETE
+    /api/external-annotations?source=aug-guide`), then posts the batch, so
+    the findings are there once. Feedback goes to the agent on exit as
+    before.
+  - A guide a trigger ran opens nothing; its turn ends by pointing at Open
+    the guide's review instead of "the review aug opens".
+  - Checked live (plannotator 0.29.1, scratch HOME, `PLANNOTATOR_BROWSER=none`):
+    saved findings refit, posted 0.55s after the review started, posted
+    again into the same review: it held 2 comments, not 4. Not checked in
+    a browser: whether restoring a recovered draft still doubles them
+    (the page merges a restored comment with a `source` into a live one
+    only when their text matches).
 - Not the Inbox: `submit_guide` refuses a v4 snapshot, drops notes unless
   `inboxCodeReview` is on, and the Inbox's first start writes
   `~/.claude/rules/plannotator-inbox.md` into the owner's Claude config.
@@ -286,7 +314,8 @@ Done (step 7), triggers:
   action and event. Auto runs go one at a time behind each other (not the
   agents' pool), none past the day's spend cap; their turn says the event
   ("Summarize the work so far (on done)"). A guide run by itself is saved
-  in Plannotator; its review waits for the owner to open it.
+  in Plannotator; its review waits for the owner to open it (Open the
+  guide's review).
 
 All eight steps are built.
 
