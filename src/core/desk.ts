@@ -338,8 +338,8 @@ export class Desk {
   }
 
   // Actions an event runs by itself (their `on` triggers): each once per
-  // task, action and event, one at a time behind each other, and none past
-  // the day's spend cap. What it opens for the owner (the guide's review)
+  // task, action and event (a run the spend cap or an error kept from
+  // starting is not counted), one at a time behind each other. What it opens for the owner (the guide's review)
   // waits for them to open it. Returns the names queued.
   private autoRuns: Promise<void> = Promise.resolve();
 
@@ -355,12 +355,16 @@ export class Desk {
           const config = this.config();
           const fresh = store.getTask(taskId);
           if (!fresh) return;
+          // A run that never started is not kept as run: the next such
+          // event tries again.
           if (capReached(config)) {
+            store.releaseActionRun(taskId, spec.name, event);
             log.info("auto action skipped: spend cap", { task: taskId, action: spec.name, event });
             return;
           }
           const started = this.startAction(config, fresh, spec, event);
           if ("error" in started) {
+            store.releaseActionRun(taskId, spec.name, event);
             log.warn("auto action not started", { task: taskId, action: spec.name, event, error: started.error });
             return;
           }

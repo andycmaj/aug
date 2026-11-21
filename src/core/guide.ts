@@ -104,10 +104,34 @@ export function patchFor(cwd: string, base: string): Patch | { error: string } {
     if (!mb.ok) continue;
     const diff = git(cwd, ["diff", "--no-color", "--no-ext-diff", mb.out.trim()]);
     if (!diff.ok) return { error: `git diff failed: ${diff.out}` };
-    if (!diff.out.trim()) return { error: `no change against ${b}` };
-    return { text: diff.out, mergeBase: mb.out.trim(), base: b };
+    const text = diff.out + untracked(cwd);
+    if (!text.trim()) return { error: `no change against ${b}` };
+    return { text, mergeBase: mb.out.trim(), base: b };
   }
   return { error: `no merge base with ${base} in ${cwd}` };
+}
+
+// New files the agent has not added are in the change too. Each is diffed
+// against /dev/null rather than `git add -N`, which would touch the
+// agent's index.
+const UNTRACKED_MAX = 50;
+
+function untracked(cwd: string): string {
+  const list = git(cwd, ["ls-files", "--others", "--exclude-standard"]);
+  if (!list.ok) return "";
+  return list.out
+    .split("\n")
+    .filter(Boolean)
+    .slice(0, UNTRACKED_MAX)
+    .map((file) => {
+      // Exit 1 means "they differ", which is the point.
+      const r = Bun.spawnSync(
+        ["git", "-C", cwd, "diff", "--no-color", "--no-ext-diff", "--no-index", "--", "/dev/null", file],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      return r.stdout.toString();
+    })
+    .join("");
 }
 
 function git(cwd: string, args: string[]): { ok: boolean; out: string } {
@@ -151,10 +175,14 @@ export function patchHunks(patch: string): Map<string, FileHunks> {
 // once; the rest go to unplacedFiles; a note outside its file's hunks is
 // left off the file (it still reads in the overview). Each chapter's
 // findings are written into its overview.
-export function fitGuide(guide: Guide, patch: string): { guide: Guide; findings: number } {
+export function fitGuide(
+  guide: Guide,
+  patch: string,
+): { guide: Guide; findings: number; lines: string[] } {
   const hunks = patchHunks(patch);
   const placed = new Set<string>();
   let findings = 0;
+  const all: string[] = [];
   const sections: GuideSection[] = [];
   for (const section of guide.sections) {
     const lines: string[] = [];
@@ -171,6 +199,7 @@ export function fitGuide(guide: Guide, patch: string): { guide: Guide; findings:
       diffs.push({ file: diff.file, summary: diff.summary, ...(pinned.length ? { notes: pinned } : {}) });
     }
     if (diffs.length === 0) continue;
+    all.push(...lines);
     const overview = lines.length
       ? `${section.overview}\n\n**Review notes**\n\n${lines.join("\n")}`
       : section.overview;
@@ -180,6 +209,7 @@ export function fitGuide(guide: Guide, patch: string): { guide: Guide; findings:
   return {
     guide: { ...guide, sections, unplacedFiles: unplaced },
     findings,
+    lines: all,
   };
 }
 
@@ -242,6 +272,8 @@ export interface SavedGuide {
   file: string;
   guide: Guide;
   findings: number;
+  // One Markdown line per finding, as the overviews list them.
+  lines: string[];
   patch: Patch;
 }
 
@@ -258,7 +290,7 @@ export async function saveGuide(opts: {
   if ("error" in parsed) return parsed;
   const patch = patchFor(opts.cwd, opts.base);
   if ("error" in patch) return patch;
-  const { guide, findings } = fitGuide(parsed, patch.text);
+  const { guide, findings, lines } = fitGuide(parsed, patch.text);
   if (guide.sections.length === 0) return { error: "no chapter of the guide names a file in the change" };
   mkdirSync(opts.dir, { recursive: true });
   const file = join(opts.dir, "guide.json");
@@ -268,7 +300,7 @@ export async function saveGuide(opts: {
     log.warn("guide import failed", { file, error: saved.error });
     return { error: `plannotator did not take the guide: ${saved.error}` };
   }
-  return { id: saved.id, file, guide, findings, patch };
+  return { id: saved.id, file, guide, findings, lines, patch };
 }
 
 // What the action's turn says: the chapters, then the findings by file.
@@ -285,11 +317,7 @@ export function guideMarkdown(saved: SavedGuide): string {
     saved.findings
       ? `${saved.findings} review note${saved.findings === 1 ? "" : "s"}${unpinned > 0 ? ` (${unpinned} not on a changed line)` : ""}:`
       : "No review notes: nothing stood out.",
-    ...saved.guide.sections.flatMap((s) =>
-      s.overview.includes("**Review notes**")
-        ? s.overview.split("**Review notes**")[1]!.trim().split("\n")
-        : [],
-    ),
+    ...saved.lines,
     "",
     `Saved in Plannotator (\`${saved.id}\`): \`plannotator review\` in the checkout lists it under Guides.`,
   ]

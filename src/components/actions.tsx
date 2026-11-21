@@ -46,7 +46,7 @@ import {
   InfoModal,
   PromptModal,
 } from "./modals";
-import type { TaskActions } from "./task-actions";
+import { actionTermId, type TaskActions } from "./task-actions";
 import { useAgentStart } from "./use-agent-start";
 import { useEditor } from "./use-editor";
 import { useDocReview } from "./use-doc-review";
@@ -454,7 +454,7 @@ export function useActions(dialogs: Dialogs) {
     title: string,
     run: NonNullable<ActionResult["terminal"]>,
   ) {
-    const id = `action-${task.id}`;
+    const id = actionTermId(task.id);
     goToTask(task.id);
     terminals.close(id);
     terminals.open({

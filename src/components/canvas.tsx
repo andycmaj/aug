@@ -55,7 +55,7 @@ import {
 import { inTmux } from "../core/driver";
 import { TerminalHost } from "./agent-terminal";
 import { ActionCard, ChatTurn } from "./chat-turn";
-import { unlessTyping, type TaskActions } from "./task-actions";
+import { actionTermId, unlessTyping, type TaskActions } from "./task-actions";
 import { docReviewId } from "./use-doc-review";
 import { prDashId, usePrDash } from "./use-pr-dash";
 import { RAIL_WIDTH } from "./rail";
@@ -98,15 +98,18 @@ export function Canvas(props: {
       t && inTmux(t) ? terminals.forTask(t.id) : undefined;
     return tm?.running ? tm : undefined;
   });
-  // ghdash (P) or a System task's diff in revdiff (e) takes the Canvas over
-  // the chat and the agent.
+  // ghdash (P), a System task's diff in revdiff (e) or a task action's
+  // terminal (the guide's review, a quiz) takes the Canvas over the chat
+  // and the agent.
   const dash = createMemo(() => {
     const t = task();
     if (!t) return undefined;
     const d = terminals.get(prDashId(t.id));
     if (d?.running) return d;
     const r = terminals.get(docReviewId(t.id));
-    return r?.running ? r : undefined;
+    if (r?.running) return r;
+    const a = terminals.get(actionTermId(t.id));
+    return a?.running ? a : undefined;
   });
   const attached = () =>
     isPaneFocused("canvas") && Boolean(dash() ?? term()?.running);

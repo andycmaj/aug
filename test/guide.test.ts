@@ -98,6 +98,16 @@ describe("fitted to the patch", () => {
     expect(guide.unplacedFiles).toEqual(["README.md"]);
   });
 
+  test("a new file not yet added is in the patch", () => {
+    const dir = repo();
+    writeFileSync(join(dir, "mod.ts"), "export const m = 1;\n");
+    const patch = patchFor(dir, "main");
+    if ("error" in patch) throw new Error(patch.error);
+    expect([...patchHunks(patch.text).keys()]).toContain("mod.ts");
+    // The agent's index is left as it was.
+    expect(sh(dir, "git", "status", "--porcelain")).toContain("?? mod.ts");
+  });
+
   test("master when there is no main", () => {
     const dir = repo();
     sh(dir, "git", "branch", "-m", "main", "master");

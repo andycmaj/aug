@@ -1,6 +1,6 @@
 # Pluggable task actions (AUG-0073) — plan
 
-Status: approved by the owner (2026-11-20). Decisions below.
+Status: approved by the owner (2026-11-20), and built (Build order, steps 1-8). Decisions below.
 
 ## What exists today
 

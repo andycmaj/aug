@@ -17,7 +17,7 @@ import {
 } from "../src/core/brain";
 import { DEFAULT_CONFIG, mergeConfig } from "../src/core/config";
 import { Engine } from "../src/core/engine";
-import { sessionStarted } from "../src/core/lifecycle";
+import { sessionStarted, workFinished } from "../src/core/lifecycle";
 import { runMove } from "../src/core/moves";
 import { setMux } from "../src/core/mux";
 import * as store from "../src/core/store";
@@ -446,6 +446,34 @@ describe("triggers", () => {
     await e.desk.actionsSettled();
     expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(true);
     expect(store.turnsForTask(before.id).some((x) => x.role === TurnRole.action)).toBe(false);
+  });
+
+  test("ready is the agent's finished work; merged is the merge", async () => {
+    const e = engineWith({
+      summarize: { on: [{ event: "ready" }] },
+      recap: { skill: "aug:summarize", via: "headless", on: [{ event: "merged" }] },
+    });
+    e.fireEventActions();
+    const t = task(Kind.general);
+    sessionStarted({ id: "s-ready", taskId: t.id, kind: SessionKind.tmux, cwd: tmpdir(), startedBy: "owner" });
+    workFinished({ taskId: t.id, sessionId: "s-ready" }, { summary: "did it", closes: false });
+    store.updateTask(t.id, { merged_at: "2026-11-20T00:00:00Z" });
+    expect(e.fireEventActions()).toBe(2);
+    await e.desk.actionsSettled();
+    const abouts = store
+      .turnsForTask(t.id)
+      .filter((x) => x.role === TurnRole.action)
+      .map((x) => x.about);
+    expect(abouts).toContain("Summarize the work so far (on ready)");
+    expect(abouts).toContain("recap (on merged)");
+  });
+
+  test("a run that never started is not counted: the next event tries again", async () => {
+    const e = engineWith({ recap: { skill: "nope", via: "headless", on: [{ event: "done" }] } });
+    const t = task(Kind.general);
+    expect(e.desk.fireActions("done", t.id)).toEqual(["recap"]);
+    await e.desk.actionsSettled();
+    expect(e.desk.fireActions("done", t.id)).toEqual(["recap"]);
   });
 
   test("a pane action never runs by itself; an unknown event is left out", () => {

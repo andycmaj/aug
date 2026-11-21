@@ -15,8 +15,10 @@ base, try `main`, then `master`.
 ## Read
 
 1. `git merge-base <base> HEAD`, then `git diff <merge-base>`: that diff
-   (it includes uncommitted edits) is what the guide describes. Read it
-   once, carefully. It is your main and usually only source.
+   (it includes uncommitted edits) is what the guide describes, plus new
+   files not yet added (`git status --short` lists them as `??`; read
+   them too). Read it once, carefully. It is your main and usually only
+   source.
 2. `git log --oneline <merge-base>..HEAD` for intent. A pull request's
    description, when you were given one and can read it.
 3. A few targeted reads only, each answering a question you can name: a

@@ -1243,6 +1243,14 @@ export function claimActionRun(taskId: number, action: string, event: string): b
   return won != null;
 }
 
+// A claimed run that never ran (the spend cap, a skill not found): the
+// event may run it again.
+export function releaseActionRun(taskId: number, action: string, event: string): void {
+  db()
+    .query("DELETE FROM action_runs WHERE task_id = ? AND action = ? AND event = ?")
+    .run(taskId, action, event);
+}
+
 // Task events after an id, oldest first: what the engine turns into
 // action triggers.
 export function taskEventsAfter(id: number): TaskEventRow[] {

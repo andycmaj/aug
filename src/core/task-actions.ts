@@ -397,24 +397,36 @@ export function userSkillDir(name: string): string {
 }
 
 // A plugin folder holding one user skill (linked, so an edit to the skill
-// applies), under AUG_HOME. Remade each time: the link may have moved.
+// applies), under AUG_HOME. Made once and kept while its link still points
+// at the skill, so two runs at once never pull it from under each other.
 export function wrapUserSkill(name: string): string | null {
   if (!/^[A-Za-z0-9_-]+$/.test(name)) return null;
   const source = userSkillDir(name);
   if (!existsSync(join(source, "SKILL.md"))) return null;
   const dir = join(paths.home(), "wrapped", name);
+  const link = join(dir, "skills", name);
   try {
-    rmSync(dir, { recursive: true, force: true });
-    mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
-    mkdirSync(join(dir, "skills"), { recursive: true });
-    writeFileSync(
+    const target = realpathSync(source);
+    writeIfChanged(
       join(dir, ".claude-plugin", "plugin.json"),
       `${JSON.stringify({ name: WRAP_PLUGIN, version: "1.0.0", description: `Your ${name} skill, for aug's headless runs.` }, null, 2)}\n`,
     );
-    symlinkSync(realpathSync(source), join(dir, "skills", name));
+    if (linkTarget(link) !== target) {
+      rmSync(link, { recursive: true, force: true });
+      mkdirSync(join(dir, "skills"), { recursive: true });
+      symlinkSync(target, link);
+    }
     return dir;
   } catch (err) {
     log.warn("could not wrap a user skill", { name, err });
+    return null;
+  }
+}
+
+function linkTarget(path: string): string | null {
+  try {
+    return realpathSync(path);
+  } catch {
     return null;
   }
 }
