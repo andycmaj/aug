@@ -1,0 +1,298 @@
+// The guide action's second half (docs/task-actions-design.md, guide): the
+// skill answers with Plannotator guide JSON (chapters, plus review findings
+// as line notes); aug makes the patch itself, so the guide describes exactly
+// what is in the checkout, fits the guide to it, and saves it into
+// Plannotator, where `plannotator review` lists it under Guides.
+//
+// Plannotator 0.28 keeps a note but draws it nowhere (the review UI, an
+// exported page and the Inbox all leave it out), so each chapter's findings
+// are also written into its overview, which every view draws.
+
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { errorMessage, logger } from "./log";
+
+const log = logger("guide");
+
+export interface GuideNote {
+  lineStart: number;
+  lineEnd: number;
+  side?: "old" | "new";
+  text: string;
+}
+
+export interface GuideDiff {
+  file: string;
+  summary: string;
+  notes?: GuideNote[];
+}
+
+export interface GuideSection {
+  title: string;
+  overview: string;
+  diffs: GuideDiff[];
+}
+
+export interface Guide {
+  title: string;
+  intent: string;
+  sections: GuideSection[];
+  unplacedFiles: string[];
+}
+
+const NOTE_TEXT_MAX = 1000;
+const NOTES_PER_FILE_MAX = 20;
+
+// The JSON object in the skill's answer: a ```json fence, or the whole text.
+export function parseGuide(text: string): Guide | { error: string } {
+  const fenced = /```(?:json)?\s*\n([\s\S]*?)\n```/.exec(text);
+  const raw = (fenced?.[1] ?? text).trim();
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch (err) {
+    return { error: `the guide is not JSON: ${errorMessage(err)}` };
+  }
+  if (!isRecord(value)) return { error: "the guide is not a JSON object" };
+  const sections = Array.isArray(value.sections) ? value.sections : [];
+  const guide: Guide = {
+    title: str(value.title) || "Guided review",
+    intent: str(value.intent),
+    sections: sections.filter(isRecord).map((s) => ({
+      title: str(s.title) || "Changes",
+      overview: str(s.overview),
+      diffs: (Array.isArray(s.diffs) ? s.diffs : []).filter(isRecord).map((d) => ({
+        file: str(d.file),
+        summary: str(d.summary),
+        notes: (Array.isArray(d.notes) ? d.notes : []).filter(isRecord).flatMap((n) => {
+          const lineStart = Number(n.lineStart);
+          const lineEnd = Number(n.lineEnd ?? n.lineStart);
+          const text = str(n.text).slice(0, NOTE_TEXT_MAX);
+          if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || !text) return [];
+          return [{ lineStart, lineEnd, ...(n.side === "old" ? { side: "old" as const } : {}), text }];
+        }),
+      })),
+    })),
+    unplacedFiles: (Array.isArray(value.unplacedFiles) ? value.unplacedFiles : []).map(str),
+  };
+  if (guide.sections.length === 0) return { error: "the guide has no chapters" };
+  return guide;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function str(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+// ── the patch ─────────────────────────────────────────────────────────────
+
+export interface Patch {
+  text: string;
+  // The merge base the diff is taken from, and the branch it came from.
+  mergeBase: string;
+  base: string;
+}
+
+// `git diff <merge-base>`: the branch's change plus edits not yet
+// committed, as Plannotator's own guides take it.
+export function patchFor(cwd: string, base: string): Patch | { error: string } {
+  for (const b of base === "main" ? ["main", "master"] : [base]) {
+    const mb = git(cwd, ["merge-base", b, "HEAD"]);
+    if (!mb.ok) continue;
+    const diff = git(cwd, ["diff", "--no-color", "--no-ext-diff", mb.out.trim()]);
+    if (!diff.ok) return { error: `git diff failed: ${diff.out}` };
+    if (!diff.out.trim()) return { error: `no change against ${b}` };
+    return { text: diff.out, mergeBase: mb.out.trim(), base: b };
+  }
+  return { error: `no merge base with ${base} in ${cwd}` };
+}
+
+function git(cwd: string, args: string[]): { ok: boolean; out: string } {
+  const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
+  const out = r.exitCode === 0 ? r.stdout.toString() : r.stderr.toString().trim();
+  return { ok: r.exitCode === 0, out };
+}
+
+interface FileHunks {
+  // [start, end] line ranges, inclusive, per side.
+  new: [number, number][];
+  old: [number, number][];
+}
+
+// The files a patch touches, each with its hunks' line ranges.
+export function patchHunks(patch: string): Map<string, FileHunks> {
+  const files = new Map<string, FileHunks>();
+  let current: FileHunks | null = null;
+  for (const line of patch.split("\n")) {
+    const header = /^diff --git a\/(.+?) b\/(.+)$/.exec(line);
+    if (header) {
+      current = { new: [], old: [] };
+      files.set(header[2]!, current);
+      continue;
+    }
+    const hunk = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (hunk && current) {
+      const span = (start: string, len?: string): [number, number] => {
+        const s = Number(start);
+        const n = len === undefined ? 1 : Number(len);
+        return [s, s + Math.max(n, 1) - 1];
+      };
+      current.old.push(span(hunk[1]!, hunk[2]));
+      current.new.push(span(hunk[3]!, hunk[4]));
+    }
+  }
+  return files;
+}
+
+// The guide made to fit the patch: chapters name only files in it, each
+// once; the rest go to unplacedFiles; a note outside its file's hunks is
+// left off the file (it still reads in the overview). Each chapter's
+// findings are written into its overview.
+export function fitGuide(guide: Guide, patch: string): { guide: Guide; findings: number } {
+  const hunks = patchHunks(patch);
+  const placed = new Set<string>();
+  let findings = 0;
+  const sections: GuideSection[] = [];
+  for (const section of guide.sections) {
+    const lines: string[] = [];
+    const diffs: GuideDiff[] = [];
+    for (const diff of section.diffs) {
+      const file = hunks.get(diff.file);
+      if (!file || placed.has(diff.file)) continue;
+      placed.add(diff.file);
+      const notes = (diff.notes ?? []).slice(0, NOTES_PER_FILE_MAX);
+      findings += notes.length;
+      for (const n of notes)
+        lines.push(`- \`${diff.file}\` ${lineWord(n)}: ${n.text}`);
+      const pinned = notes.filter((n) => insideOneHunk(n, file));
+      diffs.push({ file: diff.file, summary: diff.summary, ...(pinned.length ? { notes: pinned } : {}) });
+    }
+    if (diffs.length === 0) continue;
+    const overview = lines.length
+      ? `${section.overview}\n\n**Review notes**\n\n${lines.join("\n")}`
+      : section.overview;
+    sections.push({ ...section, overview, diffs });
+  }
+  const unplaced = [...hunks.keys()].filter((f) => !placed.has(f));
+  return {
+    guide: { ...guide, sections, unplacedFiles: unplaced },
+    findings,
+  };
+}
+
+function lineWord(n: GuideNote): string {
+  const span = n.lineEnd > n.lineStart ? `L${n.lineStart}-L${n.lineEnd}` : `L${n.lineStart}`;
+  return n.side === "old" ? `${span} (removed)` : span;
+}
+
+function insideOneHunk(n: GuideNote, file: FileHunks): boolean {
+  const ranges = n.side === "old" ? file.old : file.new;
+  return n.lineEnd >= n.lineStart && ranges.some(([s, e]) => n.lineStart >= s && n.lineEnd <= e);
+}
+
+// A Plannotator guide snapshot, format v4 (the one that carries notes).
+export function snapshot(guide: Guide, patch: Patch): Record<string, unknown> {
+  return {
+    kind: "plannotator-guided-review",
+    version: 4,
+    exportedAt: new Date().toISOString(),
+    guide: { ...guide, reviewed: guide.sections.map(() => false) },
+    review: { rawPatch: patch.text, gitRef: `${patch.base}...HEAD` },
+    source: { kind: "local" },
+  };
+}
+
+// ── saving it into Plannotator ────────────────────────────────────────────
+
+export interface GuideTool {
+  // `plannotator guide import --snapshot`: the saved guide's id.
+  save(file: string, cwd: string, pr?: string): Promise<{ id: string } | { error: string }>;
+}
+
+const plannotator: GuideTool = {
+  async save(file, cwd, pr) {
+    const bin = Bun.which("plannotator");
+    if (!bin) return { error: "plannotator is not on PATH" };
+    const proc = Bun.spawn(
+      [bin, "guide", "import", "--snapshot", file, ...(pr ? ["--pr", pr] : [])],
+      { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, PLANNOTATOR_UPDATE_CHECK: "0" } },
+    );
+    const [out, err, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    if (code !== 0) return { error: (err || out).trim().split("\n").pop() || `plannotator exited ${code}` };
+    const id = out.trim().split("\n")[0]?.trim();
+    return id ? { id } : { error: "plannotator printed no guide id" };
+  },
+};
+
+let tool: GuideTool = plannotator;
+
+export function setGuideTool(next: GuideTool | null): void {
+  tool = next ?? plannotator;
+}
+
+export interface SavedGuide {
+  id: string;
+  file: string;
+  guide: Guide;
+  findings: number;
+  patch: Patch;
+}
+
+// The skill's answer, fitted to the checkout's patch, written to `dir` and
+// saved into Plannotator.
+export async function saveGuide(opts: {
+  answer: string;
+  cwd: string;
+  base: string;
+  dir: string;
+  pr?: string;
+}): Promise<SavedGuide | { error: string }> {
+  const parsed = parseGuide(opts.answer);
+  if ("error" in parsed) return parsed;
+  const patch = patchFor(opts.cwd, opts.base);
+  if ("error" in patch) return patch;
+  const { guide, findings } = fitGuide(parsed, patch.text);
+  if (guide.sections.length === 0) return { error: "no chapter of the guide names a file in the change" };
+  mkdirSync(opts.dir, { recursive: true });
+  const file = join(opts.dir, "guide.json");
+  writeFileSync(file, `${JSON.stringify(snapshot(guide, patch), null, 2)}\n`);
+  const saved = await tool.save(file, opts.cwd, opts.pr);
+  if ("error" in saved) {
+    log.warn("guide import failed", { file, error: saved.error });
+    return { error: `plannotator did not take the guide: ${saved.error}` };
+  }
+  return { id: saved.id, file, guide, findings, patch };
+}
+
+// What the action's turn says: the chapters, then the findings by file.
+export function guideMarkdown(saved: SavedGuide): string {
+  const notes = saved.guide.sections.flatMap((s) =>
+    s.diffs.flatMap((d) => (d.notes ?? []).map((n) => ({ file: d.file, n }))),
+  );
+  const unpinned = saved.findings - notes.length;
+  return [
+    `**${saved.guide.title}**`,
+    saved.guide.intent,
+    "",
+    `${saved.guide.sections.length} chapter${saved.guide.sections.length === 1 ? "" : "s"}: ${saved.guide.sections.map((s) => s.title).join("; ")}.`,
+    saved.findings
+      ? `${saved.findings} review note${saved.findings === 1 ? "" : "s"}${unpinned > 0 ? ` (${unpinned} not on a changed line)` : ""}:`
+      : "No review notes: nothing stood out.",
+    ...saved.guide.sections.flatMap((s) =>
+      s.overview.includes("**Review notes**")
+        ? s.overview.split("**Review notes**")[1]!.trim().split("\n")
+        : [],
+    ),
+    "",
+    `Saved in Plannotator (\`${saved.id}\`): \`plannotator review\` in the checkout lists it under Guides.`,
+  ]
+    .filter((line, i, all) => line !== "" || all[i - 1] !== "")
+    .join("\n");
+}

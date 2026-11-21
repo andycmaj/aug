@@ -228,10 +228,36 @@ Done (steps 4-5):
   `--plugin-dir`, so nothing needs it installed. It would only make
   `/aug:summarize` available in the owner's own sessions.
 
+Done (step 6), the guide:
+
+- `aug:guide` (`fork`, coding with a worktree, output `guide`) answers with
+  Plannotator guide JSON only: chapters (Plannotator's own methodology) and
+  review findings as line notes. It needs no plannotator capability: the
+  skill only reads git, and aug does the rest (`core/guide.ts`).
+- aug makes the patch itself (`git diff <merge-base>`, main then master),
+  fits the guide to it (files not in the patch dropped, files left out
+  listed as unplaced, each file once, a note outside its file's hunks kept
+  off the file), writes a v4 snapshot under What it made and saves it with
+  `plannotator guide import --snapshot` (`--pr` when the task has one).
+  The turn lists the chapters and every finding; the TUI opens
+  `plannotator review` on the Canvas, and what the owner writes there goes
+  to the agent when it exits (an approval sends nothing).
+- Checked (plannotator 0.28.61, headless Chrome): Plannotator keeps v4
+  notes but draws them nowhere: not in `plannotator review`'s Guides view,
+  not in an exported page, not in an Inbox review (even with
+  `inboxCodeReview` on). So each chapter's findings are also written into
+  its overview under **Review notes**, which every view draws: the guided
+  review and the agentic review in one view, the owner's decision 5. The
+  notes stay in the snapshot for when Plannotator draws them.
+- Not the Inbox: `submit_guide` refuses a v4 snapshot, drops notes unless
+  `inboxCodeReview` is on, and the Inbox's first start writes
+  `~/.claude/rules/plannotator-inbox.md` into the owner's Claude config.
+- Checked for real (haiku, scratch home and Plannotator data dir): the run
+  read the diff, found an unguarded zero divisor, saved the guide, and the
+  review UI showed the chapter with the finding under Review notes.
+
 Still to build:
 
-6. `aug:guide` (snapshot v4 + import), after checking the review UI draws
-   notes. Test it against the offline review simulator (AUG-0179).
 7. Triggers: the `runAction` triage effect, lifecycle events, `action_runs`.
 8. The `action` move; README config.
 

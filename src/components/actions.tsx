@@ -5,7 +5,7 @@
 // embedded viewer each have a hook of their own beside this one.
 
 import { createSignal, type Accessor, type JSX } from "solid-js";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useAug, ViewMode } from "../context/aug";
@@ -468,9 +468,23 @@ export function useActions(dialogs: Dialogs) {
       onExit: () => {
         terminals.close(id);
         if (aug.selectedKey() === `t${task.id}`) setActivePane("canvas");
+        if (run.feedback) sendReviewNotes(task, run.feedback);
       },
     });
     setTimeout(() => setActivePane("canvas"), 0);
+  }
+
+  // What the owner wrote in plannotator review goes to the agent, as if
+  // typed; an approval or a closed tab sends nothing.
+  function sendReviewNotes(task: TaskRow, file: string) {
+    const notes = existsSync(file) ? readFileSync(file, "utf8").trim() : "";
+    if (!notes || /^The user approved\.?$/i.test(notes)) return;
+    desk
+      .say(task.id, `My notes from the guided review in Plannotator:\n\n${notes}`)
+      .then(
+        () => showToast(`Your review notes went to ${taskRef(task.id)}'s agent`, 4000),
+        (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),
+      );
   }
 
   // The action keys bound at start (app.tsx builds the keymap from the same).

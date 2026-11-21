@@ -167,7 +167,10 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   written under `AUG_HOME/plugin`); config `actions` changes, turns off or
   adds one. `desk.runAction` runs it headless or on a fork of the agent's
   session (`core/run-action.ts`), and its answer is a `TurnRole.action` turn,
-  never the agent's. `.` opens the picker; the palette lists each one.
+  never the agent's; `pane` (the quiz) runs interactive claude in a split
+  of the agent's window. `guide` saves its answer into Plannotator
+  (`core/guide.ts`). `.` opens the picker; the palette lists each one;
+  `actions.<name>.key` binds one at start.
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `aug-tools move <verb>`, the Assistant's
   prompt and the engine's dispatch, which runs each on the desk. aug-tools

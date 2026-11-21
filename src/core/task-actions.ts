@@ -19,6 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import guideSkill from "../../contrib/aug-plugin/skills/guide/SKILL.md" with { type: "text" };
 import quizSkill from "../../contrib/aug-plugin/skills/quiz/SKILL.md" with { type: "text" };
 import summarizeSkill from "../../contrib/aug-plugin/skills/summarize/SKILL.md" with { type: "text" };
 import { claudeDir, declaredRules, pluginSkillFiles } from "./capabilities";
@@ -50,8 +51,11 @@ export const ActionOutput = {
   turn: "turn",
   // The answer is also a file under What it made.
   file: "file",
-  // The skill does its own output (opens a viewer, links a guide).
+  // The skill does its own output (a pane the owner talks in).
   none: "none",
+  // The answer is Plannotator guide JSON: saved into Plannotator, opened in
+  // `plannotator review`, its findings listed on the turn (core/guide.ts).
+  guide: "guide",
 } as const;
 export type ActionOutput = (typeof ActionOutput)[keyof typeof ActionOutput];
 
@@ -94,6 +98,15 @@ export const BUILTIN_ACTIONS: Record<string, Omit<ActionSpec, "name">> = {
     via: ActionVia.fork,
     output: ActionOutput.turn,
   },
+  guide: {
+    title: "Guided review, with review notes",
+    skill: "aug:guide",
+    args: "task {ref} ({title}); base {base}; pull request {pr}",
+    via: ActionVia.fork,
+    kinds: [Kind.coding],
+    needs: [ActionNeed.worktree],
+    output: ActionOutput.guide,
+  },
   quiz: {
     title: "Quiz me on the change",
     skill: "aug:quiz",
@@ -108,6 +121,7 @@ export const BUILTIN_ACTIONS: Record<string, Omit<ActionSpec, "name">> = {
 // The skills of aug's own plugin, by name, as shipped.
 const AUG_SKILLS: Record<string, string> = {
   summarize: summarizeSkill,
+  guide: guideSkill,
   quiz: quizSkill,
 };
 
@@ -222,18 +236,22 @@ export function actionsFor(config: AugConfig, task: TaskRow): ActionSpec[] {
 
 // A task does not record what it branched from; the skills fall back to
 // master when there is no main.
-const BASE = "main";
+export const ACTION_BASE = "main";
+
+export function prUrl(task: TaskRow): string | null {
+  const pr = taskPr(task);
+  return pr ? `https://github.com/${pr.repo}/pull/${pr.number}` : null;
+}
 
 // The args with the task filled in; a value it lacks reads "none".
 export function fillArgs(template: string, task: TaskRow): string {
-  const pr = taskPr(task);
   const values: Record<string, string> = {
     ref: store.taskRef(task.id),
     title: task.title,
     worktree: task.worktree ?? "none",
     branch: task.branch ?? "none",
-    base: BASE,
-    pr: pr ? `https://github.com/${pr.repo}/pull/${pr.number}` : "none",
+    base: ACTION_BASE,
+    pr: prUrl(task) ?? "none",
   };
   return template.replace(/\{(\w+)\}/g, (whole, key: string) =>
     key in values ? values[key]! : whole,

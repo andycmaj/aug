@@ -29,12 +29,15 @@ import {
   ActionVia,
   augPluginDir,
   augSkillRules,
+  ACTION_BASE,
   AUG_PLUGIN,
   invocation,
   paneCommand,
+  prUrl,
   skillSource,
   type ActionSpec,
 } from "./task-actions";
+import { guideMarkdown, saveGuide } from "./guide";
 import { transcript } from "./transcript";
 import {
   SpendRole,
@@ -50,9 +53,15 @@ export interface ActionResult {
   ok: boolean;
   // One line for a toast.
   text: string;
-  // A pane action with no agent window to split: the TUI runs this on the
-  // Canvas instead.
-  terminal?: { argv: string[]; cwd: string; env: Record<string, string> };
+  // What the TUI runs on the Canvas: a pane action with no agent window to
+  // split, or the guide's `plannotator review`. `feedback` is where the
+  // owner's review notes land when it exits.
+  terminal?: {
+    argv: string[];
+    cwd: string;
+    env: Record<string, string>;
+    feedback?: string;
+  };
   // A pane action opened in a split of the agent's window.
   pane?: boolean;
 }
@@ -298,6 +307,8 @@ async function run(
       store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
     }
     if (result.isError) throw new BrainError(result.text || "claude failed");
+    if (spec.output === ActionOutput.guide)
+      return await finishGuide(task, spec, turn, result.text, timing);
     const text = result.text.trim();
     const files =
       spec.output === ActionOutput.file ? writeOutput(task, spec, text) : [];
@@ -318,8 +329,73 @@ async function run(
       status: TurnStatus.failed,
       body: `The ${spec.name} action failed: ${message}`,
       finished_at: now(),
+      ...(err instanceof GuideError && err.files.length
+        ? { files: JSON.stringify(err.files) }
+        : {}),
     });
     return { ok: false, text: `${spec.name} failed: ${message}` };
+  }
+}
+
+// The guide's answer saved into Plannotator; its review opened on the
+// Canvas. A guide Plannotator refuses fails the run, with the answer kept
+// as a file so nothing is lost.
+async function finishGuide(
+  task: TaskRow,
+  spec: ActionSpec,
+  turn: TurnRow,
+  answer: string,
+  timing: (fields?: Record<string, unknown>) => void,
+): Promise<ActionResult> {
+  const cwd = task.worktree ?? cwdFor(task);
+  const dir = paths.work(task.id);
+  const saved = await saveGuide({
+    answer,
+    cwd,
+    base: ACTION_BASE,
+    dir,
+    pr: prUrl(task) ?? undefined,
+  });
+  if ("error" in saved) {
+    const files = writeOutput(task, { ...spec, name: `${spec.name}-answer` }, answer.trim());
+    throw new GuideError(saved.error, files);
+  }
+  store.updateTurn(turn.id, {
+    status: TurnStatus.done,
+    body: guideMarkdown(saved),
+    did: `${saved.guide.title}: ${saved.findings} review notes`,
+    finished_at: now(),
+    files: JSON.stringify([
+      { path: saved.file, name: "guide.json", bytes: Bun.file(saved.file).size },
+    ]),
+  });
+  timing({ ok: true });
+  const feedback = join(dir, "guide-feedback.md");
+  return {
+    ok: true,
+    text: `${spec.title}: saved, opening Plannotator`,
+    terminal: {
+      argv: [
+        "sh",
+        "-c",
+        'rm -f "$2"; plannotator review --base "$1" | tee "$2"',
+        "plannotator",
+        saved.patch.base,
+        feedback,
+      ],
+      cwd,
+      env: { PLANNOTATOR_UPDATE_CHECK: "0" },
+      feedback,
+    },
+  };
+}
+
+class GuideError extends Error {
+  constructor(
+    message: string,
+    readonly files: MadeFile[],
+  ) {
+    super(message);
   }
 }
 
