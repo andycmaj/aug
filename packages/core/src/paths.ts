@@ -1,7 +1,7 @@
 // Where Riker keeps its state. Everything lives under one home so a fixture run
 // (or a test) can point RIKER_HOME at a scratch dir and touch nothing real.
 
-import { mkdirSync, realpathSync } from "node:fs";
+import { lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { CMD, envVar, HOME_DIR, LEGACY } from "./brand";
@@ -16,6 +16,17 @@ export function legacyHome(): string {
   return join(homedir(), LEGACY.homeDir);
 }
 
+// The default home, while aug's ~/.aug is still a folder of its own (not yet
+// moved and linked by core/migrate-home.ts).
+export function homeUnmoved(): boolean {
+  if (rikerHome() !== defaultHome()) return false;
+  try {
+    return lstatSync(legacyHome()).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 // What this home was called before the rename, for things written then that
 // name it (installed hooks, the statusline block): a home named .riker was
 // the .aug beside it (core/migrate-home.ts); any other home kept its path.
@@ -23,8 +34,11 @@ export function homeAliases(home = rikerHome()): string[] {
   return basename(home) === HOME_DIR ? [home, join(dirname(home), LEGACY.homeDir)] : [home];
 }
 
+// An agent aug started has AUG_HOME=~/.aug, which is now a link to the
+// default home: that is the default home, by its own name.
 export function rikerHome(): string {
-  return envVar("HOME") ?? defaultHome();
+  const home = envVar("HOME");
+  return !home || home === legacyHome() ? defaultHome() : home;
 }
 
 export const paths = {

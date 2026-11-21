@@ -76,6 +76,13 @@ Tests live beside their package (`packages/<name>/test/`).
   viewer instead of a window of its own. `tagWindow` also sets `@riker_tools`
   (how to call riker-tools) for scripts in that pane; `packages/core/contrib/revdiff/` is
   revdiff's user-layer launcher that does this.
+- **Every name Riker goes by is `core/brand.ts`** (command, tools, home,
+  `RIKER_*` env, `RIKER-` refs, `@riker_*` tmux options, entrypoint), with
+  aug's spellings in `LEGACY`: never spell one inline. Riker was aug, and
+  until the compat window closes (docs/rename-riker.md) reads take both:
+  `envVar()`, `optionFormat()`, `refNumber()` (AUG- forever), legacy
+  install markers as ours but stale. `core/migrate-home.ts` moves `~/.aug`
+  to `~/.riker` at start (`riker migrate --check` says how).
 - **What Riker writes outside its home is `core/install.ts`**: one registry
   (`hooks`, `statusline`, `revdiff`) of idempotent install, uninstall and
   state, behind `riker install|uninstall [name] [--check]`. The engine rewrites

@@ -90,14 +90,23 @@ only the new one.
 
 - Runs only for the default home: `RIKER_HOME` unset and `AUG_HOME` unset or
   `~/.aug`. A scratch `AUG_HOME` is used as the Riker home, untouched.
-- Refuses while `~/.aug/aug.pid` is a live process (the old aug is running).
+- Refuses while `~/.aug/aug.pid` is a live process (the old aug is running),
+  or when `~/.riker` already exists; Riker then exits rather than start on an
+  empty home. An agent's `AUG_HOME=~/.aug` names the default home.
+- Until it has run, riker-tools refuses on the default home (a hook would
+  otherwise make an empty `~/.riker` the move then refuses to overwrite).
 - `~/.aug` moves to `~/.riker` (one `rename`, same filesystem). `aug.db*`,
   `aug.log` and `aug.pid` become `riker.*`. `~/.aug` is left as a symlink to
   `~/.riker`, so `~/.aug/bin/aug-tools`, `~/.aug/work/N` and old hook paths
   still resolve for running agents.
 - DB, in one transaction: `turns.author`, `sessions.started_by`; repo slug
-  `andycmaj/aug` to `andycmaj/riker` in `projects.repos` and
-  `pr_status.repo` (task threads and messages carry no aug slug today).
+  `andycmaj/aug` to `andycmaj/riker` in `tasks.repo`, `projects.repos` and
+  `pr_status.repo`; the slug at the start of `task_threads.thread_key` and
+  `messages.thread_key` (`github:andycmaj/aug#10`, or the PR's thread would
+  split once GitHub answers with the new name) and of PR URLs in `tasks.url`,
+  `pr_status.url` and `task_links.url`. A slug that only starts the same
+  (`andycmaj/aug-tools`) is left alone, and so is free text (titles, chat,
+  notes, worktree paths).
 - `config.json`: `github.repos` key renamed to `andycmaj/riker`; the path
   is left alone (Phase 3 moves the checkout).
 - Live tmux windows: every session and window with `@aug_project` /

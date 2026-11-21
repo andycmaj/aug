@@ -7,6 +7,11 @@ import {
   uninstallHooks,
 } from "@riker/core/adopt";
 import { INSTALLS, InstallState, installState } from "@riker/core/install";
+import { CMD } from "@riker/core/brand";
+import { loadConfig } from "@riker/core/config";
+import { migrateHome, planHomeMigration } from "@riker/core/migrate-home";
+import { setMux, TmuxMux } from "@riker/core/mux";
+import { copyLegacyTags } from "@riker/core/projects";
 
 export interface CLIConfig {
   // A built-in fixture name: no network, no AI, a fictional day.
@@ -133,7 +138,35 @@ const sim = defineCommand({
   },
 });
 
-const SUBCOMMANDS = { hooks, install, uninstall, sim };
+// aug's home becomes Riker's (core/migrate-home.ts). Riker does this itself
+// at start; this shows what it would do, or does it without starting.
+const migrate = defineCommand({
+  meta: {
+    name: "migrate",
+    description: "Move aug's home (~/.aug) to Riker's (~/.riker), as a start does",
+  },
+  args: {
+    check: { type: "boolean", description: "say what it would do, change nothing" },
+  },
+  async run({ args }) {
+    const done = args.check ? planHomeMigration() : migrateHome();
+    if (done.skip) console.log(`nothing to do: ${done.skip}`);
+    else if (done.refuse) {
+      console.error(`${CMD}: ${done.refuse}`);
+      process.exit(1);
+    } else console.log(done.steps.join("\n"));
+    if (done.refuse) return;
+    // Windows aug tagged get Riker's tags too (the engine also does this at
+    // each start).
+    if (args.check) console.log("copy @aug_* tags on live tmux windows to @riker_*");
+    else {
+      setMux(new TmuxMux(loadConfig().tmuxSocket));
+      console.log(`tmux: tagged ${await copyLegacyTags()} sessions and windows`);
+    }
+  },
+});
+
+const SUBCOMMANDS = { hooks, install, uninstall, sim, migrate };
 
 const main = defineCommand({
   meta: {

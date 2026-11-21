@@ -555,6 +555,12 @@ export function watchTmux(
 // name. Runs at boot, on watch events, and on a slow poll.
 // A tmux that does not answer (a timeout) is not one with no windows: that
 // would mark every live claude gone.
+// Windows aug tagged before the rename get Riker's tags (docs/rename-riker.md,
+// Phase 2): the engine does it at each start until the compat window closes.
+export function copyLegacyTags(): Promise<number> {
+  return mux().copyLegacyTags();
+}
+
 export async function reconcile(): Promise<void> {
   const state = await mux().state({ strict: true });
   const windows = new Set(state.windows.map((w) => w.id));

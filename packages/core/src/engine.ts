@@ -752,6 +752,13 @@ export class Engine {
   }
 
   async reconcile(by = "start"): Promise<void> {
+    if (by === "start")
+      try {
+        const tagged = await projects.copyLegacyTags();
+        if (tagged) log.info("copied aug's tmux tags", { tagged });
+      } catch (err) {
+        log.warn("copying aug's tmux tags failed", { err: errorMessage(err) });
+      }
     const done = perfStart("engine.reconcile", { by });
     try {
       await projects.reconcile();

@@ -34,10 +34,18 @@ import { reportLines, spendReport } from "@riker/core/spend";
 import * as store from "@riker/core/store";
 import { setToolsEntry } from "@riker/core/self";
 import { MoveStatus, NoteLabel } from "@riker/core/types";
+import { defaultHome, homeUnmoved, legacyHome } from "@riker/core/paths";
 import { fileURLToPath } from "node:url";
 
 // Run on its own (hooks, agents), riker-tools is its own entry.
 setToolsEntry(fileURLToPath(import.meta.url));
+
+// Before riker first starts after the rename, ~/.aug is still aug's: writing
+// would make an empty ~/.riker that the move then refuses to overwrite.
+if (homeUnmoved()) {
+  console.error(`riker-tools: ${legacyHome()} has not moved to ${defaultHome()} yet; start riker once to move it`);
+  process.exit(1);
+}
 
 // A hook is one short process: config.json is read when a line is logged,
 // not on every start.

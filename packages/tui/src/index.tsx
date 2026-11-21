@@ -13,13 +13,29 @@ import { setMux, TmuxMux } from "@riker/core/mux";
 import { startPerf, timing } from "@riker/core/perf";
 import { paths } from "@riker/core/paths";
 import { exitCode } from "@riker/core/restart";
+import { CMD } from "@riker/core/brand";
+import { migrateHome } from "@riker/core/migrate-home";
+
+let migrated: string[] | null = null;
 
 const cli = await parseCLI();
+// aug's home moves to Riker's before anything opens it (core/migrate-home.ts).
+// A fixture or the sim runs on a scratch home of its own.
+if (!cli.fixture && !cli.sim) {
+  const moved = migrateHome();
+  if (moved.refuse) {
+    console.error(`${CMD}: cannot move aug's home: ${moved.refuse}`);
+    process.exit(1);
+  }
+  if (!moved.skip) console.error(moved.steps.join("\n"));
+  migrated = moved.skip ? null : moved.steps;
+}
 // config.json, read again whenever it changes. Everything below is handed
 // this source; nothing else reads the file.
 const config = fileConfig();
 configureLog(() => config.get().log);
 logCrashes();
+if (migrated) logger(CMD).info("moved aug's home", { steps: migrated.join("; ") });
 startPerf({ proc: "riker", sampleProcess: true });
 logger("riker").info("start", {
   fixture: cli.fixture ?? (cli.sim ? "sim" : null),
