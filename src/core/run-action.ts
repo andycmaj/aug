@@ -44,6 +44,8 @@ import {
   readFindings,
   reviewComments,
   saveGuide,
+  writePatch,
+  type Patch,
   type ReviewComment,
 } from "./guide";
 import { transcript } from "./transcript";
@@ -110,6 +112,7 @@ function actionPrompt(
   task: TaskRow,
   forked: boolean,
   as: string,
+  patchFile?: string,
 ): string {
   const turns = store
     .turnsForTask(task.id)
@@ -127,6 +130,9 @@ function actionPrompt(
       : turns.length
         ? `The task's chat so far, oldest first:\n${transcript(turns)}`
         : "",
+    patchFile
+      ? `The change's diff, as aug took it (git diff against the merge base, uncommitted edits and new files included), is in ${patchFile}. Read that file, all of it, in parts if it is long: it is the diff to review, so do not run git diff or git status for it. Its columns are the old and new line numbers: pin notes to those, never to the file's own line numbers.`
+      : "",
     "",
     invocation(spec, task, as),
   ]
@@ -177,6 +183,14 @@ export function startAction(
 
   const session = spec.via === ActionVia.fork ? forkable(task) : null;
   const cwd = session?.cwd ?? cwdFor(task);
+  // The guide is handed its diff, taken before anything is spent: no change,
+  // no run.
+  let patch: { patch: Patch; file: string } | undefined;
+  if (spec.output === ActionOutput.guide) {
+    const taken = patchFor(task.worktree ?? cwd, ACTION_BASE);
+    if ("error" in taken) return { error: `${spec.name}: ${taken.error}` };
+    patch = { patch: taken, file: writePatch(paths.work(task.id), taken) };
+  }
   const turn = actionTurn(task, spec, event);
   running.add(key);
   log.info("action start", { task: task.id, action: spec.name, fork: !!session });
@@ -185,6 +199,7 @@ export function startAction(
     cwd,
     session: session?.id,
     as: source.as,
+    patch,
     pluginDirs: [...new Set([source.dir, ...grant.pluginDirs])],
     tools: [...new Set([...ACTION_TOOLS, ...grant.tools])],
     allow: [
@@ -280,6 +295,8 @@ interface RunShape {
   session?: string;
   // The skill's name as this run loads it (a wrapped user skill's differs).
   as: string;
+  // The guide's diff, and the file the skill reads it from.
+  patch?: { patch: Patch; file: string };
   pluginDirs: string[];
   tools: string[];
   allow: string[];
@@ -297,7 +314,7 @@ async function run(
   const timing = log.time("action done", { task: task.id, action: spec.name });
   try {
     const result = await think({
-      prompt: actionPrompt(spec, task, Boolean(shape.session), shape.as),
+      prompt: actionPrompt(spec, task, Boolean(shape.session), shape.as, shape.patch?.file),
       system: actionSystem(spec),
       model: spec.model ?? config.brain.agentModel,
       cwd: shape.cwd,
@@ -321,7 +338,11 @@ async function run(
     }
     if (result.isError) throw new BrainError(result.text || "claude failed");
     if (spec.output === ActionOutput.guide)
-      return await finishGuide(task, spec, turn, result.text, event, timing);
+      return await finishGuide(task, spec, turn, result.text, {
+        event,
+        patch: shape.patch?.patch,
+        denied: result.denied ?? [],
+      }, timing);
     const text = result.text.trim();
     const files =
       spec.output === ActionOutput.file ? writeOutput(task, spec, text) : [];
@@ -359,9 +380,10 @@ async function finishGuide(
   spec: ActionSpec,
   turn: TurnRow,
   answer: string,
-  event: string | undefined,
+  run: { event?: string; patch?: Patch; denied: string[] },
   timing: (fields?: Record<string, unknown>) => void,
 ): Promise<ActionResult> {
+  const { event, denied } = run;
   const cwd = task.worktree ?? cwdFor(task);
   const dir = paths.work(task.id);
   const saved = await saveGuide({
@@ -370,6 +392,7 @@ async function finishGuide(
     base: ACTION_BASE,
     dir,
     pr: prUrl(task) ?? undefined,
+    patch: run.patch,
   });
   if ("error" in saved) {
     const files = writeOutput(task, { ...spec, name: `${spec.name}-answer` }, answer.trim());
@@ -377,7 +400,7 @@ async function finishGuide(
   }
   store.updateTurn(turn.id, {
     status: TurnStatus.done,
-    body: guideMarkdown(saved, !event),
+    body: guideMarkdown(saved, { opened: !event, denied }),
     did: `${saved.guide.title}: ${saved.findings.length} review notes`,
     finished_at: now(),
     files: JSON.stringify([
@@ -385,10 +408,11 @@ async function finishGuide(
     ]),
   });
   timing({ ok: true });
-  if (event) return { ok: true, text: `${spec.title}: saved, its review waits for you` };
+  const warn = denied.length ? " (a read was denied: it may have missed things)" : "";
+  if (event) return { ok: true, text: `${spec.title}: saved, its review waits for you${warn}` };
   return {
     ok: true,
-    text: `${spec.title}: saved, opening Plannotator`,
+    text: `${spec.title}: saved, opening Plannotator${warn}`,
     terminal: reviewTerminal(cwd, dir, saved.patch.base, saved.comments),
   };
 }

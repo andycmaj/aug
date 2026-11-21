@@ -14,6 +14,8 @@ import {
   patchHunks,
   readFindings,
   reviewComments,
+  reviewNotes,
+  numberedPatch,
   setGuideTool,
   type ReviewComment,
 } from "../src/core/guide";
@@ -203,6 +205,15 @@ function fakeReview(port = 0) {
   return { server, calls, held: () => held };
 }
 
+describe("what the review sends back", () => {
+  test("an approval or a review closed without feedback is nothing to pass on", () => {
+    expect(reviewNotes("")).toBeNull();
+    expect(reviewNotes("The user approved.\n")).toBeNull();
+    expect(reviewNotes("Review session closed without feedback.\n")).toBeNull();
+    expect(reviewNotes("# Code Review Feedback\n\nBug: x\n")).toBe("# Code Review Feedback\n\nBug: x");
+  });
+});
+
 describe("posting the comments", () => {
   test("aug's earlier comments are cleared before posting, so they are there once", async () => {
     const review = fakeReview();
@@ -308,16 +319,21 @@ describe("the guide action", () => {
   });
   afterEach(() => setGuideTool(null));
 
-  function answering(text: string) {
-    setBrain(
-      async (): Promise<BrainResult> => ({
+  let prompts: string[];
+
+  function answering(text: string, denied?: string[]) {
+    prompts = [];
+    setBrain(async (call): Promise<BrainResult> => {
+      prompts.push(call.prompt);
+      return {
         text,
         structured: null,
         sessionId: null,
         durationMs: 1,
         isError: false,
-      }),
-    );
+        ...(denied ? { denied } : {}),
+      };
+    });
   }
 
   function codingTask(worktree: string) {
@@ -428,6 +444,84 @@ describe("the guide action", () => {
     expect(turn.body).toContain(OPEN_REVIEW_TITLE);
     expect(turn.body).not.toContain("The review aug opens");
     expect(engine.desk.hasGuideReview(task.id)).toBe(true);
+  });
+
+  test("the skill is handed the diff as a file, the one its notes are placed on", async () => {
+    const dir = repo();
+    answering(`\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\``);
+    const { engine, task } = codingTask(dir);
+    const started = engine.desk.runAction(task.id, "guide");
+    if ("error" in started) throw new Error(started.error);
+    await started.done;
+    const file = join(paths.work(task.id), "guide-patch.diff");
+    expect(prompts[0]).toContain(file);
+    expect(prompts[0]).toContain("do not run git diff");
+    // Each hunk line carries its old and new numbers: div is new line 5.
+    expect(readFileSync(file, "utf8")).toMatch(/^\s+5 \+export function div/m);
+  });
+
+  test("a numbered patch puts old and new line numbers beside each hunk line", () => {
+    const text = [
+      "diff --git a/f.ts b/f.ts",
+      "--- a/f.ts",
+      "+++ b/f.ts",
+      "@@ -2,3 +2,3 @@",
+      " keep",
+      "-old",
+      "+new",
+      " --- a dash line in the code",
+      "\\ No newline at end of file",
+      "diff --git a/g.ts b/g.ts",
+      "--- a/g.ts",
+      "+++ b/g.ts",
+      "@@ -0,0 +1 @@",
+      "+only",
+      "",
+    ].join("\n");
+    const body = numberedPatch(text).split("\n").filter((l) => !l.startsWith("#"));
+    expect(body).toEqual([
+      "diff --git a/f.ts b/f.ts",
+      "--- a/f.ts",
+      "+++ b/f.ts",
+      "@@ -2,3 +2,3 @@",
+      "    2     2  keep",
+      "    3       -old",
+      "          3 +new",
+      "    4     4  --- a dash line in the code",
+      "\\ No newline at end of file",
+      "diff --git a/g.ts b/g.ts",
+      "--- a/g.ts",
+      "+++ b/g.ts",
+      "@@ -0,0 +1 @@",
+      "          1 +only",
+      "",
+    ]);
+  });
+
+  test("no change against the base is refused before the run spends anything", () => {
+    const dir = repo();
+    sh(dir, "git", "checkout", "-q", "main");
+    answering("unused");
+    const { engine, task } = codingTask(dir);
+    const started = engine.desk.runAction(task.id, "guide");
+    expect("error" in started && started.error).toContain("no change against main");
+    expect(prompts).toHaveLength(0);
+  });
+
+  test("a run that had a read denied says it may have missed things, not that nothing stood out", async () => {
+    const dir = repo();
+    const bare = { ...ANSWER, sections: [{ ...ANSWER.sections[0]!, diffs: [{ file: "math.ts", summary: "Adds `div`." }] }] };
+    answering(`\`\`\`json\n${JSON.stringify(bare)}\n\`\`\``, ["Bash mb=$(git merge-base main HEAD); git diff $mb"]);
+    const { engine, task } = codingTask(dir);
+    const started = engine.desk.runAction(task.id, "guide");
+    if ("error" in started) throw new Error(started.error);
+    const result = await started.done;
+    expect(result.ok).toBe(true);
+    expect(result.text).toContain("a read was denied");
+    const turn = store.turnsForTask(task.id).find((x) => x.role === TurnRole.action)!;
+    expect(turn.body).toContain("A read was denied (`Bash mb=$(git merge-base main HEAD); git diff $mb`)");
+    expect(turn.body).toContain("No review notes.");
+    expect(turn.body).not.toContain("nothing stood out");
   });
 
   test("a worktree that is gone is refused before the run spends anything", () => {

@@ -14,6 +14,12 @@ base, try `main`, then `master`.
 
 ## Read
 
+When you are given a diff file, that file is the change: read all of it
+(in parts if it is long) and skip step 1's git commands. Its hunk lines
+carry their old and new line numbers in two columns: those are the numbers
+for notes, not the line numbers of the file itself. Run one plain
+command per Bash call, no chaining or shell variables.
+
 1. `git merge-base <base> HEAD`, then `git diff <merge-base>`: that diff
    (it includes uncommitted edits) is what the guide describes, plus new
    files not yet added (`git status --short` lists them as `??`; read

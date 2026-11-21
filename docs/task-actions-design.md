@@ -231,7 +231,21 @@ Done (step 6), the guide:
   `plannotator guide import --snapshot` (`--pr` when the task has one).
   The turn lists the chapters and every finding; the TUI opens
   `plannotator review` on the Canvas, and what the owner writes there goes
-  to the agent when it exits (an approval sends nothing).
+  to the agent when it exits (an approval, or a review closed without
+  feedback, sends nothing: `reviewNotes`).
+- The skill is handed that patch (AUG-0185). A fork of a coding session
+  kept the session's habit of chained shell (`mb=$(git merge-base ...);
+  git diff $mb | head`), which aug's allow rules deny; the run then wrote
+  its chapters from memory with no findings. So aug takes the patch before
+  the run (no change: refused before anything is spent), writes it to
+  `guide-patch.diff` in the work dir with each hunk line's old and new
+  line numbers in two columns (`numberedPatch`: read through Read, a bare
+  diff's only numbers are the file's own, and haiku pinned notes to those),
+  and the prompt says to read it instead of running git. The guide is
+  fitted to that same patch. A run with a denied call says so on its turn
+  and toast ("a read was denied: it may have missed things") instead of
+  "nothing stood out". Checked with haiku on a scratch home: one Read of
+  the file, no git, three findings pinned to their lines.
 - Checked (plannotator 0.28.61, headless Chrome): Plannotator keeps v4
   notes but draws them nowhere: not in `plannotator review`'s Guides view,
   not in an exported page, not in an Inbox review (even with

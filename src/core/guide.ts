@@ -459,10 +459,12 @@ export async function saveGuide(opts: {
   base: string;
   dir: string;
   pr?: string;
+  // The patch the skill was handed; taken now when none was.
+  patch?: Patch;
 }): Promise<SavedGuide | { error: string }> {
   const parsed = parseGuide(opts.answer);
   if ("error" in parsed) return parsed;
-  const patch = patchFor(opts.cwd, opts.base);
+  const patch = opts.patch ?? patchFor(opts.cwd, opts.base);
   if ("error" in patch) return patch;
   const { guide, findings, lines, comments } = fitGuide(parsed, patch.text);
   if (guide.sections.length === 0) return { error: "no chapter of the guide names a file in the change" };
@@ -479,10 +481,84 @@ export async function saveGuide(opts: {
   return { id: saved.id, file, guide, findings, lines, comments, patch };
 }
 
+// The diff handed to the skill, so it reviews exactly the patch its notes
+// are placed on, and needs no shell to read it (a fork of a coding session
+// chains commands out of habit, and a chained command is denied).
+export const PATCH_FILE = "guide-patch.diff";
+
+export function writePatch(dir: string, patch: Patch): string {
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, PATCH_FILE);
+  writeFileSync(file, numberedPatch(patch.text));
+  return file;
+}
+
+// The diff with each hunk line's old and new line number in front: read
+// through the Read tool, a bare diff's only numbers are the file's own,
+// and a note pinned to those lands on the wrong lines.
+const NUMBERED_HEAD = [
+  "# The change as a diff. In each hunk the first column is the line's number",
+  "# in the old file, the second its number in the new file (blank where the",
+  "# line is not on that side), then the diff line. Review notes take these",
+  "# numbers: the new column, or the old one for a removed line (side old).",
+  "",
+].join("\n");
+
+export function numberedPatch(text: string): string {
+  const out: string[] = [];
+  let oldLine = 0;
+  let newLine = 0;
+  let oldLeft = 0;
+  let newLeft = 0;
+  const col = (n: number | null) => (n === null ? "" : String(n)).padStart(5);
+  for (const line of text.split("\n")) {
+    const hunk = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (hunk) {
+      oldLine = Number(hunk[1]);
+      oldLeft = hunk[2] === undefined ? 1 : Number(hunk[2]);
+      newLine = Number(hunk[3]);
+      newLeft = hunk[4] === undefined ? 1 : Number(hunk[4]);
+      out.push(line);
+      continue;
+    }
+    if (oldLeft <= 0 && newLeft <= 0) {
+      out.push(line);
+      continue;
+    }
+    if (line.startsWith("+")) {
+      out.push(`${col(null)} ${col(newLine++)} ${line}`);
+      newLeft--;
+    } else if (line.startsWith("-")) {
+      out.push(`${col(oldLine++)} ${col(null)} ${line}`);
+      oldLeft--;
+    } else if (line.startsWith(" ") || line === "") {
+      out.push(`${col(oldLine++)} ${col(newLine++)} ${line}`);
+      oldLeft--;
+      newLeft--;
+    } else out.push(line); // "\ No newline at end of file"
+  }
+  return NUMBERED_HEAD + out.join("\n");
+}
+
+// What the owner sent from the review, or null when there is nothing to
+// pass on: an approval, or a review closed without feedback.
+export function reviewNotes(text: string): string | null {
+  const notes = text.trim();
+  if (!notes) return null;
+  if (/^(The user approved|Review session closed without feedback)\.?$/i.test(notes)) return null;
+  return notes;
+}
+
 // What the action's turn says: the chapters, then the findings by file.
 // `opened`: aug opens the review now; else (a trigger ran it) the owner
-// opens it from the task's actions.
-export function guideMarkdown(saved: SavedGuide, opened = true): string {
+// opens it from the task's actions. `denied`: calls the run was refused,
+// so no notes may mean it did not look, not that nothing stood out.
+export function guideMarkdown(
+  saved: SavedGuide,
+  opts: { opened?: boolean; denied?: string[] } = {},
+): string {
+  const opened = opts.opened ?? true;
+  const denied = opts.denied ?? [];
   const notes = saved.guide.sections.flatMap((s) =>
     s.diffs.flatMap((d) => (d.notes ?? []).map((n) => ({ file: d.file, n }))),
   );
@@ -493,9 +569,17 @@ export function guideMarkdown(saved: SavedGuide, opened = true): string {
     saved.guide.intent,
     "",
     `${saved.guide.sections.length} chapter${saved.guide.sections.length === 1 ? "" : "s"}: ${saved.guide.sections.map((s) => s.title).join("; ")}.`,
+    ...(denied.length
+      ? [
+          `A read was denied (${denied.map((d) => `\`${d.slice(0, 120)}\``).join(", ")}): the review may have missed things.`,
+          "",
+        ]
+      : []),
     count
       ? `${count} review note${count === 1 ? "" : "s"}${unpinned > 0 ? ` (${unpinned} not on a changed line)` : ""}:`
-      : "No review notes: nothing stood out.",
+      : denied.length
+        ? "No review notes."
+        : "No review notes: nothing stood out.",
     ...saved.lines,
     "",
     opened

@@ -32,7 +32,7 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { baseKey, neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
-import { OPEN_REVIEW_TITLE, postComments } from "../core/guide";
+import { OPEN_REVIEW_TITLE, postComments, reviewNotes } from "../core/guide";
 import type { ActionResult } from "../core/run-action";
 import { actionsFor, keyedActions } from "../core/task-actions";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
@@ -495,11 +495,12 @@ export function useActions(dialogs: Dialogs) {
   }
 
   // What the owner sent from plannotator review goes to the agent, as if
-  // typed; an approval or a closed tab sends nothing. It carries aug's
-  // comments the owner kept, unlabelled, so the message says so.
+  // typed; an approval or a review closed without feedback sends nothing
+  // (reviewNotes). It carries aug's comments the owner kept, unlabelled, so
+  // the message says so.
   function sendReviewNotes(task: TaskRow, file: string) {
-    const notes = existsSync(file) ? readFileSync(file, "utf8").trim() : "";
-    if (!notes || /^The user approved\.?$/i.test(notes)) return;
+    const notes = reviewNotes(existsSync(file) ? readFileSync(file, "utf8") : "");
+    if (!notes) return;
     desk
       .say(task.id, `My notes from the guided review in Plannotator (with the review findings aug posted there that I kept):\n\n${notes}`)
       .then(
