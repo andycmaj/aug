@@ -47,7 +47,7 @@ import {
   type Patch,
   type ReviewComment,
 } from "@aug/code-review-plannotator/guide";
-import { branchCommits, planBatches, type BatchPlan } from "@aug/code-review-plannotator/batches";
+import { branchCommits, commitLog, planBatches, type BatchPlan } from "@aug/code-review-plannotator/batches";
 import { setGuideLog } from "@aug/code-review-plannotator/log";
 import { reviewInBatches } from "@aug/code-review-plannotator/run";
 import { guideMarkdown } from "./guide-turn";
@@ -391,9 +391,7 @@ async function runGuide(
   timing: (fields?: Record<string, unknown>) => void,
 ): Promise<ActionResult> {
   const cwd = task.worktree ?? shape.cwd;
-  const commits = branchCommits(cwd, plan.patch.mergeBase).length
-    ? git(cwd, ["log", "--no-merges", "--oneline", `${plan.patch.mergeBase}..HEAD`])
-    : "";
+  const commits = branchCommits(cwd, plan.patch.mergeBase).length ? commitLog(cwd, plan.patch.mergeBase) : "";
   const ran = await reviewInBatches({
     plan: plan.batches,
     commits,
@@ -433,11 +431,6 @@ async function runGuide(
   }
   log.info("guide calls", { task: task.id, calls: ran.calls, gaps: ran.gaps.length });
   return finishGuide(task, spec, turn, ran.guide, { event, patch: plan.patch, denied: ran.denied, gaps: ran.gaps }, timing);
-}
-
-function git(cwd: string, args: string[]): string {
-  const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
-  return r.exitCode === 0 ? r.stdout.toString().trim() : "";
 }
 
 // The guide saved into Plannotator, its findings kept beside it; its review

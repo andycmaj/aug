@@ -459,6 +459,11 @@ export interface SavedFindings {
   findings: Finding[];
 }
 
+export function writeFindings(dir: string, kept: SavedFindings): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, FINDINGS_FILE), `${JSON.stringify(kept, null, 2)}\n`);
+}
+
 export function readFindings(dir: string): SavedFindings | null {
   const file = join(dir, FINDINGS_FILE);
   if (!existsSync(file)) return null;
@@ -507,8 +512,7 @@ export async function saveGuide(opts: {
     log.warn("guide import failed", { file, error: saved.error });
     return { error: `plannotator did not take the guide: ${saved.error}` };
   }
-  const kept: SavedFindings = { id: saved.id, title: guide.title, base: patch.base, findings };
-  writeFileSync(join(opts.dir, FINDINGS_FILE), `${JSON.stringify(kept, null, 2)}\n`);
+  writeFindings(opts.dir, { id: saved.id, title: guide.title, base: patch.base, findings });
   return { id: saved.id, file, guide, findings, lines, comments, patch };
 }
 

@@ -24,6 +24,9 @@
     "packages/code-review-plannotator": {
       "name": "@aug/code-review-plannotator",
       "version": "0.0.1",
+      "bin": {
+        "code-review-plannotator": "./src/cli.ts",
+      },
     },
     "packages/core": {
       "name": "@aug/core",

@@ -27,7 +27,11 @@ one way: cli → tui → fixtures → core → code-review-plannotator.
   snapshot, import and live comments, and the job instructions
   (`skill/SKILL.md`, which aug's plugin ships as `aug:guide`). It knows
   nothing of aug: warnings go to `setGuideLog`, which aug points at
-  aug.log.
+  aug.log. Without aug, `review()` runs it end to end with any `ask`;
+  `claudeAsk` is one on a fresh read-only `claude -p` that keeps each
+  call's cost and tokens; `bun packages/code-review-plannotator/src/cli.ts
+  review [--model] [--batch-chars] [--no-plannotator] [--open]` writes
+  guide.json, guide-findings.json and usage.json (what evals compare).
 - **`@aug/fixtures`**: the demo day, the offline GitHub sim and a fake
   claude.
 - **`@aug/tui`**: the UI (`index.tsx`, app, components, context, terminal,

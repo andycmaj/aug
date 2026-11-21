@@ -85,6 +85,15 @@ export function branchCommits(cwd: string, mergeBase: string): string[][] {
     .filter((c) => c.length > 0);
 }
 
+// The branch's commits, one line each, for the chapters call.
+export function commitLog(cwd: string, mergeBase: string): string {
+  const r = Bun.spawnSync(["git", "-C", cwd, "log", "--no-merges", "--oneline", `${mergeBase}..HEAD`], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return r.exitCode === 0 ? r.stdout.toString().trim() : "";
+}
+
 // `foo.test.ts`, `test_foo.py`, `foo_test.go`, `FooSpec.scala` -> `foo`.
 export function stem(path: string): string {
   let name = basename(path);

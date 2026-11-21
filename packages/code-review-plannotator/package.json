@@ -9,5 +9,8 @@
     "./SKILL.md": "./skill/SKILL.md",
     "./test/*": "./test/*.ts",
     "./*": "./src/*.ts"
+  },
+  "bin": {
+    "code-review-plannotator": "./src/cli.ts"
   }
 }
