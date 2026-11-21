@@ -83,7 +83,7 @@ Code: `src/core/slack/confirm.ts`, the gate in `runMove` (`core/moves.ts`).
 
 An Assistant turn that answers a Slack line asks for moves as
 `assistant via Slack` (`AUG_ASKED_BY`), not `assistant`. From that asker,
-`start`, `stop`, `done`, `not_a_task` and `project_archive` do not run: the
+`start`, `stop`, `done`, `ignore` and `project_archive` do not run: the
 move answers "held for the owner's yes in Slack", and the hold is kept (kv
 `slack.remote.confirm`) with the turn that asked for it. Every other move
 runs as from the terminal.

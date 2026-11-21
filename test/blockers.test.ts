@@ -53,7 +53,7 @@ describe("blocked on another task", () => {
     await move("done", { task: ref(a.id) });
     expect(triggers(waits.id).at(-1)).toBe(`${ref(a.id)} done: api; still blocked by ${ref(b.id)}`);
     expect(laneOfTask(waits.id)).toBe(Lane.blocked);
-    engine.desk.notATask(b.id);
+    engine.desk.ignore(b.id);
     expect(triggers(waits.id).at(-1)).toBe(`${ref(b.id)} dropped: docs; nothing blocks this now`);
     expect(store.blockersOf(waits.id)).toEqual([]);
     expect(laneOfTask(waits.id)).toBe(Lane.yours);

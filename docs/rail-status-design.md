@@ -66,7 +66,7 @@ blocked, open.
   in `AGENT_MOVES` so an agent can say it is stuck on another task. A task
   cannot block on itself or on a task that (transitively) waits on it.
 - When a blocker is done or dropped (`lifecycle.taskClosed`,
-  `workFinished` that closes, `notATask`, a dropped stray), one function
+  `workFinished` that closes, `ignore`, a dropped stray), one function
   `blockerResolved(id)` removes its rows and adds a turn on each dependent:
   "AUG-0012 done: <title>; nothing else blocks this" (or "still waits on
   AUG-0013"). That turn is the notification; the row leaving the blocked

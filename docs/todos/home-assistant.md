@@ -61,7 +61,7 @@ The engine still makes every owner move, so tools ask it to:
 | Create tasks (any kind, in a project) | yes | yes |
 | Edit, move, prioritize, remind | yes | own task |
 | Start or stop agents | when asked | no |
-| Archive a project, not-a-task, bulk done | confirms in the thread first | no |
+| Archive a project, ignore, bulk done | confirms in the thread first | no |
 | Send to Slack or GitHub | never: drafts, I press Send | never |
 
 ## Steps

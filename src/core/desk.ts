@@ -509,10 +509,10 @@ export class Desk {
     });
   }
 
-  // Not a task: deleted if nothing was done on it, otherwise Mark done.
-  notATask(taskId: number, why = ""): void {
+  // Ignore: deleted if nothing was done on it, otherwise Mark done.
+  ignore(taskId: number, why = ""): void {
     this.cannot(
-      `not_a_task ${store.taskRef(taskId)}`,
+      `ignore ${store.taskRef(taskId)}`,
       "it filed its messages as FYI and taught triage",
       () => {
         const task = store.getTask(taskId);
@@ -524,7 +524,7 @@ export class Desk {
           this.config(),
           {
             taskId,
-            what: "Not a task: should have been FYI",
+            what: "Ignored: should have been FYI",
             before: task.kind,
             after: "fyi",
             note: why || null,
@@ -536,7 +536,7 @@ export class Desk {
           void this.drivers.for(task).stop(task);
           taskDropped(taskId);
           for (const m of store.messagesForTask(taskId))
-            store.fileMessage(m.id, Verdict.fyi, "you said: not a task", null);
+            store.fileMessage(m.id, Verdict.fyi, "you said: ignore", null);
         }
       },
     );
@@ -684,7 +684,7 @@ export class Desk {
   }
 
   // Triage again, as a new run. A message on a task is refused: a second
-  // pass could make a duplicate, and "not a task" is the way back. It is
+  // pass could make a duplicate, and "ignore" is the way back. It is
   // claimed like the worker claims, so the two never triage it at once; a
   // failure here is the owner's to see, so it is not retried for them.
   async retriage(messageId: number): Promise<RetriageResult> {
@@ -693,7 +693,7 @@ export class Desk {
     if (message.task_id !== null)
       return {
         ok: false,
-        why: `it is on ${store.taskRef(message.task_id)}: use not a task instead`,
+        why: `it is on ${store.taskRef(message.task_id)}: use ignore instead`,
       };
     if (!store.claimMessage(messageId))
       return { ok: false, why: "triage is running on it now" };
@@ -881,13 +881,13 @@ export class Desk {
 }
 
 // Whether from waits on to, directly or through the tasks it waits on.
-// Making a task is not undone: not a task drops it.
+// Making a task is not undone: ignore drops it.
 function madeTask(task: TaskRow | null): UndoDraft | null {
   return task
     ? {
         type: "cannot",
         what: `new ${store.taskRef(task.id)}`,
-        why: "a task made is not unmade: x (not a task) drops it",
+        why: "a task made is not unmade: x (ignore) drops it",
       }
     : null;
 }

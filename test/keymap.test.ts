@@ -114,7 +114,7 @@ test("the footer names what x and m do to the selected row", () => {
     const f = footer("rail", { ...base, item, kind });
     return { x: f.get("x"), m: f.get("m") };
   };
-  expect(words("task", "task")).toEqual({ x: "not a task", m: undefined });
+  expect(words("task", "task")).toEqual({ x: "ignore", m: undefined });
   expect(words("project")).toEqual({ x: "archive", m: undefined });
   expect(words("task", "home").x).toBeUndefined();
 });
@@ -228,7 +228,7 @@ test("typing in the chat box lists the box's keys, not the Canvas's", () => {
 
 test("a key's relevant binding wins over one that declines this row", () => {
   const work: HelpCtx = { ...quiet, item: "task", kind: "task", coding: false };
-  expect(shown(["rail", "app"], work).get("x")).toBe(Commands.NOT_TASK);
+  expect(shown(["rail", "app"], work).get("x")).toBe(Commands.IGNORE);
   const project: HelpCtx = { ...work, item: "project", kind: null };
   expect(shown(["rail", "app"], project).get("x")).toBe(
     Commands.PROJECT_ARCHIVE,
@@ -291,7 +291,7 @@ test("the Inbox's keys say what they do to each row", () => {
   const made = inbox("message", { inboxTask: true, inboxWork: true, inboxMade: true });
   expect(
     [made.get("x"), made.get("X"), made.get("t"), made.get("s"), made.get("m"), made.get("U")],
-  ).toEqual(["dismiss", "not a task", "go to task", "start", undefined, undefined]);
+  ).toEqual(["dismiss", "ignore", "go to task", "start", undefined, undefined]);
   const joined = inbox("message", { inboxTask: true, inboxWork: true });
   expect([joined.get("x"), joined.get("X"), joined.get("t")]).toEqual(["dismiss", undefined, "go to task"]);
   const unplaced = inbox("message");

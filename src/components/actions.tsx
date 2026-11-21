@@ -406,10 +406,10 @@ export function useActions(dialogs: Dialogs) {
     showToast(aug.desk.rejectDocs(task.id), 4000);
   }
 
-  function notATask(task: TaskRow) {
+  function ignore(task: TaskRow) {
     advanceFrom(`t${task.id}`);
-    desk.notATask(task.id);
-    showToast("Not a task: triage will learn from it");
+    desk.ignore(task.id);
+    showToast("Ignored: triage will learn from it");
   }
 
   function cyclePriority(task: TaskRow) {
@@ -528,12 +528,12 @@ export function useActions(dialogs: Dialogs) {
     else for (const m of rowMessages(row)) desk.readMessage(m.id);
   }
 
-  function inboxNotATask(row: InboxRow) {
+  function inboxIgnore(row: InboxRow) {
     if (row.type !== "message" || row.taskId === null) return false;
     const task = aug.task(row.taskId);
     if (!task) return false;
-    desk.notATask(task.id);
-    showToast("Not a task: triage will learn from it");
+    desk.ignore(task.id);
+    showToast("Ignored: triage will learn from it");
   }
 
   async function retriage(message: MessageRow) {
@@ -849,7 +849,7 @@ export function useActions(dialogs: Dialogs) {
       [Commands.DOC_REJECT]: onSystem(rejectDocs),
       [Commands.DOC_REVIEW]: onSystem(reviewDocs),
       // x means one thing per row type; each declines the others' rows.
-      [Commands.NOT_TASK]: () => {
+      [Commands.IGNORE]: () => {
         const item = get();
         if (
           item?.type !== "task" ||
@@ -857,7 +857,7 @@ export function useActions(dialogs: Dialogs) {
           item.task.kind === Kind.system
         )
           return false;
-        notATask(item.task);
+        ignore(item.task);
       },
       [Commands.PROJECT_ARCHIVE]: () => {
         const item = get();
@@ -909,7 +909,7 @@ export function useActions(dialogs: Dialogs) {
     goToTask,
     inboxMakeTask,
     inboxDismiss,
-    inboxNotATask,
+    inboxIgnore,
     retriage,
     openMessage,
     noiseFilter,

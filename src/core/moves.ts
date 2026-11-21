@@ -341,13 +341,13 @@ export const MOVES: Record<string, MoveSpec> = {
       return `asked for a redraft on ${ref(task)}`;
     },
   },
-  not_a_task: {
-    help: "Not a task: drop it and teach triage",
+  ignore: {
+    help: "Ignore: drop it and teach triage",
     task: true,
-    args: { why: { help: "why it is not a task" } },
+    args: { why: { help: "why to ignore it" } },
     run(desk, task, args) {
-      desk.notATask(task!.id, args.why ?? "");
-      return `${ref(task)}: not a task`;
+      desk.ignore(task!.id, args.why ?? "");
+      return `${ref(task)}: ignored`;
     },
   },
   noise: {

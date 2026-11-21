@@ -187,7 +187,7 @@ describe("re-running triage", () => {
     const again = await engine.desk.retriage(m.id);
     expect(again).toEqual({
       ok: false,
-      why: `it is on ${store.taskRef(out.taskId!)}: use not a task instead`,
+      why: `it is on ${store.taskRef(out.taskId!)}: use ignore instead`,
     });
     expect(store.triageRunsFor(m.id)).toHaveLength(1);
   });

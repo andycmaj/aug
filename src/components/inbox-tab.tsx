@@ -131,9 +131,9 @@ export function useInboxTab(opts: {
       if (r.read) return false;
       opts.actions.inboxDismiss(r);
     }),
-    [Commands.NOT_TASK]: onMessage((r) => {
+    [Commands.IGNORE]: onMessage((r) => {
       if (r.result !== InboxResult.task) return false;
-      return opts.actions.inboxNotATask(r);
+      return opts.actions.inboxIgnore(r);
     }),
     [Commands.OPEN_URL]: onMessage((r) => opts.actions.openMessage(r.message)),
     [Commands.INBOX_NOISE]: onMessage((r) => {

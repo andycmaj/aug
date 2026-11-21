@@ -1,4 +1,4 @@
-// Correcting it teaches it. Every correction (Not a task, a changed kind or
+// Correcting it teaches it. Every correction (Ignore, a changed kind or
 // priority, an edited or redrafted draft) is evidence; one small model call
 // turns it into a line in LEARNED.md, which triage and the agents read on the
 // next message like it.

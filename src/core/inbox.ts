@@ -99,7 +99,7 @@ export type InboxRow =
     };
 
 // Where a message went, from what the message says now: an owner's move
-// after triage (not a task, make it a task) changes it, and the row follows.
+// after triage (ignore, make it a task) changes it, and the row follows.
 export function messageResult(m: MessageRow): InboxResult {
   if (m.from_me) return InboxResult.own;
   if (m.task_id !== null)

@@ -265,9 +265,9 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   // one command per meaning, so the footer and help name the one that applies.
   {
     key: "x",
-    cmd: Commands.NOT_TASK,
-    desc: "not a task (triage learns from it)",
-    help: "not a task",
+    cmd: Commands.IGNORE,
+    desc: "ignore (triage learns from it)",
+    help: "ignore",
     relevant: isWork,
   },
   {
@@ -621,9 +621,9 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     },
     {
       key: "shift+x",
-      cmd: Commands.NOT_TASK,
-      desc: "Inbox: not a task (drops the task it made; triage learns)",
-      help: "not a task",
+      cmd: Commands.IGNORE,
+      desc: "Inbox: ignore (drops the task it made; triage learns)",
+      help: "ignore",
       relevant: (c) => onInbox(c) && c.item === "message" && Boolean(c.inboxMade),
     },
     {

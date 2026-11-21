@@ -13,7 +13,7 @@ export const CONFIRM_MOVES: ReadonlySet<string> = new Set([
   "start",
   "stop",
   "done",
-  "not_a_task",
+  "ignore",
   "project_archive",
 ]);
 
@@ -25,7 +25,7 @@ const VERB_WORDS: Record<string, string> = {
   start: "start the agent on",
   stop: "stop the agent on",
   done: "mark done",
-  not_a_task: "drop as not a task",
+  ignore: "ignore",
   project_archive: "archive project",
 };
 

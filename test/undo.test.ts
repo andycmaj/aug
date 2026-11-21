@@ -180,7 +180,7 @@ describe("ctrl+z undoes the last move", () => {
     });
     expect(store.getTask(t.id)!.priority).toBe(Priority.urgent);
     expect((await undo()).text).toBe(`undid: priority ${ref(t.id)}`);
-    expect(await undo()).toEqual({ ok: false, text: `Can't undo new ${ref(t.id)}: a task made is not unmade: x (not a task) drops it` });
+    expect(await undo()).toEqual({ ok: false, text: `Can't undo new ${ref(t.id)}: a task made is not unmade: x (ignore) drops it` });
     expect(await undo()).toEqual({ ok: false, text: "Nothing to undo" });
   });
 
