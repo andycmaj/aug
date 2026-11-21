@@ -9,10 +9,19 @@
 // answer is a turn of its own (TurnRole.action), so nothing that reads the
 // agent's turns (resume, denials, the latest answer) mistakes it for one.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
+import quizSkill from "../../contrib/aug-plugin/skills/quiz/SKILL.md" with { type: "text" };
 import summarizeSkill from "../../contrib/aug-plugin/skills/summarize/SKILL.md" with { type: "text" };
-import { declaredRules, pluginSkillFiles } from "./capabilities";
+import { claudeDir, declaredRules, pluginSkillFiles } from "./capabilities";
 import type { AugConfig } from "./config";
 import { logger } from "./log";
 import { paths } from "./paths";
@@ -30,7 +39,8 @@ export const ActionVia = {
   fork: "fork",
   // The task's own agent is told to run it, as if the owner typed it.
   agent: "agent",
-  // Interactive claude in a split of the agent's window (not built yet).
+  // Interactive claude in a split of the agent's window, or on the Canvas
+  // when it has none: for a skill that talks with the owner (a quiz).
   pane: "pane",
 } as const;
 export type ActionVia = (typeof ActionVia)[keyof typeof ActionVia];
@@ -84,11 +94,21 @@ export const BUILTIN_ACTIONS: Record<string, Omit<ActionSpec, "name">> = {
     via: ActionVia.fork,
     output: ActionOutput.turn,
   },
+  quiz: {
+    title: "Quiz me on the change",
+    skill: "aug:quiz",
+    args: "task {ref} ({title}); base {base}; 5 questions",
+    via: ActionVia.pane,
+    kinds: [Kind.coding],
+    needs: [ActionNeed.worktree],
+    output: ActionOutput.none,
+  },
 };
 
 // The skills of aug's own plugin, by name, as shipped.
 const AUG_SKILLS: Record<string, string> = {
   summarize: summarizeSkill,
+  quiz: quizSkill,
 };
 
 export const AUG_PLUGIN = "aug";
@@ -183,7 +203,6 @@ export function whyNot(spec: ActionSpec, task: TaskRow): string | null {
     if (need === ActionNeed.pr && !taskPr(task))
       return `${spec.name} needs a pull request on the task`;
   }
-  if (spec.via === ActionVia.pane) return `${spec.name} runs in a pane, which is not built yet`;
   return null;
 }
 
@@ -221,31 +240,113 @@ export function fillArgs(template: string, task: TaskRow): string {
   );
 }
 
-// What the prompt says: the skill as a slash command, then its args.
-export function invocation(spec: ActionSpec, task: TaskRow): string {
+// What the prompt says: the skill as a slash command, then its args. A
+// wrapped user skill is invoked by its wrapper's name (`as`).
+export function invocation(
+  spec: ActionSpec,
+  task: TaskRow,
+  as: string = spec.skill,
+): string {
   const args = spec.args ? fillArgs(spec.args, task) : "";
-  return `/${spec.skill}${args ? ` ${args}` : ""}`;
+  return `/${as}${args ? ` ${args}` : ""}`;
 }
 
-// The plugin folder a skill comes from, when aug can load it headless: its
-// own plugin, or the plugin the action's capability grants.
-export function skillPlugin(
+// Where a headless run loads a skill from, and the name it is invoked by:
+// aug's own plugin, the plugin the action's capability grants, or a bare
+// user skill (~/.claude/skills/<name>) wrapped in a plugin of its own, since
+// headless claude skips the user's settings. `wrapped` says the skill's
+// allowed-tools were not vetted by a capability.
+export interface SkillSource {
+  dir: string;
+  as: string;
+  wrapped: boolean;
+}
+
+export function skillSource(
   spec: ActionSpec,
   capabilityDirs: string[],
-): string | null {
+): SkillSource | null {
   const [plugin, name] = spec.skill.includes(":")
     ? (spec.skill.split(":", 2) as [string, string])
     : [null, spec.skill];
   if (plugin === AUG_PLUGIN) {
     const dir = ensureAugPlugin();
-    return existsSync(join(dir, "skills", name)) ? dir : null;
+    return existsSync(join(dir, "skills", name))
+      ? { dir, as: spec.skill, wrapped: false }
+      : null;
   }
-  if (!plugin) return null;
-  return (
-    capabilityDirs.find((dir) =>
-      pluginSkillFiles(dir).some((f) => f.includes(`/skills/${name}/`) || f.endsWith(`/${name}.md`)),
-    ) ?? null
+  if (!plugin) {
+    const dir = wrapUserSkill(name);
+    return dir ? { dir, as: `${WRAP_PLUGIN}:${name}`, wrapped: true } : null;
+  }
+  const dir = capabilityDirs.find((d) =>
+    pluginSkillFiles(d).some(
+      (f) => f.includes(`/skills/${name}/`) || f.endsWith(`/${name}.md`),
+    ),
   );
+  return dir ? { dir, as: spec.skill, wrapped: false } : null;
+}
+
+export const WRAP_PLUGIN = "aug-user";
+
+export function userSkillDir(name: string): string {
+  return join(claudeDir(), "skills", name);
+}
+
+// A plugin folder holding one user skill (linked, so an edit to the skill
+// applies), under AUG_HOME. Remade each time: the link may have moved.
+export function wrapUserSkill(name: string): string | null {
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) return null;
+  const source = userSkillDir(name);
+  if (!existsSync(join(source, "SKILL.md"))) return null;
+  const dir = join(paths.home(), "wrapped", name);
+  try {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+    mkdirSync(join(dir, "skills"), { recursive: true });
+    writeFileSync(
+      join(dir, ".claude-plugin", "plugin.json"),
+      `${JSON.stringify({ name: WRAP_PLUGIN, version: "1.0.0", description: `Your ${name} skill, for aug's headless runs.` }, null, 2)}\n`,
+    );
+    symlinkSync(realpathSync(source), join(dir, "skills", name));
+    return dir;
+  } catch (err) {
+    log.warn("could not wrap a user skill", { name, err });
+    return null;
+  }
+}
+
+// The interactive claude a pane action runs: the skill as its first prompt,
+// with aug's plugin (or the capability's) loaded; a bare user skill needs
+// nothing, since interactive claude loads the user's settings. AUG_TASK_ID
+// without a session id keeps aug's hooks off it: it is not the task's agent.
+export function paneCommand(
+  spec: ActionSpec,
+  task: TaskRow,
+  capabilityDirs: string[],
+): { argv: string[]; env: Record<string, string> } | { error: string } {
+  const plugin = spec.skill.includes(":") ? spec.skill.split(":", 1)[0] : null;
+  let dirs: string[] = [];
+  if (plugin) {
+    const source = skillSource(spec, capabilityDirs);
+    // A plugin the user installed loads with their settings anyway.
+    if (source) dirs = [source.dir];
+    else if (plugin === AUG_PLUGIN) return { error: `skill ${spec.skill} not found in aug's plugin` };
+  } else if (!existsSync(join(userSkillDir(spec.skill), "SKILL.md"))) {
+    return { error: `skill ${spec.skill} not found in ${userSkillDir(spec.skill)}` };
+  }
+  const env = { AUG_TASK_ID: String(task.id) };
+  return {
+    argv: [
+      "env",
+      ...Object.entries(env).map(([k, v]) => `${k}=${v}`),
+      "claude",
+      ...(spec.model ? ["--model", spec.model] : []),
+      ...dirs.flatMap((d) => ["--plugin-dir", d]),
+      invocation(spec, task),
+    ],
+    env,
+  };
 }
 
 // The rules aug's own skills declare: trusted, since aug wrote them.

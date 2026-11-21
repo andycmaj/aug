@@ -11,6 +11,7 @@ import {
   DENIED_STEP,
   GH_READS,
   grantSteps,
+  pluginWidens,
   SHELL_HOWTO,
 } from "./capabilities";
 import type { AugConfig } from "./config";
@@ -18,7 +19,9 @@ import { now } from "./db";
 import type { MadeFile } from "./files";
 import { errorMessage, logger } from "./log";
 import { linkLine, projectContext } from "./lookup";
+import { mux } from "./mux";
 import { paths } from "./paths";
+import { liveWindow } from "./projects";
 import { toolsEnv, toolsRules, TOOLS_NAME } from "./self";
 import * as store from "./store";
 import {
@@ -28,7 +31,8 @@ import {
   augSkillRules,
   AUG_PLUGIN,
   invocation,
-  skillPlugin,
+  paneCommand,
+  skillSource,
   type ActionSpec,
 } from "./task-actions";
 import { transcript } from "./transcript";
@@ -46,6 +50,11 @@ export interface ActionResult {
   ok: boolean;
   // One line for a toast.
   text: string;
+  // A pane action with no agent window to split: the TUI runs this on the
+  // Canvas instead.
+  terminal?: { argv: string[]; cwd: string; env: Record<string, string> };
+  // A pane action opened in a split of the agent's window.
+  pane?: boolean;
 }
 
 export interface ActionRun {
@@ -77,7 +86,12 @@ function actionSystem(spec: ActionSpec): string {
   ].join("\n");
 }
 
-function actionPrompt(spec: ActionSpec, task: TaskRow, forked: boolean): string {
+function actionPrompt(
+  spec: ActionSpec,
+  task: TaskRow,
+  forked: boolean,
+  as: string,
+): string {
   const turns = store
     .turnsForTask(task.id)
     .filter((t) => t.role !== TurnRole.action)
@@ -95,7 +109,7 @@ function actionPrompt(spec: ActionSpec, task: TaskRow, forked: boolean): string 
         ? `The task's chat so far, oldest first:\n${transcript(turns)}`
         : "",
     "",
-    invocation(spec, task),
+    invocation(spec, task, as),
   ]
     .filter((line, i, all) => line !== "" || all[i - 1] !== "")
     .join("\n");
@@ -121,47 +135,36 @@ export function startAction(
   task: TaskRow,
   spec: ActionSpec,
 ): ActionRun | { error: string } {
+  if (spec.via === ActionVia.pane) return startPane(config, task, spec);
   if (spec.via !== ActionVia.headless && spec.via !== ActionVia.fork)
     return { error: `${spec.name} does not run headless (via ${spec.via})` };
   const key = runKey(task.id, spec.name);
   if (running.has(key)) return { error: `${spec.name} is already running here` };
 
-  // One capability for this run only, whatever the general role has.
-  const grant = spec.capability
-    ? capabilityGrant("general", {
-        ...config,
-        capabilities: {
-          ...config.capabilities,
-          grants: { general: [spec.capability] },
-        },
-      })
-    : { allow: [], tools: [], pluginDirs: [], commands: [] };
-  const plugin = skillPlugin(spec, grant.pluginDirs);
-  if (!plugin) {
-    const where = spec.skill.startsWith(`${AUG_PLUGIN}:`)
-      ? `aug's plugin (${augPluginDir()})`
-      : spec.capability
-        ? `the plugin capability "${spec.capability}" grants`
-        : "a plugin: name one with capability in its actions entry";
-    return { error: `skill ${spec.skill} not found in ${where}` };
+  const grant = oneGrant(config, spec);
+  const source = skillSource(spec, grant.pluginDirs);
+  if (!source) return { error: notFound(spec) };
+  // A user skill's allowed-tools join the run's allow list once it loads:
+  // like a plugin's, they must stay within what the capability grants.
+  if (source.wrapped) {
+    const extra = pluginWidens(source.dir, grant.commands);
+    if (extra.length)
+      return {
+        error: `${spec.skill} asks for ${extra.join(", ")}: grant them with a capability in its actions entry`,
+      };
   }
 
   const session = spec.via === ActionVia.fork ? forkable(task) : null;
   const cwd = session?.cwd ?? cwdFor(task);
-  const turn = store.addTurn({
-    taskId: task.id,
-    role: TurnRole.action,
-    author: spec.name,
-    status: TurnStatus.running,
-  });
-  store.updateTurn(turn.id, { about: spec.title });
+  const turn = actionTurn(task, spec);
   running.add(key);
   log.info("action start", { task: task.id, action: spec.name, fork: !!session });
 
   const done = run(config, task, spec, turn, {
     cwd,
     session: session?.id,
-    pluginDirs: [...new Set([plugin, ...grant.pluginDirs])],
+    as: source.as,
+    pluginDirs: [...new Set([source.dir, ...grant.pluginDirs])],
     tools: [...new Set([...ACTION_TOOLS, ...grant.tools])],
     allow: [
       ...new Set([
@@ -175,9 +178,87 @@ export function startAction(
   return { turnId: turn.id, done };
 }
 
+// One capability for this run only, whatever the general role has.
+function oneGrant(config: AugConfig, spec: ActionSpec) {
+  return spec.capability
+    ? capabilityGrant("general", {
+        ...config,
+        capabilities: {
+          ...config.capabilities,
+          grants: { general: [spec.capability] },
+        },
+      })
+    : { allow: [], tools: [], pluginDirs: [], commands: [] };
+}
+
+function notFound(spec: ActionSpec): string {
+  const where = spec.skill.startsWith(`${AUG_PLUGIN}:`)
+    ? `aug's plugin (${augPluginDir()})`
+    : spec.skill.includes(":")
+      ? spec.capability
+        ? `the plugin capability "${spec.capability}" grants`
+        : "a plugin: name one with capability in its actions entry"
+      : "~/.claude/skills";
+  return `skill ${spec.skill} not found in ${where}`;
+}
+
+function actionTurn(task: TaskRow, spec: ActionSpec): TurnRow {
+  const turn = store.addTurn({
+    taskId: task.id,
+    role: TurnRole.action,
+    author: spec.name,
+    status: TurnStatus.running,
+  });
+  store.updateTurn(turn.id, { about: spec.title });
+  return turn;
+}
+
+// A pane action: interactive claude in a split of the agent's window (shown
+// wherever that window is, the Canvas included), or on the Canvas when the
+// task has no window. What is said there stays there: its turn says only
+// that it was opened. Not held as running: a second quiz is the owner's to
+// open.
+function startPane(
+  config: AugConfig,
+  task: TaskRow,
+  spec: ActionSpec,
+): ActionRun | { error: string } {
+  const command = paneCommand(spec, task, oneGrant(config, spec).pluginDirs);
+  if ("error" in command) return command;
+  const cwd = cwdFor(task);
+  const turn = actionTurn(task, spec);
+  const finish = (where: string) =>
+    store.updateTurn(turn.id, {
+      status: TurnStatus.done,
+      body: `Opened ${where}: \`${invocation(spec, task)}\``,
+      finished_at: now(),
+    });
+  const done = (async (): Promise<ActionResult> => {
+    const window = await liveWindow(task.id).catch(() => null);
+    if (window) {
+      try {
+        await mux().splitPane({ paneId: window, cwd, argv: command.argv, zoom: true });
+        finish("in a split of the agent's window");
+        return { ok: true, text: `${spec.title}: opened beside the agent`, pane: true };
+      } catch (err) {
+        log.warn("pane split failed; opening on the Canvas", { task: task.id, err });
+      }
+    }
+    finish("on the Canvas");
+    return {
+      ok: true,
+      text: `${spec.title}: opened on the Canvas`,
+      terminal: { argv: command.argv.slice(command.argv.indexOf("claude")), cwd, env: command.env },
+    };
+  })();
+  return { turnId: turn.id, done };
+}
+
 interface RunShape {
   cwd: string;
   session?: string;
+  // The skill's name as this run loads it (a wrapped user skill's differs).
+  as: string;
   pluginDirs: string[];
   tools: string[];
   allow: string[];
@@ -194,7 +275,7 @@ async function run(
   const timing = log.time("action done", { task: task.id, action: spec.name });
   try {
     const result = await think({
-      prompt: actionPrompt(spec, task, Boolean(shape.session)),
+      prompt: actionPrompt(spec, task, Boolean(shape.session), shape.as),
       system: actionSystem(spec),
       model: spec.model ?? config.brain.agentModel,
       cwd: shape.cwd,

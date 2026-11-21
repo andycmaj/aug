@@ -32,6 +32,7 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
+import type { ActionResult } from "../core/run-action";
 import { actionsFor, keyedActions } from "../core/task-actions";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
 import type { NoiseRule } from "../core/config";
@@ -81,6 +82,7 @@ export function useActions(dialogs: Dialogs) {
   const aug = useAug();
   const terminals = useTerminals();
   const { showToast } = useToast();
+  const { setActivePane } = useFocus();
   const desk = aug.desk;
   const editor = useEditor();
   const { attachViewer } = useViewer();
@@ -434,9 +436,41 @@ export function useActions(dialogs: Dialogs) {
       return;
     }
     showToast(`${started.title}: running on ${taskRef(task.id)}`, 3000);
-    void started.done.then((r) =>
-      showToast(r.text, r.ok ? 4000 : 6000, r.ok ? "info" : "error"),
-    );
+    void started.done.then((r) => {
+      showToast(r.text, r.ok ? 4000 : 6000, r.ok ? "info" : "error");
+      // A pane action: shown where the owner can answer it.
+      if (r.terminal) openActionTerminal(task, started.title, r.terminal);
+      else if (r.pane) {
+        goToTask(task.id);
+        void attachViewer(task.id);
+      }
+    });
+  }
+
+  // A pane action with no agent window: interactive claude on the Canvas,
+  // closed when it exits.
+  function openActionTerminal(
+    task: TaskRow,
+    title: string,
+    run: NonNullable<ActionResult["terminal"]>,
+  ) {
+    const id = `action-${task.id}`;
+    goToTask(task.id);
+    terminals.close(id);
+    terminals.open({
+      id,
+      title: `${taskRef(task.id)} ${title}`,
+      kind: "review",
+      taskId: task.id,
+      argv: run.argv,
+      cwd: run.cwd,
+      env: run.env,
+      onExit: () => {
+        terminals.close(id);
+        if (aug.selectedKey() === `t${task.id}`) setActivePane("canvas");
+      },
+    });
+    setTimeout(() => setActivePane("canvas"), 0);
   }
 
   // The action keys bound at start (app.tsx builds the keymap from the same).

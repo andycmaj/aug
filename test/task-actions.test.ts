@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -21,6 +28,7 @@ import {
   invocation,
   registeredActions,
   whyNot,
+  WRAP_PLUGIN,
 } from "../src/core/task-actions";
 import { transcript } from "../src/core/transcript";
 import { Kind, SessionKind, TurnRole, type TaskRow } from "../src/core/types";
@@ -28,6 +36,7 @@ import { FakeMux } from "./fake-mux";
 import { config, freshHome, testConfig } from "./helpers";
 
 let engine: Engine;
+let mux: FakeMux;
 let calls: BrainCall[];
 let answer: (call: BrainCall) => Partial<BrainResult>;
 
@@ -46,7 +55,8 @@ beforeEach(() => {
       ...answer(call),
     };
   });
-  setMux(new FakeMux());
+  mux = new FakeMux();
+  setMux(mux);
   engine = new Engine({ config: testConfig() });
 });
 
@@ -109,9 +119,11 @@ describe("which rows an action applies to", () => {
     expect(whyNot(review, task(Kind.coding, { worktree: "/tmp/wt" }))).toBeNull();
   });
 
-  test("a pane action is not offered yet", () => {
-    const c = withActions({ quiz: { skill: "quiz-me", via: "pane" } });
-    expect(actionsFor(c, task()).map((a) => a.name)).not.toContain("quiz");
+  test("quiz: coding work with a checkout", () => {
+    const names = (t: TaskRow) => actionsFor(config(), t).map((a) => a.name);
+    expect(names(task(Kind.general))).not.toContain("quiz");
+    expect(names(task())).not.toContain("quiz");
+    expect(names(task(Kind.coding, { worktree: "/tmp/wt" }))).toContain("quiz");
   });
 });
 
@@ -235,5 +247,107 @@ describe("what agents read back", () => {
     const text = transcript(store.turnsForTask(t.id));
     expect(text).toContain("ran the summarize action");
     expect(text).not.toContain("You (the agent) answered");
+  });
+});
+
+describe("a pane action (quiz)", () => {
+  function codingTask() {
+    const wt = mkdtempSync(join(tmpdir(), "aug-wt-"));
+    return task(Kind.coding, { worktree: wt });
+  }
+
+  test("no agent window: interactive claude on the Canvas, aug's plugin loaded", async () => {
+    const t = codingTask();
+    const started = engine.desk.runAction(t.id, "quiz");
+    if ("error" in started) throw new Error(started.error);
+    const result = await started.done;
+    expect(result.ok).toBe(true);
+    const run = result.terminal!;
+    expect(run.argv[0]).toBe("claude");
+    expect(run.argv).toContain(augPluginDir());
+    expect(run.argv.at(-1)).toStartWith("/aug:quiz task ");
+    expect(run.cwd).toBe(t.worktree!);
+    // Its hooks see a task but no session: not taken for the agent.
+    expect(run.env).toEqual({ AUG_TASK_ID: String(t.id) });
+    expect(calls).toHaveLength(0);
+    const turn = store.turnsForTask(t.id).find((x) => x.role === TurnRole.action)!;
+    expect(turn.status).toBe("done");
+    expect(turn.body).toContain("on the Canvas");
+  });
+
+  test("an agent window: a zoomed split of it", async () => {
+    const t = codingTask();
+    mux.windows.push({
+      id: "@7",
+      sessionId: "$1",
+      name: "fix-build",
+      taskId: t.id,
+      cwd: t.worktree!,
+      env: {},
+      argv: [],
+    } as never);
+    const started = engine.desk.runAction(t.id, "quiz");
+    if ("error" in started) throw new Error(started.error);
+    const result = await started.done;
+    expect(result.pane).toBe(true);
+    expect(result.terminal).toBeUndefined();
+    const split = mux.splits.at(-1)!;
+    expect(split.paneId).toBe("@7");
+    expect(split.zoom).toBe(true);
+    expect(split.argv.slice(0, 2)).toEqual(["env", `AUG_TASK_ID=${t.id}`]);
+  });
+
+  test("pointed at a user skill that is not there, it says where it looked", async () => {
+    const claude = mkdtempSync(join(tmpdir(), "aug-claude-"));
+    process.env.CLAUDE_CONFIG_DIR = claude;
+    try {
+      const c = withActions({ quiz: { skill: "quiz-me" } });
+      const e = new Engine({ config: { ...testConfig(), get: () => c } });
+      const r = e.desk.runAction(codingTask().id, "quiz");
+      expect("error" in r && r.error).toContain(join(claude, "skills", "quiz-me"));
+    } finally {
+      delete process.env.CLAUDE_CONFIG_DIR;
+    }
+  });
+});
+
+describe("a bare user skill, headless", () => {
+  function userSkill(name: string, allowed: string) {
+    const claude = mkdtempSync(join(tmpdir(), "aug-claude-"));
+    mkdirSync(join(claude, "skills", name), { recursive: true });
+    writeFileSync(
+      join(claude, "skills", name, "SKILL.md"),
+      `---\nname: ${name}\ndescription: x\nallowed-tools: ${allowed}\n---\nDo it.\n`,
+    );
+    process.env.CLAUDE_CONFIG_DIR = claude;
+  }
+
+  test("is wrapped in a plugin of its own and invoked by that name", async () => {
+    userSkill("recap", "Read, Grep");
+    try {
+      const c = withActions({ recap: { skill: "recap", via: "headless" } });
+      const e = new Engine({ config: { ...testConfig(), get: () => c } });
+      const started = e.desk.runAction(task(Kind.general).id, "recap");
+      if ("error" in started) throw new Error(started.error);
+      await started.done;
+      const call = calls.at(-1)!;
+      expect(call.prompt).toContain(`/${WRAP_PLUGIN}:recap`);
+      const dir = call.pluginDirs!.find((d) => d.includes("wrapped"))!;
+      expect(lstatSync(join(dir, "skills", "recap")).isSymbolicLink()).toBe(true);
+    } finally {
+      delete process.env.CLAUDE_CONFIG_DIR;
+    }
+  });
+
+  test("one that asks for more than its capability grants is refused", () => {
+    userSkill("pusher", "Bash(git push:*)");
+    try {
+      const c = withActions({ pusher: { skill: "pusher", via: "headless" } });
+      const e = new Engine({ config: { ...testConfig(), get: () => c } });
+      const r = e.desk.runAction(task(Kind.general).id, "pusher");
+      expect("error" in r && r.error).toContain("Bash(git push:*)");
+    } finally {
+      delete process.env.CLAUDE_CONFIG_DIR;
+    }
   });
 });

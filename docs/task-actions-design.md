@@ -206,15 +206,34 @@ Done (steps 1-3):
   worktree ran the skill, and its declared `git log`/`git diff` rules
   allowed those calls.
 
+Done (steps 4-5):
+
+- `actions.<name>.key` binds an action on the rail and the Canvas at start
+  (`buildKeymap(keys, keyedActions(config))`); a key aug already uses there,
+  or one an earlier action took, is refused (`actionKeys`) and logged, and
+  the action stays in the picker. `.` also works on the Board's Columns.
+- `aug:quiz` (`pane`, coding with a worktree). The pane runner splits the
+  agent's live window, zoomed, with `claude --plugin-dir <aug's plugin>
+  "/aug:quiz ..."`; with no window it opens on the Canvas. The pane claude
+  gets `AUG_TASK_ID` and no `AUG_SESSION_ID`, so neither aug hook takes it
+  for the task's agent (or adopts it). Its turn records only that it opened.
+  Checked for real (haiku, private tmux): the skill read this branch's diff
+  and asked its first question.
+- A bare user skill (`"skill": "quiz-me"`) runs headless wrapped in a plugin
+  of its own (`AUG_HOME/wrapped/<name>`, the skill linked in, invoked as
+  `/aug-user:<name>`). Its `allowed-tools` must stay within the action's
+  capability (`pluginWidens`), or it is refused with the rules it asked for.
+  In a pane it needs no wrapping: interactive claude loads the user's skills.
+- `aug install actions` is left out: every runner loads aug's plugin with
+  `--plugin-dir`, so nothing needs it installed. It would only make
+  `/aug:summarize` available in the owner's own sessions.
+
 Still to build:
 
-4. Per-action keys in `buildKeymap`, and the keymap clash test.
-5. The `pane` runner and `aug:quiz`; `aug install actions`; a bare user
-   skill wrapped into a throwaway plugin for headless runs.
 6. `aug:guide` (snapshot v4 + import), after checking the review UI draws
    notes. Test it against the offline review simulator (AUG-0179).
 7. Triggers: the `runAction` triage effect, lifecycle events, `action_runs`.
-8. The `action` move; an AGENTS.md architecture bullet; README config.
+8. The `action` move; README config.
 
 ## Decisions (owner, 2026-11-20)
 
