@@ -144,9 +144,9 @@ matched by plain rules (no model call), in the noise rules' shape:
   back to `headless` over the turns.
 - **guide** (`aug:guide`, `fork`, output `guide`). One run does both the
   guided review and the agentic review: chapters, plus findings pinned to
-  their lines. As built, see Build order, step 6: Plannotator keeps notes
-  but draws them nowhere, so findings are also written into each chapter's
-  overview.
+  their lines. As built, see Build order, step 6: Plannotator keeps a saved
+  guide's notes but draws them nowhere, so aug posts the findings as
+  comments into the review it opens.
 - **quiz** (`aug:quiz`, shipped with aug, `pane`, `kinds: [coding]`). The
   skill and its `args` are configurable: point `skill` at your own quiz skill
   to use it instead.
@@ -235,16 +235,29 @@ Done (step 6), the guide:
 - Checked (plannotator 0.28.61, headless Chrome): Plannotator keeps v4
   notes but draws them nowhere: not in `plannotator review`'s Guides view,
   not in an exported page, not in an Inbox review (even with
-  `inboxCodeReview` on). So each chapter's findings are also written into
-  its overview under **Review notes**, which every view draws: the guided
-  review and the agentic review in one view, the owner's decision 5. The
-  notes stay in the snapshot for when Plannotator draws them.
+  `inboxCodeReview` on). The notes stay in the snapshot for when it does.
+- What it draws instead: comments posted into a live review
+  (`POST /api/external-annotations`, in 0.28.61 and 0.29). The guide's
+  review starts on a port aug picks (`PLANNOTATOR_PORT`), and the TUI posts
+  every finding once it answers (`postComments`, retrying for a minute): on
+  its lines when one hunk shows them, else on its file naming the lines;
+  Bug and Risk as concerns. They are pinned in the diff and in the guided
+  review alike, from "aug guide" (source `aug-guide`): decision 5. The
+  owner's Send Feedback carries every comment still there, unlabelled, so
+  the message to the agent says it includes the findings the owner kept.
+  An earlier build wrote findings into each chapter's overview instead.
+- Gaps: a guide a trigger saved has no review aug opened, so no comments
+  (running the action again does post them); the review offers the last
+  session's comments as a recovered draft, so restoring it after a re-run
+  doubles them.
 - Not the Inbox: `submit_guide` refuses a v4 snapshot, drops notes unless
   `inboxCodeReview` is on, and the Inbox's first start writes
   `~/.claude/rules/plannotator-inbox.md` into the owner's Claude config.
 - Checked for real (haiku, scratch home and Plannotator data dir): the run
   read the diff, found an unguarded zero divisor, saved the guide, and the
-  review UI showed the chapter with the finding under Review notes.
+  review UI showed the chapter with the finding under Review notes. The
+  comments, again on 0.28.61 with a scratch home: posted 0.5s after the
+  review started, drawn under the line and as a file banner.
 
 Done (step 8): `aug-tools move action AUG-0012 [name]` (no name lists the
 ones that apply). It starts the run and answers at once (moves run one at

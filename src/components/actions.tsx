@@ -32,6 +32,7 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
+import { postComments } from "../core/guide";
 import type { ActionResult } from "../core/run-action";
 import { actionsFor, keyedActions } from "../core/task-actions";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
@@ -472,15 +473,20 @@ export function useActions(dialogs: Dialogs) {
       },
     });
     setTimeout(() => setActivePane("canvas"), 0);
+    if (run.comments)
+      void postComments(run.comments.port, run.comments.list).then((r) => {
+        if ("error" in r) showToast(`Review notes not posted to Plannotator: ${r.error}`, 6000, "error");
+      });
   }
 
-  // What the owner wrote in plannotator review goes to the agent, as if
-  // typed; an approval or a closed tab sends nothing.
+  // What the owner sent from plannotator review goes to the agent, as if
+  // typed; an approval or a closed tab sends nothing. It carries aug's
+  // comments the owner kept, unlabelled, so the message says so.
   function sendReviewNotes(task: TaskRow, file: string) {
     const notes = existsSync(file) ? readFileSync(file, "utf8").trim() : "";
     if (!notes || /^The user approved\.?$/i.test(notes)) return;
     desk
-      .say(task.id, `My notes from the guided review in Plannotator:\n\n${notes}`)
+      .say(task.id, `My notes from the guided review in Plannotator (with the review findings aug posted there that I kept):\n\n${notes}`)
       .then(
         () => showToast(`Your review notes went to ${taskRef(task.id)}'s agent`, 4000),
         (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),

@@ -4,9 +4,10 @@
 // what is in the checkout, fits the guide to it, and saves it into
 // Plannotator, where `plannotator review` lists it under Guides.
 //
-// Plannotator 0.28 keeps a note but draws it nowhere (the review UI, an
-// exported page and the Inbox all leave it out), so each chapter's findings
-// are also written into its overview, which every view draws.
+// Plannotator keeps a saved guide's notes but draws them nowhere. A live
+// `plannotator review` session takes comments over HTTP
+// (/api/external-annotations) and pins them to their lines, in the diff and
+// in the guide alike, so the findings are posted there once it is up.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -173,19 +174,19 @@ export function patchHunks(patch: string): Map<string, FileHunks> {
 
 // The guide made to fit the patch: chapters name only files in it, each
 // once; the rest go to unplacedFiles; a note outside its file's hunks is
-// left off the file (it still reads in the overview). Each chapter's
-// findings are written into its overview.
+// left off the file. Every note becomes a review comment: on its lines when
+// they are in one hunk, else on its file.
 export function fitGuide(
   guide: Guide,
   patch: string,
-): { guide: Guide; findings: number; lines: string[] } {
+): { guide: Guide; findings: number; lines: string[]; comments: ReviewComment[] } {
   const hunks = patchHunks(patch);
   const placed = new Set<string>();
   let findings = 0;
-  const all: string[] = [];
+  const lines: string[] = [];
+  const comments: ReviewComment[] = [];
   const sections: GuideSection[] = [];
   for (const section of guide.sections) {
-    const lines: string[] = [];
     const diffs: GuideDiff[] = [];
     for (const diff of section.diffs) {
       const file = hunks.get(diff.file);
@@ -193,23 +194,24 @@ export function fitGuide(
       placed.add(diff.file);
       const notes = (diff.notes ?? []).slice(0, NOTES_PER_FILE_MAX);
       findings += notes.length;
-      for (const n of notes)
+      const pinned: GuideNote[] = [];
+      for (const n of notes) {
         lines.push(`- \`${diff.file}\` ${lineWord(n)}: ${n.text}`);
-      const pinned = notes.filter((n) => insideOneHunk(n, file));
+        if (insideOneHunk(n, file)) {
+          pinned.push(n);
+          comments.push(lineComment(diff.file, n));
+        } else comments.push(fileComment(diff.file, n));
+      }
       diffs.push({ file: diff.file, summary: diff.summary, ...(pinned.length ? { notes: pinned } : {}) });
     }
-    if (diffs.length === 0) continue;
-    all.push(...lines);
-    const overview = lines.length
-      ? `${section.overview}\n\n**Review notes**\n\n${lines.join("\n")}`
-      : section.overview;
-    sections.push({ ...section, overview, diffs });
+    if (diffs.length > 0) sections.push({ ...section, diffs });
   }
   const unplaced = [...hunks.keys()].filter((f) => !placed.has(f));
   return {
     guide: { ...guide, sections, unplacedFiles: unplaced },
     findings,
-    lines: all,
+    lines,
+    comments,
   };
 }
 
@@ -221,6 +223,99 @@ function lineWord(n: GuideNote): string {
 function insideOneHunk(n: GuideNote, file: FileHunks): boolean {
   const ranges = n.side === "old" ? file.old : file.new;
   return n.lineEnd >= n.lineStart && ranges.some(([s, e]) => n.lineStart >= s && n.lineEnd <= e);
+}
+
+// ── review comments ───────────────────────────────────────────────────────
+
+// One comment as /api/external-annotations takes it.
+export interface ReviewComment {
+  source: string;
+  author: string;
+  scope: "line" | "file";
+  filePath: string;
+  lineStart?: number;
+  lineEnd?: number;
+  side?: "old" | "new";
+  type: "comment" | "concern";
+  text: string;
+}
+
+// Who the comments are from, so the owner can tell them from their own, and
+// a re-run can clear them by source.
+export const COMMENT_SOURCE = "aug-guide";
+const COMMENT_AUTHOR = "aug guide";
+
+// Bug and Risk are concerns; Test and Nit are comments.
+function commentType(text: string): ReviewComment["type"] {
+  return /^(bug|risk)\b/i.test(text) ? "concern" : "comment";
+}
+
+function lineComment(filePath: string, n: GuideNote): ReviewComment {
+  return {
+    source: COMMENT_SOURCE,
+    author: COMMENT_AUTHOR,
+    scope: "line",
+    filePath,
+    lineStart: n.lineStart,
+    lineEnd: n.lineEnd,
+    side: n.side ?? "new",
+    type: commentType(n.text),
+    text: n.text,
+  };
+}
+
+// A note on lines no hunk shows: on its file, saying which lines.
+function fileComment(filePath: string, n: GuideNote): ReviewComment {
+  return {
+    source: COMMENT_SOURCE,
+    author: COMMENT_AUTHOR,
+    scope: "file",
+    filePath,
+    type: commentType(n.text),
+    text: `${lineWord(n)}: ${n.text}`,
+  };
+}
+
+// A port nothing listens on, for the review aug opens (PLANNOTATOR_PORT),
+// so aug knows where to post.
+export function freePort(): number {
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+  const port = server.port;
+  void server.stop(true);
+  if (port === undefined) throw new Error("no free port");
+  return port;
+}
+
+// The comments posted into the review on `port`, as one batch, once it
+// answers: `plannotator review` takes a few seconds to come up.
+export async function postComments(
+  port: number,
+  comments: ReviewComment[],
+  opts: { waitMs?: number; everyMs?: number } = {},
+): Promise<{ ok: true } | { error: string }> {
+  if (comments.length === 0) return { ok: true };
+  const deadline = Date.now() + (opts.waitMs ?? 60_000);
+  const url = `http://127.0.0.1:${port}/api/external-annotations`;
+  let last = "Plannotator did not answer";
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotations: comments }),
+      });
+      if (res.ok) return { ok: true };
+      // It is up and refused them: trying again will not help.
+      last = `Plannotator refused the comments (${res.status}): ${(await res.text()).slice(0, 200)}`;
+      log.warn("comments refused", { port, error: last });
+      return { error: last };
+    } catch (err) {
+      last = errorMessage(err);
+    }
+    await Bun.sleep(opts.everyMs ?? 500);
+  }
+  log.warn("comments not posted", { port, error: last });
+  return { error: last };
 }
 
 // A Plannotator guide snapshot, format v4 (the one that carries notes).
@@ -272,8 +367,9 @@ export interface SavedGuide {
   file: string;
   guide: Guide;
   findings: number;
-  // One Markdown line per finding, as the overviews list them.
+  // One Markdown line per finding.
   lines: string[];
+  comments: ReviewComment[];
   patch: Patch;
 }
 
@@ -290,7 +386,7 @@ export async function saveGuide(opts: {
   if ("error" in parsed) return parsed;
   const patch = patchFor(opts.cwd, opts.base);
   if ("error" in patch) return patch;
-  const { guide, findings, lines } = fitGuide(parsed, patch.text);
+  const { guide, findings, lines, comments } = fitGuide(parsed, patch.text);
   if (guide.sections.length === 0) return { error: "no chapter of the guide names a file in the change" };
   mkdirSync(opts.dir, { recursive: true });
   const file = join(opts.dir, "guide.json");
@@ -300,7 +396,7 @@ export async function saveGuide(opts: {
     log.warn("guide import failed", { file, error: saved.error });
     return { error: `plannotator did not take the guide: ${saved.error}` };
   }
-  return { id: saved.id, file, guide, findings, lines, patch };
+  return { id: saved.id, file, guide, findings, lines, comments, patch };
 }
 
 // What the action's turn says: the chapters, then the findings by file.
@@ -319,7 +415,7 @@ export function guideMarkdown(saved: SavedGuide): string {
       : "No review notes: nothing stood out.",
     ...saved.lines,
     "",
-    `Saved in Plannotator (\`${saved.id}\`): \`plannotator review\` in the checkout lists it under Guides.`,
+    `Saved in Plannotator (\`${saved.id}\`). The review aug opens has these notes as comments; its Agents tab lists the guide.`,
   ]
     .filter((line, i, all) => line !== "" || all[i - 1] !== "")
     .join("\n");

@@ -271,9 +271,10 @@ nothing to install):
 - `summarize`: the work so far (goal, done, decisions, left, blocked), on a
   copy of the agent's session, so the agent is not disturbed.
 - `guide` (coding, with a checkout): a guided review of the branch in
-  chapters, with review findings pinned to their lines, saved into
-  Plannotator and opened in `plannotator review`. What you write there goes
-  to the agent. Needs `plannotator` on your PATH.
+  chapters, with review findings, saved into Plannotator and opened in
+  `plannotator review` with each finding as a comment on its lines (from
+  "aug guide"). The comments you keep, and yours, go to the agent when you
+  send feedback. Needs `plannotator` on your PATH.
 - `quiz` (coding, with a checkout): quizzes you on the change, one question
   at a time, in interactive claude beside the agent (or on the Canvas when
   it has no window).

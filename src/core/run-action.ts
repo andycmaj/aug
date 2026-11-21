@@ -37,7 +37,7 @@ import {
   skillSource,
   type ActionSpec,
 } from "./task-actions";
-import { guideMarkdown, saveGuide } from "./guide";
+import { freePort, guideMarkdown, type ReviewComment, saveGuide } from "./guide";
 import { transcript } from "./transcript";
 import {
   SpendRole,
@@ -55,12 +55,14 @@ export interface ActionResult {
   text: string;
   // What the TUI runs on the Canvas: a pane action with no agent window to
   // split, or the guide's `plannotator review`. `feedback` is where the
-  // owner's review notes land when it exits.
+  // owner's review notes land when it exits; `comments` are posted into the
+  // review once it is up.
   terminal?: {
     argv: string[];
     cwd: string;
     env: Record<string, string>;
     feedback?: string;
+    comments?: { port: number; list: ReviewComment[] };
   };
   // A pane action opened in a split of the agent's window.
   pane?: boolean;
@@ -373,6 +375,7 @@ async function finishGuide(
   });
   timing({ ok: true });
   const feedback = join(dir, "guide-feedback.md");
+  const port = freePort();
   return {
     ok: true,
     text: `${spec.title}: saved, opening Plannotator`,
@@ -386,8 +389,9 @@ async function finishGuide(
         feedback,
       ],
       cwd,
-      env: { PLANNOTATOR_UPDATE_CHECK: "0" },
+      env: { PLANNOTATOR_UPDATE_CHECK: "0", PLANNOTATOR_PORT: String(port) },
       feedback,
+      comments: { port, list: saved.comments },
     },
   };
 }

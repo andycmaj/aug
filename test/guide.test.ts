@@ -6,7 +6,9 @@ import { setBrain, type BrainResult } from "../src/core/brain";
 import { Engine } from "../src/core/engine";
 import {
   fitGuide,
+  freePort,
   parseGuide,
+  postComments,
   patchFor,
   patchHunks,
   setGuideTool,
@@ -80,7 +82,7 @@ describe("the guide's JSON", () => {
 });
 
 describe("fitted to the patch", () => {
-  test("files it lacks go, files it left out are unplaced, notes outside a hunk stay in the overview only", () => {
+  test("files it lacks go, files it left out are unplaced, every note is a review comment", () => {
     const dir = repo();
     const patch = patchFor(dir, "main");
     if ("error" in patch) throw new Error(patch.error);
@@ -88,14 +90,35 @@ describe("fitted to the patch", () => {
 
     const parsed = parseGuide(JSON.stringify(ANSWER));
     if ("error" in parsed) throw new Error(parsed.error);
-    const { guide, findings } = fitGuide(parsed, patch.text);
+    const { guide, findings, comments } = fitGuide(parsed, patch.text);
     expect(findings).toBe(2);
     const section = guide.sections[0]!;
     expect(section.diffs.map((d) => d.file)).toEqual(["math.ts"]);
     expect(section.diffs[0]!.notes!.map((n) => n.lineStart)).toEqual([6]);
-    expect(section.overview).toContain("**Review notes**");
-    expect(section.overview).toContain("`math.ts` L40: Nit: outside every hunk.");
+    expect(section.overview).toBe("A new `div` function.");
     expect(guide.unplacedFiles).toEqual(["README.md"]);
+    // On its line when a hunk shows it; on its file, naming the line, when not.
+    expect(comments).toEqual([
+      {
+        source: "aug-guide",
+        author: "aug guide",
+        scope: "line",
+        filePath: "math.ts",
+        lineStart: 6,
+        lineEnd: 6,
+        side: "new",
+        type: "concern",
+        text: "Bug: b of 0 gives Infinity.",
+      },
+      {
+        source: "aug-guide",
+        author: "aug guide",
+        scope: "file",
+        filePath: "math.ts",
+        type: "comment",
+        text: "L40: Nit: outside every hunk.",
+      },
+    ]);
   });
 
   test("a new file not yet added is in the patch", () => {
@@ -114,6 +137,51 @@ describe("fitted to the patch", () => {
     const patch = patchFor(dir, "main");
     if ("error" in patch) throw new Error(patch.error);
     expect(patch.base).toBe("master");
+  });
+});
+
+describe("posting the comments", () => {
+  test("waits for the review to come up, then posts them as one batch", async () => {
+    const port = freePort();
+    const got: unknown[] = [];
+    // Plannotator starts a moment after aug begins posting.
+    let server: ReturnType<typeof Bun.serve> | null = null;
+    setTimeout(() => {
+      server = Bun.serve({
+        hostname: "127.0.0.1",
+        port,
+        async fetch(req) {
+          got.push({ path: new URL(req.url).pathname, body: await req.json() });
+          return Response.json({ ids: ["a"] }, { status: 201 });
+        },
+      });
+    }, 150);
+    const comment = {
+      source: "aug-guide",
+      author: "aug guide",
+      scope: "file" as const,
+      filePath: "math.ts",
+      type: "comment" as const,
+      text: "L1: Nit: x",
+    };
+    const r = await postComments(port, [comment], { waitMs: 3000, everyMs: 50 });
+    void server!.stop(true);
+    expect(r).toEqual({ ok: true });
+    expect(got).toEqual([{ path: "/api/external-annotations", body: { annotations: [comment] } }]);
+  });
+
+  test("a refusal is not retried, and nothing answering gives up", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => Response.json({ error: "annotations[0] missing" }, { status: 400 }),
+    });
+    const refused = await postComments(server.port!, [{ source: "s", author: "a", scope: "file", filePath: "f", type: "comment", text: "t" }], { waitMs: 3000, everyMs: 50 });
+    void server.stop(true);
+    expect("error" in refused && refused.error).toContain("refused the comments (400)");
+
+    const silent = await postComments(freePort(), [{ source: "s", author: "a", scope: "file", filePath: "f", type: "comment", text: "t" }], { waitMs: 200, everyMs: 50 });
+    expect(silent).toHaveProperty("error");
   });
 });
 
@@ -173,6 +241,10 @@ describe("the guide action", () => {
     expect(result.terminal!.argv.join(" ")).toContain("plannotator review --base");
     expect(result.terminal!.cwd).toBe(dir);
     expect(result.terminal!.feedback).toEndWith("guide-feedback.md");
+    // The review comes up on a port aug chose, so it can post the notes there.
+    const port = result.terminal!.comments!.port;
+    expect(result.terminal!.env.PLANNOTATOR_PORT).toBe(String(port));
+    expect(result.terminal!.comments!.list.map((c) => c.scope)).toEqual(["line", "file"]);
 
     const turn = store.turnsForTask(task.id).find((x) => x.role === TurnRole.action)!;
     expect(turn.status).toBe("done");
