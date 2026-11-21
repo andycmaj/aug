@@ -124,14 +124,14 @@ describe("which rows an action applies to", () => {
     const review = registeredActions(c).find((a) => a.name === "review")!;
     expect(whyNot(review, task(Kind.general))).toContain("coding");
     expect(whyNot(review, task())).toContain("worktree");
-    expect(whyNot(review, task(Kind.coding, { worktree: "/tmp/wt" }))).toBeNull();
+    expect(whyNot(review, task(Kind.coding, { worktree: tmpdir() }))).toBeNull();
   });
 
   test("quiz: coding work with a checkout", () => {
     const names = (t: TaskRow) => actionsFor(config(), t).map((a) => a.name);
     expect(names(task(Kind.general))).not.toContain("quiz");
     expect(names(task())).not.toContain("quiz");
-    expect(names(task(Kind.coding, { worktree: "/tmp/wt" }))).toContain("quiz");
+    expect(names(task(Kind.coding, { worktree: tmpdir() }))).toContain("quiz");
   });
 });
 
@@ -274,6 +274,8 @@ describe("a pane action (quiz)", () => {
     expect(run.argv[0]).toBe("claude");
     expect(run.argv).toContain(augPluginDir());
     expect(run.argv.at(-1)).toStartWith("/aug:quiz task ");
+    // A title can come from Slack or GitHub: kept out of an interactive session.
+    expect(run.argv.at(-1)).not.toContain(t.title);
     expect(run.cwd).toBe(t.worktree!);
     // Its hooks see a task but no session: not taken for the agent.
     expect(run.env).toEqual({ AUG_TASK_ID: String(t.id) });

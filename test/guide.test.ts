@@ -151,7 +151,9 @@ describe("posting the comments", () => {
         hostname: "127.0.0.1",
         port,
         async fetch(req) {
-          got.push({ path: new URL(req.url).pathname, body: await req.json() });
+          const path = new URL(req.url).pathname;
+          if (path === "/api/diff") return Response.json({ rawPatch: "" });
+          got.push({ path, body: await req.json() });
           return Response.json({ ids: ["a"] }, { status: 201 });
         },
       });
@@ -170,11 +172,30 @@ describe("posting the comments", () => {
     expect(got).toEqual([{ path: "/api/external-annotations", body: { annotations: [comment] } }]);
   });
 
+  test("a port something else took gets nothing", async () => {
+    let posted = 0;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(req) {
+        if (req.method === "POST") posted++;
+        return new Response("not found", { status: 404 });
+      },
+    });
+    const r = await postComments(server.port!, [{ source: "s", author: "a", scope: "file", filePath: "f", type: "comment", text: "t" }], { waitMs: 3000, everyMs: 50 });
+    void server.stop(true);
+    expect("error" in r && r.error).toContain("is not a Plannotator review");
+    expect(posted).toBe(0);
+  });
+
   test("a refusal is not retried, and nothing answering gives up", async () => {
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
-      fetch: () => Response.json({ error: "annotations[0] missing" }, { status: 400 }),
+      fetch: (req) =>
+        new URL(req.url).pathname === "/api/diff"
+          ? Response.json({ rawPatch: "" })
+          : Response.json({ error: "annotations[0] missing" }, { status: 400 }),
     });
     const refused = await postComments(server.port!, [{ source: "s", author: "a", scope: "file", filePath: "f", type: "comment", text: "t" }], { waitMs: 3000, everyMs: 50 });
     void server.stop(true);
@@ -251,6 +272,18 @@ describe("the guide action", () => {
     expect(turn.body).toContain("2 review notes (1 not on a changed line)");
     expect(turn.body).toContain("Bug: b of 0 gives Infinity.");
     expect(turn.body).toContain("1795-add-div");
+  });
+
+  test("a worktree that is gone is refused before the run spends anything", () => {
+    let asked = 0;
+    setBrain(async (): Promise<BrainResult> => {
+      asked++;
+      return { text: "", structured: null, sessionId: null, durationMs: 1, isError: false };
+    });
+    const { engine, task } = codingTask(join(tmpdir(), "aug-guide-gone-worktree"));
+    const started = engine.desk.runAction(task.id, "guide");
+    expect("error" in started && started.error).toContain("is gone");
+    expect(asked).toBe(0);
   });
 
   test("an answer that is not a guide fails, and is kept as a file", async () => {

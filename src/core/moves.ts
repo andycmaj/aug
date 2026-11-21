@@ -495,7 +495,10 @@ export const MOVES: Record<string, MoveSpec> = {
       const started = desk.runAction(task!.id, name);
       if ("error" in started) throw new MoveError(started.error);
       // Not awaited: moves run one at a time, and an action takes minutes.
-      void started.done.then((r) => log.info("action from a move", { task: task!.id, name, ok: r.ok }));
+      void started.done.then(
+        (r) => log.info("action from a move", { task: task!.id, name, ok: r.ok }),
+        (err) => log.error("action from a move threw", { task: task!.id, name, err }),
+      );
       return `started ${name} on ${ref(task)}: its answer lands on the task when done`;
     },
   },

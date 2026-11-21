@@ -138,7 +138,9 @@ export const BUILTIN_ACTIONS: Record<string, Omit<ActionSpec, "name">> = {
   quiz: {
     title: "Quiz me on the change",
     skill: "aug:quiz",
-    args: "task {ref} ({title}); base {base}; 5 questions",
+    // No {title}: it can come from Slack or GitHub, and this one runs
+    // interactive claude with the owner's own settings.
+    args: "task {ref}; base {base}; 5 questions",
     via: ActionVia.pane,
     kinds: [Kind.coding],
     needs: [ActionNeed.worktree],
@@ -252,6 +254,9 @@ export function whyNot(spec: ActionSpec, task: TaskRow): string | null {
   for (const need of spec.needs ?? []) {
     if (need === ActionNeed.worktree && !task.worktree)
       return `${spec.name} needs a worktree (start the agent first)`;
+    // Checked before the run, not after it has spent its tokens.
+    if (need === ActionNeed.worktree && task.worktree && !existsSync(task.worktree))
+      return `${spec.name} needs a worktree, and ${task.worktree} is gone`;
     if (need === ActionNeed.session && !store.latestSession(task.id))
       return `${spec.name} needs an agent session (start the agent first)`;
     if (need === ActionNeed.pr && !taskPr(task))

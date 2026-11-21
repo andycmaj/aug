@@ -296,7 +296,6 @@ export class Desk {
     return this.drivers.for(task).isLive(task);
   }
 
-  // One line into the agent's window pointing it at its feedback.
   // A task action (core/task-actions.ts): started now, its answer a turn on
   // the task. Nothing to undo: an action reads, and its turn stays.
   runAction(
@@ -388,6 +387,7 @@ export class Desk {
     this.fireActions(ActionEvent.triaged, outcome.taskId, message);
   }
 
+  // One line into the agent's window pointing it at its feedback.
   nudge(taskId: number): Promise<boolean> {
     return projects.nudge(taskId, nudgeText(taskId));
   }

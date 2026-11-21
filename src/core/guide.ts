@@ -295,11 +295,20 @@ export async function postComments(
 ): Promise<{ ok: true } | { error: string }> {
   if (comments.length === 0) return { ok: true };
   const deadline = Date.now() + (opts.waitMs ?? 60_000);
-  const url = `http://127.0.0.1:${port}/api/external-annotations`;
+  const base = `http://127.0.0.1:${port}`;
   let last = "Plannotator did not answer";
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(url, {
+      // The port was free when aug picked it; make sure Plannotator is the
+      // one that took it before handing it the findings.
+      const diff = await fetch(`${base}/api/diff`);
+      const body: unknown = diff.ok ? await diff.json().catch(() => null) : null;
+      if (!isRecord(body) || typeof body.rawPatch !== "string") {
+        last = `port ${port} is not a Plannotator review`;
+        log.warn("comments not posted", { port, error: last });
+        return { error: last };
+      }
+      const res = await fetch(`${base}/api/external-annotations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ annotations: comments }),
