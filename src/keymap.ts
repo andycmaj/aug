@@ -358,6 +358,13 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     help: "type",
     relevant: isTask,
   },
+  {
+    key: ".",
+    cmd: Commands.ACTIONS,
+    desc: "actions: summarize the work, ... (pick one)",
+    help: "actions",
+    relevant: isWork,
+  },
 ];
 
 // The navigation keys and the config field that moves each.

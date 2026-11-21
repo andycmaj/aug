@@ -32,6 +32,7 @@ import { claudeSettingsPath, hooksInstalled, installHooks } from "../core/adopt"
 import { strayLabel, type Stray } from "../core/strays";
 import { neighborKey, type RailItem } from "../core/rail";
 import { taskRef } from "../core/rows";
+import { actionsFor } from "../core/task-actions";
 import type { NoiseRule } from "../core/config";
 import type { Jump } from "../core/desk";
 import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "../core/inbox";
@@ -421,6 +422,41 @@ export function useActions(dialogs: Dialogs) {
     const next = order[(order.indexOf(task.priority) + 1) % order.length];
     desk.setPriority(task.id, next);
     showToast(`${taskRef(task.id)} is ${next}`);
+  }
+
+  // A task action: started now, its answer a turn on the task; the toast
+  // says when it is back.
+  function runAction(task: TaskRow, name: string) {
+    const started = desk.runAction(task.id, name);
+    if ("error" in started) {
+      showToast(started.error, 5000, "error");
+      return;
+    }
+    showToast(`${started.title}: running on ${taskRef(task.id)}`, 3000);
+    void started.done.then((r) =>
+      showToast(r.text, r.ok ? 4000 : 6000, r.ok ? "info" : "error"),
+    );
+  }
+
+  // .: the actions that apply to this task.
+  function pickAction(task: TaskRow): false | void {
+    const offered = actionsFor(desk.config(), task);
+    if (offered.length === 0) {
+      showToast("No actions apply here (config.json \"actions\")");
+      return;
+    }
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Actions · ${taskRef(task.id)}`}
+        hint="Each runs a skill on this task; its answer lands in the chat."
+        choices={offered.map((a) => ({
+          label: a.title,
+          hint: a.key ? `${a.name} · ${a.key}` : a.name,
+          run: () => runAction(task, a.name),
+        }))}
+        onClose={dialogs.close}
+      />
+    ));
   }
 
   function changeKind(task: TaskRow) {
@@ -883,6 +919,7 @@ export function useActions(dialogs: Dialogs) {
         info(item);
       },
       [Commands.PR_DASH]: onTask(togglePrDash),
+      [Commands.ACTIONS]: onTask(pickAction),
     };
   }
 
@@ -915,6 +952,7 @@ export function useActions(dialogs: Dialogs) {
     noiseFilter,
     docs,
     taskActions,
+    runAction,
     togglePrDash,
     editorId: editor.editorId,
   };

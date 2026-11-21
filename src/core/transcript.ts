@@ -17,6 +17,8 @@ export function transcript(turns: TurnRow[]): string {
             : `[${at}] The owner typed:\n${turn.body}`;
         case TurnRole.trigger:
           return `[${at}] (${turn.body})`;
+        case TurnRole.action:
+          return `[${at}] The owner ran the ${turn.author} action, which said:\n${head(turn.body, 3000)}`;
         default: {
           const sent =
             turn.action_state === "sent"

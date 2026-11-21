@@ -48,6 +48,8 @@ export interface PaletteExtra {
   hint?: string;
   group: string;
   relevant?: (ctx: HelpCtx) => boolean;
+  // About the row under the keys: listed in the palette's context mode.
+  inContext?: boolean;
   run: () => void;
 }
 
@@ -101,9 +103,18 @@ export function paletteEntries(
         label: e.label,
         hint: e.hint,
         group: e.group,
-        inContext: false,
+        inContext: e.inContext ?? false,
         run: e.run,
       }),
     );
-  return [...keyed, ...loose];
+  // An extra about the row (a task action) goes with the row's keys, not
+  // after everything, where the list's window would leave it unseen.
+  const rowEnd = keyed.findLastIndex((e) => e.group === PaletteGroup.row) + 1;
+  const about = loose.filter((e) => e.inContext);
+  return [
+    ...keyed.slice(0, rowEnd),
+    ...about,
+    ...keyed.slice(rowEnd),
+    ...loose.filter((e) => !e.inContext),
+  ];
 }

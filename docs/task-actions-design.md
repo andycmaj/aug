@@ -46,11 +46,13 @@ and when it runs by itself. So:
 }
 ```
 
-- Built-in recipes ship as skills in an aug plugin (`aug:summarize`,
-  `aug:guide`), embedded in the binary (`with { type: "text" }`) and written
-  out by `aug install actions` (an `install.ts` entry). Installed into the
-  user's Claude Code plugins, they are also there for coding agents and for
-  the owner's own sessions (`/aug:summarize`).
+- Built-in recipes ship as skills in aug's own plugin (`aug:summarize`,
+  later `aug:guide`, `aug:quiz`), embedded in the binary (`with { type:
+  "text" }`, `contrib/aug-plugin/`) and written under `AUG_HOME/plugin`
+  whenever a run needs it, so headless runs load it with `--plugin-dir` and
+  need no install step. `aug install actions` (an `install.ts` entry, with
+  the `pane` step) will put it in the user's Claude Code plugins too, for
+  interactive sessions and coding agents (`/aug:summarize`).
 - Built-ins are registered by default. An entry in config with the same name
   changes it field by field; `"summarize": false` turns it off.
 - A registered skill that is missing is reported by name, with where aug
@@ -183,18 +185,34 @@ agents cannot run actions on each other in a loop. A `pane` action answers
 "needs the TUI" as a move. AUG-0017's rename of `move` applies here like
 everywhere else.
 
-## Build order (after approval)
+## Build order
 
-1. `core/task-actions.ts`: spec, defaults merged with config, arg template,
-   `actionsFor(task)`, skill resolution (plugin, user skill wrapped). Tests:
-   override and off, kinds and needs filtering, missing skill reported, a
-   widening skill refused.
-2. `desk.runAction` with the headless and fork runners (`BrainCall.fork`),
-   turn writes. Tests with `fakeBrain()`.
-3. `aug:summarize`, `aug install actions`, the `.` picker, the palette.
+Done (steps 1-3):
+
+- `core/task-actions.ts`: the registry (built-ins merged with config
+  `actions`), `whyNot`/`actionsFor`, the arg template, aug's plugin under
+  `AUG_HOME/plugin`, skill resolution (aug's plugin, or the plugin the
+  action's `capability` grants).
+- `core/run-action.ts`: the headless and fork runners (`BrainCall.fork` adds
+  `--fork-session --no-session-persistence`); `desk.runAction`; the `agent`
+  via says the invocation to the agent.
+- An action's answer is its own turn role, `TurnRole.action`, so nothing
+  that reads the agent's turns (resume, denials, the latest answer, Slack
+  remote) takes it for one. The chat draws it whole on an accent rule; the
+  transcript names it as the action's.
+- `aug:summarize`; `.` opens the picker on rail and table rows; the palette
+  lists one entry per action that applies, beside the row's keys.
+- Checked for real (haiku, scratch home): a fork of a coding session in its
+  worktree ran the skill, and its declared `git log`/`git diff` rules
+  allowed those calls.
+
+Still to build:
+
 4. Per-action keys in `buildKeymap`, and the keymap clash test.
-5. The `pane` runner and `quiz`.
-6. `aug:guide` (snapshot v4 + import), after checking the review UI draws notes.
+5. The `pane` runner and `aug:quiz`; `aug install actions`; a bare user
+   skill wrapped into a throwaway plugin for headless runs.
+6. `aug:guide` (snapshot v4 + import), after checking the review UI draws
+   notes. Test it against the offline review simulator (AUG-0179).
 7. Triggers: the `runAction` triage effect, lifecycle events, `action_runs`.
 8. The `action` move; an AGENTS.md architecture bullet; README config.
 

@@ -62,6 +62,9 @@ export function ChatTurn(props: {
       <Match when={t().role === TurnRole.agent}>
         <AgentTurn turn={t()} latest={props.latestAgent} width={props.width} />
       </Match>
+      <Match when={t().role === TurnRole.action}>
+        <ActionTurn turn={t()} width={props.width} />
+      </Match>
     </Switch>
   );
 }
@@ -252,6 +255,74 @@ const PREVIEW_LINES = 40;
 
 // The files a turn left: one line each, a markdown file rendered and a CSV
 // shown as a small table. o opens one in your viewer, O in $EDITOR.
+// A task action's answer (core/task-actions.ts): its title, then the result
+// whole, on a rule of its own so it never reads as the agent's turn.
+function ActionTurn(props: { turn: TurnRow; width: number }) {
+  const theme = useTheme();
+  const aug = useAug();
+  const steps = createMemo(() => turnSteps(props.turn));
+  const refusals = createMemo(() => refusalLines(steps()));
+  const files = createMemo(() => parseFiles(props.turn.files));
+  const running = () => props.turn.status === "running";
+  const liveRan = () => {
+    aug.spinner();
+    return duration(props.turn.started_at, null, new Date());
+  };
+  return (
+    <box
+      flexDirection="column"
+      marginBottom={1}
+      paddingLeft={2}
+      border={["left"]}
+      borderColor={theme.accent}
+      borderStyle="single"
+    >
+      <text>
+        <span style={{ fg: theme.accent, attributes: 1 }}>
+          {props.turn.about || props.turn.author}
+        </span>
+        <span
+          style={{ fg: theme.textMuted }}
+        >{` · action · ${clock(props.turn.started_at)} · `}</span>
+        <Show
+          when={running()}
+          fallback={
+            <span style={{ fg: theme.textMuted }}>{`ran ${duration(props.turn.started_at, props.turn.finished_at, aug.now())}`}</span>
+          }
+        >
+          <span style={{ fg: theme.info }}>{`${aug.spinner()} running ${liveRan()}`}</span>
+        </Show>
+      </text>
+      <Switch>
+        <Match when={running()}>
+          <For each={steps().slice(-6)}>
+            {(step) => <text fg={theme.textMuted}>{`↳ ${step}`}</text>}
+          </For>
+        </Match>
+        <Match when={props.turn.status === "failed"}>
+          <text fg={theme.error} wrapMode="word">
+            {props.turn.body}
+          </text>
+        </Match>
+        <Match when={true}>
+          <Show
+            when={props.turn.body.trim()}
+            fallback={<text fg={theme.textMuted}>(it gave no answer)</text>}
+          >
+            <Markdown text={props.turn.body} width={Math.max(20, props.width - 4)} />
+          </Show>
+          <Show when={files().length > 0}>
+            <WhatItMade files={files()} width={props.width - 4} />
+          </Show>
+        </Match>
+      </Switch>
+      <For each={refusals()}>
+        {(line) => <text fg={theme.warning} wrapMode="word">{line}</text>}
+      </For>
+    </box>
+  );
+}
+
 function WhatItMade(props: { files: MadeFile[]; width: number }) {
   const theme = useTheme();
   return (

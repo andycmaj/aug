@@ -161,6 +161,13 @@ focus, keymap, theme, toast, modals, palette, help). The structure mirrors
   `inTmux(task)` (coding, and the onboarding interview's System task) and
   nothing above the driver branches on it. What a coding
   start still needs comes back as `needs: repo | path | branch`.
+- **Task actions are skills aug runs on one task** (`core/task-actions.ts`,
+  `docs/task-actions-design.md`). Built-ins (`summarize`) are registered
+  there and their skills ship in aug's own plugin (`contrib/aug-plugin`,
+  written under `AUG_HOME/plugin`); config `actions` changes, turns off or
+  adds one. `desk.runAction` runs it headless or on a fork of the agent's
+  session (`core/run-action.ts`), and its answer is a `TurnRole.action` turn,
+  never the agent's. `.` opens the picker; the palette lists each one.
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `aug-tools move <verb>`, the Assistant's
   prompt and the engine's dispatch, which runs each on the desk. aug-tools

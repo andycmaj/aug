@@ -1,0 +1,239 @@
+import { beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  claudeArgs,
+  setBrain,
+  type BrainCall,
+  type BrainResult,
+} from "../src/core/brain";
+import { DEFAULT_CONFIG, mergeConfig } from "../src/core/config";
+import { Engine } from "../src/core/engine";
+import { sessionStarted } from "../src/core/lifecycle";
+import { setMux } from "../src/core/mux";
+import * as store from "../src/core/store";
+import {
+  actionsFor,
+  augPluginDir,
+  ensureAugPlugin,
+  fillArgs,
+  invocation,
+  registeredActions,
+  whyNot,
+} from "../src/core/task-actions";
+import { transcript } from "../src/core/transcript";
+import { Kind, SessionKind, TurnRole, type TaskRow } from "../src/core/types";
+import { FakeMux } from "./fake-mux";
+import { config, freshHome, testConfig } from "./helpers";
+
+let engine: Engine;
+let calls: BrainCall[];
+let answer: (call: BrainCall) => Partial<BrainResult>;
+
+beforeEach(() => {
+  freshHome({ autostart: false });
+  calls = [];
+  answer = () => ({ text: "**Goal**: fix it.\n**Done**: fixed." });
+  setBrain(async (call): Promise<BrainResult> => {
+    calls.push(call);
+    return {
+      text: "",
+      structured: null,
+      sessionId: null,
+      durationMs: 1,
+      isError: false,
+      ...answer(call),
+    };
+  });
+  setMux(new FakeMux());
+  engine = new Engine({ config: testConfig() });
+});
+
+function task(kind: Kind = Kind.coding, patch: Partial<TaskRow> = {}): TaskRow {
+  const t = engine.desk.newTask("Fix the build", kind);
+  if (Object.keys(patch).length) store.updateTask(t.id, patch);
+  return store.getTask(t.id)!;
+}
+
+function withActions(actions: Record<string, unknown>) {
+  return mergeConfig({ ...DEFAULT_CONFIG, actions } as never);
+}
+
+describe("the registry", () => {
+  test("summarize is built in", () => {
+    const names = registeredActions(config()).map((a) => a.name);
+    expect(names).toContain("summarize");
+  });
+
+  test("config turns one off, changes one field by field, adds one", () => {
+    const c = withActions({
+      summarize: { model: "haiku" },
+      recap: { skill: "aug:summarize", via: "headless", title: "Recap" },
+    });
+    const byName = Object.fromEntries(registeredActions(c).map((a) => [a.name, a]));
+    expect(byName.summarize!.model).toBe("haiku");
+    expect(byName.summarize!.skill).toBe("aug:summarize");
+    expect(byName.recap!.title).toBe("Recap");
+    expect(byName.recap!.output).toBe("turn");
+
+    const off = withActions({ summarize: false });
+    expect(registeredActions(off).map((a) => a.name)).not.toContain("summarize");
+  });
+
+  test("an entry without a skill or a known via is left out", () => {
+    const c = withActions({
+      noskill: { via: "headless" },
+      badvia: { skill: "x", via: "telepathy" },
+    });
+    const names = registeredActions(c).map((a) => a.name);
+    expect(names).not.toContain("noskill");
+    expect(names).not.toContain("badvia");
+  });
+});
+
+describe("which rows an action applies to", () => {
+  test("work, not Home", () => {
+    const home = store.homeTask();
+    expect(actionsFor(config(), task()).map((a) => a.name)).toContain("summarize");
+    expect(actionsFor(config(), home)).toEqual([]);
+  });
+
+  test("kinds and needs say why not", () => {
+    const c = withActions({
+      review: { skill: "aug:summarize", via: "headless", kinds: ["coding"], needs: ["worktree"] },
+    });
+    const review = registeredActions(c).find((a) => a.name === "review")!;
+    expect(whyNot(review, task(Kind.general))).toContain("coding");
+    expect(whyNot(review, task())).toContain("worktree");
+    expect(whyNot(review, task(Kind.coding, { worktree: "/tmp/wt" }))).toBeNull();
+  });
+
+  test("a pane action is not offered yet", () => {
+    const c = withActions({ quiz: { skill: "quiz-me", via: "pane" } });
+    expect(actionsFor(c, task()).map((a) => a.name)).not.toContain("quiz");
+  });
+});
+
+describe("args", () => {
+  test("the task fills the template", () => {
+    const t = task(Kind.coding, { worktree: "/w/aug", branch: "fix-build" });
+    const ref = store.taskRef(t.id);
+    expect(fillArgs("{ref} {title} {worktree} {branch} {base} {pr} {other}", t)).toBe(
+      `${ref} Fix the build /w/aug fix-build main none {other}`,
+    );
+    const summarize = registeredActions(config()).find((a) => a.name === "summarize")!;
+    expect(invocation(summarize, t)).toStartWith(`/aug:summarize task ${ref}`);
+  });
+});
+
+describe("aug's plugin", () => {
+  test("is written under AUG_HOME with its skills", () => {
+    const dir = ensureAugPlugin();
+    expect(dir).toBe(augPluginDir());
+    const manifest = JSON.parse(
+      readFileSync(join(dir, ".claude-plugin", "plugin.json"), "utf8"),
+    ) as { name: string };
+    expect(manifest.name).toBe("aug");
+    expect(readFileSync(join(dir, "skills", "summarize", "SKILL.md"), "utf8")).toContain(
+      "name: summarize",
+    );
+  });
+});
+
+describe("running one", () => {
+  test("headless: a running action turn, then the answer", async () => {
+    const t = task(Kind.general);
+    const started = engine.desk.runAction(t.id, "summarize");
+    if ("error" in started) throw new Error(started.error);
+    const running = store.turnsForTask(t.id).find((x) => x.role === TurnRole.action)!;
+    expect(running.status).toBe("running");
+    expect(running.author).toBe("summarize");
+
+    const result = await started.done;
+    expect(result.ok).toBe(true);
+    const turn = store.getTurn(running.id)!;
+    expect(turn.status).toBe("done");
+    expect(turn.body).toContain("**Goal**");
+
+    const call = calls.at(-1)!;
+    expect(call.prompt).toContain("/aug:summarize");
+    expect(call.pluginDirs).toContain(augPluginDir());
+    expect(call.allow).toContain("Bash(git log:*)");
+    expect(call.resume).toBeUndefined();
+    // Not the agent: its state is untouched.
+    expect(store.getTask(t.id)!.agent_state).toBe(t.agent_state);
+  });
+
+  test("fork: resumes a copy of the agent's session in its folder", async () => {
+    const t = task();
+    const cwd = mkdtempSync(join(tmpdir(), "aug-wt-"));
+    sessionStarted({
+      id: "sess-1",
+      taskId: t.id,
+      kind: SessionKind.tmux,
+      cwd,
+      startedBy: "owner",
+    });
+    const started = engine.desk.runAction(t.id, "summarize");
+    if ("error" in started) throw new Error(started.error);
+    await started.done;
+    const call = calls.at(-1)!;
+    expect(call.resume).toBe("sess-1");
+    expect(call.fork).toBe(true);
+    expect(call.cwd).toBe(cwd);
+    expect(claudeArgs(call)).toContain("--fork-session");
+  });
+
+  test("a failure is kept on its turn", async () => {
+    answer = () => ({ isError: true, text: "overloaded" });
+    const t = task(Kind.general);
+    const started = engine.desk.runAction(t.id, "summarize");
+    if ("error" in started) throw new Error(started.error);
+    const result = await started.done;
+    expect(result.ok).toBe(false);
+    const turn = store.turnsForTask(t.id).find((x) => x.role === TurnRole.action)!;
+    expect(turn.status).toBe("failed");
+    expect(turn.body).toContain("overloaded");
+  });
+
+  test("the same action twice at once is refused", () => {
+    const t = task(Kind.general);
+    const first = engine.desk.runAction(t.id, "summarize");
+    const second = engine.desk.runAction(t.id, "summarize");
+    expect("error" in first).toBe(false);
+    expect("error" in second && second.error).toContain("already running");
+  });
+
+  test("an unknown action names the ones there are", () => {
+    const t = task(Kind.general);
+    const r = engine.desk.runAction(t.id, "nope");
+    expect("error" in r && r.error).toContain("summarize");
+  });
+
+  test("output file: the answer is also under What it made", async () => {
+    const c = withActions({ summarize: { output: "file" } });
+    const source = { ...testConfig(), get: () => c };
+    const e = new Engine({ config: source });
+    const t = task(Kind.general);
+    const started = e.desk.runAction(t.id, "summarize");
+    if ("error" in started) throw new Error(started.error);
+    await started.done;
+    const turn = store.turnsForTask(t.id).find((x) => x.role === TurnRole.action)!;
+    const files = JSON.parse(turn.files ?? "[]") as { path: string }[];
+    expect(files).toHaveLength(1);
+    expect(existsSync(files[0]!.path)).toBe(true);
+  });
+});
+
+describe("what agents read back", () => {
+  test("an action's answer is named as the action's, not the agent's", async () => {
+    const t = task(Kind.general);
+    const started = engine.desk.runAction(t.id, "summarize");
+    if ("error" in started) throw new Error(started.error);
+    await started.done;
+    const text = transcript(store.turnsForTask(t.id));
+    expect(text).toContain("ran the summarize action");
+    expect(text).not.toContain("You (the agent) answered");
+  });
+});

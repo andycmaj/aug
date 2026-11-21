@@ -34,6 +34,14 @@ import * as repos from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
+import { startAction, type ActionResult } from "./run-action";
+import {
+  ActionVia,
+  actionNamed,
+  invocation,
+  registeredActions,
+  whyNot,
+} from "./task-actions";
 import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
 import {
   taskFromHeld,
@@ -281,6 +289,37 @@ export class Desk {
   }
 
   // One line into the agent's window pointing it at its feedback.
+  // A task action (core/task-actions.ts): started now, its answer a turn on
+  // the task. Nothing to undo: an action reads, and its turn stays.
+  runAction(
+    taskId: number,
+    name: string,
+  ): { error: string } | { title: string; done: Promise<ActionResult> } {
+    const task = store.getTask(taskId);
+    if (!task) return { error: `no task ${store.taskRef(taskId)}` };
+    const config = this.config();
+    const spec = actionNamed(config, name);
+    if (!spec) {
+      const names = registeredActions(config).map((a) => a.name);
+      return { error: `no action ${name}: there are ${names.join(", ") || "none"}` };
+    }
+    const why = whyNot(spec, task);
+    if (why) return { error: why };
+    if (spec.via === ActionVia.agent) {
+      const text = invocation(spec, task);
+      return {
+        title: spec.title,
+        done: this.say(taskId, text).then((ok) => ({
+          ok,
+          text: ok ? `${spec.title}: told the agent` : `${spec.name}: the agent did not get it`,
+        })),
+      };
+    }
+    const run = startAction(config, task, spec);
+    if ("error" in run) return run;
+    return { title: spec.title, done: run.done };
+  }
+
   nudge(taskId: number): Promise<boolean> {
     return projects.nudge(taskId, nudgeText(taskId));
   }
