@@ -274,10 +274,15 @@ Done (step 6), the guide:
     the guide's review instead of "the review aug opens".
   - Checked live (plannotator 0.29.1, scratch HOME, `PLANNOTATOR_BROWSER=none`):
     saved findings refit, posted 0.55s after the review started, posted
-    again into the same review: it held 2 comments, not 4. Not checked in
-    a browser: whether restoring a recovered draft still doubles them
-    (the page merges a restored comment with a `source` into a live one
-    only when their text matches).
+    again into the same review: it held 2 comments, not 4.
+  - Restoring a recovered draft, checked in headless Chrome on 0.29.1: the
+    page saves aug's comments into its draft, and the next review of the
+    same change offers "Draft Recovered ... restore them?". Restored after
+    aug posts, before, or with the re-run's findings reworded, the page
+    shows each finding once (badge 2), and Send Feedback carries each
+    once: a restored comment with a `source` gives way to the live ones
+    from that source. Not doubled on 0.29.1 whether or not aug clears
+    first; the clear guards a review that is reused.
 - Not the Inbox: `submit_guide` refuses a v4 snapshot, drops notes unless
   `inboxCodeReview` is on, and the Inbox's first start writes
   `~/.claude/rules/plannotator-inbox.md` into the owner's Claude config.
