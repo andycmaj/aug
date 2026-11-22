@@ -10,6 +10,7 @@ import {
   For,
   Match,
   on,
+  onCleanup,
   onMount,
   Show,
   Switch,
@@ -531,8 +532,10 @@ function mentionLine(m: Mention, openTasks: (p: ProjectRow) => number): string {
   return `${taskRef(t.id)}  ${t.title}${t.status === "open" ? "" : ` (${t.status})`}`;
 }
 
-// Text the editor handed back unsent. The box unmounts while the editor has
-// the Canvas, so it waits here for the box to come back.
+// Each task's unsent text: what the editor handed back (the box unmounts
+// while the editor has the Canvas) and what was typed before the selection
+// moved on. The box stays mounted from task to task, so without this a draft
+// followed you, and ctrl+a carried it into Home's box, where enter sends it.
 const unsent = new Map<number, string>();
 
 // The box under the chat. Typing always continues the same conversation.
@@ -588,6 +591,27 @@ function ChatInput(props: {
     unsent.delete(props.task.id);
     if (input && text) input.value = text;
   });
+  // Read at unmount, when the task accessor may already be gone.
+  let shown = props.task.id;
+  const keep = () => {
+    const text = input?.value ?? "";
+    if (text) unsent.set(shown, text);
+  };
+  createEffect(
+    on(
+      () => props.task.id,
+      (id) => {
+        if (!input) return;
+        keep();
+        shown = id;
+        input.value = unsent.get(id) ?? "";
+        unsent.delete(id);
+        track();
+      },
+      { defer: true },
+    ),
+  );
+  onCleanup(keep);
 
   // Focusing the pane focuses the field inside it.
   createEffect(() => {

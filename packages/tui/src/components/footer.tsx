@@ -1,8 +1,16 @@
 // Key hints for the focused pane: the bindings reachable from it that apply
 // to the item under it (`helpBindings`), plus the view switch on the right.
 
-import { createMemo, For, Show, type Accessor } from "solid-js";
-import { useTerminalDimensions } from "@opentui/solid";
+import {
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+  type Accessor,
+} from "solid-js";
+import type { TerminalCapabilities } from "@opentui/core";
+import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import {
   getHelpItems,
   useReachableBindings,
@@ -18,14 +26,30 @@ import { helpBindings, type HelpCtx } from "../keymap";
 const KEY_WORDS: Record<string, string> = { escape: "esc" };
 export const keyLabel = (keys: string) => KEY_WORDS[keys] ?? keys;
 
+// Whether the terminal sends ctrl+[ apart from Esc: only one speaking the
+// kitty keyboard protocol to Riker does (tmux folds the two into Esc). The
+// answer to opentui's query comes after start.
+function useKittyKeys(): Accessor<boolean> {
+  const renderer = useRenderer();
+  const [kitty, setKitty] = createSignal(
+    renderer.capabilities?.kitty_keyboard ?? false,
+  );
+  const update = (caps: TerminalCapabilities | null) =>
+    setKitty(caps?.kitty_keyboard ?? false);
+  renderer.on("capabilities", update);
+  onCleanup(() => renderer.off("capabilities", update));
+  return kitty;
+}
+
 // The reachable bindings that apply here, recomputed on focus, keymap and
 // context changes. The footer and the ? help both read this.
 export function useFocusBindings(
   ctx: Accessor<HelpCtx>,
 ): Accessor<HelpBinding[]> {
   const reachable = useReachableBindings();
+  const kittyKeys = useKittyKeys();
   return () =>
-    helpBindings(reachable(), ctx()).map((b) => ({
+    helpBindings(reachable(), { ...ctx(), kittyKeys: kittyKeys() }).map((b) => ({
       ...b,
       keys: keyLabel(b.keys),
     }));

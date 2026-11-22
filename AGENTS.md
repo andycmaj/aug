@@ -368,6 +368,13 @@ Tests live beside their package (`packages/<name>/test/`).
   shows or hides the rail and stays attached (the agent loses them; a
   terminal with no agent gets them). `buildKeymap` swaps config's navigation
   keys in at start.
+- `ctrl+[` goes back and `ctrl+a` goes Home from anywhere: a modal, the
+  chat box, the Board, an attached agent (detach first). Both are a layer
+  with no target under every other (`shell.tsx`), which the terminal's own
+  layer detaches and declines to. `ctrl+[` is the Esc byte unless the
+  terminal speaks the kitty keyboard protocol to Riker, and tmux folds it
+  into Esc whatever `extended-keys` says, so there it is Esc and its hint
+  hides (`HelpCtx.kittyKeys`).
 - Navigation history is `core/nav-history.ts`, held by the Riker context:
   every change of the selected row or the view is a visit (recorded once per
   handler, so a switch plus a select is one), `[`/`]` go back and forward,

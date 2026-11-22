@@ -30,7 +30,7 @@ const SHOW_ONE_KEY = [
   "stty -icanon -iexten -isig -echo min 1; echo ready; dd bs=1 count=1 2>/dev/null | od -An -c; sleep 5",
 ];
 
-async function mount(withJump: boolean) {
+async function mount(withJump: boolean, kitty = false) {
   const calls: string[] = [];
   let focus: ReturnType<typeof useFocus> | undefined;
   const setup = await testRender(
@@ -74,7 +74,7 @@ async function mount(withJump: boolean) {
         </TerminalsProvider>
       </ThemeProvider>
     ),
-    { width: 60, height: 20 },
+    { width: 60, height: 20, kittyKeyboard: kitty },
   );
   destroy = () => setup.renderer.destroy();
   const frameWith = async (want: string) => {
@@ -134,3 +134,29 @@ test("ctrl+e in a terminal with no window of its own goes to it as typed", async
   expect(focus()?.sidebarVisible()).toBe(true);
   expect(focus()?.isPaneFocused("canvas")).toBe(true);
 });
+
+// RIKER-0195: ctrl+[ (sent apart from Esc by a kitty-protocol terminal) and
+// ctrl+a detach an agent and decline, so the shell's layer goes back or Home
+// (go-back-anywhere.test.tsx); a terminal with no agent (the editor, where
+// ctrl+[ is how many type Esc) gets them as typed.
+for (const [name, key, octal] of [
+  ["ctrl+[", "[", "033"],
+  ["ctrl+a", "a", "001"],
+] as const) {
+  test(`${name} on an agent detaches, and the agent never sees it`, async () => {
+    const { setup, calls, frameWith, focus } = await mount(true, true);
+    setup.mockInput.pressKey(key, { ctrl: true });
+    await setup.renderOnce();
+    expect(calls).toEqual(["detach"]);
+    expect(focus()?.isPaneFocused("rail")).toBe(true);
+    expect(await frameWith(octal)).not.toContain(octal);
+  });
+
+  test(`${name} in a terminal with no window of its own goes to it as typed`, async () => {
+    const { setup, calls, frameWith, focus } = await mount(false, true);
+    setup.mockInput.pressKey(key, { ctrl: true });
+    expect(await frameWith(octal)).toContain(octal);
+    expect(calls).toEqual([]);
+    expect(focus()?.isPaneFocused("canvas")).toBe(true);
+  });
+}

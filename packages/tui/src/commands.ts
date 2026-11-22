@@ -18,6 +18,9 @@ export const Commands = {
   GO_TO: "nav.goto",
   HISTORY_BACK: "nav.history.back",
   HISTORY_FORWARD: "nav.history.forward",
+  // From anywhere, a modal or an attached agent too (shell.tsx).
+  GO_BACK: "nav.back",
+  GO_HOME: "assistant.go",
   UNDO: "move.undo",
 
   // On the item at the cursor / the selected item

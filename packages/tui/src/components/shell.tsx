@@ -42,6 +42,9 @@ export interface ShellApi {
 
 const log = logger("shell");
 
+// Below the default (0), so a pane's own layer for the same key runs first.
+const ANYWHERE_PRIORITY = -1;
+
 export function useShell(opts: {
   typing: Accessor<boolean>;
   extraPalette?: () => PaletteExtra[];
@@ -129,6 +132,34 @@ export function useShell(opts: {
       [Commands.UNDO]: unlessTyping(undo),
     },
     { target: () => layout },
+  );
+
+  // ctrl+[ and ctrl+a mean the same everywhere: a layer with no target, so a
+  // modal (outside the layout), the chat box and the rail all reach it. It
+  // sits below every other layer: an attached agent's own (agent-terminal.tsx)
+  // detaches first and declines to it, and a terminal with no agent keeps the
+  // key. Back leaves the dialog, the box or the agent before going back, so it
+  // lands on the rail, never typing into a box or attached to a terminal.
+  const leaveAll = () => {
+    if (focus.isModalOpen()) closeModal();
+    if (focus.isPaneFocused("canvas") || focus.isPaneFocused("input"))
+      focus.setActivePane("rail");
+  };
+  useScope(
+    "app",
+    {
+      [Commands.GO_BACK]: () => {
+        leaveAll();
+        history(-1);
+      },
+      // Out of the box first: Home focuses its own box afresh, and a box
+      // that keeps focus across the switch loses its field's.
+      [Commands.GO_HOME]: () => {
+        leaveAll();
+        riker.goHome();
+      },
+    },
+    { priority: ANYWHERE_PRIORITY },
   );
 
   // Moves with no key of their own; everything with a key comes from the

@@ -198,11 +198,13 @@ function shown(scopes: string[], ctx: HelpCtx): Map<string, string> {
 
 test("attached to a terminal, only its own keys are listed", () => {
   const keys = shown(["terminal", "canvas", "app"], { ...quiet, attached: true });
-  // Detach, the go-to chord, the tmux jump and the rail: the keys an
-  // attached terminal lets past.
+  // Detach, the go-to chord, back, Home, the tmux jump and the rail: the
+  // keys an attached terminal lets past.
   expect([...keys.values()].sort()).toEqual(
     [
       Commands.GO_TO,
+      Commands.GO_BACK,
+      Commands.GO_HOME,
       Commands.TERMINAL_DETACH,
       Commands.TERMINAL_JUMP,
       Commands.SIDEBAR_TOGGLE,
@@ -210,6 +212,42 @@ test("attached to a terminal, only its own keys are listed", () => {
   );
   expect(keys.get("^t")).toBe(Commands.TERMINAL_JUMP);
   expect(keys.get("^e")).toBe(Commands.SIDEBAR_TOGGLE);
+  expect(keys.get("^[")).toBe(Commands.GO_BACK);
+  expect(keys.get("^a")).toBe(Commands.GO_HOME);
+});
+
+// RIKER-0195: ctrl+[ goes back and ctrl+a goes Home from anywhere. Each is in
+// the app table (the shell's layer under every other) and the terminal's
+// (what lets it past an attached agent), and means nothing else anywhere:
+// not the ctrl+j/k of RIKER-0024 and RIKER-0180, nor Esc.
+test("ctrl+[ is back and ctrl+a is Home, anywhere, an attached terminal too", () => {
+  const uses = (key: string) =>
+    Object.entries(keymap)
+      .flatMap(([scope, bindings]) =>
+        (bindings ?? []).filter((b) => b.key === key).map((b) => `${scope}:${b.cmd}`),
+      )
+      .sort();
+  expect(uses("ctrl+[")).toEqual([`app:${Commands.GO_BACK}`, `terminal:${Commands.GO_BACK}`]);
+  expect(uses("ctrl+a")).toEqual([`app:${Commands.GO_HOME}`, `terminal:${Commands.GO_HOME}`]);
+  for (const key of ["ctrl+j", "ctrl+k", "escape"])
+    for (const use of uses(key))
+      expect([Commands.GO_BACK, Commands.GO_HOME]).not.toContain(use.split(":")[1]);
+});
+
+test("typing in the chat box, ctrl+[ and ctrl+a still show and work", () => {
+  const keys = shown(["input", "canvas", "app"], { ...quiet, typing: true });
+  expect(keys.get("^[")).toBe(Commands.GO_BACK);
+  expect(keys.get("^a")).toBe(Commands.GO_HOME);
+  // Where ctrl+[ arrives as Esc (no kitty protocol, or inside tmux), back
+  // is not offered: the key would do what Esc does.
+  const legacy = shown(["input", "canvas", "app"], { ...quiet, typing: true, kittyKeys: false });
+  expect(legacy.has("^[")).toBe(false);
+  expect(legacy.get("^a")).toBe(Commands.GO_HOME);
+  const attached = shown(["terminal"], { ...quiet, attached: true, kittyKeys: false });
+  expect(attached.has("^[")).toBe(false);
+  // On Home, ctrl+a has nowhere to go.
+  const onHome = shown(["input", "canvas", "app"], { ...quiet, kind: "home", typing: true });
+  expect(onHome.has("^a")).toBe(false);
 });
 
 // Reserved like ctrl+] (the passthrough lets the terminal scope's keys by),

@@ -52,6 +52,9 @@ export interface HelpCtx {
   inboxWork?: boolean;
   // The Wins tab shows today (l and 0 have nowhere to go).
   winsToday?: boolean;
+  // The terminal sends ctrl+[ apart from Esc (the kitty keyboard protocol;
+  // never inside tmux). Without it ctrl+[ is Esc, so back is not offered.
+  kittyKeys?: boolean;
 }
 
 // In tab order (keys 1-5): Wins first.
@@ -95,6 +98,8 @@ export function helpBindings<B extends HelpBinding<HelpCtx>>(
 // wraps the rest in unlessTyping).
 const WORK_WHILE_TYPING = new Set<string>([
   Commands.FOCUS_NEXT,
+  Commands.GO_BACK,
+  Commands.GO_HOME,
   Commands.SIDEBAR_TOGGLE,
   Commands.POLL_NOW,
 ]);
@@ -377,6 +382,9 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   },
 ];
 
+export const BACK_CHORD = "ctrl+[";
+export const HOME_CHORD = "ctrl+a";
+
 // The navigation keys and the config field that moves each.
 const NAV_DEFAULTS: Required<NavKeys> = {
   goTo: "ctrl+\\",
@@ -437,6 +445,26 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       key: NAV_DEFAULTS.forward,
       cmd: Commands.HISTORY_FORWARD,
       desc: "forward again (history)",
+    },
+    // Control chords, bound in a layer of their own that no pane or modal
+    // shadows (shell.tsx), and in the terminal's table so they get past an
+    // attached agent. ctrl+[ is the Esc byte in a legacy terminal and inside
+    // tmux, which folds it into Esc whatever extended-keys says: only a
+    // terminal speaking the kitty protocol to Riker sends it apart. There
+    // Esc keeps its own meaning (and still reaches the agent).
+    {
+      key: BACK_CHORD,
+      cmd: Commands.GO_BACK,
+      desc: "back from anywhere: closes the dialog, leaves the box or the agent, then goes back",
+      help: "back",
+      relevant: (c) => c.kittyKeys !== false,
+    },
+    // The chat box loses ctrl+a (start of line); home still does it.
+    {
+      key: HOME_CHORD,
+      cmd: Commands.GO_HOME,
+      desc: "Home: the Assistant, from anywhere",
+      relevant: (c) => c.kind !== "home",
     },
     { key: "shift+n", cmd: Commands.NEW_TASK, desc: "new task" },
     // Raw mode turns off the terminal's suspend, so ctrl+z reaches Riker. An
@@ -525,6 +553,23 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       cmd: Commands.TERMINAL_JUMP,
       desc: "detach and jump your tmux client to the agent's window (prefix L comes back)",
       help: "tmux",
+    },
+    // Reserved on an agent (a terminal with no agent, the editor, is sent
+    // the key as typed): detach, then back or Home as anywhere else. The
+    // agent loses ctrl+[ (Esc still reaches it) and ctrl+a (start of line
+    // in claude's prompt, and tmux's prefix where that is C-a).
+    {
+      key: BACK_CHORD,
+      cmd: Commands.GO_BACK,
+      desc: "detach and go back",
+      help: "back",
+      relevant: (c) => c.kittyKeys !== false,
+    },
+    {
+      key: HOME_CHORD,
+      cmd: Commands.GO_HOME,
+      desc: "detach and go to the Assistant",
+      help: "home",
     },
     // Reserved, so the rail toggles while attached as it does anywhere (the
     // owner's call, AUG-0176): the agent loses ctrl+e (end of line in
