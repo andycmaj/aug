@@ -487,6 +487,8 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   // The task an approved idea became.
   { table: "ideas", column: "made_task_id", ddl: "INTEGER REFERENCES tasks(id)" },
   { table: "turns", column: "pending", ddl: "INTEGER NOT NULL DEFAULT 0" },
+  // Where a running action is (the guide's stage), one line.
+  { table: "turns", column: "progress", ddl: "TEXT" },
   { table: "projects", column: "brief", ddl: "TEXT NOT NULL DEFAULT ''" },
   { table: "tasks", column: "goal_id", ddl: "INTEGER REFERENCES project_goals(id)" },
   { table: "sessions", column: "end_reason", ddl: "TEXT" },

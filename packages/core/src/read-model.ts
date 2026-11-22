@@ -88,6 +88,7 @@ function reads(desk: LiveCheck) {
     tasksWithPendingAction: [[T.turns], store.tasksWithPendingAction],
     turns: [[T.turns], store.turnsForTask],
     pendingAction: [[T.turns], store.pendingAction],
+    latestActionTurns: [[T.turns], store.latestActionTurns],
     messages: [[T.messages], store.messagesForTask],
     message: [[T.messages], store.getMessage],
     taskLinks: [[T.taskLinks], store.linksForTask],

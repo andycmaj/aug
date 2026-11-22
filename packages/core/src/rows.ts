@@ -3,7 +3,7 @@
 // the database.
 
 import { REF_PREFIX, refNumber } from "./brand";
-import type { NoteRow, ProjectRow, TurnRow } from "./types";
+import { TurnStatus, type NoteRow, type ProjectRow, type TurnRow } from "./types";
 
 export function taskRef(id: number): string {
   return `${REF_PREFIX}${String(id).padStart(4, "0")}`;
@@ -33,4 +33,23 @@ export function turnSteps(turn: TurnRow): string[] {
 
 export function noteReadBy(note: NoteRow): string[] {
   return JSON.parse(note.read_by) as string[];
+}
+
+// How long the rail keeps saying an action finished or failed.
+export const ACTION_SHOWN_MS = 2 * 60_000;
+
+// What the rail says about a task's latest action turn: where a running
+// one is, and for a short while that it finished or failed. Null when
+// there is nothing to say.
+export function actionRailWord(
+  turn: TurnRow | undefined,
+  now: Date,
+): { text: string; running: boolean; failed: boolean } | null {
+  if (!turn) return null;
+  const name = turn.author || "action";
+  if (turn.status === TurnStatus.running)
+    return { text: `${name}: ${turn.progress ?? "running"}`, running: true, failed: false };
+  if (!turn.finished_at || now.getTime() - Date.parse(turn.finished_at) > ACTION_SHOWN_MS) return null;
+  const failed = turn.status === TurnStatus.failed;
+  return { text: `${name} ${failed ? "failed" : "done"}`, running: false, failed };
 }

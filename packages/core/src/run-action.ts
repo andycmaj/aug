@@ -51,7 +51,8 @@ import {
 import { branchCommits, commitLog, planBatches, type BatchPlan } from "@riker/code-review-plannotator/batches";
 import { setGuideLog } from "@riker/code-review-plannotator/log";
 import { reviewInBatches } from "@riker/code-review-plannotator/run";
-import { guideMarkdown } from "./guide-turn";
+import type { GuideProgress } from "@riker/code-review-plannotator/progress";
+import { guideMarkdown, guideProgressLine } from "./guide-turn";
 import { transcript } from "./transcript";
 import {
   SpendRole,
@@ -393,9 +394,11 @@ async function runGuide(
 ): Promise<ActionResult> {
   const cwd = task.worktree ?? shape.cwd;
   const commits = branchCommits(cwd, plan.patch.mergeBase).length ? commitLog(cwd, plan.patch.mergeBase) : "";
+  const progress = guideProgress(task, turn);
   const ran = await reviewInBatches({
     plan: plan.batches,
     commits,
+    progress,
     prompt: (job) => actionPrompt(spec, task, false, shape.as, job),
     ask: async (prompt, label) => {
       const result = await think({
@@ -431,7 +434,23 @@ async function runGuide(
     throw new GuideError(ran.error, files);
   }
   log.info("guide calls", { task: task.id, calls: ran.calls, gaps: ran.gaps.length });
-  return finishGuide(task, spec, turn, ran.guide, { event, patch: plan.patch, denied: ran.denied, gaps: ran.gaps }, timing);
+  return finishGuide(
+    task,
+    spec,
+    turn,
+    ran.guide,
+    { event, patch: plan.patch, denied: ran.denied, gaps: ran.gaps, progress },
+    timing,
+  );
+}
+
+// Each stage onto the turn, where the Canvas and the rail read it.
+function guideProgress(task: TaskRow, turn: TurnRow): (p: GuideProgress) => void {
+  return (p) => {
+    const line = guideProgressLine(p);
+    log.info("guide progress", { task: task.id, stage: p.stage, line });
+    store.updateTurn(turn.id, { progress: line });
+  };
 }
 
 // The guide saved into Plannotator, its findings kept beside it; its review
@@ -442,7 +461,7 @@ async function finishGuide(
   spec: ActionSpec,
   turn: TurnRow,
   guide: Guide,
-  run: { event?: string; patch: Patch; denied: string[]; gaps: string[] },
+  run: { event?: string; patch: Patch; denied: string[]; gaps: string[]; progress: (p: GuideProgress) => void },
   timing: (fields?: Record<string, unknown>) => void,
 ): Promise<ActionResult> {
   const { event, denied } = run;
@@ -454,6 +473,7 @@ async function finishGuide(
     dir,
     pr: prUrl(task) ?? undefined,
     patch: run.patch,
+    progress: run.progress,
   });
   if ("error" in saved) {
     const files = writeOutput(task, { ...spec, name: `${spec.name}-answer` }, JSON.stringify(guide, null, 2));

@@ -166,6 +166,18 @@ matched by plain rules (no model call), in the noise rules' shape:
   the table, one entry each ("Action: summarize the work so far").
 - A running action shows as its running turn on the table. When it ends, a
   toast says so ("summary ready", "guide ready: opening plannotator").
+- A guide says where it is (AUG-0192): `reviewInBatches` and `saveGuide`
+  take a `progress` callback (`GuideProgress` in
+  `@riker/code-review-plannotator` `progress.ts`: diff read, one call, batches
+  done and running, chapters, fitting, saving), and Riker writes each stage
+  as one short line on the action turn's `progress` column
+  (`guideProgressLine`, `core/guide-turn.ts`). The Canvas shows it above
+  the turn's steps; the rail's sub line leads with it (`guide: batches 3/5
+  done, 2 running`), spinning, its PR chip set aside while it runs, then
+  says `guide done` or `guide failed` for two minutes (`actionRailWord`,
+  `core/rows.ts`, from the `latestActionTurns` read). A failed turn keeps
+  the stage it stopped at. A run a trigger started writes the same turn,
+  so it shows the same way.
 
 ## As a move
 

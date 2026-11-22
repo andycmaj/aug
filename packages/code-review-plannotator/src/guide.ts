@@ -18,6 +18,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { errorMessage, log } from "./log";
+import { GuideStage, type GuideProgress } from "./progress";
 
 export interface GuideNote {
   lineStart: number;
@@ -504,14 +505,17 @@ export async function saveGuide(opts: {
   pr?: string;
   // The patch the calls were given.
   patch: Patch;
+  progress?: (p: GuideProgress) => void;
 }): Promise<SavedGuide | { error: string }> {
   const parsed = opts.guide;
   const patch = opts.patch;
+  opts.progress?.({ stage: GuideStage.fitting });
   const { guide, findings, lines, comments } = fitGuide(parsed, patch.text);
   if (guide.sections.length === 0) return { error: "no chapter of the guide names a file in the change" };
   mkdirSync(opts.dir, { recursive: true });
   const file = join(opts.dir, "guide.json");
   writeFileSync(file, `${JSON.stringify(snapshot(guide, patch), null, 2)}\n`);
+  opts.progress?.({ stage: GuideStage.saving });
   const saved = await tool.save(file, opts.cwd, opts.pr);
   if ("error" in saved) {
     log.warn("guide import failed", { file, error: saved.error });
