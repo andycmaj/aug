@@ -266,15 +266,36 @@ export function taskClosed(taskId: number, by = "you"): void {
   });
 }
 
-// Not a task after all: gone from the rail, and nothing waits on it.
-export function taskDropped(taskId: number, by = "you"): void {
+// Not a task after all: gone from the rail, and nothing waits on it. Its
+// chat says who dropped it and why, since the rail no longer shows it.
+export function taskDropped(taskId: number, by = "you", why = ""): void {
   store.batch(() => {
     store.updateTask(taskId, {
       status: TaskStatus.dropped,
       closed_at: now(),
       closed_by: by,
     });
+    store.addTurn({
+      taskId,
+      role: TurnRole.trigger,
+      body: `Dropped by ${by} (ignore)${why.trim() ? `: ${why.trim()}` : ""}. d reopens it.`,
+    });
     blockerResolved(taskId);
+  });
+}
+
+// Open again, by the owner's say: no agent starts (Start does that).
+export function taskReopened(taskId: number, by = "you"): void {
+  const task = store.getTask(taskId);
+  if (!task) return;
+  const was = task.status;
+  store.batch(() => {
+    store.reopen(taskId);
+    store.addTurn({
+      taskId,
+      role: TurnRole.trigger,
+      body: `Reopened by ${by} (was ${was})`,
+    });
   });
 }
 

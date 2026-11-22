@@ -8,7 +8,8 @@
 
 import { SECTION_TITLES, type RailItem, type RailSection } from "./rail";
 import { taskRef, type SearchTurn } from "./store";
-import { Channel, Kind, TurnRole, type MessageRow } from "./types";
+import { laneOf } from "./lanes";
+import { Channel, Kind, TaskStatus, TurnRole, type MessageRow, type TaskRow } from "./types";
 
 interface Person {
   // null: a name typed by hand (waiting on), with no account behind it.
@@ -41,6 +42,8 @@ export interface SearchDoc {
   numbers: { n: number; where: string }[];
   people: Person[];
   content: Content[];
+  // Done or dropped: listed only when what is typed matches it.
+  closed?: boolean;
 }
 
 export interface SearchHit {
@@ -134,6 +137,8 @@ export interface SearchSources {
 export function searchIndex(
   sections: RailSection[],
   sources: SearchSources,
+  // Done and dropped work, off the rail: found only by what is typed.
+  closed: TaskRow[] = [],
 ): SearchDoc[] {
   const docs: SearchDoc[] = [];
   for (const s of sections) {
@@ -147,43 +152,9 @@ export function searchIndex(
         title: titleOf(item),
       };
       switch (item.type) {
-        case "task": {
-          const t = item.task;
-          const filed = sources.messages.get(t.id) ?? [];
-          const people = filed.map(personOf).filter((p): p is Person => !!p);
-          if (t.waiting_on)
-            people.push({
-              channel: null,
-              handle: t.waiting_on,
-              name: t.waiting_on,
-            });
-          docs.push({
-            ...base,
-            taskId: t.id,
-            numbers: uniq(
-              [
-                githubNumber(t.thread_key, t.url),
-                ...filed.map((m) => githubNumber(m.thread_key, m.url)),
-              ].filter((n): n is { n: number; where: string } => !!n),
-              (n) => n.where,
-            ),
-            people: uniq(people, (p) => `${p.channel}:${p.handle}`),
-            content: [
-              { text: t.summary, why: "summary" },
-              { text: t.agent_says ?? "", why: "agent says" },
-              {
-                text: [t.repo, t.branch].filter(Boolean).join(" "),
-                why: "repo",
-              },
-              ...filed.map((m) => ({
-                text: `${m.title} ${m.body}`,
-                why: `${m.channel} message`,
-              })),
-              ...chatOf(sources.turns?.get(t.id) ?? []),
-            ].filter((c) => c.text),
-          });
+        case "task":
+          docs.push(taskDoc(item, base, sources));
           break;
-        }
         case "project":
           docs.push({
             ...base,
@@ -199,7 +170,75 @@ export function searchIndex(
       }
     }
   }
+  for (const task of closed) {
+    const item = closedItem(task);
+    docs.push({
+      ...taskDoc(item, {
+        item,
+        section: task.status === TaskStatus.dropped ? "Dropped" : "Done",
+        order: docs.length,
+        title: task.title,
+      }, sources),
+      closed: true,
+    });
+  }
   return docs;
+}
+
+function closedItem(task: TaskRow): Extract<RailItem, { type: "task" }> {
+  return {
+    type: "task",
+    key: `t${task.id}`,
+    task,
+    lane: laneOf(task, { hasPendingAction: false }),
+    priority: task.priority,
+    slipped: false,
+    at: task.created_at,
+    group: null,
+    copy: false,
+    tags: [],
+  };
+}
+
+function taskDoc(
+  item: Extract<RailItem, { type: "task" }>,
+  base: Pick<SearchDoc, "item" | "section" | "order" | "title">,
+  sources: SearchSources,
+): SearchDoc {
+  const t = item.task;
+  const filed = sources.messages.get(t.id) ?? [];
+  const people = filed.map(personOf).filter((p): p is Person => !!p);
+  if (t.waiting_on)
+    people.push({
+      channel: null,
+      handle: t.waiting_on,
+      name: t.waiting_on,
+    });
+  return {
+    ...base,
+    taskId: t.id,
+    numbers: uniq(
+      [
+        githubNumber(t.thread_key, t.url),
+        ...filed.map((m) => githubNumber(m.thread_key, m.url)),
+      ].filter((n): n is { n: number; where: string } => !!n),
+      (n) => n.where,
+    ),
+    people: uniq(people, (p) => `${p.channel}:${p.handle}`),
+    content: [
+      { text: t.summary, why: "summary" },
+      { text: t.agent_says ?? "", why: "agent says" },
+      {
+        text: [t.repo, t.branch].filter(Boolean).join(" "),
+        why: "repo",
+      },
+      ...filed.map((m) => ({
+        text: `${m.title} ${m.body}`,
+        why: `${m.channel} message`,
+      })),
+      ...chatOf(sources.turns?.get(t.id) ?? []),
+    ].filter((c) => c.text),
+  };
 }
 
 // One word's best match on a row: lower is better, null is none.
@@ -311,6 +350,7 @@ export function search(
   const words = query.trim().split(/\s+/).filter(Boolean);
   const scored: { doc: SearchDoc; score: number; why: string[] }[] = [];
   for (const doc of docs) {
+    if (doc.closed && !words.length) continue;
     let score = 0;
     const why: string[] = [];
     let all = true;

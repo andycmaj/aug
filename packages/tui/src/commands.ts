@@ -23,6 +23,7 @@ export const Commands = {
   // On the item at the cursor / the selected item
   OPEN: "item.open",
   DONE: "task.done",
+  REOPEN: "task.reopen",
   REMIND: "task.remind",
   WATCH: "task.watch",
   WIN: "task.win",

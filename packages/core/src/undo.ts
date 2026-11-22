@@ -11,9 +11,18 @@ import type { RikerConfig } from "./config";
 import { holdForStart, holdReleased, HELD_FOR_START } from "./lifecycle";
 import * as projects from "./projects";
 import { briefEditable } from "./read-model";
+import { isClosed } from "./rows";
 import { MAX_WINS } from "./rail";
 import * as store from "./store";
-import { AgentState, Kind, SessionKind, TaskStatus, TurnRole, type TaskRow } from "./types";
+import {
+  AgentState,
+  Kind,
+  SessionKind,
+  TaskStatus,
+  TurnRole,
+  type MessageRow,
+  type TaskRow,
+} from "./types";
 
 const FIELDS = [
   "status",
@@ -38,6 +47,9 @@ interface Link {
   added_by: string;
 }
 
+// A message filed under the task, as triage left it (ignore refiles them).
+type Filed = Pick<MessageRow, "id" | "verdict" | "reason" | "task_id">;
+
 // What a move can change about a task, all of it.
 export interface TaskSnap {
   fields: Pick<TaskRow, Field>;
@@ -48,6 +60,7 @@ export interface TaskSnap {
   dependents: number[];
   win: boolean;
   links: Link[];
+  messages: Filed[];
 }
 
 type Part = Field | Exclude<keyof TaskSnap, "fields">;
@@ -79,6 +92,9 @@ export function snapshot(taskId: number, day: string): TaskSnap | null {
     links: store
       .linksForTask(taskId)
       .map((l) => ({ url: l.url, title: l.title, added_by: l.added_by })),
+    messages: store
+      .messagesForTask(taskId)
+      .map((m) => ({ id: m.id, verdict: m.verdict, reason: m.reason, task_id: m.task_id })),
   };
 }
 
@@ -90,7 +106,7 @@ function same(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-const PARTS: Part[] = [...FIELDS, "held", "blockers", "dependents", "win", "links"];
+const PARTS: Part[] = [...FIELDS, "held", "blockers", "dependents", "win", "links", "messages"];
 
 function changed(before: TaskSnap, after: TaskSnap): Part[] {
   return PARTS.filter((p) => !same(partOf(before, p), partOf(after, p)));
@@ -189,6 +205,11 @@ export class UndoStack {
     if (outer) outer.recorded = true;
     this.keep(frame.by, draft(value));
     return value;
+  }
+
+  // Who is making the move under way: the move bus's asker, else the owner.
+  by(): string {
+    return this.scope.getStore()?.by ?? "you";
   }
 
   // A move that went through no desk method: it cannot be undone.
@@ -290,6 +311,16 @@ export async function revert(config: RikerConfig, entry: UndoEntry): Promise<Und
       for (const l of before.links)
         if (!had.has(l.url)) store.addTaskLink(task.id, l.url, l.title, l.added_by);
     }
+    // Ignore refiled its messages as FYI: each goes back under the task, as
+    // triage filed it, unless something filed it again since.
+    if (has("messages")) {
+      const kept = new Set(now.messages.map((m) => m.id));
+      for (const m of before.messages) {
+        if (kept.has(m.id)) continue;
+        const row = store.getMessage(m.id);
+        if (row && row.task_id === null) store.fileMessage(m.id, m.verdict, m.reason, m.task_id);
+      }
+    }
     store.addTurn({ taskId: task.id, role: TurnRole.trigger, body: `Undone: ${entry.what}` });
   });
 
@@ -304,8 +335,4 @@ export async function revert(config: RikerConfig, entry: UndoEntry): Promise<Und
     ok: true,
     text: `undid: ${name}${whose(entry)}${reopened ? "; s starts its agent again" : ""}`,
   };
-}
-
-function isClosed(task: Pick<TaskRow, "status">): boolean {
-  return task.status === TaskStatus.done || task.status === TaskStatus.dropped;
 }

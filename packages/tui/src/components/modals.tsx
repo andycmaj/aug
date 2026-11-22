@@ -430,7 +430,8 @@ function searchTag(item: RailItem): string {
 }
 
 // / and the go-to chord: every row on the rail, folded and For later ones
-// too, the ones seen lately first. Picking one selects it.
+// too, the ones seen lately first, then done and dropped work that matches
+// what is typed. Picking one selects it.
 export function SearchModal(props: {
   onPick: (key: string) => void;
   onClose: () => void;
@@ -450,7 +451,7 @@ export function SearchModal(props: {
     const ids = sections
       .flatMap((s) => s.items)
       .flatMap((i) => (i.type === "task" ? [i.task.id] : []));
-    return searchIndex(sections, riker.searchSources(ids));
+    return searchIndex(sections, riker.searchSources(ids), riker.closedTasks());
   });
   const nav = useListNavigation({
     itemCount: () => hits().length,
@@ -500,7 +501,7 @@ export function SearchModal(props: {
         <Show
           when={hits().length > 0}
           fallback={
-            <text fg={theme.textMuted}>Nothing on the rail matches</text>
+            <text fg={theme.textMuted}>Nothing matches</text>
           }
         >
           <For each={hits()}>

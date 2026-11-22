@@ -7,7 +7,7 @@ import { setMux } from "../src/mux";
 import { localDay } from "../src/rail";
 import * as store from "../src/store";
 import { UndoStack } from "../src/undo";
-import { AgentState, Kind, Priority, SessionKind, TaskStatus, TurnRole } from "../src/types";
+import { AgentState, Kind, Priority, SessionKind, TaskStatus, TurnRole, Verdict } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
 import { fakeBrain, freshHome, testConfig } from "./support/helpers";
 
@@ -243,5 +243,84 @@ describe("ctrl+z undoes the last move", () => {
     expect(stack.pop()).toMatchObject({ what: "c" });
     expect(stack.pop()).toMatchObject({ what: "b" });
     expect(stack.pop()).toBeUndefined();
+  });
+});
+
+describe("ignore and reopen (AUG-0186)", () => {
+  const filedTo = (taskId: number) => {
+    const m = store.insertMessage({
+      channel: "slack",
+      externalId: `m-${taskId}`,
+      threadKey: `slack:C1:${taskId}`,
+      author: "U2",
+      authorName: "Sam",
+      title: "DM with Sam",
+      body: "can you look at this",
+      receivedAt: new Date().toISOString(),
+    })!;
+    store.fileMessage(m.id, Verdict.task, "asks you to look", taskId);
+    return m.id;
+  };
+  const corrections = () =>
+    db().query("SELECT COUNT(*) AS n FROM corrections").get() as { n: number };
+
+  test("ignore drops it, says who on the task, learns nothing, and ctrl+z takes all of it back", async () => {
+    const t = task("Look at the flaky test");
+    const m = filedTo(t.id);
+    expect((await engine.runMove("ignore", { task: ref(t.id), why: "not mine" }, "assistant")).ok).toBe(true);
+
+    expect(store.getTask(t.id)).toMatchObject({ status: TaskStatus.dropped, closed_by: "assistant" });
+    expect(store.turnsForTask(t.id).at(-1)?.body).toBe(
+      "Dropped by assistant (ignore): not mine. d reopens it.",
+    );
+    expect(store.getMessage(m)).toMatchObject({ verdict: Verdict.fyi, task_id: null });
+    expect(corrections().n).toBe(0);
+
+    expect(await undo()).toEqual({ ok: true, text: `undid: ignore ${ref(t.id)} (assistant's move)` });
+    expect(store.getTask(t.id)).toMatchObject({ status: TaskStatus.open, closed_by: null });
+    expect(store.getMessage(m)).toMatchObject({
+      verdict: Verdict.task,
+      reason: "asks you to look",
+      task_id: t.id,
+    });
+  });
+
+  test("ignore on worked-on work marks it done, and ctrl+z opens it again", async () => {
+    const t = task();
+    store.addTurn({ taskId: t.id, role: TurnRole.agent, body: "did a thing" });
+    await engine.desk.ignore(t.id);
+    expect(store.getTask(t.id)!.status).toBe(TaskStatus.done);
+    expect((await undo()).text).toBe(`undid: done ${ref(t.id)}`);
+    expect(store.getTask(t.id)!.status).toBe(TaskStatus.open);
+  });
+
+  test("reopen opens a dropped or done task without starting its agent; ctrl+z drops it again", async () => {
+    const t = task("Guide findings", Kind.coding);
+    await engine.desk.ignore(t.id);
+    const r = await engine.runMove("reopen", { task: ref(t.id) }, "assistant");
+    expect(r).toEqual({ ok: true, result: `${ref(t.id)} is open again; s starts its agent` });
+    expect(store.getTask(t.id)).toMatchObject({
+      status: TaskStatus.open,
+      closed_at: null,
+      // Still held for the owner's Start, as it was made.
+      agent_state: AgentState.queued,
+    });
+    expect(store.latestSession(t.id)).toBeNull();
+    expect(fake.windows).toEqual([]);
+    expect(store.turnsForTask(t.id).at(-1)?.body).toBe("Reopened by assistant (was dropped)");
+    const events = db()
+      .query("SELECT kind, detail FROM task_events WHERE task_id = ? ORDER BY id")
+      .all(t.id);
+    expect(events).toEqual([
+      { kind: "created", detail: "coding" },
+      { kind: "dropped", detail: "you" },
+      { kind: "reopened", detail: null },
+    ]);
+
+    expect((await engine.runMove("reopen", { task: ref(t.id) })).result).toBe(
+      `${ref(t.id)} is not done or dropped`,
+    );
+    expect((await undo()).text).toBe(`undid: reopen ${ref(t.id)} (assistant's move)`);
+    expect(store.getTask(t.id)!.status).toBe(TaskStatus.dropped);
   });
 });

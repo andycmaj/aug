@@ -291,6 +291,23 @@ describe("go-to list", () => {
     void b;
   });
 
+  test("done and dropped work is found by what is typed, after the rail, never listed bare", () => {
+    const open = store.createTask({ title: "Guide review", kind: Kind.task, channel: "owner" });
+    const gone = store.createTask({ title: "Guide findings", kind: Kind.task, channel: "owner" });
+    store.updateTask(gone.id, { status: TaskStatus.dropped, closed_at: at(9), closed_by: "you" });
+    const all = () =>
+      searchIndex(rail(), { messages: new Map(), turns: new Map() }, store.closedTasks());
+    expect(goToList(all(), "", []).map((h) => h.title)).not.toContain("Guide findings");
+    expect(goToList(all(), "guide", []).map((h) => [h.title, h.section])).toEqual([
+      ["Guide review", "Tasks"],
+      ["Guide findings", "Dropped"],
+    ]);
+    expect(goToList(all(), store.taskRef(gone.id), []).map((h) => h.item.key)).toEqual([
+      `t${gone.id}`,
+    ]);
+    void open;
+  });
+
   test("typing searches, recent or not", () => {
     const a = store.createTask({ title: "Alpha", kind: Kind.task, channel: "owner" });
     store.createTask({ title: "Bravo", kind: Kind.task, channel: "owner" });

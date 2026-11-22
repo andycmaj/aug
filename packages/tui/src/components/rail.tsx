@@ -80,13 +80,14 @@ export function Rail(props: { actions: TaskActions }) {
   let pane: Renderable | undefined;
 
   // First visit: the first row is selected. A cursor whose row left the rail
-  // comes back to the selected row, if the rail shows it.
+  // comes back to the selected row, if the rail shows it. A task gone to
+  // that has no row (done or dropped) keeps it, so the rail's keys reach it.
   createEffect(() => {
     const list = riker.shownItems();
     if (list.length === 0) return;
     const shown = (key: string | null) => list.some((i) => i.key === key);
     if (!riker.selectedKey()) riker.select(list[0].key);
-    else if (!shown(riker.cursorKey()))
+    else if (!shown(riker.cursorKey()) && riker.cursorKey() !== riker.offRailKey())
       riker.moveCursor(riker.selectedRowKey() ?? list[0].key);
   });
 

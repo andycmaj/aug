@@ -43,7 +43,7 @@ import {
   suggestMentions,
 } from "@riker/core/mentions";
 import type { RailItem } from "@riker/core/rail";
-import { taskRef } from "@riker/core/rows";
+import { isClosed, taskRef } from "@riker/core/rows";
 import {
   AgentState,
   Kind,
@@ -422,6 +422,11 @@ function TaskChat(props: {
             ["y", "accept"],
             ["x", "skip"],
           ];
+    if (isClosed(t))
+      return [
+        ["d", "reopen"],
+        ["i", "type: reopens it too"],
+      ];
     const edit: [string, string][] =
       brief() === null ? [] : [["e", "edit the brief"]];
     if (t.kind === Kind.coding)
@@ -487,18 +492,22 @@ function TaskChat(props: {
           />
         )}
       </For>
-      <Show
-        when={props.task.status === "done" && props.task.kind !== Kind.home}
-      >
-        <text
-          fg={theme.textMuted}
-        >{`· done${props.task.closed_by ? ` (${props.task.closed_by})` : ""} · typing reopens it`}</text>
+      <Show when={isClosed(props.task) && props.task.kind !== Kind.home}>
+        <text fg={theme.textMuted}>{closedLine(props.task)}</text>
       </Show>
       <box paddingLeft={1} marginTop={1}>
         <KeyHints hints={hint()} />
       </box>
     </scrollbox>
   );
+}
+
+// What closed it, who and when: a dropped task is off the rail, so this is
+// where the owner learns how it got there and how to bring it back.
+function closedLine(task: TaskRow): string {
+  const by = task.closed_by ? ` by ${task.closed_by}` : "";
+  const at = task.closed_at ? ` ${dayClock(task.closed_at)}` : "";
+  return `· ${task.status}${by}${at}`;
 }
 
 function PendingCard(props: { taskId: number }) {

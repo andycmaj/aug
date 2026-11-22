@@ -121,6 +121,21 @@ test("the footer names what x and m do to the selected row", () => {
   expect(words("task", "home").x).toBeUndefined();
 });
 
+test("d marks an open task done and reopens a done or dropped one", () => {
+  const ctx: HelpCtx = {
+    item: "task",
+    kind: "task",
+    hasDraft: false,
+    live: false,
+    coding: false,
+    watching: false,
+    started: false,
+    pr: false,
+  };
+  expect(footer("rail", ctx).get("d")).toBe("done");
+  expect(footer("rail", { ...ctx, closed: true }).get("d")).toBe("reopen");
+});
+
 test("the footer offers ghdash only on a task with a PR", () => {
   const ctx: HelpCtx = {
     item: "task",
