@@ -4,6 +4,7 @@ import * as store from "@riker/core/store";
 import { freshHome } from "@riker/core/test/support/helpers";
 import { Kind } from "@riker/core/types";
 import { githubComment } from "../src/draft";
+import { githubPlugin } from "../src/index";
 
 beforeEach(() => freshHome());
 
@@ -45,5 +46,13 @@ describe("a GitHub draft", () => {
     expect(drafts.describe(draft)).toBe("GitHub comment + merge on a/b#3");
     expect(drafts.text(draft)).toBe("ship it");
     expect(drafts.text(drafts.withText(draft, "lgtm"))).toBe("lgtm");
+  });
+});
+
+describe("what GitHub tells the Assistant", () => {
+  test("its gh reads", () => {
+    const lines = githubPlugin().assistant!({} as never);
+    expect(lines[0]).toBe("## GitHub");
+    expect(lines.join("\n")).toContain("gh pr view");
   });
 });

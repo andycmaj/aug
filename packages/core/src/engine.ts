@@ -108,7 +108,11 @@ export class Engine {
       this.status = { ...this.status, [c.name]: off("not started") };
     }
     const drafts = Drafts.of(plugins);
-    this.pool = new AgentPool({ config, drafts });
+    this.pool = new AgentPool({
+      config,
+      drafts,
+      assistantLines: (c) => plugins.flatMap((p) => p.assistant?.(c) ?? []),
+    });
     this.drivers = new Drivers({
       pool: this.pool,
       config,

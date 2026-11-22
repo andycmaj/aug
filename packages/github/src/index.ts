@@ -8,6 +8,12 @@ import { githubComment, type GithubComment } from "./draft";
 
 export { GithubConnector, githubConfig, type GithubConfig, githubComment, type GithubComment, type GithubOptions };
 
+// The Assistant's gh reads (core grants them on its shell: GH_READS).
+const GITHUB_LINES = [
+  "## GitHub",
+  "Look up issues, PRs and runs with gh's read commands: gh pr view|list|diff|checks|status, gh issue view|list|status, gh search, gh run view|list, gh repo view. Nothing that writes (no comments, no gh api).",
+];
+
 export function githubPlugin(options: GithubOptions = {}): RikerPlugin & { connector: GithubConnector } {
   const connector = new GithubConnector(options);
   return {
@@ -16,5 +22,6 @@ export function githubPlugin(options: GithubOptions = {}): RikerPlugin & { conne
     connectors: [connector],
     drafts: [githubComment],
     config: [githubConfig],
+    assistant: () => GITHUB_LINES,
   };
 }

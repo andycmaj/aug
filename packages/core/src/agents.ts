@@ -270,6 +270,8 @@ export interface PoolOptions {
   config: ConfigSource;
   // The plugins' kinds of draft, which make a turn's answer a draft.
   drafts?: Drafts;
+  // The plugins' lines for the Assistant's system prompt.
+  assistantLines?: (config: RikerConfig) => string[];
 }
 
 interface Running {
@@ -518,7 +520,7 @@ export class AgentPool {
     try {
       const result = await think({
         ...(home
-          ? assistantCall(config, history, reason, resume, where)
+          ? assistantCall(config, history, reason, resume, where, this.options.assistantLines?.(config) ?? [])
           : generalCall(config, task, history, reason, Boolean(resume))),
         cwd,
         ...(resume ? { resume } : { sessionId }),

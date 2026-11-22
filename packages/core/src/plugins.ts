@@ -151,4 +151,7 @@ export interface RikerPlugin {
   connectors?: Connector[];
   drafts?: DraftKind[];
   guards?: MoveGuard[];
+  // Lines for the Assistant's system prompt (core/assistant.ts): what this
+  // plugin lets it look up, and how a line heard from its place is answered.
+  assistant?(config: RikerConfig): string[];
 }

@@ -16,6 +16,7 @@ import {
   bindToThread,
   CONFIRM_MINUTES,
   pendingConfirms,
+  SLACK_AUTHOR,
   takeForThread,
   type Pending,
 } from "./confirm";
@@ -24,7 +25,6 @@ import * as store from "@riker/core/store";
 import {
   AgentState,
   Kind,
-  SLACK_AUTHOR,
   TaskStatus,
   TurnRole,
   TurnStatus,

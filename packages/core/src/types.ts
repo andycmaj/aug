@@ -228,14 +228,17 @@ export const TurnRole = {
 } as const;
 export type TurnRole = (typeof TurnRole)[keyof typeof TurnRole];
 
-// The author of an owner line that came from Slack (@riker/slack remote.ts):
-// the Assistant answers it short, since it is read in Slack.
-export const SLACK_AUTHOR = "you via Slack";
-// Who asks when the Assistant's turn answers a Slack line (RIKER_ASKED_BY):
-// @riker/slack holds the moves that start or end work for the owner's yes.
-export const SLACK_ASKER = "assistant via Slack";
-// How long such a hold waits for that yes.
-export const CONFIRM_MINUTES = 10;
+// An owner line a plugin heard from somewhere else (@riker/slack's remote)
+// is said with the author `you via <place>`: the Assistant answers it short,
+// since it is read there, and its turn asks as `assistant via <place>`
+// (RIKER_ASKED_BY), so that plugin's guard can hold a move for the owner's
+// yes there.
+export const heardVia = (place: string): string => `you via ${place}`;
+export const askedVia = (place: string): string => `assistant via ${place}`;
+
+export function placeHeard(author: string | null): string | null {
+  return author?.match(/^you via (.+)$/)?.[1] ?? null;
+}
 
 export const ActionState = {
   pending: "pending",

@@ -4,9 +4,14 @@
 // runs it (remote.ts), within CONFIRM_MINUTES.
 
 import * as store from "@riker/core/store";
-import { CONFIRM_MINUTES, SLACK_ASKER } from "@riker/core/types";
+import { askedVia, heardVia } from "@riker/core/types";
 
-export { CONFIRM_MINUTES, SLACK_ASKER };
+// The owner's lines from Slack (remote.ts), and who the Assistant asks as
+// while it answers one (core/types.ts heardVia).
+export const SLACK_AUTHOR = heardVia("Slack");
+export const SLACK_ASKER = askedVia("Slack");
+// How long a held move waits for the owner's yes.
+export const CONFIRM_MINUTES = 10;
 
 // The moves that wait for a yes: they spend money or end work.
 export const CONFIRM_MOVES: ReadonlySet<string> = new Set([
