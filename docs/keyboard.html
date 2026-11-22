@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Riker Keys</title>
+<meta name="description" content="Every key in Riker, by where you are: the rail, the Canvas, the chat box, an attached agent, the Board, a dialog. Press a key to see what it does.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: architecture.html's terminal-side reference look. A strip of the
+   chords that work anywhere, then a place picker beside the footer Riker
+   would show there, then every binding by scope. */
+:root {
+  --bg: #edf0f2;
+  --surface: #fafbfb;
+  --sunk: #e2e7ea;
+  --ink: #121a21;
+  --muted: #56636f;
+  --line: #c9d1d7;
+  --accent: #0d6a86;
+  --owner: #b25210;
+  --hit: #fbe7d3;
+  --warn: #a8670a;
+  --f-display: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151a; --surface: #161f26; --sunk: #1c2730; --ink: #e2e8ed; --muted: #94a2ae;
+    --line: #2a3742; --accent: #52b6d3; --owner: #f0964a; --hit: #3a2a1b; --warn: #e9b04f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151a; --surface: #161f26; --sunk: #1c2730; --ink: #e2e8ed; --muted: #94a2ae;
+  --line: #2a3742; --accent: #52b6d3; --owner: #f0964a; --hit: #3a2a1b; --warn: #e9b04f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 80px; display: grid; gap: 48px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 6vw, 3.8rem); font-weight: 700; letter-spacing: -0.04em; }
+h2 { font-size: 1.2rem; }
+h3 { font-size: 0.95rem; }
+p { margin: 0; }
+a { color: var(--accent); }
+code { font-family: var(--f-code); font-size: 0.86em; background: var(--sunk); padding: 1px 5px; border-radius: 3px; }
+button, input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eyebrow { font-family: var(--f-code); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--muted); max-width: 65ch; }
+section { display: grid; gap: 16px; min-width: 0; }
+header { display: grid; gap: 14px; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-family: var(--f-code); font-size: 0.8rem; }
+nav.toc a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--line); }
+nav.toc a:hover { color: var(--ink); }
+
+kbd { font-family: var(--f-code); font-size: 0.82rem; font-weight: 500; display: inline-block; min-width: 1.8em; text-align: center;
+  padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); white-space: nowrap; }
+
+/* terminal switch */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; width: fit-content; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; font-family: var(--f-code); font-size: 0.8rem; cursor: pointer; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.term-note { font-size: 0.9rem; color: var(--muted); max-width: 75ch; }
+
+/* anywhere chords */
+.chords { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.chord { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.chord .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.chord .name { font-family: var(--f-display); font-size: 0.85rem; font-weight: 600; }
+.chord p { font-size: 0.86rem; color: var(--muted); }
+.chord.off { opacity: 0.55; }
+.chord .caveat { color: var(--warn); font-size: 0.8rem; }
+
+/* explorer */
+.explorer { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.places { display: grid; gap: 4px; }
+.places button { text-align: left; border: 1px solid transparent; background: transparent; padding: 7px 10px; border-radius: 5px; cursor: pointer; font-size: 0.9rem; }
+.places button:hover { background: var(--sunk); }
+.places button[aria-pressed="true"] { background: var(--surface); border-color: var(--line); font-weight: 600; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.where { color: var(--muted); font-size: 0.9rem; }
+.press { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 0.9rem; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 6px; min-height: 46px; }
+.press .said { color: var(--muted); }
+.press.found { border-style: solid; border-color: var(--owner); }
+.footer-line { font-family: var(--f-code); font-size: 0.78rem; background: var(--sunk); padding: 8px 10px; border-radius: 4px; overflow-x: auto; white-space: nowrap; color: var(--muted); }
+.footer-line b { color: var(--ink); font-weight: 500; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th { text-align: left; font-family: var(--f-code); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.k { width: 1%; }
+td.k .ks { display: flex; flex-wrap: wrap; gap: 4px; min-width: 6rem; max-width: 9rem; }
+@media (min-width: 761px) { td.k .ks { flex-wrap: nowrap; max-width: none; } }
+tr.hit td { background: var(--hit); }
+tr.off td { opacity: 0.5; }
+.tag { font-family: var(--f-code); font-size: 0.7rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
+.tag.warn { color: var(--warn); border-color: currentColor; }
+.scroll { overflow-x: auto; }
+
+/* reference */
+.search { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.search input { width: min(100%, 360px); padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+details > summary { cursor: pointer; padding: 10px 14px; font-family: var(--f-display); font-size: 0.85rem; font-weight: 600; }
+details > summary .count { font-family: var(--f-code); font-weight: 400; color: var(--muted); margin-left: 8px; }
+details > .scroll { padding: 0 8px 8px; }
+.empty { color: var(--muted); font-size: 0.9rem; }
+footer.stamp { font-family: var(--f-code); font-size: 0.75rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+
+@media (max-width: 760px) {
+  .explorer { grid-template-columns: minmax(0, 1fr); }
+  .places { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  tr.hit td { transition: background 0.2s; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">keyboard · andycmaj/riker</div>
+    <h1>Riker keys</h1>
+    <p class="lede">Riker shows only the keys that work where you are. The footer lists the ones it has room for, <kbd>?</kbd> lists them all, and <kbd>:</kbd> runs any of them by name. This page lists the same keys, taken from <code>packages/tui/src/keymap.ts</code>. Pick a place and press a key to see what it does there.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#anywhere">anywhere</a><a href="#places">by place</a><a href="#reference">every binding</a><a href="architecture.html">architecture</a>
+    </nav>
+  </header>
+
+  <section id="anywhere">
+    <div class="eyebrow">from anywhere</div>
+    <h2>Chords that get past everything</h2>
+    <p class="lede">These control chords work in the chat box, in a dialog, and while attached to an agent, where every other key goes to the agent.</p>
+    <div class="search">
+      <span class="eyebrow">your terminal</span>
+      <div class="seg" role="group" aria-label="Your terminal">
+        <button type="button" id="term-kitty" aria-pressed="true">Ghostty / kitty, no tmux</button>
+        <button type="button" id="term-tmux" aria-pressed="false">inside tmux</button>
+      </div>
+    </div>
+    <p class="term-note" id="term-note"></p>
+    <div class="chords" id="chords"></div>
+  </section>
+
+  <section id="places">
+    <div class="eyebrow">by place</div>
+    <h2>What works where you are</h2>
+    <div class="explorer">
+      <div class="places" id="place-list" role="group" aria-label="Where you are"></div>
+      <div class="panel">
+        <div>
+          <h3 id="place-title"></h3>
+          <p class="where" id="place-where"></p>
+        </div>
+        <div class="press" id="press" aria-live="polite"><span class="said">Press a key (or click one) to see what it does here.</span></div>
+        <div class="footer-line" id="footer-line" title="Roughly what the footer shows here; it drops what does not fit, and ? lists the rest"></div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>key</th><th>does</th></tr></thead>
+            <tbody id="place-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="reference">
+    <div class="eyebrow">reference</div>
+    <h2>Every binding, by scope</h2>
+    <p class="lede">A pane's keys plus the ones above it reach you. A key marked <span class="tag">sometimes</span> works only on the rows it is for, such as <kbd>y</kbd> when a draft waits. Config can move the go-to chord and history keys (<code>keys</code> in config.json) and give a task action its own key (<code>actions.&lt;name&gt;.key</code>).</p>
+    <div class="search">
+      <input type="search" id="filter" placeholder="Filter: a key or a word (detach, ^a, inbox)" aria-label="Filter bindings">
+      <span class="empty" id="filter-count"></span>
+    </div>
+    <div id="scopes" style="display:grid;gap:10px"></div>
+  </section>
+
+  <footer class="stamp">Generated from packages/tui/src/keymap.ts by <code>bun run docs:keys</code>. packages/tui/test/keys-doc.test.ts fails while this page is out of date.</footer>
+</div>
+
+<script type="application/json" id="keys-data">{"places":[{"id":"rail-task","title":"Rail · a task with a draft","where":"Chat, the rail's cursor on a chat task whose reply waits for your y","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down"},{"keys":"k / up","desc":"up","cmd":"nav.up"},{"keys":"g","desc":"top","cmd":"nav.top"},{"keys":"G","desc":"bottom","cmd":"nav.bottom"},{"keys":"Enter","desc":"select it","cmd":"item.open"},{"keys":"f","desc":"filter by status: the next one with tasks","cmd":"rail.filter.cycle"},{"keys":"1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 / 9","desc":"filter: toggle that status pill (the bar above the rail)","cmd":"rail.filter.1"},{"keys":"y","desc":"send the draft (asks first)","cmd":"action.send"},{"keys":"e","desc":"edit the draft in $EDITOR","cmd":"action.edit"},{"keys":"E","desc":"ask for a different draft","cmd":"action.redraft"},{"keys":"s","desc":"start / continue the agent","cmd":"agent.start"},{"keys":"d","desc":"mark done","cmd":"task.done"},{"keys":"r","desc":"remind me later","cmd":"task.remind"},{"keys":"w","desc":"watch it / stop watching","cmd":"task.watch"},{"keys":"z","desc":"pin as one of today's Wins / unpin","cmd":"task.win"},{"keys":"x","desc":"ignore: not work, dropped (ctrl+z or d undoes)","cmd":"task.ignore"},{"keys":"p","desc":"cycle priority","cmd":"task.priority"},{"keys":"t","desc":"change what kind of work it is","cmd":"task.kind"},{"keys":"W","desc":"hand it to a person (waiting on them)","cmd":"task.waiton"},{"keys":"o","desc":"open the link, a URL on the task, or a file the agent made","cmd":"item.url"},{"keys":"O","desc":"edit a file the agent made in $EDITOR","cmd":"item.file.edit"},{"keys":"I","desc":"everything Riker knows about it","cmd":"item.info"},{"keys":"i","desc":"type to the agent","cmd":"chat.type"},{"keys":".","desc":"actions: summarize the work, ... (pick one)","cmd":"task.actions"},{"keys":"^p","desc":"palette","cmd":"app.palette"},{"keys":":","desc":"command palette","cmd":"app.palette"},{"keys":"q / ^c","desc":"quit","cmd":"app.quit"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"Tab","desc":"switch","cmd":"focus.next"},{"keys":"?","desc":"keyboard help","cmd":"app.help"},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle"},{"keys":"a","desc":"Home: ask the Assistant anything","cmd":"assistant.open"},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next"},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back"},{"keys":"/","desc":"search the rail: words, RIKER-23, #412, @someone","cmd":"search.open"},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto"},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back"},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"},{"keys":"N","desc":"new task","cmd":"task.new"},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open"},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open"}]},{"id":"rail-coding","title":"Rail · a coding task","where":"Chat, the rail's cursor on a coding task with a live agent and a PR","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down"},{"keys":"k / up","desc":"up","cmd":"nav.up"},{"keys":"g","desc":"top","cmd":"nav.top"},{"keys":"G","desc":"bottom","cmd":"nav.bottom"},{"keys":"Enter","desc":"select it","cmd":"item.open"},{"keys":"f","desc":"filter by status: the next one with tasks","cmd":"rail.filter.cycle"},{"keys":"1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 / 9","desc":"filter: toggle that status pill (the bar above the rail)","cmd":"rail.filter.1"},{"keys":"S","desc":"stop the agent and save","cmd":"agent.stop"},{"keys":"T","desc":"jump your tmux client to the agent's window","cmd":"agent.jump"},{"keys":"M","desc":"move it to a project","cmd":"task.project"},{"keys":"u","desc":"nudge the agent to read new reviews / CI","cmd":"agent.nudge"},{"keys":"d","desc":"mark done","cmd":"task.done"},{"keys":"r","desc":"remind me later","cmd":"task.remind"},{"keys":"w","desc":"watch it / stop watching","cmd":"task.watch"},{"keys":"z","desc":"pin as one of today's Wins / unpin","cmd":"task.win"},{"keys":"x","desc":"ignore: not work, dropped (ctrl+z or d undoes)","cmd":"task.ignore"},{"keys":"p","desc":"cycle priority","cmd":"task.priority"},{"keys":"t","desc":"change what kind of work it is","cmd":"task.kind"},{"keys":"W","desc":"hand it to a person (waiting on them)","cmd":"task.waiton"},{"keys":"o","desc":"open the link, a URL on the task, or a file the agent made","cmd":"item.url"},{"keys":"O","desc":"edit a file the agent made in $EDITOR","cmd":"item.file.edit"},{"keys":"P","desc":"its PR in ghdash, on the Canvas (again to close)","cmd":"pr.dash"},{"keys":"I","desc":"everything Riker knows about it","cmd":"item.info"},{"keys":"i","desc":"type to the agent","cmd":"chat.type"},{"keys":".","desc":"actions: summarize the work, ... (pick one)","cmd":"task.actions"},{"keys":"^p","desc":"palette","cmd":"app.palette"},{"keys":":","desc":"command palette","cmd":"app.palette"},{"keys":"q / ^c","desc":"quit","cmd":"app.quit"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"Tab","desc":"switch","cmd":"focus.next"},{"keys":"?","desc":"keyboard help","cmd":"app.help"},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle"},{"keys":"a","desc":"Home: ask the Assistant anything","cmd":"assistant.open"},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next"},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back"},{"keys":"/","desc":"search the rail: words, RIKER-23, #412, @someone","cmd":"search.open"},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto"},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back"},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"},{"keys":"N","desc":"new task","cmd":"task.new"},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open"},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open"}]},{"id":"rail-project","title":"Rail · a project","where":"Chat, the rail's cursor on a project heading","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down"},{"keys":"k / up","desc":"up","cmd":"nav.up"},{"keys":"g","desc":"top","cmd":"nav.top"},{"keys":"G","desc":"bottom","cmd":"nav.bottom"},{"keys":"Enter","desc":"select it","cmd":"item.open"},{"keys":"space","desc":"fold / unfold the project's tasks","cmd":"rail.fold"},{"keys":"f","desc":"filter by status: the next one with tasks","cmd":"rail.filter.cycle"},{"keys":"1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 / 9","desc":"filter: toggle that status pill (the bar above the rail)","cmd":"rail.filter.1"},{"keys":"T","desc":"jump your tmux client to the agent's window","cmd":"agent.jump"},{"keys":"x","desc":"archive the project","cmd":"project.archive"},{"keys":"e","desc":"edit the project's brief, goals, repos and docs in $EDITOR","cmd":"project.edit"},{"keys":"o","desc":"open the link, a URL on the task, or a file the agent made","cmd":"item.url"},{"keys":"I","desc":"everything Riker knows about it","cmd":"item.info"},{"keys":"^p","desc":"palette","cmd":"app.palette"},{"keys":":","desc":"command palette","cmd":"app.palette"},{"keys":"q / ^c","desc":"quit","cmd":"app.quit"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"Tab","desc":"switch","cmd":"focus.next"},{"keys":"?","desc":"keyboard help","cmd":"app.help"},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle"},{"keys":"a","desc":"Home: ask the Assistant anything","cmd":"assistant.open"},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next"},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back"},{"keys":"/","desc":"search the rail: words, RIKER-23, #412, @someone","cmd":"search.open"},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto"},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back"},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"},{"keys":"N","desc":"new task","cmd":"task.new"},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open"},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open"}]},{"id":"home","title":"Home","where":"Chat, Home selected (the Assistant), focus on the Canvas","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down"},{"keys":"k / up","desc":"up","cmd":"nav.up"},{"keys":"g","desc":"top","cmd":"nav.top"},{"keys":"G","desc":"bottom","cmd":"nav.bottom"},{"keys":"pageup","desc":"pgup","cmd":"scroll.pageup"},{"keys":"pagedown","desc":"pgdn","cmd":"scroll.pagedown"},{"keys":"esc","desc":"back to the rail","cmd":"task.back"},{"keys":"o","desc":"open the link, a URL on the task, or a file the agent made","cmd":"item.url"},{"keys":"O","desc":"edit a file the agent made in $EDITOR","cmd":"item.file.edit"},{"keys":"I","desc":"everything Riker knows about it","cmd":"item.info"},{"keys":"i","desc":"type to the agent","cmd":"chat.type"},{"keys":"^p","desc":"palette","cmd":"app.palette"},{"keys":":","desc":"command palette","cmd":"app.palette"},{"keys":"q / ^c","desc":"quit","cmd":"app.quit"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"Tab","desc":"switch","cmd":"focus.next"},{"keys":"?","desc":"keyboard help","cmd":"app.help"},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle"},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next"},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back"},{"keys":"/","desc":"search the rail: words, RIKER-23, #412, @someone","cmd":"search.open"},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto"},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back"},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"N","desc":"new task","cmd":"task.new"},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open"},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open"}]},{"id":"canvas-coding","title":"Canvas · a coding task","where":"Chat, a stopped coding task selected, focus on the Canvas","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down"},{"keys":"k / up","desc":"up","cmd":"nav.up"},{"keys":"g","desc":"top","cmd":"nav.top"},{"keys":"G","desc":"bottom","cmd":"nav.bottom"},{"keys":"pageup","desc":"pgup","cmd":"scroll.pageup"},{"keys":"pagedown","desc":"pgdn","cmd":"scroll.pagedown"},{"keys":"esc","desc":"back to the rail","cmd":"task.back"},{"keys":"s","desc":"start / continue the agent","cmd":"agent.start"},{"keys":"T","desc":"jump your tmux client to the agent's window","cmd":"agent.jump"},{"keys":"M","desc":"move it to a project","cmd":"task.project"},{"keys":"u","desc":"nudge the agent to read new reviews / CI","cmd":"agent.nudge"},{"keys":"d","desc":"mark done","cmd":"task.done"},{"keys":"r","desc":"remind me later","cmd":"task.remind"},{"keys":"w","desc":"watch it / stop watching","cmd":"task.watch"},{"keys":"z","desc":"pin as one of today's Wins / unpin","cmd":"task.win"},{"keys":"x","desc":"ignore: not work, dropped (ctrl+z or d undoes)","cmd":"task.ignore"},{"keys":"p","desc":"cycle priority","cmd":"task.priority"},{"keys":"t","desc":"change what kind of work it is","cmd":"task.kind"},{"keys":"W","desc":"hand it to a person (waiting on them)","cmd":"task.waiton"},{"keys":"o","desc":"open the link, a URL on the task, or a file the agent made","cmd":"item.url"},{"keys":"O","desc":"edit a file the agent made in $EDITOR","cmd":"item.file.edit"},{"keys":"P","desc":"its PR in ghdash, on the Canvas (again to close)","cmd":"pr.dash"},{"keys":"I","desc":"everything Riker knows about it","cmd":"item.info"},{"keys":"i","desc":"type to the agent","cmd":"chat.type"},{"keys":".","desc":"actions: summarize the work, ... (pick one)","cmd":"task.actions"},{"keys":"^p","desc":"palette","cmd":"app.palette"},{"keys":":","desc":"command palette","cmd":"app.palette"},{"keys":"q / ^c","desc":"quit","cmd":"app.quit"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"Tab","desc":"switch","cmd":"focus.next"},{"keys":"?","desc":"keyboard help","cmd":"app.help"},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle"},{"keys":"a","desc":"Home: ask the Assistant anything","cmd":"assistant.open"},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next"},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back"},{"keys":"/","desc":"search the rail: words, RIKER-23, #412, @someone","cmd":"search.open"},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto"},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back"},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"},{"keys":"N","desc":"new task","cmd":"task.new"},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open"},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open"}]},{"id":"typing","title":"The chat box","where":"Typing in the box under a task","rows":[{"keys":"Enter","desc":"send (or take the @ suggestion)","cmd":"input.submit"},{"keys":"Tab","desc":"@: take the suggestion","cmd":"input.complete"},{"keys":"up","desc":"@: previous suggestion","cmd":"input.pick.up"},{"keys":"down","desc":"@: next suggestion","cmd":"input.pick.down"},{"keys":"^g","desc":"write it in $EDITOR (save and quit sends)","cmd":"input.editor"},{"keys":"esc","desc":"leave the box","cmd":"input.leave"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"}]},{"id":"attached","title":"Attached to an agent","where":"The Canvas shows a live agent and has focus: every other key goes to the agent","rows":[{"keys":"^]","desc":"detach from the terminal","cmd":"terminal.detach"},{"keys":"^\\","desc":"detach and go to anything","cmd":"nav.goto"},{"keys":"^t","desc":"detach and jump your tmux client to the agent's window (prefix L comes back)","cmd":"terminal.jump"},{"keys":"^[","desc":"detach and go back","cmd":"nav.back"},{"keys":"^a","desc":"detach and go to the Assistant","cmd":"assistant.go"},{"keys":"^e","desc":"show / hide the rail (you stay attached)","cmd":"focus.sidebar.toggle"}]},{"id":"board-wins","title":"Board · Wins","where":"Board, tab 1, on a won task","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down"},{"keys":"k / up","desc":"up","cmd":"nav.up"},{"keys":"g","desc":"top","cmd":"nav.top"},{"keys":"G","desc":"bottom","cmd":"nav.bottom"},{"keys":"1","desc":"tab: wins","cmd":"board.tab.1"},{"keys":"2","desc":"tab: columns","cmd":"board.tab.2"},{"keys":"3","desc":"tab: knowledge","cmd":"board.tab.3"},{"keys":"4","desc":"tab: inbox","cmd":"board.tab.4"},{"keys":"5","desc":"tab: cost","cmd":"board.tab.5"},{"keys":"Enter","desc":"Wins: show or hide what happened to it that day","cmd":"wins.expand"},{"keys":"t","desc":"Wins: go to the task","cmd":"wins.go"},{"keys":"h / left","desc":"Wins: a day earlier","cmd":"wins.prev-day"},{"keys":"s","desc":"start / continue the agent","cmd":"agent.start"},{"keys":"d","desc":"reopen (done or dropped; its agent does not start)","cmd":"task.reopen"},{"keys":".","desc":"actions: summarize the work, ... (pick one)","cmd":"task.actions"},{"keys":"M","desc":"move the task to a project","cmd":"task.project"},{"keys":"R","desc":"repos: where each is checked out, and checkouts to add","cmd":"project.repos"},{"keys":"^p","desc":"palette","cmd":"app.palette"},{"keys":":","desc":"command palette","cmd":"app.palette"},{"keys":"q / ^c","desc":"quit","cmd":"app.quit"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"Tab","desc":"switch","cmd":"focus.next"},{"keys":"?","desc":"keyboard help","cmd":"app.help"},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle"},{"keys":"a","desc":"Home: ask the Assistant anything","cmd":"assistant.open"},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next"},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back"},{"keys":"/","desc":"search the rail: words, RIKER-23, #412, @someone","cmd":"search.open"},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto"},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back"},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"},{"keys":"N","desc":"new task","cmd":"task.new"},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open"},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open"}]},{"id":"board-columns","title":"Board · Columns","where":"Board, tab 2, on a task","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down"},{"keys":"k / up","desc":"up","cmd":"nav.up"},{"keys":"g","desc":"top","cmd":"nav.top"},{"keys":"G","desc":"bottom","cmd":"nav.bottom"},{"keys":"h / left","desc":"column left","cmd":"board.left"},{"keys":"l / right","desc":"column right","cmd":"board.right"},{"keys":"1","desc":"tab: wins","cmd":"board.tab.1"},{"keys":"2","desc":"tab: columns","cmd":"board.tab.2"},{"keys":"3","desc":"tab: knowledge","cmd":"board.tab.3"},{"keys":"4","desc":"tab: inbox","cmd":"board.tab.4"},{"keys":"5","desc":"tab: cost","cmd":"board.tab.5"},{"keys":"Enter","desc":"open the task in Chat, or jump to the project's session","cmd":"item.open"},{"keys":"A","desc":"adopt a tmux session or a stray claude as a project","cmd":"project.adopt"},{"keys":"s","desc":"start / continue the agent","cmd":"agent.start"},{"keys":"d","desc":"mark done","cmd":"task.done"},{"keys":".","desc":"actions: summarize the work, ... (pick one)","cmd":"task.actions"},{"keys":"M","desc":"move the task to a project","cmd":"task.project"},{"keys":"R","desc":"repos: where each is checked out, and checkouts to add","cmd":"project.repos"},{"keys":"^p","desc":"palette","cmd":"app.palette"},{"keys":":","desc":"command palette","cmd":"app.palette"},{"keys":"q / ^c","desc":"quit","cmd":"app.quit"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"Tab","desc":"switch","cmd":"focus.next"},{"keys":"?","desc":"keyboard help","cmd":"app.help"},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle"},{"keys":"a","desc":"Home: ask the Assistant anything","cmd":"assistant.open"},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next"},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back"},{"keys":"/","desc":"search the rail: words, RIKER-23, #412, @someone","cmd":"search.open"},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto"},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back"},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"},{"keys":"N","desc":"new task","cmd":"task.new"},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open"},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open"}]},{"id":"board-inbox","title":"Board · Inbox","where":"Board, tab 4, on a message triage held","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down"},{"keys":"k / up","desc":"up","cmd":"nav.up"},{"keys":"g","desc":"top","cmd":"nav.top"},{"keys":"G","desc":"bottom","cmd":"nav.bottom"},{"keys":"1","desc":"tab: wins","cmd":"board.tab.1"},{"keys":"2","desc":"tab: columns","cmd":"board.tab.2"},{"keys":"3","desc":"tab: knowledge","cmd":"board.tab.3"},{"keys":"4","desc":"tab: inbox","cmd":"board.tab.4"},{"keys":"5","desc":"tab: cost","cmd":"board.tab.5"},{"keys":"Enter","desc":"Inbox: show or hide how triage routed it","cmd":"inbox.expand"},{"keys":"f","desc":"Inbox: next filter","cmd":"inbox.filter"},{"keys":"/","desc":"Inbox: search subject, sender and source","cmd":"inbox.search"},{"keys":"m","desc":"Inbox: make it a task (an idea: approve it)","cmd":"item.task"},{"keys":"x","desc":"Inbox: dismiss it (marked read, it leaves actionable; its task stays)","cmd":"inbox.read"},{"keys":"o","desc":"Inbox: open the message's link","cmd":"item.url"},{"keys":"F","desc":"Inbox: create noise filter (triage files its like as FYI)","cmd":"inbox.noise"},{"keys":"U","desc":"Inbox: re-run triage on it","cmd":"inbox.retriage"},{"keys":"B","desc":"Inbox: show the whole message, or cap it again","cmd":"inbox.body"},{"keys":"R","desc":"repos: where each is checked out, and checkouts to add","cmd":"project.repos"},{"keys":"^p","desc":"palette","cmd":"app.palette"},{"keys":":","desc":"command palette","cmd":"app.palette"},{"keys":"q / ^c","desc":"quit","cmd":"app.quit"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"Tab","desc":"switch","cmd":"focus.next"},{"keys":"?","desc":"keyboard help","cmd":"app.help"},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle"},{"keys":"a","desc":"Home: ask the Assistant anything","cmd":"assistant.open"},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next"},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back"},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto"},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back"},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"},{"keys":"N","desc":"new task","cmd":"task.new"},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open"},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open"}]},{"id":"board-cost","title":"Board · Cost","where":"Board, tab 5","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down"},{"keys":"k / up","desc":"up","cmd":"nav.up"},{"keys":"g","desc":"top","cmd":"nav.top"},{"keys":"G","desc":"bottom","cmd":"nav.bottom"},{"keys":"1","desc":"tab: wins","cmd":"board.tab.1"},{"keys":"2","desc":"tab: columns","cmd":"board.tab.2"},{"keys":"3","desc":"tab: knowledge","cmd":"board.tab.3"},{"keys":"4","desc":"tab: inbox","cmd":"board.tab.4"},{"keys":"5","desc":"tab: cost","cmd":"board.tab.5"},{"keys":"R","desc":"repos: where each is checked out, and checkouts to add","cmd":"project.repos"},{"keys":"^p","desc":"palette","cmd":"app.palette"},{"keys":":","desc":"command palette","cmd":"app.palette"},{"keys":"q / ^c","desc":"quit","cmd":"app.quit"},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle"},{"keys":"Tab","desc":"switch","cmd":"focus.next"},{"keys":"?","desc":"keyboard help","cmd":"app.help"},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle"},{"keys":"a","desc":"Home: ask the Assistant anything","cmd":"assistant.open"},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next"},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back"},{"keys":"/","desc":"search the rail: words, RIKER-23, #412, @someone","cmd":"search.open"},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto"},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back"},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"},{"keys":"N","desc":"new task","cmd":"task.new"},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo"},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll"},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open"},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open"}]},{"id":"dialog","title":"A dialog","where":"Help, the palette, go to, a confirm: its own keys are listed in it","rows":[{"keys":"esc","desc":"close","cmd":"modal.close"},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back"},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go"}]}],"scopes":[{"scope":"app","title":"Anywhere","rows":[{"keys":"^p","desc":"palette","cmd":"app.palette","sometimes":true},{"keys":":","desc":"command palette","cmd":"app.palette","sometimes":true},{"keys":"q / ^c","desc":"quit","cmd":"app.quit","sometimes":true},{"keys":"^e","desc":"sidebar","cmd":"focus.sidebar.toggle","sometimes":false},{"keys":"Tab","desc":"switch","cmd":"focus.next","sometimes":false},{"keys":"?","desc":"keyboard help","cmd":"app.help","sometimes":true},{"keys":"v","desc":"switch Chat / Board","cmd":"view.toggle","sometimes":true},{"keys":"a","desc":"Home: ask the Assistant anything","cmd":"assistant.open","sometimes":true},{"keys":"n","desc":"next (walk the rail)","cmd":"walk.next","sometimes":true},{"keys":"b","desc":"previous (walk the rail backwards)","cmd":"walk.back","sometimes":true},{"keys":"/","desc":"search the rail: words, RIKER-23, #412, @someone","cmd":"search.open","sometimes":true},{"keys":"^\\","desc":"go to anything: search the rail from anywhere, recent rows first","cmd":"nav.goto","sometimes":true},{"keys":"[","desc":"back to where you were (history)","cmd":"nav.history.back","sometimes":true},{"keys":"]","desc":"forward again (history)","cmd":"nav.history.forward","sometimes":true},{"keys":"^[","desc":"back from anywhere: closes the dialog, leaves the box or the agent, then goes back","cmd":"nav.back","sometimes":true},{"keys":"^a","desc":"Home: the Assistant, from anywhere","cmd":"assistant.go","sometimes":true},{"keys":"N","desc":"new task","cmd":"task.new","sometimes":true},{"keys":"^z","desc":"undo the last move (yours or the Assistant's)","cmd":"move.undo","sometimes":true},{"keys":"^r","desc":"check GitHub and Slack now","cmd":"ingest.poll","sometimes":false},{"keys":"D","desc":"edit PERSONA / JOB / LEARNED ...","cmd":"docs.open","sometimes":true},{"keys":"C","desc":"connections and Advisor status","cmd":"status.open","sometimes":true}]},{"scope":"rail","title":"The rail","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down","sometimes":false},{"keys":"k / up","desc":"up","cmd":"nav.up","sometimes":false},{"keys":"g","desc":"top","cmd":"nav.top","sometimes":false},{"keys":"G","desc":"bottom","cmd":"nav.bottom","sometimes":false},{"keys":"Enter","desc":"select it","cmd":"item.open","sometimes":false},{"keys":"space","desc":"fold / unfold the project's tasks","cmd":"rail.fold","sometimes":true},{"keys":"f","desc":"filter by status: the next one with tasks","cmd":"rail.filter.cycle","sometimes":false},{"keys":"0","desc":"filter: show every status","cmd":"rail.filter.clear","sometimes":true},{"keys":"1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 / 9","desc":"filter: toggle that status pill (the bar above the rail)","cmd":"rail.filter.1","sometimes":false},{"keys":"y","desc":"send the draft (asks first)","cmd":"action.send","sometimes":true},{"keys":"e","desc":"edit the draft in $EDITOR","cmd":"action.edit","sometimes":true},{"keys":"e","desc":"edit the brief in $EDITOR (before it starts)","cmd":"task.brief","sometimes":true},{"keys":"E","desc":"ask for a different draft","cmd":"action.redraft","sometimes":true},{"keys":"s","desc":"start / continue the agent","cmd":"agent.start","sometimes":true},{"keys":"S","desc":"stop the agent and save","cmd":"agent.stop","sometimes":true},{"keys":"T","desc":"jump your tmux client to the agent's window","cmd":"agent.jump","sometimes":true},{"keys":"M","desc":"move it to a project","cmd":"task.project","sometimes":true},{"keys":"u","desc":"nudge the agent to read new reviews / CI","cmd":"agent.nudge","sometimes":true},{"keys":"d","desc":"mark done","cmd":"task.done","sometimes":true},{"keys":"d","desc":"reopen (done or dropped; its agent does not start)","cmd":"task.reopen","sometimes":true},{"keys":"r","desc":"remind me later","cmd":"task.remind","sometimes":true},{"keys":"w","desc":"watch it / stop watching","cmd":"task.watch","sometimes":true},{"keys":"z","desc":"pin as one of today's Wins / unpin","cmd":"task.win","sometimes":true},{"keys":"x","desc":"ignore: not work, dropped (ctrl+z or d undoes)","cmd":"task.ignore","sometimes":true},{"keys":"x","desc":"archive the project","cmd":"project.archive","sometimes":true},{"keys":"y","desc":"System: accept (take the shipped doc, write the drafts, or start the interview)","cmd":"docs.accept","sometimes":true},{"keys":"x","desc":"System: reject (keep your doc, or skip)","cmd":"docs.reject","sometimes":true},{"keys":"e","desc":"System: read the diff in revdiff (notes you leave redraft it)","cmd":"docs.review","sometimes":true},{"keys":"e","desc":"edit the project's brief, goals, repos and docs in $EDITOR","cmd":"project.edit","sometimes":true},{"keys":"p","desc":"cycle priority","cmd":"task.priority","sometimes":true},{"keys":"t","desc":"change what kind of work it is","cmd":"task.kind","sometimes":true},{"keys":"W","desc":"hand it to a person (waiting on them)","cmd":"task.waiton","sometimes":true},{"keys":"o","desc":"open the link, a URL on the task, or a file the agent made","cmd":"item.url","sometimes":false},{"keys":"O","desc":"edit a file the agent made in $EDITOR","cmd":"item.file.edit","sometimes":true},{"keys":"P","desc":"its PR in ghdash, on the Canvas (again to close)","cmd":"pr.dash","sometimes":true},{"keys":"I","desc":"everything Riker knows about it","cmd":"item.info","sometimes":true},{"keys":"i","desc":"type to the agent","cmd":"chat.type","sometimes":true},{"keys":".","desc":"actions: summarize the work, ... (pick one)","cmd":"task.actions","sometimes":true}]},{"scope":"canvas","title":"The Canvas","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down","sometimes":true},{"keys":"k / up","desc":"up","cmd":"nav.up","sometimes":true},{"keys":"g","desc":"top","cmd":"nav.top","sometimes":true},{"keys":"G","desc":"bottom","cmd":"nav.bottom","sometimes":true},{"keys":"pageup","desc":"pgup","cmd":"scroll.pageup","sometimes":true},{"keys":"pagedown","desc":"pgdn","cmd":"scroll.pagedown","sometimes":true},{"keys":"esc","desc":"back to the rail","cmd":"task.back","sometimes":true},{"keys":"y","desc":"send the draft (asks first)","cmd":"action.send","sometimes":true},{"keys":"e","desc":"edit the draft in $EDITOR","cmd":"action.edit","sometimes":true},{"keys":"e","desc":"edit the brief in $EDITOR (before it starts)","cmd":"task.brief","sometimes":true},{"keys":"E","desc":"ask for a different draft","cmd":"action.redraft","sometimes":true},{"keys":"s","desc":"start / continue the agent","cmd":"agent.start","sometimes":true},{"keys":"S","desc":"stop the agent and save","cmd":"agent.stop","sometimes":true},{"keys":"T","desc":"jump your tmux client to the agent's window","cmd":"agent.jump","sometimes":true},{"keys":"M","desc":"move it to a project","cmd":"task.project","sometimes":true},{"keys":"u","desc":"nudge the agent to read new reviews / CI","cmd":"agent.nudge","sometimes":true},{"keys":"d","desc":"mark done","cmd":"task.done","sometimes":true},{"keys":"d","desc":"reopen (done or dropped; its agent does not start)","cmd":"task.reopen","sometimes":true},{"keys":"r","desc":"remind me later","cmd":"task.remind","sometimes":true},{"keys":"w","desc":"watch it / stop watching","cmd":"task.watch","sometimes":true},{"keys":"z","desc":"pin as one of today's Wins / unpin","cmd":"task.win","sometimes":true},{"keys":"x","desc":"ignore: not work, dropped (ctrl+z or d undoes)","cmd":"task.ignore","sometimes":true},{"keys":"x","desc":"archive the project","cmd":"project.archive","sometimes":true},{"keys":"y","desc":"System: accept (take the shipped doc, write the drafts, or start the interview)","cmd":"docs.accept","sometimes":true},{"keys":"x","desc":"System: reject (keep your doc, or skip)","cmd":"docs.reject","sometimes":true},{"keys":"e","desc":"System: read the diff in revdiff (notes you leave redraft it)","cmd":"docs.review","sometimes":true},{"keys":"e","desc":"edit the project's brief, goals, repos and docs in $EDITOR","cmd":"project.edit","sometimes":true},{"keys":"p","desc":"cycle priority","cmd":"task.priority","sometimes":true},{"keys":"t","desc":"change what kind of work it is","cmd":"task.kind","sometimes":true},{"keys":"W","desc":"hand it to a person (waiting on them)","cmd":"task.waiton","sometimes":true},{"keys":"o","desc":"open the link, a URL on the task, or a file the agent made","cmd":"item.url","sometimes":true},{"keys":"O","desc":"edit a file the agent made in $EDITOR","cmd":"item.file.edit","sometimes":true},{"keys":"P","desc":"its PR in ghdash, on the Canvas (again to close)","cmd":"pr.dash","sometimes":true},{"keys":"I","desc":"everything Riker knows about it","cmd":"item.info","sometimes":true},{"keys":"i","desc":"type to the agent","cmd":"chat.type","sometimes":true},{"keys":".","desc":"actions: summarize the work, ... (pick one)","cmd":"task.actions","sometimes":true}]},{"scope":"input","title":"The chat box","rows":[{"keys":"Enter","desc":"send (or take the @ suggestion)","cmd":"input.submit","sometimes":false},{"keys":"Tab","desc":"@: take the suggestion","cmd":"input.complete","sometimes":false},{"keys":"up","desc":"@: previous suggestion","cmd":"input.pick.up","sometimes":false},{"keys":"down","desc":"@: next suggestion","cmd":"input.pick.down","sometimes":false},{"keys":"^g","desc":"write it in $EDITOR (save and quit sends)","cmd":"input.editor","sometimes":false},{"keys":"esc","desc":"leave the box","cmd":"input.leave","sometimes":false}]},{"scope":"terminal","title":"The terminal (every other key goes to it)","rows":[{"keys":"^]","desc":"detach from the terminal","cmd":"terminal.detach","sometimes":false},{"keys":"^\\","desc":"detach and go to anything","cmd":"nav.goto","sometimes":false},{"keys":"^t","desc":"detach and jump your tmux client to the agent's window (prefix L comes back)","cmd":"terminal.jump","sometimes":false},{"keys":"^[","desc":"detach and go back","cmd":"nav.back","sometimes":true},{"keys":"^a","desc":"detach and go to the Assistant","cmd":"assistant.go","sometimes":false},{"keys":"^e","desc":"show / hide the rail (you stay attached)","cmd":"focus.sidebar.toggle","sometimes":false}]},{"scope":"board","title":"The Board","rows":[{"keys":"j / down","desc":"down","cmd":"nav.down","sometimes":false},{"keys":"k / up","desc":"up","cmd":"nav.up","sometimes":false},{"keys":"g","desc":"top","cmd":"nav.top","sometimes":false},{"keys":"G","desc":"bottom","cmd":"nav.bottom","sometimes":false},{"keys":"h / left","desc":"column left","cmd":"board.left","sometimes":true},{"keys":"l / right","desc":"column right","cmd":"board.right","sometimes":true},{"keys":"1","desc":"tab: wins","cmd":"board.tab.1","sometimes":false},{"keys":"2","desc":"tab: columns","cmd":"board.tab.2","sometimes":false},{"keys":"3","desc":"tab: knowledge","cmd":"board.tab.3","sometimes":false},{"keys":"4","desc":"tab: inbox","cmd":"board.tab.4","sometimes":false},{"keys":"5","desc":"tab: cost","cmd":"board.tab.5","sometimes":false},{"keys":"Enter","desc":"open the task in Chat, or jump to the project's session","cmd":"item.open","sometimes":true},{"keys":"Enter","desc":"Wins: show or hide what happened to it that day","cmd":"wins.expand","sometimes":true},{"keys":"t","desc":"Wins: go to the task","cmd":"wins.go","sometimes":true},{"keys":"h / left","desc":"Wins: a day earlier","cmd":"wins.prev-day","sometimes":true},{"keys":"l / right","desc":"Wins: a day later (never past today)","cmd":"wins.next-day","sometimes":true},{"keys":"0","desc":"Wins: back to today","cmd":"wins.today","sometimes":true},{"keys":"Enter","desc":"Inbox: show or hide how triage routed it","cmd":"inbox.expand","sometimes":true},{"keys":"f","desc":"Inbox: next filter","cmd":"inbox.filter","sometimes":true},{"keys":"/","desc":"Inbox: search subject, sender and source","cmd":"inbox.search","sometimes":true},{"keys":"t","desc":"Inbox: go to the task it made or joined (an open idea: the task it is about)","cmd":"inbox.go","sometimes":true},{"keys":"m","desc":"Inbox: make it a task (an idea: approve it)","cmd":"item.task","sometimes":true},{"keys":"x","desc":"Inbox: dismiss the Advisor idea","cmd":"idea.dismiss","sometimes":true},{"keys":"x","desc":"Inbox: dismiss it (marked read, it leaves actionable; its task stays)","cmd":"inbox.read","sometimes":true},{"keys":"X","desc":"Inbox: ignore (drops the task it made; ctrl+z undoes)","cmd":"task.ignore","sometimes":true},{"keys":"o","desc":"Inbox: open the message's link","cmd":"item.url","sometimes":true},{"keys":"F","desc":"Inbox: create noise filter (triage files its like as FYI)","cmd":"inbox.noise","sometimes":true},{"keys":"U","desc":"Inbox: re-run triage on it","cmd":"inbox.retriage","sometimes":true},{"keys":"B","desc":"Inbox: show the whole message, or cap it again","cmd":"inbox.body","sometimes":true},{"keys":"c","desc":"write a knowledge entry","cmd":"board.compose.knowledge","sometimes":true},{"keys":"A","desc":"adopt a tmux session or a stray claude as a project","cmd":"project.adopt","sometimes":true},{"keys":"s","desc":"start / continue the agent","cmd":"agent.start","sometimes":true},{"keys":"S","desc":"stop the agent and save","cmd":"agent.stop","sometimes":true},{"keys":"T","desc":"jump your tmux client to the agent's or project's window","cmd":"agent.jump","sometimes":true},{"keys":"u","desc":"nudge the agent about new feedback","cmd":"agent.nudge","sometimes":true},{"keys":"d","desc":"mark done","cmd":"task.done","sometimes":true},{"keys":"d","desc":"reopen (done or dropped; its agent does not start)","cmd":"task.reopen","sometimes":true},{"keys":".","desc":"actions: summarize the work, ... (pick one)","cmd":"task.actions","sometimes":true},{"keys":"M","desc":"move the task to a project","cmd":"task.project","sometimes":true},{"keys":"P","desc":"its PR in ghdash (in Chat)","cmd":"pr.dash","sometimes":true},{"keys":"R","desc":"repos: where each is checked out, and checkouts to add","cmd":"project.repos","sometimes":false}]}]}</script>
+<script>
+(() => {
+const DATA = JSON.parse(document.getElementById("keys-data").textContent || '{"places":[],"scopes":[]}');
+const BACK = "nav.back", HOME = "assistant.go";
+
+// What the chords are for, and what each terminal lets through.
+const CHORDS = [
+  { cmd: BACK, keys: "^[", name: "back", text: "Closes the dialog, leaves the box or detaches from the agent, then goes back to where you were.", tmux: "Inside tmux, ctrl+[ arrives as Esc, so it does what Esc does: leaves the box, closes the dialog, or goes to the agent." },
+  { cmd: HOME, keys: "^a", name: "Home", text: "Opens the Assistant with its box ready. On an agent, it detaches first. The chat box loses ctrl+a for start of line; Home still does that.", tmux: "If your tmux prefix is C-a, tmux takes this key: press it twice (send-prefix)." },
+  { cmd: "nav.goto", keys: "^\\", name: "go to", text: "Search for any task or project, with recent rows first. Detaches first." },
+  { cmd: "terminal.detach", keys: "^]", name: "detach", text: "Leaves the agent's terminal. The agent keeps running." },
+  { cmd: "terminal.jump", keys: "^t", name: "tmux", text: "Detaches, then moves your own tmux client to the agent's window. prefix L comes back." },
+  { cmd: "focus.sidebar.toggle", keys: "^e", name: "rail", text: "Shows or hides the rail. If you are attached, you stay attached." },
+];
+
+let terminal = "kitty";
+let place = DATA.places[0] ? DATA.places[0].id : null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const kbds = (keys) => `<span class="ks">${keys.split(" / ").map((k) => `<kbd>${esc(k)}</kbd>`).join("")}</span>`;
+const offHere = (row) => terminal === "tmux" && row.cmd === BACK;
+
+function renderTerminal() {
+  $("term-kitty").setAttribute("aria-pressed", String(terminal === "kitty"));
+  $("term-tmux").setAttribute("aria-pressed", String(terminal === "tmux"));
+  $("term-note").textContent = terminal === "kitty"
+    ? "A terminal that speaks the kitty keyboard protocol directly to Riker sends ctrl+[ separately from Esc, so ctrl+[ goes back and Esc keeps its own meaning (an agent still gets Esc)."
+    : "tmux turns ctrl+[ into Esc whatever extended-keys is set to, so Riker can't tell them apart. ctrl+[ acts as Esc, and Riker hides its hint.";
+  $("chords").innerHTML = CHORDS.map((c) => {
+    const off = terminal === "tmux" && c.cmd === BACK;
+    const caveat = terminal === "tmux" && c.tmux ? `<span class="caveat">${esc(c.tmux)}</span>` : "";
+    return `<div class="chord${off ? " off" : ""}"><div class="top"><kbd>${esc(c.keys)}</kbd><span class="name">${esc(c.name)}</span></div><p>${esc(c.text)}</p>${caveat}</div>`;
+  }).join("");
+  renderPlace();
+  renderScopes();
+}
+
+function renderPlaces() {
+  $("place-list").innerHTML = DATA.places.map((p) =>
+    `<button type="button" data-place="${esc(p.id)}" aria-pressed="${p.id === place}">${esc(p.title)}</button>`).join("");
+}
+
+function renderPlace(hitCmd) {
+  const p = DATA.places.find((x) => x.id === place);
+  if (!p) return;
+  $("place-title").textContent = p.title;
+  $("place-where").textContent = p.where;
+  const rows = p.rows.filter((r) => !offHere(r));
+  $("footer-line").innerHTML = rows.slice(0, 9).map((r) => `<b>${esc(r.keys.split(" / ")[0])}</b> ${esc(r.desc.split(/[:(,]/)[0].trim())}`).join(" · ");
+  $("place-rows").innerHTML = p.rows.map((r) => {
+    const cls = [r.cmd === hitCmd ? "hit" : "", offHere(r) ? "off" : ""].join(" ").trim();
+    const tag = offHere(r) ? '<span class="tag warn">Esc in tmux</span>' : "";
+    return `<tr class="${cls}" data-keys="${esc(r.keys)}"><td class="k">${kbds(r.keys)}</td><td>${esc(r.desc)}${tag}</td></tr>`;
+  }).join("");
+}
+
+function renderScopes() {
+  const q = $("filter").value.trim().toLowerCase();
+  let shown = 0;
+  $("scopes").innerHTML = DATA.scopes.map((s) => {
+    const rows = s.rows.filter((r) => !q || r.keys.toLowerCase().split(" / ").includes(q) || r.desc.toLowerCase().includes(q) || r.keys.toLowerCase().includes(q));
+    shown += rows.length;
+    if (!rows.length) return "";
+    const body = rows.map((r) => {
+      const tags = (r.sometimes ? '<span class="tag">sometimes</span>' : "") + (offHere(r) ? '<span class="tag warn">Esc in tmux</span>' : "");
+      return `<tr class="${offHere(r) ? "off" : ""}"><td class="k">${kbds(r.keys)}</td><td>${esc(r.desc)}${tags}</td></tr>`;
+    }).join("");
+    return `<details${q ? " open" : ""}><summary>${esc(s.title)}<span class="count">${rows.length}</span></summary><div class="scroll"><table><tbody>${body}</tbody></table></div></details>`;
+  }).join("");
+  $("filter-count").textContent = q ? `${shown} match${shown === 1 ? "" : "es"}` : "";
+}
+
+// A browser key event, spelled as Riker's footer spells it.
+const NAMED = { Enter: "Enter", Tab: "Tab", Escape: "esc", ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", PageUp: "pageup", PageDown: "pagedown", " ": "space", Backspace: "backspace" };
+function spell(e) {
+  if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return null;
+  let k = NAMED[e.key] || e.key;
+  if (e.ctrlKey) {
+    const base = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : ({ BracketLeft: "[", BracketRight: "]", Backslash: "\\" })[e.code] || k.toLowerCase();
+    return "^" + base;
+  }
+  if (e.altKey) return null;
+  return k;
+}
+
+function lookup(keys) {
+  const p = DATA.places.find((x) => x.id === place);
+  if (!p) return;
+  const row = p.rows.find((r) => r.keys.split(" / ").includes(keys));
+  const box = $("press");
+  box.classList.toggle("found", Boolean(row));
+  if (!row) {
+    box.innerHTML = `<kbd>${esc(keys)}</kbd><span class="said">does nothing here${place === "attached" ? ": it goes to the agent" : place === "typing" ? ": it types into the box" : ""}.</span>`;
+    renderPlace();
+    return;
+  }
+  const note = offHere(row) ? " Inside tmux this key arrives as Esc." : "";
+  box.innerHTML = `<kbd>${esc(keys)}</kbd><span>${esc(row.desc)}.${esc(note)}</span>`;
+  renderPlace(row.cmd);
+  const hit = $("place-rows").querySelector("tr.hit");
+  if (hit) hit.scrollIntoView({ block: "nearest" });
+}
+
+$("place-list").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-place]");
+  if (!b) return;
+  place = b.dataset.place;
+  renderPlaces();
+  renderPlace();
+  $("press").classList.remove("found");
+  $("press").innerHTML = '<span class="said">Press a key (or click one) to see what it does here.</span>';
+});
+$("place-rows").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-keys]");
+  if (tr) lookup(tr.dataset.keys.split(" / ")[0]);
+});
+$("term-kitty").addEventListener("click", () => { terminal = "kitty"; renderTerminal(); });
+$("term-tmux").addEventListener("click", () => { terminal = "tmux"; renderTerminal(); });
+$("filter").addEventListener("input", renderScopes);
+document.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement || e.metaKey) return;
+  const keys = spell(e);
+  if (!keys) return;
+  // Keep keys the page needs for itself: Tab moves focus.
+  if (keys === "Tab") return;
+  e.preventDefault();
+  lookup(keys);
+});
+
+renderPlaces();
+renderTerminal();
+})();
+</script>
+</body>
+</html>

@@ -2,7 +2,8 @@
 // and the session runs, every key goes to the agent except the detach chord;
 // detaching moves focus back to the rail and the session keeps running.
 // ctrl+t detaches too and moves your own tmux client to the agent's window;
-// ctrl+e shows or hides the rail and leaves you attached.
+// ctrl+e shows or hides the rail and leaves you attached. ctrl+[ and ctrl+a
+// detach, then go back or Home (shell.tsx).
 // A paste goes in too, bracketed when the program asked for it.
 
 import { batch, createEffect, createMemo, onCleanup, Show } from "solid-js";
@@ -49,6 +50,9 @@ export function TermView(props: {
 
 const CTRL_T = "\x14";
 const CTRL_E = "\x05";
+const CTRL_A = "\x01";
+// What ctrl+[ is in a legacy terminal: Esc.
+const CTRL_BRACKET = "\x1b";
 
 function within(node: Renderable | null, target: Renderable): boolean {
   for (let n: Renderable | null = node; n; n = n.parent) {
@@ -111,6 +115,18 @@ export function TerminalHost(props: {
       [Commands.GO_TO]: () => {
         props.onDetach();
         openModal("search");
+      },
+      // Detach, then decline: the key falls through to the shell's own
+      // layer, which goes back (or Home) as from anywhere else.
+      [Commands.GO_BACK]: () => {
+        if (!props.onJump) return terminals.write(props.id, CTRL_BRACKET);
+        props.onDetach();
+        return false;
+      },
+      [Commands.GO_HOME]: () => {
+        if (!props.onJump) return terminals.write(props.id, CTRL_A);
+        props.onDetach();
+        return false;
       },
       [Commands.TERMINAL_JUMP]: () => {
         if (!props.onJump) return terminals.write(props.id, CTRL_T);

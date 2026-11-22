@@ -15,6 +15,7 @@
     "debug": "RIKER_DEV=1 SHOW_CONSOLE=true bun run --inspect-wait --conditions=browser --preload @opentui/solid/preload ./packages/cli/src/riker.ts",
     "compile": "bun run packages/cli/script/compile.ts",
     "typecheck": "tsc --noEmit",
+    "docs:keys": "bun run packages/tui/script/keys-doc.ts",
     "test": "bun test",
     "format": "prettier --write packages"
   },
