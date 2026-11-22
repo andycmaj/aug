@@ -41,8 +41,16 @@
       "version": "0.0.1",
       "dependencies": {
         "@riker/core": "workspace:*",
+        "@riker/github": "workspace:*",
         "@riker/triage": "workspace:*",
         "citty": "^0.2.2",
+      },
+    },
+    "packages/github": {
+      "name": "@riker/github",
+      "version": "0.0.1",
+      "dependencies": {
+        "@riker/core": "workspace:*",
       },
     },
     "packages/triage": {
@@ -61,6 +69,7 @@
         "@opentui/solid": "0.5.12",
         "@riker/core": "workspace:*",
         "@riker/fixtures": "workspace:*",
+        "@riker/github": "workspace:*",
         "@riker/triage": "workspace:*",
         "citty": "^0.2.2",
         "ghostty-opentui": "1.5.0",
@@ -170,6 +179,8 @@
     "@riker/core": ["@riker/core@workspace:packages/core"],
 
     "@riker/fixtures": ["@riker/fixtures@workspace:packages/fixtures"],
+
+    "@riker/github": ["@riker/github@workspace:packages/github"],
 
     "@riker/triage": ["@riker/triage@workspace:packages/triage"],
 

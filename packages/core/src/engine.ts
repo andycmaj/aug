@@ -12,21 +12,6 @@ import { Desk } from "./desk";
 import { syncDocs } from "./doc-sync";
 import { refreshInstalls } from "./install";
 import { Drivers } from "./driver";
-import { ghApi, pollGithub, type GhApi } from "./ingest/github";
-import {
-  clockTime,
-  GhBudget,
-  ghTrouble,
-  GhTrouble,
-  GithubGate,
-  GRAPHQL_RESERVE,
-  limitedUntil,
-  PauseWhy,
-  type GateClock,
-  type GhRateLimit,
-  type Pause,
-} from "./github-gate";
-import { ghPrBatch, refreshPrStatuses, type PrFetch, type PrRefresh } from "./pr";
 import { checkMerges } from "./merge";
 import { errorMessage, logger } from "./log";
 import { count, measure, perfStart } from "./perf";
@@ -35,30 +20,34 @@ import { slackTransport, type SlackTransport } from "./slack/transport";
 import { Remote, remoteChannel, type RemoteLink } from "./slack/remote";
 import { remoteLink } from "./slack/remote-links";
 import { recoverAtBoot } from "./lifecycle";
+import { SendError } from "./outbound";
 import { drainMoves, runMove, type MoveOutcome } from "./moves";
 import * as projects from "./projects";
-import { setSlackSender } from "./outbound";
+import { paths } from "./paths";
 import * as store from "./store";
 import { ActionEvent } from "./task-actions";
 import { settleStaleTurns } from "./turn-check";
-import type { RikerPlugin, Triage, Triaged, TriageEffect } from "./plugins";
+import {
+  offStatus,
+  type Connector,
+  type ConnectorContext,
+  type ConnectorStatus,
+  type RikerPlugin,
+  type Senders,
+  type Triage,
+  type Triaged,
+  type TriageEffect,
+} from "./plugins";
 import { SessionKind, TaskStatus, type TaskRow } from "./types";
 
-export type ConnectorState = "off" | "polling" | "ok" | "error";
+export type { ConnectorState, ConnectorStatus } from "./plugins";
 
-export interface ConnectorStatus {
-  state: ConnectorState;
-  detail: string;
-  at: string | null;
-}
-
-export interface EngineStatus {
-  github: ConnectorStatus;
-  slack: ConnectorStatus;
-  // Talking to the Assistant from Slack (core/slack/remote.ts).
-  remote: ConnectorStatus;
+// Each connector's line by its name, and the Advisor's.
+export type EngineStatus = Record<string, ConnectorStatus> & {
   advisor: ConnectorStatus;
-}
+  slack: ConnectorStatus;
+  remote: ConnectorStatus;
+};
 
 export interface EngineOptions {
   // config.json for a real Riker, fixedConfig for tests and the fixture day.
@@ -73,26 +62,10 @@ export interface EngineOptions {
   onLearned?: (line: string) => void;
   // Replaces the Slack transport chosen from config (tests).
   slack?: SlackTransport;
-  // Replaces gh for the GitHub poll (tests).
-  github?: { api?: GhApi; prs?: PrFetch; clock?: GateClock };
   // Replaces the remote's Slack link chosen from config (tests).
   remoteLink?: RemoteLink;
   // What other packages add (core/plugins.ts): triage, connections.
   plugins?: readonly RikerPlugin[];
-}
-
-// A poll this slow is worth saying so on the status line.
-const SLOW_GITHUB_MS = 30_000;
-
-function short(message: string): string {
-  const line = message.split("\n")[0] ?? message;
-  return line.length > 100 ? `${line.slice(0, 99)}…` : line;
-}
-
-function pauseWords(what: string, p: Pause): string {
-  return p.why === PauseWhy.rateLimit
-    ? `${what}rate limited until ${clockTime(p.until)}`
-    : `${what}paused until ${clockTime(p.until)} (GraphQL budget low)`;
 }
 
 const EVENTS_CURSOR = "actions.events";
@@ -107,11 +80,7 @@ const EVENT_TRIGGERS: Record<string, ActionEvent> = {
 
 const log = logger("engine");
 
-const off = (detail: string): ConnectorStatus => ({
-  state: "off",
-  detail,
-  at: null,
-});
+const off = offStatus;
 
 export class Engine {
   readonly pool: AgentPool;
@@ -121,14 +90,24 @@ export class Engine {
   private remote: Remote | null = null;
   private timers: ReturnType<typeof setInterval>[] = [];
   private polling = new Set<string>();
-  private gate: GithubGate | null = null;
   private statusListeners = new Set<(s: EngineStatus) => void>();
   status: EngineStatus = {
-    github: off("not started"),
     slack: off("not started"),
     remote: off("not started"),
     advisor: off("not started"),
   };
+  // Every connector the plugins brought, in their order.
+  readonly connectors: readonly Connector[];
+
+  // What the status line and modal list, in order: the plugins'
+  // connectors, then Slack's two lines while they still live here.
+  connections(): readonly Pick<Connector, "name" | "label" | "quietWhenOff" | "hint">[] {
+    return [
+      ...this.connectors,
+      { name: "slack", label: "Slack", hint: `Slack needs a user token in SLACK_TOKEN or ${paths.config()}.` },
+      { name: "remote", label: "Slack remote", quietWhenOff: true },
+    ];
+  }
 
   private readonly judge: Triage | null;
 
@@ -137,6 +116,19 @@ export class Engine {
     const judges = (options.plugins ?? []).flatMap((p) => (p.triage ? [p.triage] : []));
     if (judges.length > 1) throw new Error("more than one plugin brings triage");
     this.judge = judges[0] ?? null;
+    const plugins = options.plugins ?? [];
+    this.connectors = plugins.flatMap((p) => p.connectors ?? []);
+    const names = new Set<string>(["advisor", "slack", "remote"]);
+    for (const c of this.connectors) {
+      if (names.has(c.name)) throw new Error(`two connectors are called ${c.name}`);
+      names.add(c.name);
+      this.status = { ...this.status, [c.name]: off("not started") };
+    }
+    const senders: Senders = {
+      slack_reply: (action) =>
+        this.slack ? this.slack.send(action) : Promise.reject(new SendError("Slack is not connected")),
+    };
+    for (const p of plugins) Object.assign(senders, p.senders);
     this.slack = options.slack ?? null;
     this.pool = new AgentPool({ config });
     this.drivers = new Drivers({
@@ -151,7 +143,10 @@ export class Engine {
       offline: options.offline,
       onLearned: options.onLearned,
       triage: this.judge ?? undefined,
+      senders,
+      guards: plugins.flatMap((p) => p.guards ?? []),
     });
+    for (const c of this.connectors) c.attach(this.connectorContext(c));
   }
 
   onStatus(listener: (s: EngineStatus) => void): () => void {
@@ -159,7 +154,24 @@ export class Engine {
     return () => this.statusListeners.delete(listener);
   }
 
-  private setStatus(key: keyof EngineStatus, next: ConnectorStatus): void {
+  private connectorContext(c: Connector): ConnectorContext {
+    return {
+      config: this.options.config,
+      status: () => this.status[c.name] ?? off("not started"),
+      setStatus: (next) => this.setStatus(c.name, next),
+      ingest: (messages) => this.ingest(messages),
+      every: (ms, fn) => void this.timers.push(setInterval(fn, ms)),
+      say: (taskId, text, author) => this.desk.say(taskId, text, author),
+      wake: (taskId, reason) => {
+        const task = store.getTask(taskId);
+        if (task) void this.drivers.for(task).wake(task, reason);
+      },
+      runMove: (verb, args, by) => this.runMove(verb, args, by),
+      checkMerges: () => this.checkMerges(),
+    };
+  }
+
+  private setStatus(key: string, next: ConnectorStatus): void {
     const prev = this.status[key];
     // A connection changing state is worth a line; each poll is only a trace.
     if (prev.state !== next.state || prev.detail !== next.detail) {
@@ -213,7 +225,7 @@ export class Engine {
     this.watchMoves();
     this.timers.push(setInterval(() => this.fireEventActions(), 2_000));
     if (this.options.offline) {
-      this.setStatus("github", off("fixture mode"));
+      for (const c of this.connectors) this.setStatus(c.name, off("fixture mode"));
       this.setStatus("slack", off("fixture mode"));
       this.setStatus("remote", off("fixture mode"));
       this.setStatus("advisor", off("fixture mode"));
@@ -224,22 +236,13 @@ export class Engine {
     this.timers.push(setInterval(() => void this.triageInbox(), 15_000));
     const config = this.options.config.get();
     log.info("engine start", {
-      github: config.github.enabled,
+      connectors: this.connectors.map((c) => c.name).join(","),
       slack: config.slack.enabled ? config.slack.transport : false,
       maxActiveAgents: config.maxActiveAgents,
     });
-    if (config.github.enabled) {
-      void this.pollGithub();
-      this.timers.push(
-        setInterval(
-          () => void this.pollGithub(),
-          config.github.pollSeconds * 1000,
-        ),
-      );
-    } else this.setStatus("github", off("disabled in config"));
+    for (const c of this.connectors) c.start();
     this.slack = this.options.slack ?? slackTransport(config);
     const slack = this.slack;
-    setSlackSender((action) => slack.send(action));
     const canSlack = slack.available();
     if (config.slack.enabled && canSlack.ok) {
       void this.pollSlack();
@@ -287,6 +290,7 @@ export class Engine {
     this.timers = [];
     this.watching?.abort();
     this.watching = null;
+    for (const c of this.connectors) c.stop?.();
     this.slack?.stop();
     this.remote?.stop();
     this.remote = null;
@@ -437,152 +441,6 @@ export class Engine {
     this.desk.runEffects(effects);
   }
 
-  // The gate outlives a restart only for a rate limit: GitHub's reset time
-  // does not move because Riker did.
-  private githubGate(): GithubGate {
-    if (this.gate) return this.gate;
-    const gate = new GithubGate(
-      () => this.options.config.get().github.pollSeconds * 1000,
-      this.options.github?.clock,
-    );
-    for (const budget of Object.values(GhBudget)) {
-      const saved = store.kvGet(`github.pause.${budget}`);
-      if (!saved) continue;
-      try {
-        const p = JSON.parse(saved) as Pause;
-        gate.hold(budget, p.until, p.why);
-      } catch {
-        // A pause that cannot be read is no pause.
-      }
-    }
-    this.gate = gate;
-    return gate;
-  }
-
-  private holdGithub(budget: GhBudget, until: number, why: PauseWhy): void {
-    const gate = this.githubGate();
-    gate.hold(budget, until, why);
-    const p = gate.pause(budget);
-    if (p) store.kvSet(`github.pause.${budget}`, JSON.stringify(p));
-    log.warn("github paused", { budget, why, until: new Date(until).toISOString() });
-  }
-
-  // gh api rate_limit is free; it says when the spent budget comes back.
-  private async githubLimited(budget: GhBudget): Promise<void> {
-    const api = this.options.github?.api ?? ghApi;
-    let limits: GhRateLimit | null = null;
-    try {
-      limits = (await api("rate_limit")) as GhRateLimit;
-    } catch (err) {
-      log.warn("rate_limit failed", { err: errorMessage(err) });
-    }
-    const clock = this.options.github?.clock;
-    const nowMs = clock ? clock.now() : Date.now();
-    this.holdGithub(budget, limitedUntil(budget, limits, nowMs), PauseWhy.rateLimit);
-  }
-
-  // force (the owner's check now) skips a backoff, never a rate limit.
-  async pollGithub(force = false): Promise<void> {
-    if (this.polling.has("github")) return;
-    const gate = this.githubGate();
-    if (gate.backoff() && !force) return;
-    const restHeld = gate.pause(GhBudget.rest);
-    const graphHeld = gate.pause(GhBudget.graphql);
-    if (restHeld && graphHeld) {
-      this.setStatus("github", {
-        state: "error",
-        detail: pauseWords("", restHeld),
-        at: now(),
-      });
-      return;
-    }
-    this.polling.add("github");
-    this.setStatus("github", { ...this.status.github, state: "polling" });
-    const done = log.time("github poll");
-    const started = Date.now();
-    const api = this.options.github?.api ?? ghApi;
-    try {
-      let fresh = 0;
-      if (!restHeld) {
-        const startedAt = now();
-        const since =
-          store.kvGet("github.since") ??
-          new Date(Date.now() - 2 * 86400000).toISOString();
-        fresh = this.ingest(await pollGithub(since, api, store.hasBranchTasks));
-        store.kvSet("github.since", startedAt);
-      }
-      // On the same clock: what the rail says about each task's PR.
-      const prs = graphHeld
-        ? null
-        : await refreshPrStatuses({
-            fetch: this.options.github?.prs ?? ghPrBatch,
-            gate,
-          });
-      if (prs?.limited) await this.githubLimited(GhBudget.graphql);
-      else if (prs?.budget && prs.budget.remaining < GRAPHQL_RESERVE)
-        this.holdGithub(
-          GhBudget.graphql,
-          Date.parse(prs.budget.resetAt),
-          PauseWhy.reserve,
-        );
-      await this.checkMerges();
-      const ms = Date.now() - started;
-      done({ fresh, prs: prs?.asked ?? 0, failed: prs?.failed ?? 0 });
-      this.githubPolled(fresh, prs, ms);
-    } catch (err) {
-      done({ ok: false, err });
-      const message = errorMessage(err);
-      if (ghTrouble(message) === GhTrouble.rateLimit) {
-        await this.githubLimited(GhBudget.rest);
-        const p = gate.pause(GhBudget.rest);
-        this.setStatus("github", {
-          state: "error",
-          detail: p ? pauseWords("", p) : short(message),
-          at: now(),
-        });
-      } else {
-        const until = gate.failed(message);
-        this.setStatus("github", {
-          state: "error",
-          detail: `${short(message)} · retry ${clockTime(until)}`,
-          at: now(),
-        });
-      }
-    } finally {
-      this.polling.delete("github");
-    }
-  }
-
-  // What the round says: new messages, PRs that could not be read, a paused
-  // budget, a slow poll. Every PR failing is the poll failing.
-  private githubPolled(fresh: number, prs: PrRefresh | null, ms: number): void {
-    const gate = this.githubGate();
-    const restHeld = gate.pause(GhBudget.rest);
-    const graphHeld = gate.pause(GhBudget.graphql);
-    const allFailed = !!prs && prs.asked > 0 && prs.ok === 0 && prs.failed === prs.asked;
-    const failedWords = prs?.failed
-      ? `${prs.failed} PR${prs.failed === 1 ? "" : "s"} failed: ${short(prs.error ?? "")}`
-      : "";
-    const parts = [
-      restHeld ? pauseWords("", restHeld) : fresh ? `${fresh} new` : "up to date",
-      failedWords,
-      graphHeld ? pauseWords("PR status ", graphHeld) : "",
-      ms > SLOW_GITHUB_MS ? `slow ${Math.round(ms / 1000)}s` : "",
-    ];
-    let state: ConnectorState = "ok";
-    if (allFailed) {
-      const until = gate.failed(prs.error ?? "PR status failed");
-      parts.push(`retry ${clockTime(until)}`);
-      state = "error";
-    } else gate.succeeded();
-    if (graphHeld?.why === PauseWhy.rateLimit || restHeld) state = "error";
-    this.setStatus("github", {
-      state,
-      detail: parts.filter(Boolean).join(" · "),
-      at: now(),
-    });
-  }
-
   async pollSlack(): Promise<void> {
     const slack = this.slack;
     if (!slack?.available().ok || this.polling.has("slack")) return;
@@ -698,7 +556,10 @@ export class Engine {
   }
 
   async pollNow(): Promise<void> {
-    await Promise.all([this.pollGithub(true), this.pollSlack()]);
+    await Promise.all([
+      ...this.connectors.map((c) => c.pollNow?.()),
+      this.pollSlack(),
+    ]);
   }
 
   private async advisorTick(force = false): Promise<void> {

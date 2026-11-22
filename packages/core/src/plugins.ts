@@ -99,7 +99,13 @@ export interface Connector {
   label: string;
   // Left off the footer's line while off (an opt-in nobody turned on).
   quietWhenOff?: boolean;
-  start(ctx: ConnectorContext): void;
+  // One line for the status modal on what it needs to connect.
+  hint?: string;
+  // What the engine lends, handed over once when it is made, so a test or
+  // the fixture day can poll a connector the engine never started.
+  attach(ctx: ConnectorContext): void;
+  // Starts its clocks (never on the fixture day).
+  start(): void;
   stop?(): void;
   // The owner's "check now": skips a backoff, never a rate limit.
   pollNow?(): Promise<void>;

@@ -3,8 +3,8 @@
 // assignments, and comments on threads you are part of. Read-only: Riker never
 // marks a notification read.
 
-import { ghTrouble, GhTrouble } from "../github-gate";
-import type { NewMessage } from "../store";
+import { ghTrouble, GhTrouble } from "./gate";
+import type { NewMessage } from "@riker/core/store";
 
 // A detail that cannot be read is left out; a rate limit stops the poll,
 // since every call after it fails too and spends what is left.

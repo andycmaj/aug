@@ -5,6 +5,7 @@
 // call: the api, the PR batch and Send are all the sim's.
 
 import { triagePlugin } from "@riker/triage";
+import { githubPlugin } from "@riker/github";
 import { watch, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -170,11 +171,11 @@ export function installSim(opts: SimOptions): {
     return `sim: ${done}`;
   });
   const fake = fileURLToPath(new URL("../fake-claude.ts", import.meta.url));
+  const github = githubPlugin({ api: simApi(file), prs: simPrFetch(file) });
   const engine = new Engine({
     config,
     noWorktrees: true,
-    plugins: [triagePlugin()],
-    github: { api: simApi(file), prs: simPrFetch(file) },
+    plugins: [triagePlugin(), github],
     launchOverride: (task, launch) => {
       const cwd = simCwd(task, file) ?? launch.cwd;
       const argv = haiku
@@ -189,7 +190,7 @@ export function installSim(opts: SimOptions): {
     let timer: ReturnType<typeof setTimeout> | null = null;
     watch(dirname(file), () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => void engine.pollGithub(true), 300);
+      timer = setTimeout(() => void github.connector.poll(true), 300);
     });
     if (opts.scenario)
       void playScenario(opts.scenario, file, {

@@ -47,7 +47,7 @@ import {
   type ActionSpec,
 } from "./task-actions";
 import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
-import type { Triage, TriageEffect, TriageOutcome } from "./plugins";
+import type { MoveGuard, Senders, Triage, TriageEffect, TriageOutcome } from "./plugins";
 import {
   AgentState,
   IdeaStatus,
@@ -86,6 +86,10 @@ export interface DeskOptions {
   onLearned?: (line: string) => void;
   // The inbox's judge (core/plugins.ts); without one, r and m say so.
   triage?: Triage;
+  // Ways out, by DraftAction type, from the plugins.
+  senders?: Senders;
+  // Moves that wait for the owner's yes (core/moves.ts asks each).
+  guards?: readonly MoveGuard[];
 }
 
 export class Desk {
@@ -99,6 +103,15 @@ export class Desk {
 
   get offline(): boolean {
     return Boolean(this.options.offline);
+  }
+
+  // What a move must answer instead of running (held for a yes), if any.
+  guardMove(verb: string, args: Record<string, string>, by: string): string | null {
+    for (const guard of this.options.guards ?? []) {
+      const held = guard(verb, args, by);
+      if (held !== null) return held;
+    }
+    return null;
   }
 
   // ctrl+z: this session's moves, newest first (core/undo.ts).
@@ -562,7 +575,7 @@ export class Desk {
 
   async send(taskId: number): Promise<string> {
     return this.cannotAsync(`send ${store.taskRef(taskId)}`, "it sent the draft", async () => {
-      return sendPending(this.config(), taskId);
+      return sendPending(this.config(), taskId, this.options.senders ?? {});
     });
   }
 

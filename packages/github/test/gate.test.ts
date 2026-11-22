@@ -8,7 +8,7 @@ import {
   PauseWhy,
   SECONDARY_PAUSE_MS,
   UNKNOWN_RESET_PAUSE_MS,
-} from "../src/github-gate";
+} from "../src/gate";
 
 describe("what went wrong", () => {
   test("rate limits, by what gh says", () => {
