@@ -69,8 +69,8 @@ function githubNumber(
 
 function personOf(m: MessageRow): Person | null {
   if (m.from_me || m.channel === Channel.owner) return null;
-  // GitHub's stand-in when the notification names nobody.
-  if (m.channel === Channel.github && m.author === "github") return null;
+  // A channel's stand-in when it names nobody (GitHub's "github").
+  if (m.author === m.channel) return null;
   return {
     channel: m.channel,
     handle: m.author,
@@ -259,9 +259,9 @@ function textScore(text: string, word: string): number | null {
 }
 
 function personWhy(p: Person): string {
-  if (p.channel === Channel.github) return `github @${p.handle}`;
-  if (p.channel === Channel.slack) return `slack ${p.name}`;
-  return `waiting on ${p.name}`;
+  if (!p.channel) return `waiting on ${p.name}`;
+  // A display name when the channel has one (Slack), else the handle.
+  return p.name !== p.handle ? `${p.channel} ${p.name}` : `${p.channel} @${p.handle}`;
 }
 
 function personMatch(doc: SearchDoc, word: string, base: number): Match | null {

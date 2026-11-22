@@ -3,13 +3,13 @@
 
 import { SELF } from "./brand";
 
+// Where a message or task came from: the owner, or a plugin's channel named
+// as that plugin names it ("github", "slack"). Core knows only the owner's.
 export const Channel = {
-  github: "github",
-  slack: "slack",
   // Typed by the owner (a new task, a line in a chat).
   owner: "owner",
 } as const;
-export type Channel = (typeof Channel)[keyof typeof Channel];
+export type Channel = string;
 
 // Triage's five roads plus watch. fyi creates no task; the rest are task kinds.
 export const Verdict = {
