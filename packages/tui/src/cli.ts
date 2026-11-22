@@ -22,6 +22,18 @@ export interface CLIConfig {
 
 let config: CLIConfig | undefined;
 
+// These commands run here, inside parseCLI, before index.tsx moves aug's home.
+// Writing first would make a fresh ~/.riker that the move then refuses to
+// overwrite, so one that writes into the home moves it first, as a start does.
+function moveHomeFirst(): void {
+  const moved = migrateHome();
+  if (moved.refuse) {
+    console.error(`${CMD}: cannot move aug's home: ${moved.refuse}`);
+    process.exit(1);
+  }
+  if (!moved.skip) console.log(moved.steps.join("\n"));
+}
+
 // Hooks in your user settings, so Riker picks up claudes you start by hand in
 // a project's tmux session. Never written unless you ask.
 const hooks = defineCommand({
@@ -33,12 +45,14 @@ const hooks = defineCommand({
     install: defineCommand({
       meta: { name: "install", description: "Add Riker's hooks to your Claude settings" },
       run() {
+        moveHomeFirst();
         console.log(`riker hooks added to ${installHooks()}`);
       },
     }),
     uninstall: defineCommand({
       meta: { name: "uninstall", description: "Remove Riker's hooks from your Claude settings" },
       run() {
+        moveHomeFirst();
         console.log(
           uninstallHooks()
             ? `riker hooks removed from ${claudeSettingsPath()}`
@@ -83,7 +97,9 @@ const install = defineCommand({
     check: { type: "boolean", description: "say what is installed, change nothing" },
   },
   run({ args }) {
-    for (const name of chosen(args._.map(String))) {
+    const names = chosen(args._.map(String));
+    if (!args.check) moveHomeFirst();
+    for (const name of names) {
       const item = INSTALLS[name];
       const state = installState(name);
       if (args.check) {
@@ -111,7 +127,9 @@ const uninstall = defineCommand({
     description: `Take out what riker install put in: ${Object.keys(INSTALLS).join(", ")} (all when none named)`,
   },
   run({ args }) {
-    for (const name of chosen(args._.map(String))) {
+    const names = chosen(args._.map(String));
+    moveHomeFirst();
+    for (const name of names) {
       const removed = INSTALLS[name].uninstall();
       console.log(removed ? `${name}: removed\n${indent(removed)}` : `${name}: nothing to remove`);
     }
