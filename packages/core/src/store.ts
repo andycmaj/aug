@@ -1038,6 +1038,15 @@ export function openIdeas(): IdeaRow[] {
   );
 }
 
+// Ideas made since `since` (an ISO time), whatever the owner did with them:
+// the Advisor's record of what it already said.
+export function ideasSince(since: string): IdeaRow[] {
+  return all<IdeaRow>(
+    "SELECT * FROM ideas WHERE created_at >= ? ORDER BY created_at, id",
+    since,
+  );
+}
+
 export function ideaTasked(id: number, taskId: number): void {
   run("UPDATE ideas SET status = 'tasked', made_task_id = ? WHERE id = ?", taskId, id);
 }

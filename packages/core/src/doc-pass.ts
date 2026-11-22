@@ -9,6 +9,7 @@
 // edit would stop their updates, so a lesson that belongs in one becomes an
 // Advisor idea to change Riker instead.
 
+import { pastIdeas, repeatsPastIdea } from "./advisor";
 import { think } from "./brain";
 import type { RikerConfig } from "./config";
 import {
@@ -220,10 +221,12 @@ export async function runDocPass(
     proposed++;
   }
   let ideas = 0;
-  const open = store.openIdeas().map((i) => i.title.toLowerCase());
+  const past = pastIdeas(at);
   for (const idea of answer?.ideas ?? []) {
-    if (open.includes(idea.title.toLowerCase())) continue;
-    store.addIdea(idea.title, `${idea.body}\n\n(A change to Riker's shipped docs: an AUG-MISC task.)`, null);
+    if (repeatsPastIdea({ title: idea.title, taskId: null }, past)) continue;
+    past.push(
+      store.addIdea(idea.title, `${idea.body}\n\n(A change to Riker's shipped docs: an AUG-MISC task.)`, null),
+    );
     ideas++;
   }
   store.kvSet(SEEN, signature());

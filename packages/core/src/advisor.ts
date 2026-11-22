@@ -6,11 +6,20 @@
 import { createHash } from "node:crypto";
 import { think } from "./brain";
 import type { RikerConfig } from "./config";
+import { logger } from "./log";
 import { docsBlock } from "./prompts";
 import { isSlipped } from "./rail";
 import { capReached } from "./spend";
 import * as store from "./store";
-import { Kind, SpendRole, TaskStatus } from "./types";
+import {
+  IdeaStatus,
+  Kind,
+  SpendRole,
+  TaskStatus,
+  type IdeaRow,
+} from "./types";
+
+const log = logger("advisor");
 
 const IDEAS_SCHEMA = {
   type: "object",
@@ -83,6 +92,62 @@ export function workPicture(at: Date): string {
   ].join("\n");
 }
 
+// How far back the Advisor remembers what it said and what the owner did
+// with it, so an idea does not come back under new words.
+export const PAST_IDEAS_DAYS = 30;
+
+// Every idea still open, and every one made in the window whatever became of
+// it.
+export function pastIdeas(at: Date): IdeaRow[] {
+  const since = new Date(at.getTime() - PAST_IDEAS_DAYS * 86400000).toISOString();
+  const byId = new Map<number, IdeaRow>();
+  for (const i of [...store.openIdeas(), ...store.ideasSince(since)]) byId.set(i.id, i);
+  return [...byId.values()].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+}
+
+function outcome(i: IdeaRow): string {
+  switch (i.status) {
+    case IdeaStatus.dismissed:
+      return "dismissed";
+    case IdeaStatus.tasked:
+      return `approved${i.made_task_id ? ` as ${store.taskRef(i.made_task_id)}` : ""}`;
+    default:
+      return "open in the Inbox";
+  }
+}
+
+export function pastIdeasBlock(past: IdeaRow[]): string {
+  if (past.length === 0) return "(none)";
+  return past
+    .map(
+      (i) =>
+        `- [${outcome(i)}, ${i.created_at.slice(0, 10)}] ${i.title}${i.task_id ? ` (about ${store.taskRef(i.task_id)})` : ""}`,
+    )
+    .join("\n");
+}
+
+const sameTitle = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// Why a new idea is refused, or null: it repeats one already said by title,
+// or it is about a task whose idea the owner dismissed in the window. The
+// model is told both; this holds when it rewords one anyway.
+export function repeatsPastIdea(
+  idea: { title: string; taskId: number | null },
+  past: IdeaRow[],
+): string | null {
+  const same = past.find((p) => sameTitle(p.title, idea.title));
+  if (same) return `repeats idea #${same.id} (${outcome(same)})`;
+  if (idea.taskId) {
+    const dismissed = past.find(
+      (p) => p.status === IdeaStatus.dismissed && p.task_id === idea.taskId,
+    );
+    if (dismissed)
+      return `${store.taskRef(idea.taskId)}'s idea #${dismissed.id} was dismissed`;
+  }
+  return null;
+}
+
 const LAST_RUN = "advisor.lastRun";
 // The hash of the work picture the model last read.
 const LAST_PICTURE = "advisor.lastPicture";
@@ -110,11 +175,11 @@ export async function runAdvisor(
     // Not marked run: the next tick after the cap lifts asks.
     return { added: 0, skipped: "daily spend cap reached" };
   }
-  const existing = store.openIdeas().map((i) => i.title.toLowerCase());
+  const past = pastIdeas(at);
   const result = await think({
-    prompt: `${picture}\n\nIdeas already in the Inbox:\n${existing.join("\n") || "(none)"}\n\nToday is ${at.toISOString().slice(0, 10)}.`,
+    prompt: `${picture}\n\nIdeas from the last ${PAST_IDEAS_DAYS} days (and any still open), with what the owner did with each:\n${pastIdeasBlock(past)}\n\nToday is ${at.toISOString().slice(0, 10)}.`,
     system: [
-      "You are the Advisor in Riker, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas, none repeating one already in the Inbox. Fewer is better; zero is fine.",
+      `You are the Advisor in Riker, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas. Never repeat an idea listed as already said, under any words: one still open is already in the Inbox, one approved is already a task, and one dismissed means the owner does not want it (leave its task alone unless something new happened to it). Fewer is better; zero is fine.`,
       docsBlock(config, { persona: true, job: true, learned: true }),
     ].join("\n\n"),
     schema: IDEAS_SCHEMA,
@@ -124,13 +189,14 @@ export async function runAdvisor(
   const answer = result.structured as IdeasAnswer | null;
   let added = 0;
   for (const idea of answer?.ideas ?? []) {
-    if (existing.includes(idea.title.toLowerCase())) continue;
-    const taskId = idea.task ? store.parseTaskRef(idea.task) : null;
-    store.addIdea(
-      idea.title,
-      idea.body,
-      taskId && store.getTask(taskId) ? taskId : null,
-    );
+    const ref = idea.task ? store.parseTaskRef(idea.task) : null;
+    const taskId = ref && store.getTask(ref) ? ref : null;
+    const why = repeatsPastIdea({ title: idea.title, taskId }, past);
+    if (why) {
+      log.info("advisor refused an idea", { title: idea.title, why });
+      continue;
+    }
+    past.push(store.addIdea(idea.title, idea.body, taskId));
     added++;
   }
   store.kvSet(LAST_RUN, at.toISOString());
