@@ -8,11 +8,11 @@
 // Sending is a separate one-shot call per Send press, whose only tool is the
 // send tool and whose only input is the owner's approved words.
 
-import { think, tokenUsage, type StreamEvent as BrainEvent } from "../brain";
-import { logger } from "../log";
-import { claudeEnv } from "../self";
-import { recordSpend } from "../spend";
-import { SpendRole } from "../types";
+import { think, tokenUsage, type StreamEvent as BrainEvent } from "@riker/core/brain";
+import { logger } from "@riker/core/log";
+import { claudeEnv } from "@riker/core/self";
+import { recordSpend } from "@riker/core/spend";
+import { SpendRole } from "@riker/core/types";
 import {
   rawToNewMessage,
   type PollContext,

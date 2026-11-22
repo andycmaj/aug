@@ -34,7 +34,6 @@ import {
   type ProjectMove,
   type ProjectRow,
   type TaskRow,
-  type TriageVerdict,
 } from "@riker/core/types";
 
 import type { ProjectPick, TriageEffect, TriageOutcome } from "@riker/core/plugins";
@@ -557,7 +556,7 @@ export interface TriageDeps {
   config: TriageConfig;
   rules?: readonly TriageRule[];
   // Earlier messages on the thread whose text the message carries
-  // (core/triage-worker.ts): they follow wherever it goes.
+  // (worker.ts): they follow wherever it goes.
   batch?: readonly MessageRow[];
 }
 

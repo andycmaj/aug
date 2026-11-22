@@ -6,6 +6,7 @@
 
 import { triagePlugin } from "@riker/triage";
 import { githubPlugin } from "@riker/github";
+import { slackPlugin } from "@riker/slack";
 import { watch, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -175,7 +176,7 @@ export function installSim(opts: SimOptions): {
   const engine = new Engine({
     config,
     noWorktrees: true,
-    plugins: [triagePlugin(), github],
+    plugins: [triagePlugin(), github, slackPlugin()],
     launchOverride: (task, launch) => {
       const cwd = simCwd(task, file) ?? launch.cwd;
       const argv = haiku

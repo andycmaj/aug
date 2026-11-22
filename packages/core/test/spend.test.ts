@@ -10,7 +10,6 @@ import { think } from "../src/brain";
 import { fixedConfig, type RikerConfig } from "../src/config";
 import { runDocPass } from "../src/doc-pass";
 import { localDay } from "../src/rail";
-import { PersistentClaude, type ProcLike } from "../src/slack/claude-mcp";
 import {
   capReached,
   dailyCap,
@@ -97,46 +96,6 @@ describe("recording spend", () => {
     expect(spendRows().map((r) => r.role).sort()).toEqual(
       ["advisor", "assistant", "doc-pass", "general"].sort(),
     );
-  });
-
-  test("the Slack session's running total is recorded turn by turn", async () => {
-    const totals = [0.1, 0.25, 0.05];
-    const spawn = (): ProcLike => {
-      const pending: string[] = [];
-      let wake: (() => void) | null = null;
-      return {
-        write() {
-          pending.push(
-            JSON.stringify({
-              type: "result",
-              structured_output: {},
-              total_cost_usd: totals.shift(),
-              usage: { input_tokens: 1, output_tokens: 2 },
-            }),
-          );
-          wake?.();
-        },
-        lines: (async function* () {
-          for (;;) {
-            if (!pending.length) await new Promise<void>((r) => (wake = r));
-            wake = null;
-            while (pending.length) yield pending.shift()!;
-          }
-        })(),
-        kill() {},
-      };
-    };
-    // A fresh process every two turns: its total starts over.
-    const session = new PersistentClaude(() => ["claude"], { maxTurns: 2, spawn, model: "haiku" });
-    await session.ask("a");
-    await session.ask("b");
-    await session.ask("c");
-    const costs = store
-      .spendByRole(localDay(new Date()))
-      .find((r) => r.role === SpendRole.slack);
-    expect(costs?.calls).toBe(3);
-    // 0.10, then 0.25 - 0.10, then a new process's 0.05.
-    expect(costs?.cost).toBeCloseTo(0.3);
   });
 
   test("the report says today, by role and task, the week, and the cap", () => {

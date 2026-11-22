@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { linkPr } from "../src/feedback";
-import { prChip, prLine, prQueueWord, taskPr } from "../src/pr";
+import { prChip, prLine, taskPr } from "../src/pr";
 import * as store from "../src/store";
-import type { Tone } from "../src/lanes";
 import { Kind, type PrStatusRow } from "../src/types";
 import { freshHome } from "./support/helpers";
 

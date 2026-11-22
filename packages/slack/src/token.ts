@@ -2,8 +2,8 @@
 // the inbox is yours: direct messages, mentions of you, the configured
 // channels, and new replies on threads Riker already tracks.
 
-import { logger } from "../log";
-import type { NewMessage } from "../store";
+import { logger } from "@riker/core/log";
+import type { NewMessage } from "@riker/core/store";
 import {
   plainText,
   rawToNewMessage,

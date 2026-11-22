@@ -1,7 +1,7 @@
 // The simulator's GitHub: one JSON file in the scratch home that `bun run
 // sim:do` and the scenarios write, and that the fake `gh api` and GraphQL
 // batch below read on every call. Its answers are typed as the shapes
-// core/ingest/github.ts and core/pr.ts parse, and the PR batch goes through
+// @riker/github's ingest.ts and pr-status.ts parse, and the PR batch goes through
 // the real readPrBatch, so Riker polls this exactly as it polls GitHub.
 
 import {

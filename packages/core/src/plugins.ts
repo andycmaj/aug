@@ -84,7 +84,7 @@ export interface ConnectorContext {
   // A timer the engine clears at stop.
   every(ms: number, fn: () => void): void;
   // The owner's words into a task, and a wake for its agent.
-  say(taskId: number, text: string, author: string): void;
+  say(taskId: number, text: string, author: string): Promise<boolean>;
   wake(taskId: number, reason: string): void;
   // A move run on the desk, as `by`.
   runMove(verb: string, args: Record<string, string>, by: string): Promise<{ ok: boolean; result: string }>;

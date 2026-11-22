@@ -54,7 +54,7 @@ export interface RikerConfig {
     // GitHub teams whose review asks are yours, as org/team-slug (or a bare
     // slug for any org). A PR that requests a review of one of them or of
     // you, or tags one of them or you, always becomes a review task
-    // (core/triage.ts).
+    // (@riker/triage).
     reviewTeams: string[];
   };
   slack: {
@@ -74,7 +74,7 @@ export interface RikerConfig {
     // mentions of you are.
     channels: string[];
   };
-  // Talking to the Assistant from Slack (core/slack/remote.ts): your
+  // Talking to the Assistant from Slack (@riker/slack remote.ts): your
   // messages in one conversation that only you are in reach Home, and its
   // answers come back in the thread. Separate from slack.enabled (the
   // inbound triage poller) and off until turned on. It reads and posts the

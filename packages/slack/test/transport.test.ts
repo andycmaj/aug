@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG, mergeConfig } from "../src/config";
+import { DEFAULT_CONFIG, mergeConfig } from "@riker/core/config";
 import {
   ClaudeMcpTransport,
   discoverSlackTools,
   PersistentClaude,
   polledToRaw,
   type ProcLike,
-} from "../src/slack/claude-mcp";
-import { McpTransport } from "../src/slack/mcp";
-import { rawToNewMessage } from "../src/slack/shared";
-import { TokenTransport } from "../src/slack/token";
-import { slackTransport } from "../src/slack/transport";
-import { fakeBrain, freshHome } from "./support/helpers";
+} from "../src/claude-mcp";
+import { McpTransport } from "../src/mcp";
+import { rawToNewMessage } from "../src/shared";
+import { TokenTransport } from "../src/token";
+import { slackTransport } from "../src/transport";
+import { fakeBrain, freshHome } from "@riker/core/test/support/helpers";
 
 const TOOLS = [
   "Read",

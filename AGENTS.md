@@ -13,13 +13,34 @@ A bun workspace (`packages/*`, hoisted installs). A package imports another
 by name, `@riker/core/store`, from its `src/` (each `exports` `"./*":
 "./src/*.ts"`), never by relative path across packages; nothing is built.
 One root `tsconfig.json` and one `bun test` cover them all. Dependencies run
-one way: cli → tui → fixtures → core → code-review-plannotator.
+one way: cli → tui → fixtures → {triage, github, slack} → core →
+code-review-plannotator; the three plugins never import each other, and
+`packages/core/test/boundaries.test.ts` fails on an import that goes the
+other way (a new package gets a line in its `ALLOWED`).
 
 - **`@riker/core`**: the domain (below: `core/x.ts` means
   `packages/core/src/x.ts`), its embedded text (`defaults/`, Riker's plugin
   `plugin/`, `contrib/revdiff/`) and the test helpers other packages' tests
   import (`@riker/core/test/support/helpers`: `freshHome()`, `fakeBrain()`,
   `fake-mux`).
+- **Plugins** (`core/plugins.ts`): what another package adds to Riker. A
+  `RikerPlugin` brings a `Triage` (at most one), `connectors` (each a
+  status line, attached at construction, started off the fixture day),
+  `senders` by `DraftAction` type and move `guards`. An entry point hands
+  the engine its list (`plugins: [triagePlugin(), githubPlugin(),
+  slackPlugin()]` in `index.tsx`, the fixture day, the sim); core imports
+  none of them. A test picks only what it drives: `githubPlugin({ api,
+  prs, clock })`, `slackPlugin({ transport, remoteLink })`.
+- **`@riker/triage`**: the chain of rules (`src/triage.ts`) and the inbox's
+  worker (`src/worker.ts`); `triagePlugin()`.
+- **`@riker/github`**: notifications in (`ingest.ts`), the rate-limit gate
+  (`gate.ts`), each task's PR status read (`pr-status.ts`; the rail's words
+  for it stay `core/pr.ts`), sends through gh (`send.ts`), the poll
+  (`connector.ts`); `githubPlugin()`.
+- **`@riker/slack`**: the transports (`transport.ts`, `token.ts`,
+  `claude-mcp.ts`, `mcp.ts`), the poller and the remote (`connector.ts`,
+  `remote.ts`, `remote-links.ts`), the hold on moves asked from Slack
+  (`confirm.ts`, `confirmGuard`); `slackPlugin()`.
 - **`@riker/code-review-plannotator`**: the guided review as a library, runnable
   without Riker: the patch (`patchFor`, origin/<base> merge base), batches of
   related files (`planBatches`), the calls with an injected `ask`
@@ -51,9 +72,10 @@ Tests live beside their package (`packages/<name>/test/`).
 ## Architecture
 
 - **`packages/core/src/` is the domain, with no opentui/solid imports.** It holds the
-  store (`bun:sqlite`, `~/.riker/riker.db`), triage, the agent pool, hooks,
-  outbound, ingest, learning, the Assistant, the Advisor and the engine that
-  ties them together. Unit-test it in `packages/core/test/` with
+  store (`bun:sqlite`, `~/.riker/riker.db`), the agent pool, hooks,
+  outbound (drafts; plugins send), learning, the Assistant, the Advisor and
+  the engine that ties them together and runs its plugins. Triage and the
+  connections are plugin packages. Unit-test it in `packages/core/test/` with
   `freshHome()` and `fakeBrain()`.
 - **The brain is `claude -p`** (`core/brain.ts`), swappable with `setBrain` for
   tests and fixtures. User settings are skipped (`--setting-sources ""`) so the
@@ -97,7 +119,7 @@ Tests live beside their package (`packages/<name>/test/`).
   into `pr_status` on the GitHub clock, 25 PRs to one GraphQL query; the rail and the Canvas's
   header show it (marked stale when the last read failed), and `P` opens
   ghdash on it in the Canvas (`components/use-pr-dash.tsx`).
-- **When Riker may call GitHub is `core/github-gate.ts`**: a rate limit
+- **When Riker may call GitHub is `@riker/github` `gate.ts`**: a rate limit
   pauses that budget (REST or GraphQL) until its reset, kept in `kv` across
   restarts; a failed poll backs off (doubling, jittered, capped); a PR that
   keeps failing backs off alone; under `GRAPHQL_RESERVE` points PR status
@@ -107,7 +129,7 @@ Tests live beside their package (`packages/<name>/test/`).
   pane). The `adopt` move and `A` on the Board's Columns make one a coding task: one in
   tmux keeps running and its window moves into the project's session; one in
   a plain terminal is recorded as saved, so Start resumes it in a window.
-- **Slack goes through a `SlackTransport`** (`core/slack/`): `token`,
+- **Slack goes through a `SlackTransport`** (`@riker/slack`): `token`,
   `claude-mcp` (a persistent `claude -p` whose session can only read, plus a
   one-shot send call), or `mcp` (a stub). claude.ai connectors load even with
   `--setting-sources ""`, but under `-p` they connect before the first request
@@ -116,13 +138,13 @@ Tests live beside their package (`packages/<name>/test/`).
   `--strict-mcp-config` and loads none: late-connecting connectors re-add
   their schemas every resumed turn and miss the prompt cache (Knowledge #26,
   claude 2.1.322).
-- **The Slack remote is `core/slack/remote.ts`** (`docs/slack-remote.md`):
+- **The Slack remote is `@riker/slack` `remote.ts`** (`docs/slack-remote.md`):
   opt-in (`remote.enabled`), separate from the triage poller. It reads one
   conversation only the owner is in (self-DM or a private channel), hears
   the owner's own plain lines into Home (author `SLACK_AUTHOR`) and posts
   the Assistant's answer in the thread, marked `[riker]`. A turn answering
   Slack asks as `SLACK_ASKER`; `runMove` holds the moves in `CONFIRM_MOVES`
-  for the owner's yes in that thread (`core/slack/confirm.ts`).
+  for the owner's yes in that thread (`confirm.ts`, the plugin's move guard).
 - **Views read through the read model** (`core/read-model.ts`), never the
   store: `riker.task(id)`, `riker.turns(id)`, `riker.pendingAction(id)` and the
   rest sit on the Riker context. Each read names the tables it queries, and
@@ -151,16 +173,16 @@ Tests live beside their package (`packages/<name>/test/`).
   (`core/engine.ts`) is what runs: pollers, timers, the moves drain and the
   tmux watch; it owns a desk. Triage returns effects and does not start
   agents itself.
-- **`messages` is the inbox** (`core/triage-worker.ts`): each row has a
+- **`messages` is the inbox** (`@riker/triage` `worker.ts`): each row has a
   `state` (`new | triaging | done | failed`), `attempts` and `next_at`.
   Pollers only insert and then save their cursor; the engine's one worker
-  (`triageInbox`) claims due rows oldest first, resets stale claims at
+  (`triageInbox`, calling the plugin's `Triage.next`) claims due rows oldest first, resets stale claims at
   start, retries a failed model call with backoff up to
   `TRIAGE_MAX_ATTEMPTS`, then leaves it on the Inbox tab. A burst on one
   thread (rows within `BATCH_WINDOW_MS`) is one chain run on the latest,
   carrying all their text; the earlier rows follow it (rule `batch`).
   Ask a row's state, never its `reason` string.
-- **Triage is a chain of rules** (`TRIAGE_RULES` in `core/triage.ts`): each
+- **Triage is a chain of rules** (`TRIAGE_RULES` in `@riker/triage` `triage.ts`): each
   returns `ok(outcome)` to claim a message or `pass(why)` to hand it on
   (`core/result.ts`), in the order listed, and `runChain` runs them. Gates
   come first; the rules after them read the model's verdict, asked at most

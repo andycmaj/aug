@@ -9,7 +9,7 @@ import {
 } from "../src/feedback";
 import * as store from "../src/store";
 import { Kind, SessionKind } from "../src/types";
-import { freshHome, config } from "./support/helpers";
+import { freshHome } from "./support/helpers";
 
 beforeEach(() => freshHome());
 

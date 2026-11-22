@@ -5,6 +5,7 @@
 
 import { triagePlugin } from "@riker/triage";
 import { githubPlugin } from "@riker/github";
+import { slackPlugin } from "@riker/slack";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { envVar, inAgentEnv } from "@riker/core/brand";
 import { tmpdir } from "node:os";
@@ -877,7 +878,7 @@ export function installFixture(name: string): Engine {
     config,
     offline: true,
     noWorktrees: true,
-    plugins: [triagePlugin(), githubPlugin()],
+    plugins: [triagePlugin(), githubPlugin(), slackPlugin()],
     launchOverride: (task, launch) => ({
       ...launch,
       argv: [process.execPath, fake, task.title],

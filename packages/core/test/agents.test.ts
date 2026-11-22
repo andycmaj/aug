@@ -18,7 +18,6 @@ import {
   parseStreamLine,
   type StreamAcc,
 } from "../src/brain";
-import { plainText, threadKeyFor } from "../src/slack/shared";
 import * as store from "../src/store";
 import {
   AgentState,
@@ -555,19 +554,6 @@ describe("learning", () => {
 });
 
 describe("ingest", () => {
-  test("Slack text and thread keys", () => {
-    const names = new Map([["U1", "Ruth"]]);
-    expect(
-      plainText(
-        "<@U1> see <https://x.io|the doc> in <#C9|general> &amp; go",
-        names,
-      ),
-    ).toBe("@Ruth see the doc (https://x.io) in #general & go");
-    expect(threadKeyFor("D1", { ts: "1.1" }, true)).toBe("slack:D1:dm");
-    expect(threadKeyFor("C1", { ts: "2.2", thread_ts: "1.1" }, false)).toBe(
-      "slack:C1:1.1",
-    );
-  });
 });
 
 describe("claude.ai connectors", () => {

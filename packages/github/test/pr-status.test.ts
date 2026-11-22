@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { linkPr } from "@riker/core/feedback";
-import { prChip, prLine, prQueueWord, taskPr } from "@riker/core/pr";
+import { prChip, prLine, prQueueWord } from "@riker/core/pr";
 import * as store from "@riker/core/store";
 import type { Tone } from "@riker/core/lanes";
 import { Kind, type PrStatusRow } from "@riker/core/types";

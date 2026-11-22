@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { triagePlugin } from "../src/index";
 import { Engine } from "@riker/core/engine";
 import { setMux } from "@riker/core/mux";
-import { EMPTY_CURSOR, type SlackTransport } from "@riker/core/slack/shared";
 import * as store from "@riker/core/store";
 import {
   BATCH_WINDOW_MS,
@@ -112,43 +111,6 @@ describe("a failed model call", () => {
     await triageNext({ config: config() }, new Date(T0));
     store.markMessageRead(m.id);
     expect(await triageNext({ config: config() }, new Date(T0 + 86_400_000))).toBeNull();
-  });
-});
-
-describe("the Slack poll", () => {
-  function transport(messages: store.NewMessage[]): SlackTransport {
-    return {
-      kind: "token",
-      available: () => ({ ok: true, detail: "" }),
-      poll: async () => ({ messages, cursor: { ...EMPTY_CURSOR, since: "200.0" } }),
-      send: async () => "sent",
-      stop: () => {},
-    };
-  }
-
-  test("does not move its cursor when the insert throws", async () => {
-    engine = new Engine({ config: testConfig(), plugins: [triagePlugin()], offline: true, slack: transport([slackMessage(1, "hi there, a question")]) });
-    const insertSpy = spyOn(store, "insertMessage").mockImplementation(() => {
-      throw new Error("database is locked");
-    });
-    try {
-      await engine.pollSlack();
-    } finally {
-      insertSpy.mockRestore();
-    }
-    expect(engine.status.slack.state).toBe("error");
-    expect(store.kvGet("slack.cursor.token")).toBeNull();
-    await engine.pollSlack();
-    expect(JSON.parse(store.kvGet("slack.cursor.token")!).since).toBe("200.0");
-  });
-
-  test("only inserts: triage is the worker's", async () => {
-    const calls = fakeBrain(() => verdict("fyi"));
-    engine = new Engine({ config: testConfig(), plugins: [triagePlugin()], offline: true, slack: transport([slackMessage(1, "Why is the export short?")]) });
-    await engine.pollSlack();
-    const [m] = store.recentMessages(10);
-    expect(m!.state).toBe(MessageState.new);
-    expect(calls).toHaveLength(0);
   });
 });
 

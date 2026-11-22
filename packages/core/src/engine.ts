@@ -15,15 +15,9 @@ import { Drivers } from "./driver";
 import { checkMerges } from "./merge";
 import { errorMessage, logger } from "./log";
 import { count, measure, perfStart } from "./perf";
-import { EMPTY_CURSOR, type SlackCursor } from "./slack/shared";
-import { slackTransport, type SlackTransport } from "./slack/transport";
-import { Remote, remoteChannel, type RemoteLink } from "./slack/remote";
-import { remoteLink } from "./slack/remote-links";
 import { recoverAtBoot } from "./lifecycle";
-import { SendError } from "./outbound";
 import { drainMoves, runMove, type MoveOutcome } from "./moves";
 import * as projects from "./projects";
-import { paths } from "./paths";
 import * as store from "./store";
 import { ActionEvent } from "./task-actions";
 import { settleStaleTurns } from "./turn-check";
@@ -38,15 +32,13 @@ import {
   type Triaged,
   type TriageEffect,
 } from "./plugins";
-import { SessionKind, TaskStatus, type TaskRow } from "./types";
+import { SessionKind, type TaskRow } from "./types";
 
 export type { ConnectorState, ConnectorStatus } from "./plugins";
 
 // Each connector's line by its name, and the Advisor's.
 export type EngineStatus = Record<string, ConnectorStatus> & {
   advisor: ConnectorStatus;
-  slack: ConnectorStatus;
-  remote: ConnectorStatus;
 };
 
 export interface EngineOptions {
@@ -60,10 +52,6 @@ export interface EngineOptions {
   // Fixture mode has no checkouts: coding windows open in scratch.
   noWorktrees?: boolean;
   onLearned?: (line: string) => void;
-  // Replaces the Slack transport chosen from config (tests).
-  slack?: SlackTransport;
-  // Replaces the remote's Slack link chosen from config (tests).
-  remoteLink?: RemoteLink;
   // What other packages add (core/plugins.ts): triage, connections.
   plugins?: readonly RikerPlugin[];
 }
@@ -86,27 +74,17 @@ export class Engine {
   readonly pool: AgentPool;
   readonly drivers: Drivers;
   readonly desk: Desk;
-  private slack: SlackTransport | null = null;
-  private remote: Remote | null = null;
   private timers: ReturnType<typeof setInterval>[] = [];
-  private polling = new Set<string>();
   private statusListeners = new Set<(s: EngineStatus) => void>();
   status: EngineStatus = {
-    slack: off("not started"),
-    remote: off("not started"),
     advisor: off("not started"),
   };
   // Every connector the plugins brought, in their order.
   readonly connectors: readonly Connector[];
 
-  // What the status line and modal list, in order: the plugins'
-  // connectors, then Slack's two lines while they still live here.
+  // What the status line and modal list, in order.
   connections(): readonly Pick<Connector, "name" | "label" | "quietWhenOff" | "hint">[] {
-    return [
-      ...this.connectors,
-      { name: "slack", label: "Slack", hint: `Slack needs a user token in SLACK_TOKEN or ${paths.config()}.` },
-      { name: "remote", label: "Slack remote", quietWhenOff: true },
-    ];
+    return this.connectors;
   }
 
   private readonly judge: Triage | null;
@@ -118,18 +96,14 @@ export class Engine {
     this.judge = judges[0] ?? null;
     const plugins = options.plugins ?? [];
     this.connectors = plugins.flatMap((p) => p.connectors ?? []);
-    const names = new Set<string>(["advisor", "slack", "remote"]);
+    const names = new Set<string>(["advisor"]);
     for (const c of this.connectors) {
       if (names.has(c.name)) throw new Error(`two connectors are called ${c.name}`);
       names.add(c.name);
       this.status = { ...this.status, [c.name]: off("not started") };
     }
-    const senders: Senders = {
-      slack_reply: (action) =>
-        this.slack ? this.slack.send(action) : Promise.reject(new SendError("Slack is not connected")),
-    };
+    const senders: Senders = {};
     for (const p of plugins) Object.assign(senders, p.senders);
-    this.slack = options.slack ?? null;
     this.pool = new AgentPool({ config });
     this.drivers = new Drivers({
       pool: this.pool,
@@ -226,8 +200,6 @@ export class Engine {
     this.timers.push(setInterval(() => this.fireEventActions(), 2_000));
     if (this.options.offline) {
       for (const c of this.connectors) this.setStatus(c.name, off("fixture mode"));
-      this.setStatus("slack", off("fixture mode"));
-      this.setStatus("remote", off("fixture mode"));
       this.setStatus("advisor", off("fixture mode"));
       return;
     }
@@ -237,31 +209,9 @@ export class Engine {
     const config = this.options.config.get();
     log.info("engine start", {
       connectors: this.connectors.map((c) => c.name).join(","),
-      slack: config.slack.enabled ? config.slack.transport : false,
       maxActiveAgents: config.maxActiveAgents,
     });
     for (const c of this.connectors) c.start();
-    this.slack = this.options.slack ?? slackTransport(config);
-    const slack = this.slack;
-    const canSlack = slack.available();
-    if (config.slack.enabled && canSlack.ok) {
-      void this.pollSlack();
-      this.timers.push(
-        setInterval(
-          () => void this.pollSlack(),
-          config.slack.pollSeconds * 1000,
-        ),
-      );
-    } else if (!config.slack.enabled)
-      this.setStatus("slack", off("disabled in config"));
-    else
-      this.setStatus(
-        "slack",
-        slack.kind === "mcp"
-          ? { state: "error", detail: canSlack.detail, at: now() }
-          : off(canSlack.detail),
-      );
-    this.startRemote();
     this.timers.push(setInterval(() => void this.advisorTick(), 10 * 60_000));
     setTimeout(() => void this.advisorTick(), 20_000);
     // A local merge needs no network, so it has its own clock.
@@ -291,9 +241,6 @@ export class Engine {
     this.watching?.abort();
     this.watching = null;
     for (const c of this.connectors) c.stop?.();
-    this.slack?.stop();
-    this.remote?.stop();
-    this.remote = null;
     this.pool.stopAll();
   }
 
@@ -441,125 +388,8 @@ export class Engine {
     this.desk.runEffects(effects);
   }
 
-  async pollSlack(): Promise<void> {
-    const slack = this.slack;
-    if (!slack?.available().ok || this.polling.has("slack")) return;
-    this.polling.add("slack");
-    this.setStatus("slack", { ...this.status.slack, state: "polling" });
-    const done = log.time("slack poll", { transport: slack.kind });
-    try {
-      const config = this.options.config.get();
-      const cursor = JSON.parse(
-        store.kvGet(`slack.cursor.${slack.kind}`) ??
-          JSON.stringify(EMPTY_CURSOR),
-      ) as SlackCursor;
-      const trackedThreads = store
-        .listTasks()
-        .filter(
-          (t) =>
-            t.status !== TaskStatus.done &&
-            t.thread_key?.startsWith("slack:") &&
-            !t.thread_key.endsWith(":dm"),
-        )
-        .map((t) => t.thread_key!.slice("slack:".length));
-      const own = remoteChannel(this.options.config);
-      const polled = await slack.poll({
-        cursor,
-        watchChannels: config.slack.channels,
-        trackedThreads,
-        firstLookSeconds: 86400,
-      });
-      // The remote's conversation is Riker talking with the owner, not inbox.
-      const result = {
-        ...polled,
-        messages: polled.messages.filter((m) => m.meta?.channel !== own),
-      };
-      const fresh = this.ingest(result.messages);
-      store.kvSet(`slack.cursor.${slack.kind}`, JSON.stringify(result.cursor));
-      done({ read: result.messages.length, fresh });
-      this.setStatus("slack", {
-        state: "ok",
-        detail: `${fresh ? `${fresh} new` : "up to date"} · ${slack.kind}`,
-        at: now(),
-      });
-    } catch (err) {
-      done({ ok: false, err });
-      this.setStatus("slack", {
-        state: "error",
-        detail: errorMessage(err),
-        at: now(),
-      });
-    } finally {
-      this.polling.delete("slack");
-    }
-  }
-
-  // ── the remote: the owner's Slack line to the Assistant ───────────────
-
-  private startRemote(): void {
-    const config = this.options.config.get();
-    if (!config.remote.enabled) {
-      this.setStatus("remote", off("disabled in config"));
-      return;
-    }
-    const link = this.options.remoteLink ?? remoteLink(config);
-    if ("error" in link) {
-      this.setStatus("remote", { state: "error", detail: link.error, at: now() });
-      return;
-    }
-    this.remote = new Remote({
-      link,
-      config: this.options.config,
-      say: (taskId, text, author) => this.desk.say(taskId, text, author),
-      wake: (taskId) => {
-        const home = store.getTask(taskId);
-        if (home)
-          this.drivers.for(home).wake(home, "the owner wrote from Slack");
-      },
-      // The owner's own yes in Slack: the move runs as theirs.
-      runMove: (verb, args) => this.runMove(verb, args, "you via Slack"),
-    });
-    void this.pollRemote();
-    this.timers.push(
-      setInterval(() => void this.pollRemote(), config.remote.pollSeconds * 1000),
-    );
-  }
-
-  async pollRemote(): Promise<void> {
-    const remote = this.remote;
-    if (!remote || !this.options.config.get().remote.enabled) return;
-    if (this.status.remote.state !== "error")
-      this.setStatus("remote", { ...this.status.remote, state: "polling" });
-    try {
-      const result = await remote.tick();
-      if (!result) return;
-      const did = [
-        result.heard ? `${result.heard} heard` : "",
-        result.answered ? `${result.answered} answered` : "",
-      ]
-        .filter(Boolean)
-        .join(", ");
-      this.setStatus("remote", {
-        state: "ok",
-        detail: `${did || "listening"} · ${result.channel} · ${remote.kind}`,
-        at: now(),
-      });
-    } catch (err) {
-      // Slack unreachable, or the conversation is not the owner's alone:
-      // nothing is heard or lost, and the next tick tries again.
-      this.setStatus("remote", {
-        state: "error",
-        detail: errorMessage(err),
-        at: now(),
-      });
-    }
-  }
-
   async pollNow(): Promise<void> {
-    await Promise.all([
-      ...this.connectors.map((c) => c.pollNow?.()),
-      this.pollSlack(),
-    ]);
+    await Promise.all(this.connectors.map((c) => c.pollNow?.()));
   }
 
   private async advisorTick(force = false): Promise<void> {

@@ -22,13 +22,14 @@ import { findTasks, projectBrief, projectLine, taskDetail } from "./lookup";
 import { MOVES } from "./moves";
 import { docDraftsDir } from "./paths";
 import { TOOLS_NAME, toolsEnv, toolsRules } from "./self";
-import { CONFIRM_MINUTES, SLACK_ASKER } from "./slack/confirm";
 import * as store from "./store";
 import { transcript } from "./transcript";
 import {
   AgentState,
   Priority,
   ProjectStatus,
+  CONFIRM_MINUTES,
+  SLACK_ASKER,
   SLACK_AUTHOR,
   TaskStatus,
   TurnRole,
@@ -257,7 +258,7 @@ export function assistantCall(
     pluginDirs: grant.pluginDirs,
     env: {
       // A turn answering Slack asks as SLACK_ASKER, so the moves that start
-      // or end work wait for the owner's yes there (slack/confirm.ts).
+      // or end work wait for the owner's yes there (@riker/slack confirm.ts).
       [envName("ASKED_BY")]: fromSlack(turns) ? SLACK_ASKER : "assistant",
       ...toolsEnv(),
     },

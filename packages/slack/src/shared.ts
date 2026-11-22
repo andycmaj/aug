@@ -3,8 +3,8 @@
 // read (the Web API with a token, or Claude through a Slack MCP), it lands
 // as the same NewMessage, so dedupe and triage never know the difference.
 
-import type { NewMessage } from "../store";
-import type { DraftAction } from "../types";
+import type { NewMessage } from "@riker/core/store";
+import type { DraftAction } from "@riker/core/types";
 
 export type SlackReply = Extract<DraftAction, { type: "slack_reply" }>;
 
