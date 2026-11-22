@@ -42,7 +42,9 @@ one way: cli → tui → fixtures → core → code-review-plannotator.
   (`bun dev`: runs from anywhere, restarts on `RESTART_CODE`) and
   `script/compile.ts` builds `dist/riker`. The entry tells core where
   riker-tools is (`setToolsEntry`, `core/self.ts`); core never reaches up for
-  it.
+  it. Run from a linked worktree, it names the main checkout's copy
+  (`lastingEntry`), since briefs and hooks outlive the worktree;
+  `RIKER_TOOLS_ENTRY` pins one, and a start refuses when it is gone.
 
 Tests live beside their package (`packages/<name>/test/`).
 

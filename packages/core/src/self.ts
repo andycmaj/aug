@@ -3,8 +3,8 @@
 // preload the TUI needs.
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { ENTRYPOINT, LEGACY, TOOLS_NAME } from "./brand";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { ENTRYPOINT, envVar, LEGACY, TOOLS_NAME } from "./brand";
 import { rikerHome } from "./paths";
 
 // A compiled binary (`bun run compile`) has no script on disk to hand bun; it
@@ -23,6 +23,58 @@ export function setToolsEntry(path: string): void {
 export function toolsEntry(): string {
   if (!entry) throw new Error("riker-tools entry not set: the entry point calls setToolsEntry");
   return entry;
+}
+
+// Riker run from source in a linked git worktree would name that worktree's
+// riker-tools in every brief and hook, and a worktree is removed when its task
+// ends: the agents still running then fail with "Module not found". The same
+// file in the repo's main checkout outlives it, so that is the path handed
+// out when it exists. RIKER_TOOLS_ENTRY names one outright (a branch whose
+// agents need its own riker-tools).
+export function lastingEntry(path: string): string {
+  const pinned = envVar("TOOLS_ENTRY");
+  if (pinned) return resolve(pinned);
+  const main = inMainCheckout(path);
+  return main && existsSync(main) ? main : path;
+}
+
+// The path in the main checkout of a file in a linked worktree; null when it
+// is in no worktree, already in the main checkout, or the repo is bare.
+function inMainCheckout(path: string): string | null {
+  for (let dir = dirname(path); ; dir = dirname(dir)) {
+    const dotGit = join(dir, ".git");
+    const text = readText(dotGit);
+    if (text === undefined) {
+      if (dirname(dir) === dir) return null;
+      continue;
+    }
+    // A directory: this is the main checkout.
+    if (text === null) return null;
+    const gitdir = /^gitdir:\s*(.+)$/m.exec(text)?.[1]?.trim();
+    if (!gitdir) return null;
+    const worktreeGit = isAbsolute(gitdir) ? gitdir : resolve(dir, gitdir);
+    const common = readText(join(worktreeGit, "commondir"))?.trim();
+    if (!common) return null;
+    const commonDir = resolve(worktreeGit, common);
+    if (basename(commonDir) !== ".git") return null;
+    return join(dirname(commonDir), relative(dir, path));
+  }
+}
+
+// undefined when nothing is there, null for a directory.
+function readText(file: string): string | null | undefined {
+  try {
+    return readFileSync(file, "utf8");
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EISDIR" ? null : undefined;
+  }
+}
+
+// The riker-tools script briefs and hooks name, when it is no longer there
+// (Riker run from a checkout since removed): a start says so rather than
+// handing an agent a command that fails where the owner cannot see it.
+export function toolsMissing(): string | null {
+  return COMPILED || existsSync(toolsEntry()) ? null : toolsEntry();
 }
 
 export function toolsArgv(): string[] {

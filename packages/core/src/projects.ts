@@ -2,7 +2,8 @@
 // task. tmux owns the processes; this module makes and tags them, keeps the
 // DB in step with what tmux reports, and never trusts a name over a tag.
 
-import { ENV_FLAG, envName } from "./brand";
+import { ENV_FLAG, envName, NAME, TOOLS_NAME } from "./brand";
+import { toolsMissing } from "./self";
 import { homedir } from "node:os";
 import { codingCwd, codingLaunch, type CodingLaunch } from "./agents";
 import type { RikerConfig } from "./config";
@@ -172,6 +173,14 @@ export async function startTask(
 ): Promise<StartResult> {
   let task = store.getTask(taskId);
   if (!task) return { type: "failed", error: `no task ${taskId}` };
+  // The brief and hooks name riker-tools; an agent handed a path that is gone
+  // fails every call, and the owner never sees why.
+  const gone = toolsMissing();
+  if (gone)
+    return {
+      type: "failed",
+      error: `${TOOLS_NAME} is gone (${gone}): restart ${NAME} from a checkout that has it`,
+    };
   // A worktree removed by hand (or with its repo moved) is made again on
   // the same branch, rather than claude starting in a folder that is gone.
   if (task.worktree && mux().inspectCheckout(task.worktree).kind === "missing") {
