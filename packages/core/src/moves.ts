@@ -343,12 +343,20 @@ export const MOVES: Record<string, MoveSpec> = {
     },
   },
   ignore: {
-    help: "Ignore: drop it and teach triage",
+    help: "Ignore: not work. Dropped (done if its agent worked on it); its messages filed as FYI. reopen undoes it",
     task: true,
-    args: { why: { help: "why to ignore it" } },
-    run(desk, task, args) {
-      desk.ignore(task!.id, args.why ?? "");
+    args: { why: { help: "why to ignore it, said on the task" } },
+    async run(desk, task, args) {
+      await desk.ignore(task!.id, args.why ?? "");
       return `${ref(task)}: ignored`;
+    },
+  },
+  reopen: {
+    help: "Open a done or dropped task again; its agent does not start",
+    task: true,
+    args: {},
+    run(desk, task) {
+      return desk.reopen(task!.id);
     },
   },
   noise: {

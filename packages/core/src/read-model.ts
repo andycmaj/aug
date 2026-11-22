@@ -107,6 +107,7 @@ function reads(desk: LiveCheck) {
     knowledge: [[T.knowledge], store.listKnowledge],
     notes: [[T.notes], store.listNotes],
     searchSources: [[T.messages, T.turns], searchSources],
+    closedTasks: [[T.tasks], store.closedTasks],
     rail: [
       [T.tasks, T.messages, T.projects, T.goals, T.prStatus, T.taskBlockers, T.wins],
       rail,

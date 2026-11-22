@@ -3,10 +3,15 @@
 // the database.
 
 import { REF_PREFIX, refNumber } from "./brand";
-import { TurnStatus, type NoteRow, type ProjectRow, type TurnRow } from "./types";
+import { TaskStatus, TurnStatus, type NoteRow, type ProjectRow, type TaskRow, type TurnRow } from "./types";
 
 export function taskRef(id: number): string {
   return `${REF_PREFIX}${String(id).padStart(4, "0")}`;
+}
+
+// Done or dropped: off the rail, and d reopens it.
+export function isClosed(task: Pick<TaskRow, "status">): boolean {
+  return task.status === TaskStatus.done || task.status === TaskStatus.dropped;
 }
 
 export function parseTaskRef(ref: string): number | null {

@@ -26,7 +26,7 @@ import {
 import { Commands } from "../commands";
 import { useRiker, ViewMode } from "../context/riker";
 import { BOARD_COLUMNS, LANE_META } from "@riker/core/lanes";
-import { taskRef } from "@riker/core/rows";
+import { isClosed, taskRef } from "@riker/core/rows";
 import { AgentState, Kind, type KnowledgeRow, type TaskRow } from "@riker/core/types";
 import { BOARD_HELP_OPTIONS, BoardTab, type HelpCtx } from "../keymap";
 import { RikerFooter } from "./footer";
@@ -205,6 +205,7 @@ export function BoardMode() {
       [Commands.NUDGE]: onTask((t) => void shell.actions.nudge(t.id)),
       [Commands.DONE]: onTask(shell.actions.done),
       [Commands.ACTIONS]: onTask(shell.actions.pickAction),
+      [Commands.REOPEN]: onTask(shell.actions.reopen),
       [Commands.PR_DASH]: () => {
         const t = target();
         if (!t) return false;
@@ -236,6 +237,7 @@ export function BoardMode() {
       watching: false,
       started: false,
       pr: Boolean(t && riker.taskPr(t)),
+      closed: Boolean(t && isClosed(t)),
       board: tab(),
       ...(tab() === Tab.inbox ? inbox.ctx() : {}),
       ...(tab() === Tab.wins ? wins.ctx() : {}),

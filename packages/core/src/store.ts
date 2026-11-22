@@ -194,6 +194,15 @@ export function listTasks(): TaskRow[] {
   );
 }
 
+// Done and dropped work, last closed first: the go-to list finds them by
+// name, since the rail no longer lists them.
+export function closedTasks(limit = 500): TaskRow[] {
+  return all<TaskRow>(
+    "SELECT * FROM tasks WHERE status IN ('done', 'dropped') AND kind != 'home' ORDER BY closed_at DESC, id DESC LIMIT ?",
+    limit,
+  );
+}
+
 // Tasks whose agent is at work right now, Home's included: what counts
 // against Agents at once.
 export function workingTaskIds(): number[] {

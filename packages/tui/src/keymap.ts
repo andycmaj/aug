@@ -27,6 +27,8 @@ export interface HelpCtx {
   watching: boolean;
   // Its agent has run at least once: the brief is settled.
   started: boolean;
+  // Done or dropped: d reopens it rather than marks it done.
+  closed?: boolean;
   // The task has a pull request ghdash can show.
   pr: boolean;
   // A text box has focus: only its own keys are worth showing.
@@ -234,12 +236,20 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     help: "nudge",
     relevant: (c) => c.coding,
   },
+  // d means done on an open row and reopen on a closed one.
   {
     key: "d",
     cmd: Commands.DONE,
     desc: "mark done",
     help: "done",
-    relevant: isWork,
+    relevant: (c) => isWork(c) && !c.closed,
+  },
+  {
+    key: "d",
+    cmd: Commands.REOPEN,
+    desc: "reopen (done or dropped; its agent does not start)",
+    help: "reopen",
+    relevant: (c) => isWork(c) && Boolean(c.closed),
   },
   {
     key: "r",
@@ -266,7 +276,7 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   {
     key: "x",
     cmd: Commands.IGNORE,
-    desc: "ignore (triage learns from it)",
+    desc: "ignore: not work, dropped (ctrl+z or d undoes)",
     help: "ignore",
     relevant: isWork,
   },
@@ -629,7 +639,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     {
       key: "shift+x",
       cmd: Commands.IGNORE,
-      desc: "Inbox: ignore (drops the task it made; triage learns)",
+      desc: "Inbox: ignore (drops the task it made; ctrl+z undoes)",
       help: "ignore",
       relevant: (c) => onInbox(c) && c.item === "message" && Boolean(c.inboxMade),
     },
@@ -693,7 +703,14 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       relevant: (c) => c.coding || c.item === "project",
     },
     { key: "u", cmd: Commands.NUDGE, desc: "nudge the agent about new feedback", relevant: (c) => c.coding },
-    { key: "d", cmd: Commands.DONE, desc: "mark done", help: "done", relevant: isWork },
+    { key: "d", cmd: Commands.DONE, desc: "mark done", help: "done", relevant: (c) => isWork(c) && !c.closed },
+    {
+      key: "d",
+      cmd: Commands.REOPEN,
+      desc: "reopen (done or dropped; its agent does not start)",
+      help: "reopen",
+      relevant: (c) => isWork(c) && Boolean(c.closed),
+    },
     {
       key: ".",
       cmd: Commands.ACTIONS,

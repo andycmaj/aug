@@ -31,7 +31,7 @@ import { errorMessage, logger } from "@riker/core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "@riker/core/adopt";
 import { strayLabel, type Stray } from "@riker/core/strays";
 import { baseKey, neighborKey, type RailItem } from "@riker/core/rail";
-import { taskRef } from "@riker/core/rows";
+import { isClosed, taskRef } from "@riker/core/rows";
 import { postComments, reviewNotes } from "@riker/code-review-plannotator/guide";
 import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
 import type { ActionResult } from "@riker/core/run-action";
@@ -354,6 +354,8 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function done(task: TaskRow) {
+    // d on a done or dropped row reopens it instead (reopen below).
+    if (isClosed(task)) return false;
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
     advanceFrom(`t${task.id}`);
@@ -416,10 +418,15 @@ export function useActions(dialogs: Dialogs) {
     showToast(riker.desk.rejectDocs(task.id), 4000);
   }
 
+  function reopen(task: TaskRow) {
+    if (!isClosed(task)) return false;
+    showToast(desk.reopen(task.id), 3000);
+  }
+
   function ignore(task: TaskRow) {
     advanceFrom(`t${task.id}`);
-    desk.ignore(task.id);
-    showToast("Ignored: triage will learn from it");
+    void desk.ignore(task.id);
+    showToast(`Ignored ${taskRef(task.id)} · ctrl+z undoes`, 4000);
   }
 
   function cyclePriority(task: TaskRow) {
@@ -652,8 +659,8 @@ export function useActions(dialogs: Dialogs) {
     if (row.type !== "message" || row.taskId === null) return false;
     const task = riker.task(row.taskId);
     if (!task) return false;
-    desk.ignore(task.id);
-    showToast("Ignored: triage will learn from it");
+    void desk.ignore(task.id);
+    showToast(`Ignored ${taskRef(task.id)} · ctrl+z undoes`, 4000);
   }
 
   async function retriage(message: MessageRow) {
@@ -955,6 +962,7 @@ export function useActions(dialogs: Dialogs) {
       [Commands.NUDGE]: onTask((task) => void nudge(task.id)),
       [Commands.MOVE_TO_PROJECT]: onTask(moveToProject),
       [Commands.DONE]: onTask(done),
+      [Commands.REOPEN]: onTask(reopen),
       [Commands.REMIND]: onTask(remind),
       [Commands.WATCH]: onTask(watch),
       [Commands.WIN]: onTask(win),
@@ -1028,6 +1036,7 @@ export function useActions(dialogs: Dialogs) {
     start,
     stop,
     done,
+    reopen,
     send,
     say,
     compose: editor.compose,

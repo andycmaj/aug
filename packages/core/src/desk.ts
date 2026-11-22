@@ -23,7 +23,7 @@ import {
 } from "./driver";
 import { nudgeText } from "./feedback";
 import { correct } from "./learn";
-import { holdForStart, taskClosed, taskDropped } from "./lifecycle";
+import { holdForStart, taskClosed, taskDropped, taskReopened } from "./lifecycle";
 import { localDay, MAX_WINS } from "./rail";
 import type { RikerConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
@@ -629,37 +629,41 @@ export class Desk {
     });
   }
 
-  // Ignore: deleted if nothing was done on it, otherwise Mark done.
-  ignore(taskId: number, why = ""): void {
-    this.cannot(
-      `ignore ${store.taskRef(taskId)}`,
-      "it filed its messages as FYI and taught triage",
-      () => {
-        const task = store.getTask(taskId);
-        if (!task) return;
-        const worked = store
-          .turnsForTask(taskId)
-          .some((t) => t.role === TurnRole.agent || t.role === TurnRole.you);
-        correct(
-          this.config(),
-          {
-            taskId,
-            what: "Ignored: should have been FYI",
-            before: task.kind,
-            after: "fyi",
-            note: why || null,
-          },
-          this.learnedNotice,
-        );
-        if (worked) void this.close(taskId);
-        else {
-          void this.drivers.for(task).stop(task);
-          taskDropped(taskId);
-          for (const m of store.messagesForTask(taskId))
-            store.fileMessage(m.id, Verdict.fyi, "you said: ignore", null);
-        }
-      },
-    );
+  // Ignore: dropped if nothing was done on it, otherwise Mark done. Either
+  // way ctrl+z takes it back. Nothing is learned from it: what an ignore
+  // teaches is the owner's to say, and learning from every x put lines in
+  // LEARNED.md from tasks triage never saw.
+  async ignore(taskId: number, why = ""): Promise<void> {
+    const task = store.getTask(taskId);
+    if (!task) return;
+    const worked = store
+      .turnsForTask(taskId)
+      .some((t) => t.role === TurnRole.agent || t.role === TurnRole.you);
+    if (worked) {
+      await this.close(taskId);
+      return;
+    }
+    this.onTask("ignore", taskId, () => {
+      const by = this.undos.by();
+      void this.drivers.for(task).stop(task);
+      taskDropped(taskId, by, why);
+      for (const m of store.messagesForTask(taskId))
+        store.fileMessage(m.id, Verdict.fyi, `ignored by ${by}`, null);
+    });
+  }
+
+  // A done or dropped task open again. Its agent does not start: s does.
+  reopen(taskId: number): string {
+    const task = store.getTask(taskId);
+    if (!task) return `no task ${taskId}`;
+    const ref = store.taskRef(taskId);
+    // Refused inside onTask too, so a reopen that changed nothing is no entry.
+    return this.onTask("reopen", taskId, () => {
+      if (task.status !== TaskStatus.done && task.status !== TaskStatus.dropped)
+        return `${ref} is not done or dropped`;
+      taskReopened(taskId, this.undos.by());
+      return `${ref} is open again${inTmux(task) ? "; s starts its agent" : ""}`;
+    });
   }
 
   setPriority(taskId: number, priority: Priority): void {

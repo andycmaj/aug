@@ -152,6 +152,7 @@ describe("read model", () => {
       knowledge: (r) => r.knowledge(),
       notes: (r) => r.notes(),
       searchSources: (r) => r.searchSources([plain.id, withPr.id]),
+      closedTasks: (r) => r.closedTasks(),
       rail: (r) => r.rail(new Date(), pending),
       board: (r) => r.board(pending),
       blockers: (r) => r.blockers(plain.id),

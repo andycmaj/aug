@@ -72,6 +72,8 @@ interface RikerContextValue extends ReadModel {
   // Selects a row; the rail cursor follows it.
   select: (key: string | null) => void;
   selectTask: (taskId: number) => void;
+  // A task selected that has no rail row (done or dropped): its key.
+  offRailKey: Accessor<string | null>;
   // The rail's highlight, which moves without changing the selection.
   cursorKey: Accessor<string | null>;
   cursorItem: Accessor<RailItem | null>;
@@ -306,9 +308,15 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     setWantsInput(true);
   }
 
+  // A task gone to off the rail (done or dropped, from go-to or the Board)
+  // has no row: the cursor stands on it all the same, so the rail's keys (d
+  // reopens) reach it until the cursor moves.
   const cursorItem = createMemo(() => {
     const key = cursorKey();
-    return items().find((i) => i.key === key) ?? null;
+    const row = items().find((i) => i.key === key);
+    if (row) return row;
+    const off = selected();
+    return off && off.key === key && key === offRail() ? off : null;
   });
 
   // Folding a project brings the cursor up to its row.
@@ -415,6 +423,7 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
         selectedRowKey,
         select,
         selectTask,
+        offRailKey: offRail,
         cursorKey,
         cursorItem,
         moveCursor: setCursorKey,

@@ -6,7 +6,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 import { useFocus, useTheme } from "@andycmaj/opentui-app";
 import { useRiker } from "../context/riker";
 import { useTerminals } from "../context/terminals";
-import { taskRef } from "@riker/core/rows";
+import { isClosed, taskRef } from "@riker/core/rows";
 import { AgentState, Kind } from "@riker/core/types";
 import type { HelpCtx } from "../keymap";
 import { Canvas } from "./canvas";
@@ -124,6 +124,7 @@ export function ChatMode() {
       watching: Boolean(t.watching),
       started: !riker.briefEditable(t.id),
       pr: riker.taskPr(t) !== null,
+      closed: isClosed(t),
     };
   });
 
