@@ -1,4 +1,10 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Riker Architecture</title>
+<meta name="description" content="An interactive walkthrough of Riker's architecture: the system map, plugin packages, triage rules, agent lifecycle, moves, task actions and the guided review.">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,6 +54,7 @@
 }
 * { box-sizing: border-box; }
 body {
+  margin: 0;
   background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -109,10 +116,10 @@ nav.toc a:hover { color: var(--ink); }
 .svg-dim .edge.hot path { opacity: 1; stroke: var(--owner); stroke-width: 2.4; stroke-dasharray: 7 5; animation: flow 0.9s linear infinite; }
 @keyframes flow { to { stroke-dashoffset: -24; } }
 .elabel { display: none; }
-.edge.on .elabel, .edge.hot .elabel { display: block; }
+.elabel.on, .elabel.hot { display: block; }
 .elabel rect { fill: var(--bg); stroke: var(--line); }
 .elabel text { fill: var(--ink); font-family: var(--f-code); font-size: 10.5px; }
-.edge.hot .elabel text { fill: var(--owner); }
+.elabel.hot text { fill: var(--owner); }
 .store-band text.big { font-family: var(--f-display); font-size: 14px; font-weight: 600; }
 
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 12px; min-width: 0; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
@@ -269,7 +276,10 @@ td:first-child { font-family: var(--f-code); font-size: 0.8rem; white-space: now
 @media (max-width: 960px) {
   .routes, .flip { grid-template-columns: minmax(0, 1fr); }
 }
+footer.stamp { font-family: var(--f-code); font-size: 0.75rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <header>
@@ -477,6 +487,8 @@ $ bun packages/code-review-plannotator/src/cli.ts review \
     <input id="fileq" type="search" placeholder="e.g. tmux, hook, slack, guide" autocomplete="off">
     <div class="tbl ftree"><table><tbody id="ftree"></tbody></table></div>
   </section>
+
+  <footer class="stamp">Checked against andycmaj/riker main at 51a20db (2026-11-22). Plans named here (RIKER-0188, RIKER-0190, RIKER-0201) were open then.</footer>
 </div>
 
 <script>
@@ -734,9 +746,13 @@ for (const e of E) {
   const g = mk("g", { class:"edge", "data-k": e.k }, edgeLayer);
   const d = `M${p1.x.toFixed(1)},${p1.y.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
   const path = mk("path", { d, "marker-end":"url(#a-dim)" }, g);
-  const lx = 0.25 * p1.x + 0.5 * mx + 0.25 * p2.x, ly = 0.25 * p1.y + 0.5 * my + 0.25 * p2.y;
-  const lg = mk("g", { class:"elabel" }, labelLayer);
   const tw = e.l.length * 6.4 + 12;
+  const lx = 0.25 * p1.x + 0.5 * mx + 0.25 * p2.x;
+  let ly = 0.25 * p1.y + 0.5 * my + 0.25 * p2.y;
+  // Between neighbours in a row the gap is narrower than the label: lift it
+  // into the gutter above the row so it never covers a box's title.
+  if (Math.abs(dx) > Math.abs(dy) && len < tw + 10) ly = Math.min(p1.y, p2.y) - H / 2 - 14;
+  const lg = mk("g", { class:"elabel" }, labelLayer);
   mk("rect", { x:(lx - tw / 2).toFixed(1), y:(ly - 9).toFixed(1), width:tw.toFixed(1), height:"18", rx:"3" }, lg);
   const tx = mk("text", { x:lx.toFixed(1), y:(ly + 3.5).toFixed(1), "text-anchor":"middle" }, lg); tx.textContent = e.l;
   edgeEls[e.k] = { g, path, lg };
@@ -769,13 +785,14 @@ const panel = $("#panel");
 function clearMap() {
   svg.classList.remove("svg-dim");
   for (const g of Object.values(nodeEls)) g.classList.remove("sel", "lit", "near");
-  for (const { g, path } of Object.values(edgeEls)) { g.classList.remove("on", "hot", "trail"); path.setAttribute("marker-end", "url(#a-dim)"); }
+  for (const { g, path, lg } of Object.values(edgeEls)) { g.classList.remove("on", "hot", "trail"); lg.classList.remove("on", "hot"); path.setAttribute("marker-end", "url(#a-dim)"); }
 }
 function setEdge(k, cls) {
   const el = edgeEls[k]; if (!el) return;
   el.g.classList.add(cls);
   el.path.setAttribute("marker-end", `url(#a-${cls})`);
-  if (cls !== "trail") labelLayer.appendChild(el.lg); // keep active labels on top
+  // Labels sit in their own layer above the boxes, so they carry the class themselves.
+  if (cls !== "trail") { el.lg.classList.add(cls); labelLayer.appendChild(el.lg); }
 }
 
 function selectNode(id) {
@@ -1240,3 +1257,6 @@ fq.addEventListener("input", renderFiles);
 renderFiles();
 })();
 </script>
+
+</body>
+</html>
