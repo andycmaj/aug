@@ -1,0 +1,1262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Riker Architecture</title>
+<meta name="description" content="An interactive walkthrough of Riker's architecture: the system map, plugin packages, triage rules, agent lifecycle, moves, task actions and the guided review.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a terminal-side reference. One wide map you can trace, then
+   reference panels in a single column, each a tool you can poke. */
+:root {
+  --bg: #edf0f2;
+  --surface: #fafbfb;
+  --sunk: #e2e7ea;
+  --ink: #121a21;
+  --muted: #56636f;
+  --line: #c9d1d7;
+  --edge: #9aa6b0;
+  --accent: #0d6a86;
+  --owner: #b25210;
+  --l-out: #66727f;
+  --l-core: #0d6a86;
+  --l-bus: #7148a8;
+  --l-agent: #b0365a;
+  --l-ui: #b25210;
+  --l-store: #2c7a43;
+  --l-plugin: #6b7a12;
+  --ok: #2c7a43;
+  --warn: #a8670a;
+  --info: #0d6a86;
+  --f-display: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151a; --surface: #161f26; --sunk: #1c2730; --ink: #e2e8ed; --muted: #94a2ae;
+    --line: #2a3742; --edge: #4c5a66; --accent: #52b6d3; --owner: #f0964a;
+    --l-out: #96a4b1; --l-core: #52b6d3; --l-bus: #b294e8; --l-agent: #ee7f9e; --l-ui: #f0964a; --l-store: #6cc584; --l-plugin: #b8c84f;
+    --ok: #6cc584; --warn: #e9b04f; --info: #52b6d3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151a; --surface: #161f26; --sunk: #1c2730; --ink: #e2e8ed; --muted: #94a2ae;
+  --line: #2a3742; --edge: #4c5a66; --accent: #52b6d3; --owner: #f0964a;
+  --l-out: #96a4b1; --l-core: #52b6d3; --l-bus: #b294e8; --l-agent: #ee7f9e; --l-ui: #f0964a; --l-store: #6cc584; --l-plugin: #b8c84f;
+  --ok: #6cc584; --warn: #e9b04f; --info: #52b6d3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 80px; display: grid; gap: 56px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 1.25rem; }
+h3 { font-size: 0.95rem; }
+p { margin: 0; }
+code, .mono { font-family: var(--f-code); font-size: 0.86em; }
+code { background: var(--sunk); padding: 1px 5px; border-radius: 3px; }
+a { color: var(--accent); }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eyebrow { font-family: var(--f-code); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--muted); max-width: 65ch; }
+section { display: grid; gap: 18px; min-width: 0; }
+.sec-head { display: grid; gap: 6px; }
+
+/* header */
+header { display: grid; gap: 18px; }
+.title-row { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+h1 { font-size: clamp(2.6rem, 7vw, 4.2rem); font-weight: 700; letter-spacing: -0.04em; }
+h1 .cursor { display: inline-block; width: 0.55em; height: 0.9em; background: var(--owner); vertical-align: -0.08em; margin-left: 4px; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.tagline { font-size: 1.15rem; max-width: 60ch; }
+.loop { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.loop > div { padding: 14px 16px; display: grid; gap: 4px; border-left: 1px solid var(--line); min-width: 0; }
+.loop > div:first-child { border-left: 0; }
+.loop .k { font-family: var(--f-code); font-size: 0.72rem; color: var(--muted); }
+.loop .v { font-family: var(--f-display); font-size: 0.9rem; font-weight: 600; }
+.loop .d { font-size: 0.85rem; color: var(--muted); }
+.loop .owner .v { color: var(--owner); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-family: var(--f-code); font-size: 0.8rem; }
+nav.toc a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--line); }
+nav.toc a:hover { color: var(--ink); }
+
+/* map */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+.tab[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tab .g { font-family: var(--f-code); opacity: 0.7; margin-right: 6px; }
+.map-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.map-box { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
+.map-box svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.node rect.body { fill: var(--surface); stroke-width: 1.5; transition: opacity .2s; }
+.node rect.band { transition: opacity .2s; }
+.node text { fill: var(--ink); font-family: var(--f-code); font-size: 13px; pointer-events: none; }
+.node text.sub { fill: var(--muted); font-size: 10.5px; }
+.node { cursor: pointer; transition: opacity .2s; }
+.node:hover rect.body { fill: var(--sunk); }
+.node.sel rect.body { stroke-width: 3; }
+.node.lit rect.body { stroke-width: 3; fill: var(--sunk); }
+.svg-dim .node:not(.lit):not(.sel):not(.near) { opacity: 0.28; }
+.edge path { fill: none; stroke: var(--edge); stroke-width: 1.2; opacity: 0.45; transition: opacity .2s, stroke .2s; }
+.svg-dim .edge path { opacity: 0.08; }
+.svg-dim .edge.on path { opacity: 1; stroke: var(--accent); stroke-width: 1.8; }
+.svg-dim .edge.trail path { opacity: 0.55; stroke: var(--muted); stroke-dasharray: 3 4; }
+.svg-dim .edge.hot path { opacity: 1; stroke: var(--owner); stroke-width: 2.4; stroke-dasharray: 7 5; animation: flow 0.9s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -24; } }
+.elabel { display: none; }
+.elabel.on, .elabel.hot { display: block; }
+.elabel rect { fill: var(--bg); stroke: var(--line); }
+.elabel text { fill: var(--ink); font-family: var(--f-code); font-size: 10.5px; }
+.elabel.hot text { fill: var(--owner); }
+.store-band text.big { font-family: var(--f-display); font-size: 14px; font-weight: 600; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 12px; min-width: 0; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+.panel h3 { font-size: 1.05rem; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-code); font-size: 0.72rem; padding: 2px 8px; border-radius: 99px; border: 1px solid currentColor; width: fit-content; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.files { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.files code { font-size: 0.78rem; }
+.rules { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.9rem; }
+.links { display: grid; gap: 4px; font-size: 0.85rem; }
+.links button { text-align: left; background: none; border: 0; padding: 3px 0; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+.links button:hover .n { text-decoration: underline; }
+.links .dir { font-family: var(--f-code); color: var(--muted); width: 1.2em; flex: none; }
+.links .n { font-family: var(--f-code); font-weight: 500; }
+.links .l { color: var(--muted); }
+.small-head { font-family: var(--f-code); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.8rem; }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.step-nav { display: flex; align-items: center; gap: 8px; }
+.step-nav button { border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 5px 12px; cursor: pointer; }
+.step-nav button:disabled { opacity: 0.4; cursor: default; }
+.step-nav .count { font-family: var(--f-code); font-size: 0.8rem; color: var(--muted); margin-left: auto; }
+.dots { display: flex; gap: 4px; flex-wrap: wrap; }
+.dots button { width: 18px; height: 6px; border-radius: 3px; border: 0; background: var(--line); cursor: pointer; padding: 0; }
+.dots button.done { background: var(--muted); }
+.dots button.cur { background: var(--owner); }
+.step-body { font-size: 0.93rem; }
+.hint { font-size: 0.8rem; color: var(--muted); }
+
+/* triage */
+.triage-grid { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+.samples { display: grid; gap: 6px; }
+.sample { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 4px; padding: 8px 10px; cursor: pointer; display: grid; gap: 2px; }
+.sample .from { font-family: var(--f-code); font-size: 0.72rem; color: var(--muted); }
+.sample .msg { font-size: 0.86rem; }
+.sample[aria-pressed="true"] { border-color: var(--owner); box-shadow: inset 3px 0 0 var(--owner); }
+.gates { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.gate { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; padding: 11px 14px; border-top: 1px solid var(--line); align-items: start; transition: background .2s, opacity .2s; }
+.gate:first-child { border-top: 0; }
+.gate .num { font-family: var(--f-code); color: var(--muted); font-size: 0.8rem; padding-top: 2px; }
+.gate .nm { font-weight: 600; font-size: 0.92rem; }
+.gate .ds { font-size: 0.84rem; color: var(--muted); }
+.gate .out { font-family: var(--f-code); font-size: 0.72rem; color: var(--muted); white-space: nowrap; padding-top: 3px; }
+.gate.model .nm::after { content: " · model"; font-family: var(--f-code); font-size: 0.72rem; color: var(--l-agent); font-weight: 400; }
+.gates.running .gate.passed { opacity: 0.5; }
+.gates.running .gate.after { opacity: 0.25; }
+.gates.running .gate.caught { background: var(--sunk); box-shadow: inset 3px 0 0 var(--owner); }
+.gates.running .gate.caught .out { color: var(--owner); }
+.verdict-box { border: 1px dashed var(--line); border-radius: 6px; padding: 12px 14px; font-size: 0.9rem; display: grid; gap: 4px; }
+.verdict-box b { font-family: var(--f-code); color: var(--owner); font-weight: 500; }
+
+/* lifecycle */
+.life-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.life-box { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
+.life-box svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.st rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.st text { fill: var(--ink); font-family: var(--f-code); font-size: 13px; }
+.st text.word { fill: var(--muted); font-size: 10.5px; }
+.st text.glyph { font-size: 16px; }
+.st.on rect { stroke: var(--accent); stroke-width: 2.5; }
+.tr path { fill: none; stroke: var(--edge); stroke-width: 1.3; transition: opacity .2s; }
+.life-dim .tr path { opacity: 0.15; }
+.life-dim .tr.on path { opacity: 1; stroke: var(--accent); stroke-width: 2.2; }
+.life-dim .st:not(.on) { opacity: 0.45; }
+.trs { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); max-height: 470px; overflow-y: auto; }
+.trs li { border-top: 1px solid var(--line); }
+.trs li:first-child { border-top: 0; }
+.trs button { width: 100%; text-align: left; background: none; border: 0; padding: 9px 12px; cursor: pointer; display: grid; gap: 2px; }
+.trs button:hover, .trs button[aria-pressed="true"] { background: var(--sunk); }
+.trs .fn { font-family: var(--f-code); font-size: 0.82rem; font-weight: 500; }
+.trs .ft { font-family: var(--f-code); font-size: 0.72rem; color: var(--muted); }
+.trs .why { font-size: 0.83rem; color: var(--muted); }
+
+/* moves */
+.moves-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.trip { list-style: none; margin: 0; padding: 0; counter-reset: t; display: grid; gap: 8px; }
+.trip li { counter-increment: t; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; font-size: 0.9rem; }
+.trip li::before { content: counter(t); font-family: var(--f-code); font-size: 0.75rem; color: var(--bg); background: var(--l-bus); border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; }
+pre.term { margin: 0; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; font-family: var(--f-code); font-size: 0.8rem; line-height: 1.6; overflow-x: auto; white-space: pre; }
+pre.term .p { color: var(--muted); }
+pre.term .o { color: var(--ok); }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.verbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+.verb { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 9px 11px; display: grid; gap: 3px; min-width: 0; }
+.verb .vn { font-family: var(--f-code); font-size: 0.84rem; font-weight: 500; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.verb .vh { font-size: 0.82rem; color: var(--muted); }
+.verb .who { font-size: 0.66rem; font-family: var(--f-code); padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.who.agent { color: var(--l-bus); border: 1px solid var(--l-bus); }
+.who.owner { color: var(--owner); border: 1px solid var(--owner); }
+
+/* doors */
+.doors { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.door { padding: 14px 16px; display: grid; gap: 6px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); align-content: start; min-width: 0; }
+.door .only { font-family: var(--f-code); font-size: 0.82rem; color: var(--accent); }
+.door p { font-size: 0.88rem; }
+
+/* store + files */
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.tbl { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
+th, td { text-align: left; padding: 7px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+thead th { border-top: 0; font-family: var(--f-code); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; }
+td:first-child { font-family: var(--f-code); font-size: 0.8rem; white-space: nowrap; }
+#fileq { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font-family: var(--f-code); font-size: 0.85rem; }
+.ftree { max-height: 520px; overflow-y: auto; }
+.ftree tr.dir td { background: var(--sunk); font-weight: 600; }
+.ftree .lay { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 8px; }
+
+@media (max-width: 960px) {
+  .map-grid, .life-grid, .triage-grid { grid-template-columns: minmax(0, 1fr); }
+  .panel { position: static; }
+  .two, .moves-top { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .loop { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .loop > div:nth-child(3) { border-left: 0; }
+  .loop > div:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* packages */
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-family: var(--f-code); font-size: 0.82rem; }
+.chain .pk { border: 1px solid var(--line); background: var(--surface); border-radius: 4px; padding: 4px 9px; }
+.chain .pk.plug { border-color: var(--l-plugin); color: var(--l-plugin); }
+.chain .pk.core { border-color: var(--l-core); color: var(--l-core); }
+.chain .ar { color: var(--muted); }
+.pkgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.pkg { padding: 14px 16px; display: grid; gap: 6px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); align-content: start; min-width: 0; }
+.pkg .nm { font-family: var(--f-code); font-size: 0.86rem; font-weight: 500; }
+.pkg p { font-size: 0.88rem; }
+.pkg .gives { font-size: 0.8rem; color: var(--muted); }
+.pkg .gives code { font-size: 0.76rem; }
+.note { border-left: 3px solid var(--owner); background: var(--surface); padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 0.9rem; display: grid; gap: 4px; }
+.note b { font-family: var(--f-code); font-size: 0.78rem; color: var(--owner); font-weight: 500; }
+
+/* actions and commands */
+.routes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.route-out { display: grid; gap: 12px; min-width: 0; }
+.vias { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.via { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; display: grid; gap: 4px; min-width: 0; }
+.via .vn { font-family: var(--f-code); font-size: 0.84rem; font-weight: 500; color: var(--l-agent); }
+.via p { font-size: 0.84rem; color: var(--muted); }
+
+/* guided review */
+.gates.static .gate { cursor: default; }
+.flip { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.flip > div { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.flip h3 { font-size: 0.9rem; }
+.flip .tag { font-family: var(--f-code); font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+@media (max-width: 960px) {
+  .routes, .flip { grid-template-columns: minmax(0, 1fr); }
+}
+footer.stamp { font-family: var(--f-code); font-size: 0.75rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">architecture walkthrough · andycmaj/riker</div>
+    <div class="title-row"><h1>Riker<span class="cursor" aria-hidden="true"></span></h1></div>
+    <p class="tagline">Your work manager in a terminal. GitHub and Slack become tasks, Claude does the work, and nothing goes out until you approve it.</p>
+    <div class="loop" aria-label="The loop">
+      <div><span class="k">1 · plugin connectors</span><span class="v">Something arrives</span><span class="d">GitHub and Slack connectors write messages to the inbox.</span></div>
+      <div><span class="k">2 · @riker/triage</span><span class="v">It gets routed</span><span class="d">Rules first, at most one model call. Work waits in the Inbox unless an escalation rule names it.</span></div>
+      <div><span class="k">3 · core/driver</span><span class="v">A worker takes it</span><span class="d">A chat turn, or claude in a tmux window.</span></div>
+      <div class="owner"><span class="k">4 · core/outbound</span><span class="v">It waits for you</span><span class="d">Only your Send lets anything out.</span></div>
+    </div>
+    <p class="lede">Riker was called aug. Every name it goes by is in <code>core/brand.ts</code>, with aug's in <code>LEGACY</code>: reads still take <code>AUG_*</code> env, <code>@aug_*</code> tmux options and <code>AUG-</code> refs (refs for good), and <code>core/migrate-home.ts</code> moves <code>~/.aug</code> to <code>~/.riker</code> at start. Paths below are <code>core/x.ts</code> for <code>packages/core/src/x.ts</code>.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#map">system map</a><a href="#packages">packages and plugins</a><a href="#triage">triage rules</a><a href="#lifecycle">agent lifecycle</a><a href="#moves">moves bus</a><a href="#actions">actions and commands</a><a href="#guide">guided review</a><a href="#doors">one door each</a><a href="#store">store</a><a href="#files">source index</a>
+    </nav>
+  </header>
+
+  <section id="map">
+    <div class="sec-head">
+      <h2>System map</h2>
+      <p class="lede">Click a box to see what it owns and who it talks to. Or pick a flow and step through it; the orange dashes are the current hop.</p>
+    </div>
+    <div class="tabs" role="group" aria-label="Map mode" id="modeTabs"></div>
+    <div class="map-grid">
+      <div class="map-box"><svg id="mapSvg" viewBox="0 0 1090 610" role="img" aria-label="Riker module map"></svg></div>
+      <aside class="panel" id="panel" aria-live="polite"></aside>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section id="packages">
+    <div class="sec-head">
+      <h2>Packages and plugins</h2>
+      <p class="lede">A bun workspace under <code>packages/*</code>. A package imports another by name (<code>@riker/core/store</code>) from its <code>src/</code>; nothing is built, and one <code>tsconfig.json</code> and one <code>bun test</code> cover them all. Dependencies run one way, and <code>packages/core/test/boundaries.test.ts</code> fails on an import that goes the other way.</p>
+    </div>
+    <div class="chain" aria-label="Dependency order">
+      <span class="pk">cli</span><span class="ar">→</span><span class="pk">tui</span><span class="ar">→</span><span class="pk">fixtures</span><span class="ar">→</span><span class="pk plug">triage · github · slack</span><span class="ar">→</span><span class="pk core">core</span><span class="ar">→</span><span class="pk plug">code-review-plannotator</span>
+    </div>
+    <div class="pkgs" id="pkgsEl"></div>
+    <div class="sec-head">
+      <h3>What a plugin brings: <code>RikerPlugin</code> (<code>core/plugins.ts</code>)</h3>
+      <p class="lede">An entry point hands the engine its list: <code>plugins: [triagePlugin(), githubPlugin(), slackPlugin()]</code> in <code>tui/src/index.tsx</code>, the fixture day and the sim. Core runs what they bring without importing them. A test picks only what it drives: <code>githubPlugin({ api, prs, clock })</code>, <code>slackPlugin({ transport, remoteLink })</code>.</p>
+    </div>
+    <div class="tbl"><table><thead><tr><th>field</th><th>what it is</th><th>brought by</th></tr></thead><tbody id="pluginFields"></tbody></table></div>
+    <div class="note"><b>still to do · RIKER-0201</b><span>Core imports no connection, but still names them: the <code>Channel</code> and <code>DraftAction</code> unions and <code>SLACK_AUTHOR</code>/<code>SLACK_ASKER</code> in <code>core/types.ts</code>, <code>GithubMeta</code>/<code>SlackMeta</code> in <code>core/meta.ts</code>, <code>outbound.actionFor</code>, config's <code>github</code>, <code>slack</code>, <code>remote</code> and <code>triage</code> sections, the Assistant's GitHub and Slack prompt lines, and the <code>messages</code>, <code>triage_*</code> and <code>pr_status</code> tables. The plan: a plugin brings its draft builder and words, its config section and its prompt lines, and <code>Channel</code>/<code>DraftAction</code> open up. New <code>RikerPlugin</code> fields are agreed with RIKER-0190 (below, <a href="#guide">guided review</a>).</span></div>
+  </section>
+
+  <section id="triage">
+    <div class="sec-head">
+      <h2>Triage: a chain of rules, then the Inbox</h2>
+      <p class="lede">Pollers only insert into <code>messages</code> (the inbox) and save their cursor. The engine's one worker claims due rows oldest first and hands them to the triage plugin's <code>Triage.next</code>; a burst on one thread (within <code>BATCH_WINDOW_MS</code>, 2 min) is one run on the latest, carrying all their text. Each rule returns <code>ok(outcome)</code> to claim a message or <code>pass(why)</code> to hand it on, in the order of <code>TRIAGE_RULES</code>. The model's verdict is asked at most once, so a message a gate claims costs nothing. Every run is recorded (<code>triage_runs</code>, one <code>triage_steps</code> row per rule tried) and shown on the Board's Inbox tab. Pick a message to see where it stops. <code>packages/triage/src/triage.ts</code></p>
+    </div>
+    <div class="triage-grid">
+      <div class="samples" id="samples" role="group" aria-label="Sample messages"></div>
+      <div style="display:grid;gap:12px;min-width:0">
+        <ol class="gates" id="gates"></ol>
+        <div class="verdict-box" id="verdict"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="lifecycle">
+    <div class="sec-head">
+      <h2>Agent lifecycle</h2>
+      <p class="lede">A task's <code>agent_state</code> summarizes its newest session. Every change is one named transition in <code>core/lifecycle.ts</code>; nothing else writes those columns. However a session ended (your Stop, a closed window, claude exiting, a restart), the task is <code>stopped</code> and Start resumes it; the reason is on the session. The marks are the ones the rail and Board draw (<code>core/lanes.ts</code>). Click a state or a transition.</p>
+    </div>
+    <div class="life-grid">
+      <div class="life-box"><svg id="lifeSvg" viewBox="0 0 700 360" role="img" aria-label="Agent state machine"></svg></div>
+      <ul class="trs" id="trs"></ul>
+    </div>
+  </section>
+
+  <section id="moves">
+    <div class="sec-head">
+      <h2>Moves bus</h2>
+      <p class="lede">Other processes (the Assistant, a task's agent, a hook) never touch the desk directly. They ask for a move through a SQLite table, and the engine runs it. One registry in <code>core/moves.ts</code> (verb, args, help, run) feeds <code>riker-tools move &lt;verb&gt;</code>, the Assistant's prompt and the engine's dispatch. A new verb goes in the registry, nowhere else.</p>
+    </div>
+    <div class="moves-top">
+      <ol class="trip">
+        <li><span><code>riker-tools move &lt;verb&gt;</code> inserts a <code>moves</code> row (pending, <code>asked_by</code>) and waits.</span></li>
+        <li><span>The commit bumps <code>PRAGMA data_version</code>; the engine notices and drains. A move older than a minute expires: no Riker was running to make it.</span></li>
+        <li><span><code>runMove</code> checks the verb and required args; for an agent, <code>AGENT_MOVES</code> and its own task (the onboarding interview may only <code>propose_doc</code>).</span></li>
+        <li><span>Each plugin's move guards run next: from Slack, <code>CONFIRM_MOVES</code> wait for your yes in that thread (<code>@riker/slack</code> <code>confirm.ts</code>).</span></li>
+        <li><span>The spec's <code>run</code> acts on the desk, recorded for ctrl+z (<code>core/undo.ts</code>). A move that would open a dialog answers <code>needs …</code> in words.</span></li>
+        <li><span>One result line goes back on the row; riker-tools prints it.</span></li>
+      </ol>
+<pre class="term"><span class="p"># the Assistant, from Home</span>
+$ riker-tools move priority RIKER-0012 --level urgent
+<span class="o">RIKER-0012 is urgent</span>
+
+<span class="p"># a task's own agent asking for an owner's move</span>
+$ riker-tools move start RIKER-0031
+start is the owner's move: say what you need under Next steps
+
+<span class="p"># a task action, by name (no name lists the ones that apply)</span>
+$ riker-tools move action RIKER-0031 summarize</pre>
+    </div>
+    <div class="filters" role="group" aria-label="Filter verbs" id="vfilters"></div>
+    <div class="verbs" id="verbs"></div>
+  </section>
+
+  <section id="actions">
+    <div class="sec-head">
+      <h2>Actions and commands</h2>
+      <p class="lede">Three registries, one place they land. <b>Keys</b> are the owner's, in the TUI (<code>tui/src/keymap.ts</code>), and the <code>:</code> palette lists the same set. <b>Moves</b> are what other processes ask for (above). <b>Task actions</b> are skills Riker runs on one task (<code>core/task-actions.ts</code>). Every one of them ends on a desk method, so a thing done by key, by palette, by the Assistant or by a trigger behaves the same. Pick a door to see the path.</p>
+    </div>
+    <div class="routes">
+      <div style="display:grid;gap:12px;min-width:0">
+        <div class="tabs" role="group" aria-label="Entry point" id="routeTabs"></div>
+        <ol class="trip" id="routeSteps"></ol>
+      </div>
+      <div class="route-out" id="routeOut"></div>
+    </div>
+
+    <div class="sec-head">
+      <h3>Task actions: skills on a task</h3>
+      <p class="lede">The recipe is a skill (<code>SKILL.md</code>: prompt, <code>allowed-tools</code>); Riker adds only which rows it applies to, how it runs and where the answer goes. Built-ins ship in Riker's own Claude Code plugin (<code>packages/core/plugin</code>, written under <code>RIKER_HOME/plugin</code> and loaded with <code>--plugin-dir</code>, so nothing needs installing). Config <code>actions</code> changes one field by field, turns one off (<code>false</code>) or registers another; a bare user skill is wrapped in a plugin of its own and refused if its <code>allowed-tools</code> widen the grant. An action never touches <code>agent_state</code>: its answer is a <code>TurnRole.action</code> turn, never the agent's.</p>
+    </div>
+    <div class="tbl"><table><thead><tr><th>action</th><th>skill</th><th>via</th><th>output</th><th>applies to</th></tr></thead><tbody id="actionRows"></tbody></table></div>
+    <div class="vias" id="viasEl"></div>
+    <div class="note"><b>triggers</b><span><code>on</code> runs an action with no key: plain rules, no model (<code>kind</code>, <code>channel</code>, <code>githubReason</code>, and case-blind regexes on <code>author</code>, <code>title</code>, <code>body</code>, plus <code>project</code>). <code>triaged</code> fires from <code>desk.afterTriage</code>; <code>ready</code>, <code>merged</code> and <code>done</code> come from <code>task_events</code> read every 2 s past a <code>kv</code> cursor, so a <code>done</code> from riker-tools in another process is heard. <code>action_runs</code> keeps each one to once per task, action and event. Auto runs go one at a time, never past the day's spend cap, and never a <code>pane</code> action.</span></div>
+
+    <div class="sec-head">
+      <h3>The palette</h3>
+      <p class="lede"><code>tui/src/palette.ts</code> lists the bindings the footer and <code>?</code> help show (<code>helpBindings</code>), one entry per command with movement left out, plus the moves that have no key and one <code>Action: …</code> entry per task action that applies to the row. It opens on <b>Context</b> (the pane's and the row's entries, flat, titled for the row through each view's <code>subject</code>); tab shows <b>All</b> (app-wide and keyless too, grouped). A key's entry runs through <code>keymap.dispatchCommand</code> on the pane under it, so it does exactly what the key does. The mode is <code>paletteMode</code> on the Riker context.</p>
+    </div>
+  </section>
+
+  <section id="guide">
+    <div class="sec-head">
+      <h2>Guided review</h2>
+      <p class="lede">The <code>guide</code> action writes a guided code review of a coding task's change: chapters that walk the diff in a sensible order, with review findings pinned to their lines, saved into Plannotator and opened there on the Canvas. The work is <code>@riker/code-review-plannotator</code>, a library that knows nothing of Riker; Riker's glue is <code>core/run-action.ts</code> and <code>core/guide-turn.ts</code>. A pull request review that triage files is a coding task whose brief is this review. Step through a run on the map with the <b>Guide action</b> flow; the stages are below.</p>
+    </div>
+    <ol class="gates static" id="guideSteps"></ol>
+
+    <div class="sec-head">
+      <h3>How a big change is batched</h3>
+      <p class="lede">Every file's diff goes into exactly one prompt, so nothing depends on the model choosing to read it, and related files share a batch so a finding that needs both is in reach. No parser: <code>batches.ts</code> relates files by plain signals.</p>
+    </div>
+    <div class="two">
+      <ul class="rules" id="batchRules"></ul>
+      <ul class="rules" id="jobRules"></ul>
+    </div>
+
+    <div class="sec-head">
+      <h3>Without Riker</h3>
+      <p class="lede"><code>review()</code> runs it end to end with any <code>ask</code>. <code>claudeAsk</code> is one on a fresh, read-only <code>claude -p</code> (no user settings, hooks, MCP or saved session) that keeps each call's cost and tokens, so runs compare. RIKER-0188 builds the eval harness on this: the same changes at several batch sizes and models, findings compared, and a <code>batchTokens</code> setting per action for whatever budget wins.</p>
+    </div>
+<pre class="term"><span class="p"># writes guide.json, guide-findings.json and usage.json to --out</span>
+$ bun packages/code-review-plannotator/src/cli.ts review \
+    --base main --model haiku --batch-chars 100000 --no-plannotator
+<span class="p"># --open: then plannotator review, with the findings posted as comments</span></pre>
+
+    <div class="sec-head">
+      <h3>Inverting core's dependency on code review · RIKER-0190</h3>
+      <p class="lede">The split made the review a package, but core still depends on it: the only <code>@riker/*</code> import core is allowed (<code>ALLOWED.core = ["code-review-plannotator"]</code> in <code>boundaries.test.ts</code>). The plan is to make code review a plugin core is agnostic about, through the same <code>RikerPlugin</code> seam the connections use (RIKER-0198 asked for a field there, not a new registry).</p>
+    </div>
+    <div class="flip">
+      <div>
+        <span class="tag">today</span>
+        <h3>core knows the guide</h3>
+        <ul class="rules">
+          <li><code>core/task-actions.ts</code> embeds <code>@riker/code-review-plannotator/SKILL.md</code> as <code>riker:guide</code>, registers <code>guide</code> as a built-in and has an output kind for it (<code>ActionOutput.guide</code>).</li>
+          <li><code>core/run-action.ts</code> runs it: <code>patchFor</code>, <code>planBatches</code>, <code>reviewInBatches</code>, <code>saveGuide</code>, <code>runGuide</code>/<code>finishGuide</code>, <code>guideReview</code>, and points <code>setGuideLog</code> at riker.log.</li>
+          <li><code>core/guide-turn.ts</code> holds Riker's words for it: <code>guideMarkdown</code>, <code>guideProgressLine</code>, <code>OPEN_REVIEW_TITLE</code>.</li>
+          <li><code>core/desk.ts</code> has <code>hasGuideReview</code>/<code>guideReview</code>; the TUI imports <code>postComments</code> and <code>reviewNotes</code> and adds "Open the guide's review" to the picker and palette.</li>
+        </ul>
+      </div>
+      <div>
+        <span class="tag">planned</span>
+        <h3>a plugin brings the guide</h3>
+        <ul class="rules">
+          <li>A package registers a task action through <code>RikerPlugin</code>: its skill text, its runner and <code>ask</code>, how its result becomes a turn, its follow-up actions ("Open the guide's review") and its UI hooks.</li>
+          <li>The guide glue moves out of core into the plannotator package or an adapter (<code>@riker/plugin-plannotator</code>), handed to the engine at the entry point like <code>triagePlugin()</code>.</li>
+          <li><code>ALLOWED.core</code> becomes <code>[]</code>: core imports no other package.</li>
+          <li>To settle first (the task opens by grilling the owner): what a plugin can contribute (actions, picker entries, palette, keys, triggers, turn rendering), how plugins are found, and which parts of <code>task-actions.ts</code> and <code>run-action.ts</code> become the plugin API. Agreed with RIKER-0201 so connections and actions share one shape.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="doors">
+    <div class="sec-head">
+      <h2>One door each</h2>
+      <p class="lede">Most of the architecture is a set of single owners. When you need to change one of these things, there is exactly one file to open.</p>
+    </div>
+    <div class="doors" id="doorsEl"></div>
+  </section>
+
+  <section id="store">
+    <div class="sec-head">
+      <h2>Store</h2>
+      <p class="lede"><code>bun:sqlite</code> at <code>~/.riker/riker.db</code> (<code>RIKER_HOME</code> overrides). Row shapes in <code>core/types.ts</code> mirror the tables one to one. Hooks and riker-tools in other processes write here. Triggers bump a counter per table in <code>table_versions</code>, so a write from any process says what it touched, and each read in <code>core/read-model.ts</code> re-runs only when a table it names changes. Perf counters live in their own <code>perf.db</code>, so a flush never moves riker.db's <code>data_version</code>.</p>
+    </div>
+    <div class="tbl"><table><thead><tr><th>table</th><th>holds</th></tr></thead><tbody id="tables"></tbody></table></div>
+  </section>
+
+  <section id="files">
+    <div class="sec-head">
+      <h2>Source index</h2>
+      <p class="lede">Every source file, by package, colored by the map's layers. Filter by name or purpose. Tests live beside their package (<code>packages/&lt;name&gt;/test/</code>).</p>
+    </div>
+    <label for="fileq" class="small-head">filter</label>
+    <input id="fileq" type="search" placeholder="e.g. tmux, hook, slack, guide" autocomplete="off">
+    <div class="tbl ftree"><table><tbody id="ftree"></tbody></table></div>
+  </section>
+
+  <footer class="stamp">Checked against andycmaj/riker main at 51a20db (2026-11-22). Plans named here (RIKER-0188, RIKER-0190, RIKER-0201) were open then.</footer>
+</div>
+
+<script>
+(() => {
+const LAYERS = {
+  out:    { name: "Outside world", v: "--l-out" },
+  plugin: { name: "Plugin packages (core imports none)", v: "--l-plugin" },
+  core:   { name: "Domain core (no UI imports)", v: "--l-core" },
+  bus:    { name: "Process boundary", v: "--l-bus" },
+  agent:  { name: "Claude", v: "--l-agent" },
+  ui:     { name: "TUI", v: "--l-ui" },
+  store:  { name: "State", v: "--l-store" },
+};
+const C = [20, 225, 440, 665, 890], R = [20, 125, 230, 335, 440], W = 180, H = 54;
+const N = {
+  github: { c:0, r:0, layer:"out", t:"GitHub", s:"gh · notifications", files:["packages/github/src/ingest.ts","packages/github/src/pr-status.ts","packages/github/src/send.ts"],
+    d:"Your gh login. The inbox is your participating notifications: review requests, mentions, assignments and comments on threads you are in. Each task's PR is read for checks, reviews and merge queue, 25 PRs to one GraphQL query, into pr_status.",
+    rules:["Riker never marks a notification read.","A PR on a task's worktree branch is that task's thread (linkByBranch, at arrival).","Who a review was asked of is read at ingest, so the review ask rule needs no model."] },
+  slack: { c:0, r:1, layer:"out", t:"Slack", s:"SlackTransport", files:["packages/slack/src/transport.ts","packages/slack/src/token.ts","packages/slack/src/claude-mcp.ts","packages/slack/src/mcp.ts"],
+    d:"Chosen by slack.transport: token (a user token, replies go as you), claude-mcp (a persistent claude -p whose session can only read, plus a one-shot send call), or mcp (reserved, a stub).",
+    rules:["The claude-mcp reading session gets read tools only; every write tool is denied.","Each Send is its own call whose only tool is send and whose only input is your approved words.","Under -p, claude.ai connectors connect before the first request only with MCP_CONNECTION_NONBLOCKING=false.","The Slack remote (opt-in) reads one conversation only you are in, hears your lines into Home and posts the Assistant's answer, marked [riker]."] },
+  outbound: { c:0, r:2, layer:"core", t:"Outbound", s:"outbound.ts · senders", files:["core/outbound.ts","core/plugins.ts"],
+    d:"The only road out. A drafted action goes nowhere until you press Send; then the plugin that owns its type sends it (senders: github_comment from @riker/github, slack_reply from @riker/slack).",
+    rules:["Where a reply goes comes from the thread's meta, never from the model.","Sending never closes the task. Mark done does.","Building a draft per channel is still core's (outbound.actionFor); RIKER-0201 moves it into the plugins."] },
+  docs: { c:0, r:3, layer:"store", t:"Docs", s:"~/.riker/docs/*.md", files:["core/docs.ts","core/doc-sync.ts","core/proposals.ts","packages/core/defaults/"],
+    d:"PERSONA, JOB, STYLE, TRIAGE, CODING, ASSISTANT and LEARNED. Prompts read them. Seeded from defaults; a file you already have is never overwritten, and a shipped update only notifies.",
+    rules:["LEARNED.md is written by learning; the rest are yours to edit.","Every edit Riker wants that you did not ask for is a proposal on a System task (doc_proposals): the Advisor's daily doc pass, the onboarding interview, shipped versions.","Accepting lays only the proposal's own changes over the doc as it is now (git merge-file)."] },
+  plannotator: { c:0, r:4, layer:"out", t:"Plannotator", s:"plannotator review", files:["packages/code-review-plannotator/src/guide.ts"],
+    d:"The code review UI the guide lands in. Riker imports the guide as a v4 snapshot (plannotator guide import --snapshot, --pr when the task has one), then opens plannotator review on the Canvas on a port it picked, and posts the findings into it as comments.",
+    rules:["Plannotator keeps a saved guide's notes but draws them nowhere, so findings go in as comments (/api/external-annotations, source riker-guide).","It cannot hold comments for a review opened later, so Riker keeps guide-findings.json and refits them on Open the guide's review.","What you send from the review lands in guide-feedback.md and goes to the agent when it exits."] },
+  connectors: { c:1, r:0, layer:"plugin", t:"Connectors", s:"plugin connectors", files:["packages/github/src/connector.ts","packages/github/src/gate.ts","packages/slack/src/connector.ts","packages/slack/src/remote.ts"],
+    d:"Each plugin brings connectors: a status line with its own clock. The engine attaches each at construction (lending it a ConnectorContext) and starts it off the fixture day. A poll inserts what it read through ctx.ingest, which refuses duplicates and wakes the triage worker, then saves its cursor.",
+    rules:["GitHub keeps github.since in kv; Slack keeps a cursor per transport and re-reads the threads open tasks track.","gate.ts decides when Riker may call GitHub: a rate limit pauses that budget until reset (kept in kv), a failed poll backs off, a failing PR backs off alone.","Connectors: github, slack (the triage poller) and remote (the Slack remote, quiet when off)."] },
+  triage: { c:1, r:1, layer:"plugin", t:"Triage", s:"@riker/triage", files:["packages/triage/src/triage.ts","packages/triage/src/worker.ts","packages/triage/src/index.ts"],
+    d:"The inbox's judge, as a plugin. The engine's one worker calls Triage.next until nothing is due; it claims rows oldest first, runs the rule chain, retries a failed model call with backoff up to TRIAGE_MAX_ATTEMPTS, then leaves it on the Inbox tab.",
+    rules:["Returns effects for the caller; never starts agents itself.","Only a message triage.escalate names reaches new task; other work is held in the Inbox for your m.","A model failure files the message as 'awaiting AI triage', never assumed to be work.","A coding task is held for your Start."] },
+  advisor: { c:1, r:2, layer:"core", t:"Advisor", s:"advisor.ts · doc-pass.ts", files:["core/advisor.ts","core/doc-pass.ts"],
+    d:"The brain on a clock. Reads your open work and what you have been doing, and leaves at most three ideas in the Inbox: what is late, what was not followed up. Asks only when the work picture's hash moved.",
+    rules:["It never acts. An idea becomes work only when you make it a task.","Its daily doc pass proposes doc edits on a System task; it never writes a doc.","Past the day's spend cap it skips."] },
+  learn: { c:1, r:3, layer:"core", t:"Learning", s:"learn.ts", files:["core/learn.ts","core/feedback.ts"],
+    d:"Every correction (ignore, a changed kind or priority, an edited or redrafted draft) is evidence. One small model call turns it into a line in LEARNED.md.",
+    rules:["A new line starts at strength 2 under Watching, where nothing reads it.","Seen again it gets stronger; at 3 it moves into its section and is in use.","A Watching line not seen again goes to the trash."] },
+  review: { c:1, r:4, layer:"plugin", t:"Code review", s:"code-review-plannotator", files:["packages/code-review-plannotator/src/guide.ts","packages/code-review-plannotator/src/batches.ts","packages/code-review-plannotator/src/run.ts","packages/code-review-plannotator/src/review.ts"],
+    d:"The guided review as a library, runnable without Riker: the patch against the merge base, batches of related files, the calls with an injected ask, fitting the guide to the patch, the Plannotator snapshot, import and live comments, and the job instructions (skill/SKILL.md, shipped as riker:guide).",
+    rules:["It knows nothing of Riker: warnings go to setGuideLog, which Riker points at riker.log.","Today core imports it (the one exception in boundaries.test.ts); RIKER-0190 inverts that.","review() and the CLI run it end to end with any ask (claudeAsk keeps cost and tokens per call)."] },
+  tui: { c:2, r:0, layer:"ui", t:"TUI", s:"@riker/tui", files:["packages/tui/src/app.tsx","packages/tui/src/components/","packages/tui/src/context/riker.tsx","packages/tui/src/keymap.ts","packages/tui/src/palette.ts"],
+    d:"OpenTUI + Solid on @andycmaj/opentui-app. Two modes: Chat (the rail beside the Canvas, which shows the selected row) and Board (Wins, Columns, Knowledge, Inbox, Cost), each with its own FocusProvider.",
+    rules:["Views read through the read model (riker.task(id), riker.turns(id), ...), never the store; a read re-runs only when a table it names changes.","Components call actions.tsx, which asks the desk. Nothing in components/ imports core/projects.","TerminalsProvider sits above both modes, so PTYs survive the switch.","keymap.ts is the single binding table; the footer, ? help and : palette all list from it."] },
+  engine: { c:2, r:1, layer:"core", t:"Engine", s:"engine.ts", files:["core/engine.ts","core/plugins.ts"],
+    d:"What runs. It takes the plugins an entry point hands it: attaches their connectors, keeps their triage, senders and move guards. Then the inbox worker, the Advisor's clock, reminders, merge checks, event-triggered actions, the moves drain and the tmux watch. It owns a desk.",
+    rules:["At start: sync docs, refresh stale installs, ensure the Home task, recover sessions, reconcile tmux.","Moves drain on data_version (250 ms check); reconcile every 30 s plus a live tmux watch; task_events read every 2 s for action triggers.","Offline (fixture) mode starts no connector and no Advisor.","Config is handed down as a ConfigSource; get() each time, so an edit applies without a restart."] },
+  desk: { c:2, r:2, layer:"core", t:"Desk", s:"desk.ts", files:["core/desk.ts","core/undo.ts","packages/tui/src/components/actions.tsx"],
+    d:"Every owner move, once: say, startAgent, stopAgent, close, send, editDraft, redraft, remind, watch, ignore, reopen, setPriority, setKind, moveTask, runAction, guideReview, afterTriage and more. TUI keys, the palette, the moves bus and tests all come here.",
+    rules:["Changes the store, teaches LEARNED.md from corrections, hands agent work to the task's driver.","A method that changes a task wraps itself in onTask for ctrl+z; one with outside effects in cannot.","Runs nothing on a clock; the engine does."] },
+  lifecycle: { c:2, r:3, layer:"core", t:"Lifecycle", s:"lifecycle.ts", files:["core/lifecycle.ts","core/lanes.ts"],
+    d:"Every change to a task's agent_state or a session's state is one named transition: holdForStart, queued, sessionStarted, sessionActivity, turnEnded, sessionEnded, turnFinished, workFinished, taskClosed, taskDropped, taskReopened, workMerged and a few more.",
+    rules:["Nothing else writes those columns.","A finished (ready) agent stays ready while it winds down.","Closing or dropping a task tells the tasks it blocked."] },
+  actions: { c:2, r:4, layer:"core", t:"Task actions", s:"task-actions · run-action", files:["core/task-actions.ts","core/run-action.ts","core/guide-turn.ts","packages/core/plugin/"],
+    d:"Skills Riker runs on one task: summarize, guide, quiz built in, more from config actions. desk.runAction runs one headless, on a fork of the agent's session, through the agent, or in a pane; its answer is a turn of its own.",
+    rules:["An action never touches agent_state.","Triggers (on) run one with no key; never a pane action, never past the spend cap.","The guide's calls go through @riker/code-review-plannotator with Riker's brain as the ask."] },
+  assistant: { c:3, r:0, layer:"agent", t:"Assistant", s:"assistant.ts · Home", files:["core/assistant.ts","core/mentions.ts"],
+    d:"Home's agent and your main way to drive Riker. Each turn is a claude -p resumed by session id, allowed riker-tools, file and web reads, gh reads and the assistant role's grants.",
+    rules:["It never sends. A Send is only ever your press.","Home is a kind: home task; listTasks() never returns it, so nothing that lists work sees it.","'Where things stand' is counts, and a resumed session gets only what changed since it last heard."] },
+  moves: { c:3, r:1, layer:"bus", t:"Moves bus", s:"moves.ts · moves table", files:["core/moves.ts"],
+    d:"One registry (verb, args, help, run) feeds riker-tools move <verb>, the Assistant's prompt and the engine's dispatch. Rows in the moves table carry requests across processes.",
+    rules:["A new verb goes in the registry, nowhere else.","A move that would open a dialog answers 'needs …' in words.","AGENT_MOVES is what a task's own agent may ask for, and only on its own task.","Plugins' move guards run before the move (the Slack confirm)."] },
+  drivers: { c:3, r:2, layer:"core", t:"Drivers", s:"driver.ts", files:["core/driver.ts"],
+    d:"One seam for 'the task's agent'. ChatDriver and TmuxDriver implement start, stop, close, deliver, wake and isLive. The desk picks one with inTmux(task): coding, and the onboarding interview's System task.",
+    rules:["Nothing above the driver branches on it.","A coding start that lacks something returns needs: repo | path | branch; the TUI turns it into a dialog, a move into words."] },
+  pool: { c:3, r:3, layer:"agent", t:"Agent pool", s:"agents.ts · ChatDriver", files:["core/agents.ts","core/transcript.ts","core/spend.ts"],
+    d:"General and reply tasks' agents, and Home's. Each turn is a headless claude -p resumed by session id, its steps streamed onto the turn, its answer three short sections plus maybe one action set up for one press.",
+    rules:["Bounded by maxActiveAgents; over the limit a task is queued with a reason.","Past config.spend's daily cap, Riker's own turns queue; yours still run.","A resumed turn sends only what it has not heard; a session idle past the cache hour is left for a new one."] },
+  capabilities: { c:3, r:4, layer:"core", t:"Capabilities", s:"capabilities.ts", files:["core/capabilities.ts"],
+    d:"Maps names Riker owns (slack.read, docs.read, ...) to concrete tool names, per role (general, assistant), from config grants. A capability can also be a command (Bash(<cmd>:*)) or a Claude Code plugin loaded with --plugin-dir.",
+    rules:["Fail closed: an unknown capability grants nothing, and any name that looks like a write is dropped.","Sessions run with --permission-mode dontAsk, so anything not allowed is denied without a prompt; a denied call names the config key to grant.","A plugin whose skills would widen the allow list is not loaded."] },
+  brain: { c:4, r:0, layer:"agent", t:"Brain", s:"brain.ts · claude -p", files:["core/brain.ts","core/self.ts","core/spend.ts"],
+    d:"Headless claude -p. One call shape for triage (no tools, a JSON schema), the Advisor, learning, the Assistant, a general agent's turn and every task action. Swappable with setBrain for tests and fixtures. Each call's cost and tokens go to spend.",
+    rules:["--setting-sources \"\" skips user settings, so your hooks and output styles never leak into what triage reads back.","A call with no mcp__ rule gets --strict-mcp-config and loads no connector.","Auth comes from the logged-in CLI."] },
+  rikertools: { c:4, r:1, layer:"bus", t:"riker-tools", s:"cli/src/riker-tools.ts", files:["packages/cli/src/riker-tools.ts","core/hooks.ts","core/pane.ts","core/adopt.ts"],
+    d:"A separate process: plain TS under bare bun with no Solid preload, so a hook costs one process start and one SQLite write. Commands: hook, adopt-hook, done, pr, feedback, note, notes, tasks, task, projects, repos, project, statusline, pane, move, knowledge, perf, spend.",
+    rules:["Its commits bump PRAGMA data_version and table_versions; the engine and TUI notice.","Run from a worktree, Riker hands agents the main checkout's riker-tools (lastingEntry); RIKER_TOOLS_ENTRY pins one.","riker-tools pane [--zoom] [--wait] -- cmd splits the agent's own window, so a diff viewer shows in the viewer."] },
+  projects: { c:4, r:2, layer:"core", t:"Projects", s:"projects.ts · TmuxDriver", files:["core/projects.ts","core/project-doc.ts","core/lookup.ts","core/repos.ts"],
+    d:"A project is one tmux session; each coding task gets one window, one worktree and one interactive claude. Keeps the DB in step with what tmux reports. A project also carries a brief, goals and docs every task in it reads.",
+    rules:["Never trusts a name over a tag.","Every coding start checks the repo's checkout path first (core/repos.ts); nothing is mapped unless you pick it.","A goal is met only by your say, never by its tasks closing."] },
+  mux: { c:4, r:3, layer:"core", t:"Mux", s:"mux.ts · libtmux · wt", files:["core/mux.ts","core/checkouts.ts"],
+    d:"The only door to tmux and wt, and the only importer of libtmux (alpha, pinned exactly). Identity is the @riker_project and @riker_task user options; @riker_tools tells pane scripts how to call riker-tools.",
+    rules:["Tests use packages/core/test/support/fake-mux.ts.","Real tmux checks use a private -L server, never the default one.","Reads also take aug's @aug_* options (optionFormat), so windows tagged before the rename keep their identity."] },
+  tmux: { c:4, r:4, layer:"out", t:"tmux · claude", s:"one window per task", files:["core/install.ts","packages/tui/src/terminal/"],
+    d:"tmux owns every coding agent's claude, so it outlives Riker and any client can reach it. Each agent is interactive Claude Code with your settings and plugins; hooks call riker-tools hook <event>.",
+    rules:["Hook events: prompt, tool, notification, stop, end, made.","The Canvas embeds a grouped viewer session in a PTY (packages/tui/src/terminal, from kube-tui).","Claudes started outside Riker are found through ~/.claude/sessions and can be adopted (core/strays.ts)."] },
+  store: { x:20, y:550, w:1050, h:46, layer:"store", t:"Store", s:"bun:sqlite · ~/.riker/riker.db", files:["core/store.ts","core/db.ts","core/types.ts","core/read-model.ts"],
+    d:"Twenty-five tables: the work (tasks, turns, sessions, threads, links, events, blockers), the inbox and its triage runs, projects and goals, the Board's notes, Knowledge and ideas, moves, actions, spend, Wins, table_versions and kv.",
+    rules:["Row shapes mirror the tables one to one.","Triggers bump table_versions per table; a read in core/read-model.ts names the tables it queries and re-runs only when one changes.","A change from another process shows up as PRAGMA data_version."] },
+};
+for (const [id, n] of Object.entries(N)) { n.id = id; if (n.x == null) { n.x = C[n.c]; n.y = R[n.r]; n.w = W; n.h = H; } }
+
+// [from, to, label, gutter x (routes to the store band), bend]
+const E = [
+  ["engine","connectors","attach · start"],
+  ["github","connectors","notifications · PR status"],
+  ["slack","connectors","transport.poll · remote"],
+  ["connectors","store","ingest: messages rows",212],
+  ["engine","triage","inbox worker: Triage.next"],
+  ["triage","brain","the one model call"],
+  ["triage","docs","TRIAGE.md · LEARNED.md"],
+  ["triage","store","task · triage_runs · steps",415],
+  ["triage","lifecycle","holdForStart (coding)"],
+  ["engine","advisor","10-minute clock"],
+  ["advisor","brain","ideas schema"],
+  ["advisor","store","≤ 3 ideas",428],
+  ["engine","moves","drain on data_version"],
+  ["moves","desk","runMove on the desk"],
+  ["engine","projects","reconcile · tmux watch"],
+  ["engine","desk","owns · afterTriage · triggers"],
+  ["tui","desk","actions.tsx"],
+  ["store","tui","read model: table_versions",634],
+  ["desk","drivers","start · stop · close · deliver"],
+  ["desk","outbound","Send (your press)"],
+  ["desk","learn","corrections"],
+  ["desk","lifecycle","taskClosed"],
+  ["desk","store","task edits",652],
+  ["desk","actions","runAction",null,-220],
+  ["actions","review","reviewInBatches · saveGuide"],
+  ["actions","brain","skill runs (headless · fork)"],
+  ["actions","capabilities","grant · --plugin-dir"],
+  ["actions","store","action turn · action_runs"],
+  ["review","plannotator","guide import · comments"],
+  ["learn","brain","lesson from a correction"],
+  ["learn","docs","LEARNED.md"],
+  ["outbound","github","sender: github_comment"],
+  ["outbound","slack","sender: slack_reply"],
+  ["outbound","lifecycle","draftSent"],
+  ["drivers","pool","ChatDriver"],
+  ["drivers","projects","TmuxDriver"],
+  ["pool","brain","headless turns"],
+  ["pool","capabilities","allow list"],
+  ["pool","assistant","Home turns"],
+  ["pool","lifecycle","turnFinished"],
+  ["assistant","brain","resumed session"],
+  ["assistant","rikertools","Bash(riker-tools)"],
+  ["assistant","capabilities","assistant grants"],
+  ["projects","mux","make · tag · read back"],
+  ["projects","lifecycle","sessionStarted · Ended"],
+  ["mux","tmux","libtmux · wt switch"],
+  ["tmux","rikertools","Claude Code hooks"],
+  ["rikertools","lifecycle","handleHook"],
+  ["rikertools","moves","insert row, wait"],
+  ["lifecycle","store","sole writer of agent_state"],
+  ["tui","tmux","viewer PTY"],
+].map(([a, b, l, via, bend]) => ({ a, b, l, via, bend, k: a + ">" + b }));
+
+const TRACES = {
+  slack: { label: "Slack DM → reply", glyph: "↑", steps: [
+    { n:["engine","connectors","slack"], e:["engine>connectors","slack>connectors"], t:"The Slack connector polls", b:"The engine attached @riker/slack's connectors and started them. The poller runs every slack.pollSeconds; its transport reads DMs, mentions, watched channels and the threads open tasks track, from the cursor kept in kv.", f:"packages/slack/src/connector.ts" },
+    { n:["connectors","store","triage"], e:["connectors>store"], t:"Rows into the inbox", b:"ctx.ingest inserts each message (a duplicate external id is refused), offers it to Triage.arrived (linkByBranch) and wakes the worker. The poller only inserts, then saves its cursor.", f:"core/engine.ts · connectorContext" },
+    { n:["engine","triage"], e:["engine>triage"], t:"The inbox worker claims it", b:"triageInbox calls the plugin's Triage.next: due rows oldest first. More lines from Sam within two minutes would ride along as one run on the latest.", f:"packages/triage/src/worker.ts" },
+    { n:["triage","brain","docs"], e:["triage>docs","triage>brain"], t:"Rules, then one model call", b:"Not yours, not a greeting, not noise, no open task on the thread, not a PR. unjudged asks the triage model (haiku by default) for a verdict, with TRIAGE.md and LEARNED.md in the prompt; every rule after it reads the same answer.", f:"packages/triage/src/triage.ts · TRIAGE_RULES" },
+    { n:["triage","store"], e:["triage>store"], t:"Escalated: a reply task", b:"The verdict is reply. escalation passes it on because triage.escalate names a DM to you, so new task files it: createTask, the message and an incoming turn, plus a triage_runs row with one step per rule tried. Triage returns an agent-turn effect instead of starting anything.", f:"packages/triage/src/triage.ts · newTask" },
+    { n:["engine","desk","drivers","pool"], e:["engine>desk","desk>drivers","drivers>pool"], t:"The desk runs the effect", b:"desk.afterTriage runs the effects and fires any triaged action triggers. drivers.for(task).wake(reason): a reply task's driver is the ChatDriver, so the pool runs a turn within maxActiveAgents.", f:"core/desk.ts · afterTriage" },
+    { n:["pool","brain","capabilities"], e:["pool>capabilities","pool>brain"], t:"A headless turn", b:"claude -p resumed by session id, read-only tools plus the general role's grants, --permission-mode dontAsk. It answers in three short sections and sets up the reply as one action.", f:"core/agents.ts" },
+    { n:["pool","lifecycle","store"], e:["pool>lifecycle","lifecycle>store"], t:"turnFinished", b:"If the agent asked you something the task is waiting ◆; otherwise ready ◈. The draft waits, and the rail shows ↑ ready to send.", f:"core/lifecycle.ts · turnFinished" },
+    { n:["store","tui"], e:["store>tui"], t:"The rail updates", b:"The write bumped table_versions for tasks and turns; the read model re-runs only the reads that name them, and the rail redraws.", f:"core/read-model.ts · context/riker.tsx" },
+    { n:["tui","desk","outbound"], e:["tui>desk","desk>outbound"], t:"You press Send", b:"actions.tsx asks desk.send. Editing or redrafting instead counts as a correction and feeds learning.", f:"components/actions.tsx → core/desk.ts" },
+    { n:["outbound","slack","lifecycle"], e:["outbound>slack","outbound>lifecycle"], t:"It goes out as you", b:"Outbound hands the slack_reply to the sender @riker/slack registered. The destination comes from the thread's meta (channel and thread_ts), never from the model. draftSent clears what the agent was waiting on. Sending does not close the task.", f:"core/outbound.ts · packages/slack/src/index.ts" },
+  ]},
+  coding: { label: "Review request → coding agent", glyph: "◐", steps: [
+    { n:["github","connectors","engine"], e:["engine>connectors","github>connectors"], t:"A review is requested", b:"The GitHub connector reads your participating notifications since github.since, inside gate.ts's budget. Who was asked (you, or a team) is read at ingest.", f:"packages/github/src/ingest.ts" },
+    { n:["connectors","store","triage"], e:["connectors>store"], t:"Arrived: linkByBranch", b:"A PR whose head branch is a task's worktree branch joins that task's threads before triage runs. This one is new.", f:"packages/triage/src/index.ts · arrived" },
+    { n:["engine","triage","store"], e:["engine>triage","triage>store"], t:"The review ask rule", b:"A PR that asks a review of you, or of a team in github.reviewTeams, is always a review task: coding, on the PR's repo and pr:N, with a guided Plannotator review as its brief. The model only gives its words.", f:"packages/triage/src/triage.ts · reviewAsk" },
+    { n:["triage","lifecycle","store"], e:["triage>lifecycle","lifecycle>store"], t:"Held for you", b:"holdForStart: agent_state queued ◌ with 'held for you: press Start'. A coding agent never starts by itself.", f:"core/lifecycle.ts · holdForStart" },
+    { n:["tui","desk","drivers"], e:["tui>desk","desk>drivers"], t:"You press Start", b:"desk.startAgent asks the TmuxDriver. It checks the repo's checkout path (core/repos.ts) first; without a mapping, a path or a branch it answers needs: repo | path | branch, and the TUI opens that dialog.", f:"components/use-agent-start.tsx → core/driver.ts" },
+    { n:["drivers","projects","mux","tmux"], e:["drivers>projects","projects>mux","mux>tmux"], t:"A window in the project's session", b:"wt makes the worktree. mux opens a window in the project's tmux session, tags it @riker_project / @riker_task, and launches interactive claude with the brief and per-session hook settings.", f:"core/projects.ts · core/mux.ts" },
+    { n:["projects","lifecycle"], e:["projects>lifecycle"], t:"sessionStarted", b:"The task is working ◐. Its brief carries the project's brief, goals and docs through lookup.projectContext.", f:"core/lifecycle.ts · sessionStarted" },
+    { n:["tmux","rikertools","lifecycle"], e:["tmux>rikertools","rikertools>lifecycle"], t:"Hooks report back", b:"Each Claude Code hook runs riker-tools hook <event>. A tool call means working; AskUserQuestion or a permission notification means waiting ◆; a turn that ends without asking rests idle ◇.", f:"core/hooks.ts · handleHook" },
+    { n:["lifecycle","store","tui","tmux"], e:["lifecycle>store","store>tui","tui>tmux"], t:"Another process wrote", b:"riker-tools' commit bumps table_versions and data_version; the TUI re-reads. The Canvas embeds the agent's window in a PTY through a grouped viewer session.", f:"core/read-model.ts · context/terminals.tsx" },
+    { n:["rikertools","lifecycle"], e:["rikertools>lifecycle"], t:"riker-tools done", b:"workFinished: ready ◈. The session runs on until claude exits; the task stays on the rail until you read the result. A guide trigger on ready would run now.", f:"core/lifecycle.ts · workFinished" },
+    { n:["engine","projects","mux"], e:["engine>projects","projects>mux"], t:"tmux is the truth", b:"A tmux watch and a 30 s reconcile keep sessions in step. Coding agents survive a Riker restart; recoverAtBoot leaves tmux sessions alone. PR status (checks, reviews, merge queue) lands in pr_status on the GitHub clock.", f:"core/engine.ts · reconcile" },
+  ]},
+  home: { label: "Home → a move", glyph: "?", steps: [
+    { n:["tui","desk"], e:["tui>desk"], t:"You type in Home", b:"a opens Home's box from anywhere, the Board too. desk.say adds your line to the home task. (From Slack, the remote does the same with your lines in your private conversation.)", f:"components/chat-mode.tsx → core/desk.ts · say" },
+    { n:["desk","drivers","pool","assistant"], e:["desk>drivers","drivers>pool","pool>assistant"], t:"Home's driver is a chat", b:"The home task's agent is the Assistant: a ChatDriver turn whose prompt and tools come from assistant.ts.", f:"core/assistant.ts" },
+    { n:["assistant","brain","capabilities"], e:["assistant>brain","assistant>capabilities"], t:"A resumed claude -p", b:"Allowed Bash(riker-tools), file and web reads, gh reads and the assistant role's grants. Anything else is denied without asking. Past chat.homeMaxTokens of context it leaves the session for a new one that reads the talk back.", f:"core/assistant.ts · core/capabilities.ts" },
+    { n:["assistant","rikertools"], e:["assistant>rikertools"], t:"It reads, then moves", b:"riker-tools tasks to look around, then riker-tools move priority RIKER-0012 --level urgent.", f:"packages/cli/src/riker-tools.ts" },
+    { n:["rikertools","moves"], e:["rikertools>moves"], t:"A row in moves", b:"riker-tools inserts { verb, args, asked_by: assistant, status: pending } and waits for the result.", f:"core/moves.ts · waitForMove" },
+    { n:["engine","moves"], e:["engine>moves"], t:"The engine claims it", b:"watchMoves checks data_version every 250 ms and drains the pending rows.", f:"core/engine.ts · watchMoves" },
+    { n:["moves","desk","store"], e:["moves>desk","desk>store"], t:"Run on the desk", b:"runMove checks the verb, the required args and, for an agent, AGENT_MOVES and own-task; then the plugins' guards (a move asked from Slack in CONFIRM_MOVES waits for your yes). Then the spec's run calls desk.setPriority, recorded for ctrl+z.", f:"core/moves.ts · runMove" },
+    { n:["desk","learn","docs","brain"], e:["desk>learn","learn>brain","learn>docs"], t:"A correction teaches", b:"A changed priority is a correction. learn.ts turns it into a LEARNED.md line at strength 2, under Watching.", f:"core/learn.ts" },
+    { n:["moves","rikertools","assistant"], e:["rikertools>moves","assistant>rikertools"], t:"One line back", b:"The result is written to the row; riker-tools prints it and the Assistant tells you in Home.", f:"core/moves.ts" },
+  ]},
+  guide: { label: "Guide action → Plannotator", glyph: "◎", steps: [
+    { n:["tui","desk"], e:["tui>desk"], t:"You pick the guide", b:". on a coding row opens the Actions picker: the actions whose kinds and needs fit the row (guide needs a worktree). The palette lists the same as 'Action: Guided review, with review notes'. A trigger (on: ready) would start it here too, with no key.", f:"components/actions.tsx · actionsFor" },
+    { n:["desk","actions","store"], e:["desk>actions","actions>store"], t:"desk.runAction", b:"startAction checks whyNot (kind, worktree still on disk) and writes a running TurnRole.action turn. agent_state is untouched: the rail never says the agent is working.", f:"core/run-action.ts · startAction" },
+    { n:["actions","review"], e:["actions>review"], t:"The patch, before any spend", b:"patchFor diffs the worktree against its merge base: origin/<base> when the remote has moved past the local branch, else the local one; untracked files too. No change: refused before anything is spent. planBatches cuts it into batches of related files.", f:"code-review-plannotator · guide.ts · batches.ts" },
+    { n:["actions","review","brain","capabilities"], e:["actions>review","actions>brain","actions>capabilities"], t:"The calls", b:"reviewInBatches with Riker's ask: each call a fresh headless think() with the skill's read-only tools and Riker's plugin dir. One batch: one 'whole' call. More: a 'notes' call per batch, three at a time, then one 'chapters' call.", f:"code-review-plannotator · run.ts" },
+    { n:["actions","store","tui"], e:["actions>store","store>tui"], t:"Where it is", b:"Each GuideProgress stage is one line on the turn's progress column. The Canvas shows it above the turn's steps; the rail's sub line leads with it ('guide: batches 3/5 done, 2 running'), then 'guide done' for two minutes.", f:"core/guide-turn.ts · guideProgressLine" },
+    { n:["review","plannotator"], e:["review>plannotator"], t:"Fitted and saved", b:"fitGuide keeps each file once and only files in the patch (the rest unplaced), and drops a note outside its file's hunks. saveGuide writes guide.json (v4 snapshot) and guide-findings.json under What it made and runs plannotator guide import --snapshot, --pr when the task has one.", f:"code-review-plannotator · guide.ts · saveGuide" },
+    { n:["tui","plannotator"], e:[], t:"The review opens on the Canvas", b:"The turn lists the chapters and every finding. The TUI runs plannotator review --base <base> on a port Riker picked, clears its own comments (source riker-guide) and posts every finding: on its lines when one hunk shows them, else on its file; Bug and Risk as concerns.", f:"components/actions.tsx · postComments" },
+    { n:["tui","desk","drivers"], e:["tui>desk","desk>drivers"], t:"Your notes go to the agent", b:"What you send from the review lands in guide-feedback.md; when the review exits, reviewNotes hands it to the agent (an approval, or closing with no feedback, sends nothing).", f:"components/actions.tsx · reviewNotes" },
+    { n:["desk","actions","plannotator"], e:["desk>actions"], t:"Later: Open the guide's review", b:"A guide a trigger ran opens nothing. 'Open the guide's review' (picker and palette, only with saved findings) runs no model: it takes the patch as it is now, refits the findings and opens the review again.", f:"core/run-action.ts · guideReview" },
+  ]},
+};
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const css = v => `var(${v})`;
+const SVGNS = "http://www.w3.org/2000/svg";
+const mk = (tag, attrs = {}, parent) => { const el = document.createElementNS(SVGNS, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); if (parent) parent.appendChild(el); return el; };
+
+// ── map rendering ───────────────────────────────────────────────
+const svg = $("#mapSvg");
+const defs = mk("defs", {}, svg);
+for (const [id, v] of [["a-dim","--edge"],["a-on","--accent"],["a-hot","--owner"],["a-trail","--muted"]]) {
+  const m = mk("marker", { id, viewBox:"0 0 10 10", refX:"9", refY:"5", markerWidth:"7", markerHeight:"7", orient:"auto-start-reverse" }, defs);
+  mk("path", { d:"M0,1 L10,5 L0,9 z", style:`fill:${css(v)}` }, m);
+}
+const ctr = n => ({ x: n.x + n.w / 2, y: n.y + n.h / 2 });
+function clip(n, from) {
+  const c = ctr(n), dx = from.x - c.x, dy = from.y - c.y;
+  if (!dx && !dy) return c;
+  const sx = Math.abs(dx) ? (n.w / 2 + 3) / Math.abs(dx) : Infinity;
+  const sy = Math.abs(dy) ? (n.h / 2 + 3) / Math.abs(dy) : Infinity;
+  const s = Math.min(sx, sy);
+  return { x: c.x + dx * s, y: c.y + dy * s };
+}
+function anchor(n, toward) {
+  // The store band is wide; aim edges straight down at it instead of its centre.
+  if (n.id === "store") return { x: Math.min(Math.max(toward.x, n.x + 20), n.x + n.w - 20), y: n.y + n.h / 2 };
+  return ctr(n);
+}
+const edgeLayer = mk("g", {}, svg), nodeLayer = mk("g", {}, svg), labelLayer = mk("g", {}, svg);
+const edgeEls = {};
+for (const e of E) {
+  const A = N[e.a], B = N[e.b];
+  if (e.via) {
+    // Run down the gutter between columns so the line never crosses a box.
+    const top = N.store.y - 3, other = A.id === "store" ? B : A, oc = ctr(other);
+    const side = { x: e.via > oc.x ? other.x + other.w + 3 : other.x - 3, y: oc.y };
+    const d = A.id === "store" ? `M${e.via},${top} V${side.y} H${side.x}` : `M${side.x},${side.y} H${e.via} V${top}`;
+    const g = mk("g", { class:"edge", "data-k": e.k }, edgeLayer);
+    const path = mk("path", { d, "marker-end":"url(#a-dim)" }, g);
+    const lx = e.via, ly = (side.y + top) / 2, tw = e.l.length * 6.4 + 12;
+    const lg = mk("g", { class:"elabel" }, labelLayer);
+    mk("rect", { x:(lx - tw / 2).toFixed(1), y:(ly - 9).toFixed(1), width:tw.toFixed(1), height:"18", rx:"3" }, lg);
+    const tx = mk("text", { x:lx, y:(ly + 3.5).toFixed(1), "text-anchor":"middle" }, lg); tx.textContent = e.l;
+    edgeEls[e.k] = { g, path, lg };
+    continue;
+  }
+  const ca = anchor(A, ctr(B)), cb = anchor(B, ctr(A));
+  const p1 = A.id === "store" ? { x: ca.x, y: A.y - 3 } : clip(A, cb);
+  const p2 = B.id === "store" ? { x: cb.x, y: B.y - 3 } : clip(B, ca);
+  const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy);
+  // A given bend steers round a box in the way (desk to actions skirts lifecycle).
+  const bend = e.bend ?? (len > 230 ? Math.min(60, len * 0.1) : 0);
+  const mx = (p1.x + p2.x) / 2 - (dy / len) * bend, my = (p1.y + p2.y) / 2 + (dx / len) * bend;
+  const g = mk("g", { class:"edge", "data-k": e.k }, edgeLayer);
+  const d = `M${p1.x.toFixed(1)},${p1.y.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  const path = mk("path", { d, "marker-end":"url(#a-dim)" }, g);
+  const tw = e.l.length * 6.4 + 12;
+  const lx = 0.25 * p1.x + 0.5 * mx + 0.25 * p2.x;
+  let ly = 0.25 * p1.y + 0.5 * my + 0.25 * p2.y;
+  // Between neighbours in a row the gap is narrower than the label: lift it
+  // into the gutter above the row so it never covers a box's title.
+  if (Math.abs(dx) > Math.abs(dy) && len < tw + 10) ly = Math.min(p1.y, p2.y) - H / 2 - 14;
+  const lg = mk("g", { class:"elabel" }, labelLayer);
+  mk("rect", { x:(lx - tw / 2).toFixed(1), y:(ly - 9).toFixed(1), width:tw.toFixed(1), height:"18", rx:"3" }, lg);
+  const tx = mk("text", { x:lx.toFixed(1), y:(ly + 3.5).toFixed(1), "text-anchor":"middle" }, lg); tx.textContent = e.l;
+  edgeEls[e.k] = { g, path, lg };
+}
+const nodeEls = {};
+for (const n of Object.values(N)) {
+  const g = mk("g", { class:"node" + (n.id === "store" ? " store-band" : ""), tabindex:"0", role:"button", "aria-label": `${n.t}: ${n.s}`, "data-id": n.id }, nodeLayer);
+  const col = css(LAYERS[n.layer].v);
+  mk("rect", { class:"body", x:n.x, y:n.y, width:n.w, height:n.h, rx:"5", style:`stroke:${col}` }, g);
+  mk("rect", { class:"band", x:n.x, y:n.y, width:"5", height:n.h, rx:"2", style:`fill:${col}` }, g);
+  if (n.id === "store") {
+    const t = mk("text", { x:n.x + 20, y:n.y + 28, class:"big" }, g); t.textContent = "Store";
+    const s = mk("text", { x:n.x + 90, y:n.y + 28, class:"sub" }, g); s.textContent = "bun:sqlite · ~/.riker/riker.db · tasks · messages · turns · sessions · moves · triage_runs · task_events · action_runs · spend · table_versions · kv …";
+  } else {
+    const t = mk("text", { x:n.x + 16, y:n.y + 23 }, g); t.textContent = n.t;
+    const s = mk("text", { x:n.x + 16, y:n.y + 41, class:"sub" }, g); s.textContent = n.s;
+  }
+  g.addEventListener("click", () => selectNode(n.id));
+  g.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); selectNode(n.id); } });
+  nodeEls[n.id] = g;
+}
+
+const legend = $("#legend");
+legend.innerHTML = Object.values(LAYERS).map(l => `<span><i style="background:${css(l.v)}"></i>${esc(l.name)}</span>`).join("");
+
+// ── state ───────────────────────────────────────────────────────
+let mode = "explore", sel = null, step = 0;
+const panel = $("#panel");
+
+function clearMap() {
+  svg.classList.remove("svg-dim");
+  for (const g of Object.values(nodeEls)) g.classList.remove("sel", "lit", "near");
+  for (const { g, path, lg } of Object.values(edgeEls)) { g.classList.remove("on", "hot", "trail"); lg.classList.remove("on", "hot"); path.setAttribute("marker-end", "url(#a-dim)"); }
+}
+function setEdge(k, cls) {
+  const el = edgeEls[k]; if (!el) return;
+  el.g.classList.add(cls);
+  el.path.setAttribute("marker-end", `url(#a-${cls})`);
+  // Labels sit in their own layer above the boxes, so they carry the class themselves.
+  if (cls !== "trail") { el.lg.classList.add(cls); labelLayer.appendChild(el.lg); }
+}
+
+function selectNode(id) {
+  if (mode !== "explore") setMode("explore", false);
+  sel = sel === id ? null : id;
+  renderExplore();
+}
+
+function renderExplore() {
+  clearMap();
+  if (!sel) {
+    panel.innerHTML = `
+      <div class="small-head">explore</div>
+      <h3>Pick a box</h3>
+      <p class="step-body">The map is laid out roughly left to right: the outside world, then the plugin packages that read it, then the engine and desk in the middle, then the agents and the processes that run them. Everything lands in the Store along the bottom.</p>
+      <p class="hint">Or choose a flow above to step through one message, one coding agent, one move or one guided review end to end.</p>
+      <div class="small-head">rules of the house</div>
+      <ul class="rules">
+        <li><code>packages/core/src/</code> has no opentui or solid imports.</li>
+        <li>Core imports no plugin; plugins never import each other (<code>boundaries.test.ts</code>).</li>
+        <li>Triage returns effects; it starts nothing.</li>
+        <li>Only your Send lets anything out.</li>
+      </ul>`;
+    return;
+  }
+  const n = N[sel];
+  svg.classList.add("svg-dim");
+  nodeEls[sel].classList.add("sel");
+  const outs = E.filter(e => e.a === sel), ins = E.filter(e => e.b === sel);
+  for (const e of outs) { setEdge(e.k, "on"); nodeEls[e.b].classList.add("near"); }
+  for (const e of ins) { setEdge(e.k, "on"); nodeEls[e.a].classList.add("near"); }
+  const L = LAYERS[n.layer];
+  const link = (e, dir) => { const o = N[dir === "→" ? e.b : e.a]; return `<button data-go="${o.id}"><span class="dir">${dir}</span><span><span class="n">${esc(o.t)}</span> <span class="l">${esc(e.l)}</span></span></button>`; };
+  panel.innerHTML = `
+    <span class="chip" style="color:${css(L.v)}">${esc(L.name)}</span>
+    <h3>${esc(n.t)}</h3>
+    <div class="files">${n.files.map(f => `<code>${esc(f)}</code>`).join("")}</div>
+    <p class="step-body">${esc(n.d)}</p>
+    ${n.rules?.length ? `<ul class="rules">${n.rules.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+    ${outs.length ? `<div class="small-head">calls / feeds</div><div class="links">${outs.map(e => link(e, "→")).join("")}</div>` : ""}
+    ${ins.length ? `<div class="small-head">called / fed by</div><div class="links">${ins.map(e => link(e, "←")).join("")}</div>` : ""}`;
+  panel.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { sel = b.dataset.go; renderExplore(); }));
+}
+
+function renderTrace() {
+  clearMap();
+  const tr = TRACES[mode], s = tr.steps[step];
+  svg.classList.add("svg-dim");
+  for (let i = 0; i < step; i++) for (const k of tr.steps[i].e) setEdge(k, "trail");
+  for (const k of s.e) { edgeEls[k]?.g.classList.remove("trail"); setEdge(k, "hot"); }
+  for (const id of s.n) nodeEls[id].classList.add("lit");
+  panel.innerHTML = `
+    <div class="small-head">${esc(tr.label)}</div>
+    <div class="dots">${tr.steps.map((_, i) => `<button aria-label="Step ${i + 1}" data-step="${i}" class="${i < step ? "done" : i === step ? "cur" : ""}"></button>`).join("")}</div>
+    <h3>${esc(s.t)}</h3>
+    <p class="step-body">${esc(s.b)}</p>
+    <div class="files"><code>${esc(s.f)}</code></div>
+    <div class="step-nav">
+      <button id="prevB" ${step === 0 ? "disabled" : ""}>← Back</button>
+      <button id="nextB" ${step === tr.steps.length - 1 ? "disabled" : ""}>Next →</button>
+      <span class="count">${step + 1} / ${tr.steps.length}</span>
+    </div>
+    <p class="hint">Arrow keys step too.</p>`;
+  $("#prevB").addEventListener("click", () => go(-1));
+  $("#nextB").addEventListener("click", () => go(1));
+  panel.querySelectorAll("[data-step]").forEach(b => b.addEventListener("click", () => { step = +b.dataset.step; renderTrace(); }));
+}
+function go(d) {
+  if (mode === "explore") return;
+  const max = TRACES[mode].steps.length - 1;
+  const next = Math.max(0, Math.min(max, step + d));
+  if (next !== step) { step = next; renderTrace(); }
+}
+document.addEventListener("keydown", ev => {
+  if (mode === "explore" || ev.target.closest?.("input")) return;
+  if (ev.key === "ArrowRight") { go(1); ev.preventDefault(); }
+  if (ev.key === "ArrowLeft") { go(-1); ev.preventDefault(); }
+});
+
+const tabsEl = $("#modeTabs");
+const MODES = [["explore", "Explore", "⌕"], ...Object.entries(TRACES).map(([k, t]) => [k, t.label, t.glyph])];
+tabsEl.innerHTML = MODES.map(([k, l, g]) => `<button class="tab" data-mode="${k}" aria-pressed="${k === mode}"><span class="g">${g}</span>${esc(l)}</button>`).join("");
+tabsEl.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode, true)));
+function setMode(m, render) {
+  mode = m; step = 0; if (m !== "explore") sel = null;
+  tabsEl.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+  if (render) m === "explore" ? renderExplore() : renderTrace();
+}
+renderExplore();
+
+// ── packages ────────────────────────────────────────────────────
+const PKGS = [
+  ["@riker/core", "The domain: store, engine, desk, lifecycle, agent pool, hooks, outbound drafts, learning, the Assistant, the Advisor, task actions. No opentui or solid. Also its embedded text (defaults/, Riker's plugin/, contrib/revdiff/) and the test helpers other packages import (freshHome(), fakeBrain(), fake-mux).", "imports: code-review-plannotator (until RIKER-0190)"],
+  ["@riker/triage", "The chain of rules (triage.ts) and the inbox's worker (worker.ts).", "hands core: <code>triage</code> (arrived, next, again, fromHeld)"],
+  ["@riker/github", "Notifications in (ingest.ts), the rate-limit gate (gate.ts), each task's PR status (pr-status.ts), sends through gh (send.ts), the poll (connector.ts).", "hands core: <code>connectors</code> [github], <code>senders</code> { github_comment }"],
+  ["@riker/slack", "The transports (token, claude-mcp, mcp), the poller and the remote, and the hold on moves asked from Slack (confirm.ts).", "hands core: <code>connectors</code> [slack, remote], <code>senders</code> { slack_reply }, <code>guards</code> [confirmGuard]"],
+  ["@riker/code-review-plannotator", "The guided review as a library, runnable without Riker: patchFor, planBatches, reviewInBatches with an injected ask, fitGuide, saveGuide, postComments, the CLI and skill/SKILL.md.", "imports nothing of Riker's"],
+  ["@riker/fixtures", "The demo day (bun run demo), the offline GitHub sim (bun run sim, sim:do) and a fake claude that fires real hooks.", "passes the three plugins to its engine"],
+  ["@riker/tui", "The UI: index.tsx, app, components, context, terminal, keymap, palette; and cli.ts, the riker argv parser.", "index.tsx: <code>plugins: [triagePlugin(), githubPlugin(), slackPlugin()]</code>"],
+  ["@riker/cli", "What a shell runs: src/riker.ts (the one entry; riker tools … is riker-tools), src/riker-tools.ts, script/riker.ts (bun dev, restarts on RESTART_CODE), script/compile.ts (dist/riker).", "tells core where riker-tools is: <code>setToolsEntry</code>"],
+];
+$("#pkgsEl").innerHTML = PKGS.map(([n, p, g]) => `<div class="pkg"><span class="nm">${esc(n)}</span><p>${esc(p)}</p><span class="gives">${g}</span></div>`).join("");
+const PLUGIN_FIELDS = [
+  ["name", "The plugin's name.", "every plugin"],
+  ["triage", "The inbox's judge (at most one): arrived() on a fresh message, next() for the worker, again() and fromHeld() for the owner's r and m. Without one, messages wait in the Inbox untriaged.", "@riker/triage"],
+  ["connectors", "Sources and lines, each with its own clock and status line. attach(ctx) once at construction, start() off the fixture day, pollNow() for the owner's check now.", "@riker/github, @riker/slack"],
+  ["senders", "One Send per DraftAction type; resolves to a receipt line. Outbound calls it on your Send.", "@riker/github, @riker/slack"],
+  ["guards", "MoveGuards: a move the owner must say yes to first. The guard answers what to say instead, or null to let it run.", "@riker/slack (confirmGuard)"],
+];
+$("#pluginFields").innerHTML = PLUGIN_FIELDS.map(([f, w, b]) => `<tr><td>${esc(f)}</td><td>${esc(w)}</td><td>${esc(b)}</td></tr>`).join("");
+
+// ── triage ──────────────────────────────────────────────────────
+const GATES = [
+  { nm:"arrived: PR on a task's branch", ds:"Before the chain: Triage.arrived runs linkByBranch, joining a PR whose head branch is a task's worktree branch to that task's threads. The chain still runs.", out:"links thread" },
+  { nm:"own message", ds:"Your reply on a live task's thread: the agent sees it, its draft stays unsent, and it thinks again.", out:"own" },
+  { nm:"greeting", ds:"'hi', 'got a sec', 'you there?' never become a task; filed, waiting for the ask they open.", out:"opener" },
+  { nm:"noise", ds:"A config.triage.noise rule matches: a bot wrote it, CI activity, a state change on a thread you only follow, or a pattern taught with the noise move.", out:"fyi" },
+  { nm:"same thread", ds:"A GitHub issue or Slack thread is one conversation, so it attaches to its open task. Not for DMs.", out:"attach" },
+  { nm:"after close", ds:"They wrote after the close (your own reply doesn't count): it attaches to the closed task.", out:"attach" },
+  { nm:"review ask", ds:"A PR asking a review of you or a github.reviewTeams team, or tagging one: always a coding review task on pr:N, held for Start. The model gives only its words.", out:"review task", model:true },
+  { nm:"unjudged", ds:"The first rule that needs the verdict asks for it. If the call fails: filed as 'awaiting AI triage', never assumed work; the worker retries.", out:"failed", model:true },
+  { nm:"same ask", ds:"A DM is a stream of asks, so the model's same_ask decides whether it joins the open task.", out:"attach" },
+  { nm:"judged fyi", ds:"The model says fyi: filed, nothing made.", out:"fyi" },
+  { nm:"escalation", ds:"Work the model saw, but triage.escalate does not name it (default: GitHub assign, mention, review request; Slack DM, mention): held in the Inbox; m makes it a task.", out:"held" },
+  { nm:"new task", ds:"reply and general get an agent turn; coding is held for Start; task and watch are yours. Filed under its repo's one project, else the one the model named.", out:"task + effect" },
+];
+const SAMPLES = [
+  { from:"slack · DM · Priya", msg:"morning!", gate:2, v:"Filed as a greeting. Nothing made; the next line Priya sends is triaged with it." },
+  { from:"github · dependabot[bot]", msg:"Bump lodash from 4.17.20 to 4.17.21", gate:3, v:"fyi: the default noise rule for bots matched. No model call, no cost." },
+  { from:"github · CI on ledger#412", msg:"Checks failed on branch riker-12-fix-rail", gate:0, v:"riker-12-fix-rail is RIKER-0012's worktree branch, so at arrival the PR thread links to RIKER-0012 and its agent hears about it. In the chain, noise then files the CI notice as fyi." },
+  { from:"slack · #ledger thread", msg:"One more thing on the export: keep CSV too", gate:4, v:"The thread already has open task RIKER-0019. The message joins it as an incoming turn; a live agent is woken." },
+  { from:"github · review request", msg:"northwind/ledger#430 · Add ledger export", gate:6, model:true, v:"Review requested of you: a coding task on northwind/ledger, branch pr:430, whose brief is a guided Plannotator review. Held ◌ 'held for you: press Start'." },
+  { from:"slack · DM · Sam", msg:"also the deck if you have it", gate:8, model:true, v:"Sam's DM has an open task. The model says same_ask: true, so the line joins it instead of making a second task." },
+  { from:"slack · #eng", msg:"does anyone know who owns the billing dashboard?", gate:10, model:true, v:"The model says general, but it is neither a DM to you nor a mention. Held in the Inbox under needs you; m makes it a task." },
+  { from:"slack · DM · Sam", msg:"can you send me the Q3 numbers before standup?", gate:11, model:true, v:"Model says reply, important. A DM to you escalates, so a reply task appears with an agent-turn effect: a headless turn drafts the answer and it waits at ↑ ready to send." },
+  { from:"github · you", msg:"Thanks, merged.", gate:1, v:"From you on a thread whose task is open: noted as your answer; the agent sees it and its unsent draft is reconsidered." },
+];
+const gatesEl = $("#gates"), samplesEl = $("#samples"), verdictEl = $("#verdict");
+gatesEl.innerHTML = GATES.map((g, i) => `<li class="gate${g.model ? " model" : ""}"><span class="num">${i === 0 ? "pre" : i}</span><div><div class="nm">${esc(g.nm)}</div><div class="ds">${esc(g.ds)}</div></div><span class="out">${esc(g.out)}</span></li>`).join("");
+samplesEl.innerHTML = SAMPLES.map((s, i) => `<button class="sample" data-i="${i}" aria-pressed="false"><span class="from">${esc(s.from)}</span><span class="msg">${esc(s.msg)}</span></button>`).join("");
+function runSample(i) {
+  const s = SAMPLES[i];
+  samplesEl.querySelectorAll(".sample").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.i === i)));
+  gatesEl.classList.add("running");
+  [...gatesEl.children].forEach((li, gi) => {
+    li.classList.remove("passed", "caught", "after");
+    // linkByBranch links and then the chain still runs; show the rest as skipped for clarity.
+    li.classList.add(gi < s.gate ? "passed" : gi === s.gate ? "caught" : "after");
+  });
+  const calls = s.model ? "one model call" : "no model call";
+  verdictEl.innerHTML = `<span class="small-head">stops at ${s.gate === 0 ? "arrival" : "rule " + s.gate + " · " + esc(GATES[s.gate].nm)} · ${calls}</span><span>${esc(s.v)}</span>`;
+}
+samplesEl.querySelectorAll(".sample").forEach(b => b.addEventListener("click", () => runSample(+b.dataset.i)));
+runSample(7);
+
+// ── lifecycle ───────────────────────────────────────────────────
+const ST = {
+  none:    { x:10,  y:150, g:"·", w:"nobody's" },
+  queued:  { x:185, y:150, g:"◌", w:"waiting to start" },
+  working: { x:360, y:150, g:"◐", w:"agent working" },
+  waiting: { x:265, y:20,  g:"◆", w:"waiting on you" },
+  idle:    { x:455, y:20,  g:"◇", w:"agent idle" },
+  ready:   { x:550, y:150, g:"◈", w:"ready for review" },
+  stopped: { x:360, y:285, g:"■", w:"agent stopped" },
+};
+const SW = 130, SH = 50;
+const TONE = { waiting:"--warn", working:"--info", ready:"--ok", idle:"--l-bus" };
+const TR = [
+  { a:"none", b:"queued", fn:"holdForStart", ft:"triage · coding", why:"A coding task waits for your Start; nothing runs it by itself." },
+  { a:"none", b:"queued", fn:"queued", ft:"agents.ts", why:"The pool is at maxActiveAgents (or the spend cap is reached); the rail says why it waits.", bend:-28 },
+  { a:"queued", b:"none", fn:"holdReleased", ft:"ctrl+z", why:"Undoing the kind change that put the hold on: it never started, so there is nothing to continue.", bend:-28 },
+  { a:"none", b:"working", fn:"sessionStarted", ft:"ChatDriver wake", why:"A reply or general task's turn starts on its own after triage.", bend:70 },
+  { a:"queued", b:"working", fn:"sessionStarted", ft:"Start", why:"Your Start, or the pool freeing a slot." },
+  { a:"queued", b:"stopped", fn:"startCancelled", ft:"Start taken back", why:"Taken back before it ran: nothing to continue, nothing lost." },
+  { a:"working", b:"waiting", fn:"sessionActivity · turnFinished", ft:"hooks · tool / notification · chat turn", why:"AskUserQuestion, a permission notification, or a chat turn that asked you something.", bend:-22 },
+  { a:"waiting", b:"working", fn:"sessionActivity", ft:"hooks · prompt / tool", why:"You answered; the agent is moving again.", bend:-22 },
+  { a:"working", b:"idle", fn:"turnEnded", ft:"hooks · stop", why:"A coding agent's turn ended without asking: it rests at its prompt.", bend:-22 },
+  { a:"idle", b:"working", fn:"sessionActivity", ft:"hooks · prompt / tool", why:"You typed to it, or it picked up again.", bend:-22 },
+  { a:"working", b:"ready", fn:"turnFinished · workFinished", ft:"chat turn · riker-tools done", why:"A chat turn came back not asking, or a coding agent said it is done." },
+  { a:"idle", b:"ready", fn:"workFinished", ft:"riker-tools done", why:"Done while it rested at its prompt." },
+  { a:"ready", b:"working", fn:"sessionActivity", ft:"hooks · prompt / tool", why:"Only new work takes it out of ready; its winding down is not news.", bend:-22 },
+  { a:"working", b:"stopped", fn:"sessionEnded · taskClosed · recoverAtBoot", ft:"Stop · window closed · exit · restart", why:"However it ended, the task is stopped; the session keeps the reason (EndReason). A chat turn cut off by a restart reads as stopped, with Continue.", bend:-22 },
+  { a:"stopped", b:"working", fn:"sessionStarted", ft:"Start resumes", why:"A stopped session is picked up again under the same id; a put-away task reopens.", bend:-22 },
+  { a:"ready", b:"none", fn:"finishSuperseded", ft:"new work on the thread", why:"New work landed after the finish: the finish is read and the task is nobody's until an agent picks it up.", bend:-150 },
+];
+const lsvg = $("#lifeSvg");
+const ldefs = mk("defs", {}, lsvg);
+for (const [id, v] of [["l-dim","--edge"],["l-on","--accent"]]) {
+  const m = mk("marker", { id, viewBox:"0 0 10 10", refX:"9", refY:"5", markerWidth:"7", markerHeight:"7", orient:"auto-start-reverse" }, ldefs);
+  mk("path", { d:"M0,1 L10,5 L0,9 z", style:`fill:${css(v)}` }, m);
+}
+const sctr = s => ({ x: s.x + SW / 2, y: s.y + SH / 2 });
+const sclip = (s, from) => clip({ x:s.x, y:s.y, w:SW, h:SH }, from);
+const trLayer = mk("g", {}, lsvg), stLayer = mk("g", {}, lsvg);
+const trEls = TR.map((t, i) => {
+  const A = ST[t.a], B = ST[t.b];
+  const p1 = sclip(A, sctr(B)), p2 = sclip(B, sctr(A));
+  const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy) || 1;
+  const bend = t.bend ?? 0;
+  const mx = (p1.x + p2.x) / 2 - (dy / len) * bend, my = (p1.y + p2.y) / 2 + (dx / len) * bend;
+  const g = mk("g", { class:"tr" }, trLayer);
+  const p = mk("path", { d:`M${p1.x},${p1.y} Q${mx},${my} ${p2.x},${p2.y}`, "marker-end":"url(#l-dim)" }, g);
+  return { g, p };
+});
+const stEls = {};
+for (const [k, s] of Object.entries(ST)) {
+  const g = mk("g", { class:"st", tabindex:"0", role:"button", "aria-label": `${k}: ${s.w}` }, stLayer);
+  mk("rect", { x:s.x, y:s.y, width:SW, height:SH, rx:"5" }, g);
+  const gl = mk("text", { x:s.x + 14, y:s.y + 26, class:"glyph", style:`fill:${css(TONE[k] || "--muted")}` }, g); gl.textContent = s.g;
+  const t = mk("text", { x:s.x + 36, y:s.y + 22 }, g); t.textContent = k;
+  const w = mk("text", { x:s.x + 36, y:s.y + 38, class:"word" }, g); w.textContent = s.w;
+  g.addEventListener("click", () => focusState(k));
+  g.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); focusState(k); } });
+  stEls[k] = g;
+}
+const trsEl = $("#trs");
+trsEl.innerHTML = TR.map((t, i) => `<li><button data-i="${i}" aria-pressed="false"><span class="fn">${esc(t.a)} → ${esc(t.b)} · ${esc(t.fn)}</span><span class="ft">${esc(t.ft)}</span><span class="why">${esc(t.why)}</span></button></li>`).join("");
+let lifeSel = null;
+function lifeHighlight(idxs, states) {
+  lsvg.classList.toggle("life-dim", idxs.length > 0);
+  trEls.forEach((el, i) => { const on = idxs.includes(i); el.g.classList.toggle("on", on); el.p.setAttribute("marker-end", on ? "url(#l-on)" : "url(#l-dim)"); if (on) trLayer.appendChild(el.g); });
+  for (const [k, g] of Object.entries(stEls)) g.classList.toggle("on", states.includes(k));
+  trsEl.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(idxs.includes(+b.dataset.i))));
+}
+function focusState(k) {
+  if (lifeSel === "s:" + k) { lifeSel = null; return lifeHighlight([], []); }
+  lifeSel = "s:" + k;
+  const idxs = TR.map((t, i) => (t.a === k || t.b === k ? i : -1)).filter(i => i >= 0);
+  lifeHighlight(idxs, [k, ...new Set(idxs.flatMap(i => [TR[i].a, TR[i].b]))]);
+}
+trsEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+  const i = +b.dataset.i;
+  if (lifeSel === "t:" + i) { lifeSel = null; return lifeHighlight([], []); }
+  lifeSel = "t:" + i;
+  lifeHighlight([i], [TR[i].a, TR[i].b]);
+}));
+
+// ── moves ───────────────────────────────────────────────────────
+const VERBS = [
+  ["new","Make a task; the brief is the new task's agent's starting point (--from: the task it came out of hears back)"],
+  ["done","Mark the task done"],
+  ["start","Start (or continue) the task's agent; coding takes repo, path, clone, branch, scratch"],
+  ["stop","Stop the task's agent and save"],
+  ["tell","Type a line into the task's chat for its agent"],
+  ["redraft","Ask the task's agent for a different draft"],
+  ["ignore","Not work: dropped, its messages filed as FYI; reopen undoes it"],
+  ["reopen","Open a done or dropped task again; its agent does not start"],
+  ["noise","Teach triage a noise pattern: matches are filed as FYI with no model call"],
+  ["priority","Set the task's priority"],
+  ["remind","Put the task away until a day"],
+  ["watch","Watch the task: not the owner's, kept open"],
+  ["unwatch","Stop watching: the task is the owner's again"],
+  ["retitle","Give the task a new title"],
+  ["action","Run a task action (summarize, guide, ...); without a name, lists the ones that apply"],
+  ["brief","Rewrite the task's brief before its agent starts"],
+  ["kind","Change what kind of work the task is"],
+  ["project","Move the task into a project (a running agent's window moves too)"],
+  ["wait_on","Mark the task waiting on someone"],
+  ["block_on","Mark the task blocked by another task; it hears when that one is done"],
+  ["unblock","No longer blocked by a task"],
+  ["win","Pin the task as one of today's Wins (at most 5)"],
+  ["link","Attach a URL to the task (a doc, a Slack thread, a ticket)"],
+  ["unlink","Take a URL off the task"],
+  ["goal","Say which project goal the task works toward"],
+  ["project_new","Make a project: a tmux session its coding tasks run in"],
+  ["adopt","Make a claude started outside Riker a coding task in a project"],
+  ["project_repo","Add a repo to a project, or take one out"],
+  ["repo","Where a repo is checked out: map a path, clone, rename or forget it"],
+  ["project_archive","Archive a project: its tmux session and every agent in it end"],
+  ["project_brief","Write a project's brief; every task in it reads it"],
+  ["project_link","Attach a doc to a project; its tasks see it"],
+  ["project_unlink","Take a doc off a project"],
+  ["goal_new","Add a goal to a project"],
+  ["goal_set","Mark a goal met, dropped or open again, or retitle it"],
+  ["onboard","Start the onboarding interview on a System task"],
+  ["propose_doc","Propose a whole new PERSONA, JOB or STYLE; it waits for the owner (the interview's only move)"],
+  ["remember","Write a line the owner said into LEARNED.md"],
+];
+const AGENT = new Set(["new","project_new","retitle","project","wait_on","block_on","unblock","priority","remind","link","unlink","goal","project_link"]);
+let vf = "all";
+const vfEl = $("#vfilters"), verbsEl = $("#verbs");
+const VF = [["all", `All ${VERBS.length}`], ["agent", `A task's agent may ask (${AGENT.size})`], ["owner", `Owner and Assistant only (${VERBS.length - AGENT.size})`]];
+vfEl.innerHTML = VF.map(([k, l]) => `<button class="tab" data-f="${k}" aria-pressed="${k === vf}">${esc(l)}</button>`).join("");
+function renderVerbs() {
+  vfEl.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.f === vf)));
+  verbsEl.innerHTML = VERBS.filter(([v]) => vf === "all" || (vf === "agent") === AGENT.has(v))
+    .map(([v, h]) => `<div class="verb"><div class="vn"><span>${esc(v)}</span><span class="who ${AGENT.has(v) ? "agent" : "owner"}">${AGENT.has(v) ? "agent ok" : "owner"}</span></div><div class="vh">${esc(h)}</div></div>`).join("");
+}
+vfEl.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => { vf = b.dataset.f; renderVerbs(); }));
+renderVerbs();
+
+// ── actions and commands ────────────────────────────────────────
+const ROUTES = {
+  key: { label: "a key", steps: [
+    "keymap.ts has one BindingSpec per key and scope; buildKeymap swaps config's navigation keys in at start, and binds actions.<name>.key on the rail and the Canvas.",
+    "A key that means different things by row (x, e) is one command per meaning, each relevant to its rows, so the footer names the one that applies.",
+    "The handler in components/actions.tsx (task actions: task-actions.ts) acts on the cursor row from the rail, the selected row from the Canvas.",
+    "It asks the desk; dialogs and toasts are the TUI's, the move is the desk's.",
+  ], ex: "d on a row → desk.close(id)  ·  ctrl+z → desk.undo()", who: "The owner, in the TUI." },
+  palette: { label: "the : palette", steps: [
+    ": opens the palette on Context: the focused pane's and the row's entries, titled for the row.",
+    "tab shows All: app-wide entries and the moves with no key, grouped.",
+    "A key's entry runs keymap.dispatchCommand on the pane under it, the same command the key runs; an extra runs itself.",
+    "Each task action that applies to the row is an 'Action: …' entry; with saved findings, 'Action: Open the guide's review' too.",
+  ], ex: ": → Action: Summarize the work so far", who: "The owner, when a key is not known or has none." },
+  picker: { label: "the . picker", steps: [
+    ". on a rail, Canvas or Board Columns row opens the Actions picker (ChoiceModal).",
+    "It offers actionsFor(config, task): registered actions whose kinds and needs fit the row, with each one's key as a hint.",
+    "A pick calls desk.runAction(task, name); a guide with saved findings adds Open the guide's review.",
+    "The run writes its own action turn; the toast says when it is ready.",
+  ], ex: ". → Guided review, with review notes", who: "The owner, on one task." },
+  move: { label: "riker-tools move", steps: [
+    "Another process (the Assistant, a task's agent, a script) runs riker-tools move <verb> --arg …; citty builds each verb's args from the MOVES registry.",
+    "It inserts a moves row and waits; the engine claims it on data_version.",
+    "runMove checks the asker (AGENT_MOVES for an agent, only its own task), the plugins' guards, then runs the spec on the desk.",
+    "move action RIKER-0012 summarize starts the run and answers at once; a pane action answers that it needs the TUI. action is not an agent's move, and from Slack it waits for your yes.",
+  ], ex: "riker-tools move action RIKER-0012 summarize", who: "The Assistant, agents, the Slack remote." },
+  trigger: { label: "a trigger", steps: [
+    "A registration's on lists events: triaged, ready, merged, done.",
+    "triaged fires from desk.afterTriage (the worker, a re-triage, m on a held message); the rest from task_events past the actions.events cursor, every 2 s.",
+    "triggeredBy matches plain rules (no model) and skips pane actions; action_runs keeps it to once per task, action and event.",
+    "desk.fireActions queues the run behind other auto runs, never past the spend cap; its turn says the event ('… (on done)').",
+  ], ex: "\"guide\": { \"on\": [{ \"event\": \"ready\" }] }", who: "Nobody: Riker, on an event." },
+};
+let route = "key";
+const routeTabs = $("#routeTabs"), routeSteps = $("#routeSteps"), routeOut = $("#routeOut");
+routeTabs.innerHTML = Object.entries(ROUTES).map(([k, r]) => `<button class="tab" data-r="${k}" aria-pressed="${k === route}">${esc(r.label)}</button>`).join("");
+function renderRoute() {
+  const r = ROUTES[route];
+  routeTabs.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.r === route)));
+  routeSteps.innerHTML = r.steps.map(s => `<li><span>${esc(s)}</span></li>`).join("");
+  routeOut.innerHTML = `<div class="small-head">who uses it</div><p>${esc(r.who)}</p><div class="small-head">example</div><pre class="term">${esc(r.ex)}</pre><div class="small-head">lands on</div><p><code>core/desk.ts</code>: one method per thing the owner can do. A desk method that changes a task goes through <code>onTask</code> so ctrl+z can put it back.</p>`;
+}
+routeTabs.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => { route = b.dataset.r; renderRoute(); }));
+renderRoute();
+
+const ACTIONS = [
+  ["summarize", "riker:summarize", "fork", "turn", "any work"],
+  ["guide", "riker:guide", "fork (its calls run fresh)", "guide", "coding · needs a worktree"],
+  ["quiz", "riker:quiz", "pane", "none", "coding · needs a worktree"],
+  ["yours", "plugin:skill or a bare user skill", "any", "turn · file · none", "kinds, needs: worktree, session, pr"],
+];
+$("#actionRows").innerHTML = ACTIONS.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
+const VIAS = [
+  ["headless", "claude -p with the task's context (its turns, its project); touches nothing else. cwd is the worktree or the task's work folder."],
+  ["fork", "Headless on a fork of the agent's session (--fork-session --no-session-persistence): it sees what the agent saw and cannot disturb it. Headless when there is no session."],
+  ["agent", "The task's own agent is told /<skill> <args>, as if you typed it. Spends the agent's context."],
+  ["pane", "Interactive claude in a zoomed split of the agent's window (or on the Canvas without one), for a skill that talks with you: the quiz. Never run by a trigger."],
+];
+$("#viasEl").innerHTML = VIAS.map(([n, p]) => `<div class="via"><span class="vn">${esc(n)}</span><p>${esc(p)}</p></div>`).join("");
+
+// ── guided review ───────────────────────────────────────────────
+const GUIDE = [
+  { nm:"Start", ds:"desk.runAction(task, 'guide'): whyNot checks it is coding and its worktree is still on disk, before anything is spent. A running action turn appears.", out:"run-action.ts" },
+  { nm:"Patch", ds:"patchFor: git diff <merge base>, plus untracked files diffed against /dev/null (the agent's index is never touched). The base is origin/<base> when the remote has moved past the local branch, so an unpulled main does not put others' work in the change. No change: refused.", out:"guide.ts" },
+  { nm:"Batches", ds:"planBatches groups related files and fills batches of about 100k characters (25k tokens). Lock files are left out of every prompt; a file past 400k characters is named on the turn, not reviewed.", out:"batches.ts" },
+  { nm:"Calls", ds:"reviewInBatches: one batch is one 'whole' call; more are 'notes' calls, three at a time, then one 'chapters' call. The ask is Riker's brain: a fresh headless call with the skill's read-only tools; every step lands on the turn, named by its call.", out:"run.ts" },
+  { nm:"Progress", ds:"Each GuideStage (read, whole, batches, chapters, fitting, saving) is a line on turns.progress; the Canvas and the rail's sub line show it while it runs. A failed turn keeps the stage it stopped at.", out:"guide-turn.ts" },
+  { nm:"Fit", ds:"fitGuide: chapters name only files in the patch, each once; the rest are unplaced; a note outside its file's hunks is left off the file.", out:"guide.ts" },
+  { nm:"Save", ds:"saveGuide writes guide.json (Plannotator snapshot v4, the one that carries notes) and guide-findings.json under What it made, then plannotator guide import --snapshot (--pr when the task has one).", out:"guide.ts" },
+  { nm:"Report", ds:"The turn lists the chapters and every finding. What no call answered for, chapters that did not parse, files too large and denied calls are said on the turn and in the toast, never 'nothing stood out'.", out:"guide-turn.ts" },
+  { nm:"Review", ds:"Run by you: the TUI opens plannotator review --base <base> on the Canvas on a port Riker picked, clears comments from source riker-guide and posts every finding (on its lines when one hunk shows them, else on its file; Bug and Risk as concerns). Run by a trigger: saved; it waits for Open the guide's review.", out:"actions.tsx" },
+  { nm:"Feedback", ds:"What you send lands in guide-feedback.md, and goes to the agent when the review exits (reviewNotes). An approval, or closing with no feedback, sends nothing.", out:"actions.tsx" },
+];
+$("#guideSteps").innerHTML = GUIDE.map((g, i) => `<li class="gate"><span class="num">${i + 1}</span><div><div class="nm">${esc(g.nm)}</div><div class="ds">${esc(g.ds)}</div></div><span class="out">${esc(g.out)}</span></li>`).join("");
+const BATCH_RULES = [
+  "Files changed in the same commit of the branch belong together.",
+  "A test and what it tests: same stem (foo.test.ts, test_foo.py, foo_test.go, FooSpec.scala), one in a test path or the same folder.",
+  "A diff that names what another file's diff defines (declarations on changed lines, and git's hunk-header function names), or imports it by path. Names too common to mean anything are ignored.",
+  "Groups fill a batch together; a group too big for one is split by folder, then by file. A miss only splits two related files, and each batch may still Read the other.",
+];
+const JOB_RULES = [
+  "whole: the whole diff in one prompt, each hunk line numbered old and new in two columns (numberedPatch), answered with the guide JSON.",
+  "notes: one per batch, three at a time: its files' summaries and review notes, beside an index of every changed file, Read allowed for the rest.",
+  "chapters: one call from the index, the branch's commit log and the batches' summaries; Riker lays the notes into the chapters, and a reviewed file no chapter names goes in a last 'Other changes', so no note is lost.",
+  "The same skill (skill/SKILL.md) is the job text: Riker loads it as riker:guide from its plugin; without a plugin, prompt.ts puts its body in the system prompt.",
+];
+$("#batchRules").innerHTML = BATCH_RULES.map(r => `<li>${esc(r)}</li>`).join("");
+$("#jobRules").innerHTML = JOB_RULES.map(r => `<li>${esc(r)}</li>`).join("");
+
+// ── doors ───────────────────────────────────────────────────────
+const DOORS = [
+  ["core/plugins.ts", "The only way a package adds to Riker", "RikerPlugin: triage, connectors, senders, guards. Core runs what an entry point hands it and imports none of them."],
+  ["core/mux.ts", "Only door to tmux and wt", "The only importer of libtmux (alpha, pinned exactly). Identity is @riker_project / @riker_task, never a name."],
+  ["core/lifecycle.ts", "Only writer of agent_state", "Every agent and session state change is a named transition."],
+  ["core/outbound.ts", "Only road out", "Nothing leaves without your Send; the destination comes from the thread, not the model; the plugin's sender sends it."],
+  ["core/desk.ts", "Every owner move", "One method per thing you can do. TUI keys, the palette, moves, triggers and tests all land here."],
+  ["core/moves.ts", "Every cross-process request", "One registry for riker-tools, the Assistant's prompt and dispatch. New verbs go here only."],
+  ["core/task-actions.ts", "Every task action", "Built-ins plus config actions; which rows, how it runs, where the answer goes, what triggers it. The recipe is a skill."],
+  ["core/driver.ts", "Every kind of agent", "Nothing above the driver branches on chat vs. tmux."],
+  ["core/read-model.ts", "Every view read", "Each read names its tables; a new read is one entry in reads(), and a test fails if its SQL touches a table it does not name."],
+  ["core/capabilities.ts", "What a headless agent may call", "Per-role grants, fail closed, writes dropped."],
+  ["core/brand.ts", "Every name Riker goes by", "Command, tools, home, RIKER_* env, RIKER- refs, @riker_* options; aug's spellings in LEGACY. Never spell one inline."],
+  ["core/install.ts", "Everything Riker writes outside its home", "One registry (hooks, statusline, revdiff) behind riker install | uninstall [name] [--check]. Scripts are embedded so the compiled binary carries them."],
+  ["core/brain.ts", "Every headless model call", "claude -p with user settings skipped; setBrain swaps it in tests."],
+  ["core/config.ts", "Config, handed down", "An entry point makes the ConfigSource; everything below calls get() each use, so an edit applies without a restart."],
+  ["core/undo.ts", "ctrl+z", "This session's moves, 50 deep: onTask keeps a task before and after; cannot records what has outside effects."],
+  ["core/log.ts", "All logging", "Writes riker.log under RIKER_HOME, never the terminal. Off unless RIKER_LOG, log.enabled or RIKER_DEV."],
+  ["tui/src/keymap.ts", "Every key binding", "One table; the footer, ? help and : palette all list from it. Each mode has its own FocusProvider."],
+  ["core/project-doc.ts", "The project doc you edit", "Brief, goals and docs in one file, applied back to project_goals and project_links."],
+];
+$("#doorsEl").innerHTML = DOORS.map(([f, o, p]) => `<div class="door"><span class="only">${esc(o)}</span><code>${esc(f)}</code><p>${esc(p)}</p></div>`).join("");
+
+// ── store ───────────────────────────────────────────────────────
+const TABLES = [
+  ["tasks","The work. kind, status, priority, agent_state, agent_says, queue_reason, thread_key, branch and worktree, project_id, goal_id, from_task_id (handoffs), merged_at."],
+  ["messages","The inbox: everything that came in, with its state (new, triaging, done, failed), attempts and next_at, its verdict and reason, from_me, and channel meta an outbound reply needs."],
+  ["triage_runs","One row per run of the chain on a message: its input, the verdict, the rule that claimed it, the outcome, the task and project."],
+  ["triage_steps","One row per rule a run tried: its decision and reason."],
+  ["turns","A task's chat: incoming, you, trigger (Riker's own notes), agent and action turns; steps, progress, files."],
+  ["sessions","Each agent session: kind (chat or tmux), cwd, tmux window, state, says, result, end_reason, context_tokens."],
+  ["task_threads","Extra threads a task owns (a PR linked by branch)."],
+  ["task_links","URLs attached by hand; Riker never reads behind them."],
+  ["task_events","What happened to a task, kept after its columns move on (triggers in db.ts): Wins history and action triggers read it."],
+  ["task_blockers","Which task blocks which; the blocked one hears when its blocker is done or dropped."],
+  ["projects","One tmux session each: repos, brief, solo, status."],
+  ["project_goals","Outcomes a project's tasks work toward; met only by your say."],
+  ["project_links","Docs on a project that every task in it sees."],
+  ["notes","The Board's live handoffs agents leave each other."],
+  ["hub","Knowledge on the Board: what agents learned, by topic."],
+  ["ideas","The Advisor's suggestions, in the Inbox until you dismiss them or make a task."],
+  ["corrections","Every correction you made, and the lesson learning drew from it."],
+  ["doc_proposals","A proposed whole text for a doc, drafted against base, on a System task, until you accept or reject it."],
+  ["moves","Cross-process move requests: verb, args, asked_by, status, result."],
+  ["action_runs","Each triggered action once per task, action and event."],
+  ["pr_status","Each task's PR: state, checks, review, mergeable, merge queue, when read, and the last error (stale)."],
+  ["spend","Each model call's cost and tokens, by local day, task, role and model."],
+  ["wins","Tasks pinned as a day's Wins (at most 5)."],
+  ["table_versions","A counter per table, bumped by triggers, so the read model re-runs only what a write touched."],
+  ["kv","Cursors, clocks and small state: github.since, slack cursors, advisor.lastRun, actions.events, GitHub gate pauses, what Home last heard."],
+];
+$("#tables").innerHTML = TABLES.map(([t, d]) => `<tr><td>${esc(t)}</td><td>${esc(d)}</td></tr>`).join("");
+
+// ── files ───────────────────────────────────────────────────────
+const FILES = {
+  "packages/core/src": [["engine.ts","core","Plugins, clocks, inbox worker, moves drain, tmux watch"],["desk.ts","core","Every owner move"],["plugins.ts","core","RikerPlugin: triage, connectors, senders, guards"],["lifecycle.ts","core","Named agent-state transitions"],["driver.ts","core","ChatDriver and TmuxDriver seam"],["agents.ts","agent","Agent pool; coding command line and brief"],["assistant.ts","agent","Home's Assistant"],["advisor.ts","core","Ideas on a clock"],["doc-pass.ts","core","The Advisor's daily doc proposals"],["brain.ts","agent","claude -p"],["capabilities.ts","core","Grants to tool names, fail closed"],["moves.ts","bus","Move registry and dispatch"],["hooks.ts","bus","Claude Code hook events to transitions"],["task-actions.ts","core","Task action registry, triggers, Riker's plugin"],["run-action.ts","agent","Runs an action: headless, fork, pane; the guide's calls"],["guide-turn.ts","core","Riker's words for a guide run"],["outbound.ts","core","Drafts; the only road out"],["learn.ts","core","Corrections to LEARNED.md"],["feedback.ts","core","PR feedback for agents; nudges"],["projects.ts","core","Projects, windows, reconcile"],["mux.ts","core","tmux and wt, via libtmux"],["checkouts.ts","core","Inspect a path; scan repoRoots for checkouts"],["repos.ts","core","Repo to checkout mapping"],["pane.ts","bus","riker-tools pane splits"],["adopt.ts","bus","Adopt a hand-started claude"],["strays.ts","core","Claudes started outside Riker"],["install.ts","core","Hooks, statusline, revdiff installs"],["store.ts","store","Queries and writes"],["db.ts","store","Schema, migrations, triggers, table_versions"],["types.ts","store","Row shapes and enums"],["read-model.ts","store","Every view read, by the tables it names"],["rows.ts","core","Pure row helpers: taskRef, turnSteps"],["docs.ts","store","~/.riker/docs: budgets, trash, LEARNED.md sections"],["doc-sync.ts","core","Docs kept at start; shipped updates"],["proposals.ts","core","Doc proposals on System tasks"],["onboard.ts","core","The onboarding interview"],["prompts.ts","core","Shared prompt blocks"],["lookup.ts","core","Task and project lines; projectContext"],["project-doc.ts","core","The editable project doc"],["lanes.ts","core","Lanes, marks and tones; laneOf"],["rail.ts","core","Building the rail; RAIL_FILTERS"],["inbox.ts","core","The Inbox tab's rows"],["wins-board.ts","core","Wins from task_events"],["pr.ts","core","A task's PR; the rail's words for it"],["merge.ts","core","Whether a task's work has landed"],["search.ts","core","/ search"],["mentions.ts","core","@-mentions of tasks and projects"],["transcript.ts","core","Turns as a transcript"],["turn-check.ts","core","Safety net under turn signals (Esc fires no Stop)"],["drafts.ts","core","$EDITOR scratch files"],["files.ts","core","Files an agent made"],["info.ts","core","What I shows"],["meta.ts","core","Channel meta of a message"],["coalesce.ts","core","A burst of writes, one redraw"],["nav-history.ts","core","[ and ] back and forward"],["undo.ts","core","ctrl+z"],["spend.ts","core","What model calls cost; the daily cap"],["perf.ts","core","Perf counters in perf.db"],["log.ts","core","riker.log"],["result.ts","core","ok or pass, never a bare null"],["glyphs.ts","core","Nerd Font or not"],["config.ts","core","config.json; ConfigSource"],["paths.ts","core","RIKER_HOME paths"],["brand.ts","core","Every name; aug's in LEGACY"],["migrate-home.ts","core","~/.aug to ~/.riker"],["home-lock.ts","core","One Riker per RIKER_HOME"],["self.ts","core","How to call riker-tools and claude; lastingEntry"],["restart.ts","core","RESTART_CODE"],["text.d.ts","core","Types for embedded text imports"]],
+  "packages/core (text)": [["plugin/skills/summarize/SKILL.md","agent","riker:summarize"],["plugin/skills/quiz/SKILL.md","agent","riker:quiz"],["defaults/*.md","store","PERSONA, JOB, STYLE, TRIAGE, CODING, ASSISTANT, LEARNED"],["contrib/revdiff/launch-revdiff.sh","bus","revdiff launcher that splits the agent's pane"]],
+  "packages/triage/src": [["index.ts","plugin","triagePlugin(): arrived, next, again, fromHeld"],["triage.ts","plugin","TRIAGE_RULES, the verdict, linkByBranch"],["worker.ts","plugin","The inbox worker: claims, batches, retries"]],
+  "packages/github/src": [["index.ts","plugin","githubPlugin()"],["connector.ts","plugin","The poll and PR status on the GitHub clock"],["ingest.ts","plugin","gh notifications to messages"],["gate.ts","plugin","Rate limits, backoff, GRAPHQL_RESERVE"],["pr-status.ts","plugin","Checks, reviews, merge queue into pr_status"],["send.ts","plugin","github_comment through gh"]],
+  "packages/slack/src": [["index.ts","plugin","slackPlugin(), confirmGuard"],["connector.ts","plugin","The triage poller and the remote connector"],["transport.ts","out","Pick a transport from config"],["token.ts","out","User-token transport"],["claude-mcp.ts","out","claude -p reader plus one-shot sender"],["mcp.ts","out","Reserved stub"],["shared.ts","out","Message shape, thread keys, the transport seam"],["remote.ts","plugin","The Slack remote"],["remote-links.ts","plugin","How the remote reads and posts"],["confirm.ts","plugin","CONFIRM_MOVES: the owner's yes from Slack"]],
+  "packages/code-review-plannotator": [["src/index.ts","plugin","Exports"],["src/guide.ts","plugin","patchFor, fitGuide, saveGuide, comments, snapshot"],["src/batches.ts","plugin","splitPatch, relate, planBatches"],["src/run.ts","plugin","reviewInBatches: whole, notes, chapters"],["src/review.ts","plugin","review(): one run end to end"],["src/ask.ts","agent","claudeAsk: fresh read-only claude -p, usage kept"],["src/prompt.ts","plugin","The job text without a plugin"],["src/progress.ts","plugin","GuideStage, GuideProgress"],["src/log.ts","plugin","setGuideLog"],["src/cli.ts","plugin","code-review-plannotator review"],["skill/SKILL.md","agent","The guide's job instructions (riker:guide)"]],
+  "packages/tui/src": [["index.tsx","ui","Entry: boots the engine with its plugins, then the app"],["app.tsx","ui","Provider stack and the two modes"],["cli.ts","ui","riker argv parser (install, uninstall, migrate, …)"],["commands.ts","ui","App commands"],["keymap.ts","ui","The single binding table"],["palette.ts","ui","Palette entries from the bindings"]],
+  "packages/tui/src/components": [["actions.tsx","ui","Asks the desk, opens dialogs, toasts outcomes; actions picker"],["task-actions.ts","ui","Key handlers on a row (cursor or Canvas)"],["chat-mode.tsx","ui","Rail beside the Canvas; palette's action entries"],["board-mode.tsx","ui","Wins, Columns, Knowledge, Inbox, Cost"],["board-tab.ts","ui","Which Board tab shows"],["rail.tsx","ui","The rail of what waits"],["canvas.tsx","ui","The selected row's view"],["chat-turn.tsx","ui","One turn in a task's chat"],["agent-terminal.tsx","ui","Embedded agent terminal"],["use-agent-start.tsx","ui","Start dialogs: repo, path, branch"],["use-editor.tsx","ui","$EDITOR round trips"],["use-viewer.tsx","ui","The embedded viewer session"],["use-pr-dash.tsx","ui","P: ghdash on the task's PR"],["use-doc-review.tsx","ui","Doc proposals in revdiff"],["use-repos.tsx","ui","Repos and their checkouts"],["wins-tab.tsx","ui","Board tab 1: Wins"],["cost-tab.tsx","ui","Board's Cost tab"],["inbox-tab.tsx","ui","Board tab 4: the Inbox"],["focus-help.tsx","ui","? help"],["modals.tsx","ui","Dialogs"],["shell.tsx","ui","Shared mode chrome"],["footer.tsx","ui","Status footer"],["ui.tsx","ui","Small shared pieces"],["connector-line.tsx","ui","Connector and Advisor status"],["crash-guard.tsx","ui","Error boundary"]],
+  "packages/tui/src/context": [["riker.tsx","ui","Read model, cursorKey and selectedKey, nav history, paletteMode"],["terminals.tsx","ui","PTYs that survive the mode switch"],["render-perf.ts","ui","What drawing costs"]],
+  "packages/tui/src/terminal": [["pty-session.ts","ui","PTY sessions (from kube-tui)"],["viewport-terminal.ts","ui","Terminal renderable"],["key-encode.ts","ui","Key encoding"],["modes.ts","ui","Terminal modes"],["replies.ts","ui","Terminal replies"],["clipboard.ts","ui","Clipboard"]],
+  "packages/cli": [["src/riker.ts","core","The one entry: dev, demo, sim, the binary"],["src/riker-tools.ts","bus","Agent and hook callbacks; move <verb>"],["src/aug-tools.ts","bus","riker-tools under its old name (compat)"],["script/riker.ts","core","bun dev: runs from anywhere, restarts on RESTART_CODE"],["script/compile.ts","core","dist/riker"]],
+  "packages/fixtures/src": [["demo.ts","ui","The fixture day (bun run demo)"],["fake-claude.ts","agent","A fake coding agent that fires real hooks"],["sim/index.ts","ui","bun run sim: real Riker on an offline GitHub"],["sim/github.ts","out","The sim's GitHub state file"],["sim/events.ts","out","Events and SCENARIOS"],["sim/do.ts","out","bun run sim:do"],["sim/checkout.ts","out","A remote-less clone of Riker for real diffs"],["sim/link.ts","out","What the sim and sim:do share"]],
+};
+const ftree = $("#ftree"), fq = $("#fileq");
+function renderFiles() {
+  const q = fq.value.trim().toLowerCase();
+  let html = "";
+  for (const [dir, files] of Object.entries(FILES)) {
+    const rows = files.filter(([f, , d]) => !q || (dir + "/" + f + " " + d).toLowerCase().includes(q));
+    if (!rows.length) continue;
+    html += `<tr class="dir"><td colspan="2">${esc(dir)}/</td></tr>`;
+    html += rows.map(([f, l, d]) => `<tr><td><span class="lay" style="background:${css(LAYERS[l].v)}"></span>${esc(f)}</td><td>${esc(d)}</td></tr>`).join("");
+  }
+  ftree.innerHTML = html || `<tr><td colspan="2">No file matches “${esc(q)}”.</td></tr>`;
+}
+fq.addEventListener("input", renderFiles);
+renderFiles();
+})();
+</script>
+
+</body>
+</html>

@@ -362,6 +362,12 @@ Tests live beside their package (`packages/<name>/test/`).
   and the go-to list puts the recent rows first.
 - A `Pane` is `flexShrink=0`, so a growing child (scrollbox, terminal host)
   needs `flexBasis={0}` or it pushes the footer off-screen.
+- **`docs/architecture.html` is the public architecture walkthrough**
+  (standalone HTML, hosted as is). A change to what it shows (a package or
+  `RikerPlugin` field, a triage rule, a lifecycle transition, a move verb,
+  a task action, a table, a one-door file, a source file) updates the page
+  in the same branch, and its footer's commit stamp. Done when headless
+  Chrome's `--dump-dom` shows every section filled and no console errors.
 
 ## TypeScript
 
