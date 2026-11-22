@@ -354,6 +354,12 @@ Tests live beside their package (`packages/<name>/test/`).
 - One Riker runs per `RIKER_HOME` (`core/home-lock.ts`), so a worktree's
   `bun dev` on the real home is refused while the owner's Riker runs. Try a
   change with `bun run demo` or a scratch `RIKER_HOME`.
+- A Riker run from a worktree hands its agents and hooks the main
+  checkout's riker-tools (`lastingEntry`, `core/self.ts`), so a branch's own
+  riker-tools change (a new verb, a changed hook) is not what they run. Pin
+  the branch's copy with
+  `RIKER_TOOLS_ENTRY=$PWD/packages/cli/src/riker-tools.ts bun dev`, and the
+  briefs and hooks it writes name that path.
 - `bun run demo` runs the fixture day. Drive it in tmux with a unique session
   name and `tmux capture-pane -p`.
 - `bun run sim [review-cycle|review-ask] [--brain fake|haiku]` is the real
