@@ -32,13 +32,13 @@ import * as projects from "@riker/core/projects";
 import { repoReport, reportText } from "@riker/core/repos";
 import { reportLines, spendReport } from "@riker/core/spend";
 import * as store from "@riker/core/store";
-import { setToolsEntry } from "@riker/core/self";
+import { lastingEntry, setToolsEntry } from "@riker/core/self";
 import { MoveStatus, NoteLabel } from "@riker/core/types";
 import { defaultHome, homeUnmoved, legacyHome } from "@riker/core/paths";
 import { fileURLToPath } from "node:url";
 
 // Run on its own (hooks, agents), riker-tools is its own entry.
-setToolsEntry(fileURLToPath(import.meta.url));
+setToolsEntry(lastingEntry(fileURLToPath(import.meta.url)));
 
 // Before riker first starts after the rename, ~/.aug is still aug's: writing
 // would make an empty ~/.riker that the move then refuses to overwrite.

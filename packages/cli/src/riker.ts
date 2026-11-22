@@ -4,9 +4,9 @@
 // binary (core/self.ts).
 
 import { fileURLToPath } from "node:url";
-import { setToolsEntry, TOOLS_SUBCOMMAND } from "@riker/core/self";
+import { lastingEntry, setToolsEntry, TOOLS_SUBCOMMAND } from "@riker/core/self";
 
-setToolsEntry(fileURLToPath(new URL("./riker-tools.ts", import.meta.url)));
+setToolsEntry(lastingEntry(fileURLToPath(new URL("./riker-tools.ts", import.meta.url))));
 
 if (process.argv[2] === TOOLS_SUBCOMMAND) {
   process.argv.splice(2, 1);

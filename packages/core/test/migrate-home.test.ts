@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { openDb, useDb } from "../src/db";
 import { migrateHome, planHomeMigration } from "../src/migrate-home";
 import { TmuxMux } from "../src/mux";
-import { setToolsEntry } from "../src/self";
+import { setToolsEntry, toolsEntry } from "../src/self";
 import * as store from "../src/store";
 import { Kind, SessionKind, TurnRole } from "../src/types";
 import { freshHome } from "./support/helpers";
@@ -227,7 +227,13 @@ const tmux = (...args: string[]) => {
 };
 
 describe.skipIf(!Bun.which("tmux"))("tmux tags", () => {
-  afterAll(() => tmux("kill-server"));
+  // The made-up entry below would leak into later files, whose starts refuse a
+  // riker-tools that is not there.
+  const entry = toolsEntry();
+  afterAll(() => {
+    tmux("kill-server");
+    setToolsEntry(entry);
+  });
 
   test("aug's @aug_* tags are copied to @riker_*, and @riker_tools is this Riker's", async () => {
     setToolsEntry("/riker/packages/cli/src/riker-tools.ts");

@@ -42,7 +42,9 @@ one way: cli → tui → fixtures → core → code-review-plannotator.
   (`bun dev`: runs from anywhere, restarts on `RESTART_CODE`) and
   `script/compile.ts` builds `dist/riker`. The entry tells core where
   riker-tools is (`setToolsEntry`, `core/self.ts`); core never reaches up for
-  it.
+  it. Run from a linked worktree, it names the main checkout's copy
+  (`lastingEntry`), since briefs and hooks outlive the worktree;
+  `RIKER_TOOLS_ENTRY` pins one, and a start refuses when it is gone.
 
 Tests live beside their package (`packages/<name>/test/`).
 
@@ -352,6 +354,12 @@ Tests live beside their package (`packages/<name>/test/`).
 - One Riker runs per `RIKER_HOME` (`core/home-lock.ts`), so a worktree's
   `bun dev` on the real home is refused while the owner's Riker runs. Try a
   change with `bun run demo` or a scratch `RIKER_HOME`.
+- A Riker run from a worktree hands its agents and hooks the main
+  checkout's riker-tools (`lastingEntry`, `core/self.ts`), so a branch's own
+  riker-tools change (a new verb, a changed hook) is not what they run. Pin
+  the branch's copy with
+  `RIKER_TOOLS_ENTRY=$PWD/packages/cli/src/riker-tools.ts bun dev`, and the
+  briefs and hooks it writes name that path.
 - `bun run demo` runs the fixture day. Drive it in tmux with a unique session
   name and `tmux capture-pane -p`.
 - `bun run sim [review-cycle|review-ask] [--brain fake|haiku]` is the real

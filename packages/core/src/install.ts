@@ -30,7 +30,7 @@ import {
 } from "./adopt";
 import { CMD, envName, LEGACY, NAME } from "./brand";
 import { ensureHome, homeAliases, paths } from "./paths";
-import { shellQuote, toolsArgv } from "./self";
+import { shellQuote, toolsArgv, toolsMissing } from "./self";
 
 export const InstallState = {
   installed: "installed",
@@ -413,7 +413,10 @@ export function installState(name: string): InstallState {
 
 // At start: what you installed is rewritten when it no longer matches this
 // Riker (a moved checkout, a new hook event), and nothing new goes in.
+// Not while this Riker's own riker-tools is gone: rewriting would only point
+// them at the missing file too.
 export function refreshInstalls(): string[] {
+  if (toolsMissing()) return [];
   const refreshed: string[] = [];
   for (const [name, item] of Object.entries(INSTALLS)) {
     if (installState(name) !== InstallState.stale || !item.here()) continue;
