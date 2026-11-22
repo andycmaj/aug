@@ -294,6 +294,10 @@ function ActionTurn(props: { turn: TurnRow; width: number }) {
           <span style={{ fg: theme.info }}>{`${riker.spinner()} running ${liveRan()}`}</span>
         </Show>
       </text>
+      {/* Where a staged run (the guide) is: above its steps, which scroll. */}
+      <Show when={running() && props.turn.progress}>
+        <text fg={theme.info} wrapMode="word">{`▸ ${props.turn.progress ?? ""}`}</text>
+      </Show>
       <Switch>
         <Match when={running()}>
           <For each={steps().slice(-6)}>
@@ -304,6 +308,9 @@ function ActionTurn(props: { turn: TurnRow; width: number }) {
           <text fg={theme.error} wrapMode="word">
             {props.turn.body}
           </text>
+          <Show when={props.turn.progress}>
+            <text fg={theme.textMuted} wrapMode="word">{`stopped at: ${props.turn.progress ?? ""}`}</text>
+          </Show>
         </Match>
         <Match when={true}>
           <Show

@@ -4,6 +4,7 @@
 
 import { branchCommits, commitLog, planBatches, type BatchPlan } from "./batches";
 import { fitGuide, patchFor, type Finding, type Guide, type Patch, type ReviewComment } from "./guide";
+import type { GuideProgress } from "./progress";
 import { jobPrompt } from "./prompt";
 import { reviewInBatches, type GuideAsk } from "./run";
 
@@ -19,6 +20,7 @@ export interface ReviewOptions {
   // Characters of numbered diff per call (batches.ts, BATCH_CHARS).
   batchChars?: number;
   fileMax?: number;
+  progress?: (p: GuideProgress) => void;
 }
 
 export interface Review {
@@ -47,6 +49,7 @@ export async function review(opts: ReviewOptions): Promise<Review | { error: str
     commits,
     prompt: opts.prompt ?? jobPrompt({ base: patch.base, pr: opts.pr, about: opts.about }),
     ask: opts.ask,
+    progress: opts.progress,
   });
   if ("error" in ran) return ran;
   const fitted = fitGuide(ran.guide, patch.text);

@@ -53,3 +53,39 @@ export const ANSWER = {
   ],
   unplacedFiles: [],
 };
+
+// A repo whose change is `files` unrelated files of about `chars` each, one
+// commit apiece, so a guide of it runs in that many batches.
+export function bigRepo(files: number, chars = 60_000): string {
+  const dir = mkdtempSync(join(tmpdir(), "riker-guide-big-"));
+  const git = (...a: string[]) =>
+    sh(dir, "git", "-c", "user.email=t@t", "-c", "user.name=t", ...a);
+  git("init", "-q", "-b", "main");
+  writeFileSync(join(dir, "README.md"), "# big\n");
+  git("add", ".");
+  git("commit", "-qm", "base");
+  git("checkout", "-qb", "feature");
+  for (let k = 1; k <= files; k++) {
+    const lines = Array.from({ length: Math.ceil(chars / 40) }, (_, i) => `export const part${k}_${i} = ${i}; // ${"x".repeat(8)}`);
+    writeFileSync(join(dir, `part${k}.ts`), `${lines.join("\n")}\n`);
+    git("add", ".");
+    git("commit", "-qm", `part ${k}`);
+  }
+  return dir;
+}
+
+// The chapters answer for bigRepo: one chapter naming every file.
+export function bigAnswer(files: number) {
+  return {
+    title: "Big change",
+    intent: "Many parts.",
+    sections: [
+      {
+        title: "Parts",
+        overview: "Each part.",
+        diffs: Array.from({ length: files }, (_, k) => ({ file: `part${k + 1}.ts`, summary: `Part ${k + 1}.` })),
+      },
+    ],
+    unplacedFiles: [],
+  };
+}

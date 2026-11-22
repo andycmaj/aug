@@ -270,6 +270,9 @@ export interface TurnRow {
   // An owner line a coding agent has not heard yet: its claude was not
   // running. The next start hands it over.
   pending: number;
+  // A running action's stage, one line (the guide's: batch 2 of 5); kept
+  // after a failure to say where it stopped.
+  progress: string | null;
   status: TurnStatus;
   session_id: string | null;
   started_at: string;

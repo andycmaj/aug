@@ -133,6 +133,7 @@ describe("read model", () => {
       tasksWithPendingAction: (r) => r.tasksWithPendingAction(),
       turns: (r) => r.turns(plain.id),
       pendingAction: (r) => r.pendingAction(plain.id),
+      latestActionTurns: (r) => r.latestActionTurns(),
       messages: (r) => r.messages(withPr.id),
       message: (r) => r.message(message.id),
       taskLinks: (r) => r.taskLinks(plain.id),

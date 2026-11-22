@@ -35,7 +35,7 @@ import {
   type RailItem,
 } from "@riker/core/rail";
 import { prChip, prQueueWord } from "@riker/core/pr";
-import { taskRef } from "@riker/core/rows";
+import { actionRailWord, taskRef } from "@riker/core/rows";
 import { AgentState, Kind, TaskStatus, type ProjectRow } from "@riker/core/types";
 import { CHANNEL_WORD, priorityColor, toneColor, useLaneMeta } from "./ui";
 import { ConnectorLine } from "./connector-line";
@@ -377,14 +377,19 @@ function RailRow(props: {
         const working =
           item.task.agent_state === AgentState.working &&
           item.lane === Lane.working;
-        const word = item.slipped ? "slipped" : laneWord(item);
+        // A task action running on it (the guide) says where it is, in
+        // place of its lane's word; then, for a while, that it ended.
+        const acting = actionRailWord(riker.latestActionTurns().get(item.task.id), now);
+        const word = acting ? acting.text : item.slipped ? "slipped" : laneWord(item);
         const age =
           item.lane === Lane.later && item.task.remind_at
             ? ageLabel(item.task.remind_at, now)
             : ageLabel(item.at, now);
         // The last read only: finding the PR anew is a few queries a row.
+        // A running action's words lead and its PR chip waits: the row is
+        // narrow, and where the run is matters most while it runs.
         const status = riker.prStatus(item.task.id);
-        const chip = status ? prChip(status) : null;
+        const chip = status && !acting ? prChip(status) : null;
         const project = projectChip(
           item.task.project_id ? riker.project(item.task.project_id) : null,
         );
@@ -394,14 +399,16 @@ function RailRow(props: {
             priorityColor(theme(), item.priority) ??
             theme().borderSubtle ??
             theme().textMuted,
-          mark: working ? riker.spinner() : meta.mark,
-          markColor: toneColor(theme(), meta.tone),
+          mark: working || acting?.running ? riker.spinner() : meta.mark,
+          markColor: acting?.failed ? theme().error : toneColor(theme(), meta.tone),
           title: item.task.title,
           titleColor: item.priority === "urgent" ? theme().error : theme().text,
           tags: item.tags.map((t) => TAG_MARK[t]).join(""),
           // A copy under Wins or Watching is out of its project: it names it,
           // PR chip or not.
-          sub: chip
+          sub: acting
+            ? [word, taskRef(item.task.id)].join(" · ")
+            : chip
             ? [taskRef(item.task.id), item.copy ? project : null, word]
                 .filter(Boolean)
                 .join(" · ")

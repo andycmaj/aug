@@ -2,6 +2,7 @@
 // the action's turn, and how the task's actions name reopening its review.
 
 import type { SavedGuide } from "@riker/code-review-plannotator/guide";
+import { GuideStage, type GuideProgress } from "@riker/code-review-plannotator/progress";
 
 // What the action's turn says: the chapters, then the findings by file.
 // `opened`: Riker opens the review now; else (a trigger ran it) the owner
@@ -48,3 +49,24 @@ export function guideMarkdown(
 
 // How the task's actions name opening the saved guide's review.
 export const OPEN_REVIEW_TITLE = "Open the guide's review";
+
+// One short line for where a guide run is, kept on its turn (`progress`)
+// for the Canvas and the rail (whose row is narrow) while it runs, and
+// after a failure to say where it stopped.
+export function guideProgressLine(p: GuideProgress): string {
+  switch (p.stage) {
+    case GuideStage.read:
+      return `diff read: ${p.files} file${p.files === 1 ? "" : "s"}, ${p.batches} batch${p.batches === 1 ? "" : "es"}`;
+    case GuideStage.whole:
+      return "reviewing in one call";
+    case GuideStage.batches:
+      // A few run at once and finish in any order: counted, not named.
+      return `batches ${p.done}/${p.of} done${p.running ? `, ${p.running} running` : ""}`;
+    case GuideStage.chapters:
+      return "writing the chapters";
+    case GuideStage.fitting:
+      return "fitting the notes";
+    case GuideStage.saving:
+      return "saving to Plannotator";
+  }
+}

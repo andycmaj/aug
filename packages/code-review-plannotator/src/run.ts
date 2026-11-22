@@ -15,6 +15,7 @@ import {
   type GuideDiff,
 } from "./guide";
 import type { BatchPlan, FilePatch } from "./batches";
+import { GuideStage, type GuideProgress } from "./progress";
 
 export type GuideAsk = (prompt: string, label: string) => Promise<{ text: string; denied: string[] }>;
 
@@ -68,15 +69,19 @@ export async function reviewInBatches(opts: {
   prompt: (job: string) => string;
   commits: string;
   ask: GuideAsk;
+  progress?: (p: GuideProgress) => void;
 }): Promise<GuideRun | { error: string; answer?: string }> {
   const { plan, ask } = opts;
+  const progress = opts.progress ?? (() => {});
   const denied: string[] = [];
   const gaps = plan.tooLarge.length
     ? [`Not reviewed, too large for one call: ${plan.tooLarge.map((f) => `\`${f}\``).join(", ")}.`]
     : [];
   if (plan.batches.length === 0) return { error: "nothing in the change to review (only lock files or files too large)" };
+  progress({ stage: GuideStage.read, files: plan.all.length, batches: plan.batches.length });
 
   if (plan.batches.length === 1) {
+    progress({ stage: GuideStage.whole });
     const answer = await ask(
       [
         opts.prompt(GuideJob.whole),
@@ -102,6 +107,9 @@ export async function reviewInBatches(opts: {
   const unanswered: string[] = [];
   const batchOf = new Map<string, number>();
   plan.batches.forEach((b, k) => b.forEach((f) => batchOf.set(f.file, k + 1)));
+  let done = 0;
+  let sent = 0;
+  const tell = () => progress({ stage: GuideStage.batches, done, running: sent - done, of: n });
   const one = async (k: number) => {
     const batch = plan.batches[k]!;
     const mine = new Set(batch.map((f) => f.file));
@@ -124,12 +132,24 @@ export async function reviewInBatches(opts: {
     for (const d of got) reviewed.set(d.file, d);
     for (const f of batch) if (!reviewed.has(f.file)) unanswered.push(f.file);
   };
-  for (let k = 0; k < n; k += CONCURRENCY)
-    await Promise.all(plan.batches.slice(k, k + CONCURRENCY).map((_, i) => one(k + i)));
+  for (let k = 0; k < n; k += CONCURRENCY) {
+    const chunk = plan.batches.slice(k, k + CONCURRENCY);
+    sent += chunk.length;
+    tell();
+    await Promise.all(
+      chunk.map((_, i) =>
+        one(k + i).finally(() => {
+          done++;
+          tell();
+        }),
+      ),
+    );
+  }
   if (unanswered.length)
     gaps.push(`No review came back for ${unanswered.map((f) => `\`${f}\``).join(", ")}.`);
 
   // Job chapters, from the index and the summaries.
+  progress({ stage: GuideStage.chapters, of: n });
   const answer = await ask(
     [
       opts.prompt(GuideJob.chapters),

@@ -851,6 +851,18 @@ export function tasksWithPendingAction(): Set<number> {
   );
 }
 
+// Each task's latest action turn, running or not: the rail says where a
+// running one is, and for a while that it finished or failed.
+export function latestActionTurns(): Map<number, TurnRow> {
+  return new Map(
+    all<TurnRow>(
+      `SELECT t.* FROM turns t
+       JOIN (SELECT MAX(id) AS id FROM turns WHERE role = ? GROUP BY task_id) m ON m.id = t.id`,
+      TurnRole.action,
+    ).map((t) => [t.task_id, t]),
+  );
+}
+
 export function retirePendingActions(taskId: number): void {
   run(
     "UPDATE turns SET action_state = ? WHERE task_id = ? AND action_state = ?",

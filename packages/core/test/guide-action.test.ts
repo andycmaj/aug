@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { postComments, readFindings, setGuideTool } from "@riker/code-review-plannotator/guide";
 import { fakeReview } from "@riker/code-review-plannotator/test/support/fake-review";
-import { ANSWER, repo, sh } from "@riker/code-review-plannotator/test/support/repo";
+import { ANSWER, bigAnswer, bigRepo, repo, sh } from "@riker/code-review-plannotator/test/support/repo";
 import { setBrain, type BrainResult } from "../src/brain";
 import { Engine } from "../src/engine";
 import { OPEN_REVIEW_TITLE } from "../src/guide-turn";
@@ -13,6 +13,7 @@ import { startAction } from "../src/run-action";
 import { actionNamed } from "../src/task-actions";
 import { setMux } from "../src/mux";
 import * as store from "../src/store";
+import { actionRailWord } from "../src/rows";
 import { Kind, TurnRole } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
 import { freshHome, testConfig } from "./support/helpers";
@@ -225,5 +226,97 @@ describe("the guide action", () => {
     expect(turn.body).toContain("not JSON");
     const files = JSON.parse(turn.files ?? "[]") as { path: string }[];
     expect(readFileSync(files[0]!.path, "utf8")).toContain("could not write it");
+  });
+
+  test("a run in batches says on its turn which stage it is in, read by the rail, then where it ended", async () => {
+    const dir = bigRepo(5);
+    const { engine, task } = codingTask(dir);
+    // What the turn says, as the rail reads it, at each call and at the save.
+    const seen: string[] = [];
+    const look = () => {
+      const turn = store.latestActionTurns().get(task.id)!;
+      seen.push(`${turn.status} | ${turn.progress} | ${actionRailWord(turn, new Date())!.text}`);
+    };
+    setBrain(async (call): Promise<BrainResult> => {
+      look();
+      await Bun.sleep(1);
+      const job = /job: (.*)$/m.exec(call.prompt)![1]!;
+      const text = job.startsWith("notes")
+        ? JSON.stringify({ files: [{ file: `part${/batch (\d+)/.exec(job)![1]}.ts`, summary: "A part." }] })
+        : JSON.stringify(bigAnswer(5));
+      return { text, structured: null, sessionId: null, durationMs: 1, isError: false };
+    });
+    setGuideTool({
+      async save() {
+        look();
+        return { id: "big" };
+      },
+    });
+    const started = engine.desk.runAction(task.id, "guide");
+    if ("error" in started) throw new Error(started.error);
+    const result = await started.done;
+    expect(result.ok).toBe(true);
+    expect(seen).toEqual([
+      "running | batches 0/5 done, 3 running | guide: batches 0/5 done, 3 running",
+      "running | batches 0/5 done, 3 running | guide: batches 0/5 done, 3 running",
+      "running | batches 0/5 done, 3 running | guide: batches 0/5 done, 3 running",
+      "running | batches 3/5 done, 2 running | guide: batches 3/5 done, 2 running",
+      "running | batches 3/5 done, 2 running | guide: batches 3/5 done, 2 running",
+      "running | writing the chapters | guide: writing the chapters",
+      "running | saving to Plannotator | guide: saving to Plannotator",
+    ]);
+    const turn = store.latestActionTurns().get(task.id)!;
+    expect(turn.status).toBe("done");
+    expect(actionRailWord(turn, new Date())).toEqual({ text: "guide done", running: false, failed: false });
+    // The rail lets it go after a while.
+    expect(actionRailWord(turn, new Date(Date.now() + 3 * 60_000))).toBeNull();
+  });
+
+  test("a failed guide keeps the stage it stopped at, and the rail says it failed", async () => {
+    const dir = bigRepo(2);
+    const { engine, task } = codingTask(dir);
+    setBrain(async (call): Promise<BrainResult> => {
+      const job = /job: (.*)$/m.exec(call.prompt)![1]!;
+      return {
+        text: job.startsWith("notes") ? JSON.stringify({ files: [] }) : "no guide here",
+        structured: null,
+        sessionId: null,
+        durationMs: 1,
+        isError: false,
+      };
+    });
+    const started = engine.desk.runAction(task.id, "guide");
+    if ("error" in started) throw new Error(started.error);
+    expect((await started.done).ok).toBe(true); // unwritten chapters still save
+    setGuideTool({ async save() { return { error: "refused" }; } });
+    const again = engine.desk.runAction(task.id, "guide");
+    if ("error" in again) throw new Error(again.error);
+    expect((await again.done).ok).toBe(false);
+    const turn = store.latestActionTurns().get(task.id)!;
+    expect(turn.status).toBe("failed");
+    expect(turn.progress).toBe("saving to Plannotator");
+    expect(actionRailWord(turn, new Date())).toEqual({ text: "guide failed", running: false, failed: true });
+  });
+
+  test("a guide a trigger started shows its stages the same way", async () => {
+    const dir = bigRepo(2);
+    const { engine, task } = codingTask(dir);
+    const stages: (string | null)[] = [];
+    setBrain(async (call): Promise<BrainResult> => {
+      stages.push(store.latestActionTurns().get(task.id)!.progress);
+      const job = /job: (.*)$/m.exec(call.prompt)![1]!;
+      const text = job.startsWith("notes") ? JSON.stringify({ files: [] }) : JSON.stringify(bigAnswer(2));
+      return { text, structured: null, sessionId: null, durationMs: 1, isError: false };
+    });
+    const config = engine.desk.config();
+    const run = startAction(config, task, actionNamed(config, "guide")!, "triaged");
+    if ("error" in run) throw new Error(run.error);
+    expect((await run.done).ok).toBe(true);
+    expect(stages).toEqual([
+      "batches 0/2 done, 2 running",
+      "batches 0/2 done, 2 running",
+      "writing the chapters",
+    ]);
+    expect(store.latestActionTurns().get(task.id)!.about).toEndWith("(on triaged)");
   });
 });
