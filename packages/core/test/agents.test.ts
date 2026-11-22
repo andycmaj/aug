@@ -18,8 +18,6 @@ import {
   parseStreamLine,
   type StreamAcc,
 } from "../src/brain";
-import { toMessage } from "../src/ingest/github";
-import { plainText, threadKeyFor } from "../src/slack/shared";
 import * as store from "../src/store";
 import {
   AgentState,
@@ -556,45 +554,6 @@ describe("learning", () => {
 });
 
 describe("ingest", () => {
-  test("a GitHub notification is one message on its issue's thread", () => {
-    const m = toMessage(
-      {
-        id: "9",
-        reason: "mention",
-        updated_at: "2026-11-05T10:00:00Z",
-        subject: {
-          title: "Export drops transfers",
-          url: "https://api.github.com/repos/a/b/issues/12",
-          latest_comment_url: null,
-          type: "Issue",
-        },
-        repository: { full_name: "a/b", html_url: "https://github.com/a/b" },
-      },
-      {
-        user: { login: "erin" },
-        body: "@me can you look?",
-        html_url: "https://github.com/a/b/issues/12",
-      },
-      "me",
-    )!;
-    expect(m.threadKey).toBe("github:a/b#12");
-    expect(m.title).toContain("mentioned you");
-    expect(m.fromMe).toBe(false);
-  });
-
-  test("Slack text and thread keys", () => {
-    const names = new Map([["U1", "Ruth"]]);
-    expect(
-      plainText(
-        "<@U1> see <https://x.io|the doc> in <#C9|general> &amp; go",
-        names,
-      ),
-    ).toBe("@Ruth see the doc (https://x.io) in #general & go");
-    expect(threadKeyFor("D1", { ts: "1.1" }, true)).toBe("slack:D1:dm");
-    expect(threadKeyFor("C1", { ts: "2.2", thread_ts: "1.1" }, false)).toBe(
-      "slack:C1:1.1",
-    );
-  });
 });
 
 describe("claude.ai connectors", () => {

@@ -10,7 +10,6 @@ import { think } from "../src/brain";
 import { fixedConfig, type RikerConfig } from "../src/config";
 import { runDocPass } from "../src/doc-pass";
 import { localDay } from "../src/rail";
-import { PersistentClaude, type ProcLike } from "../src/slack/claude-mcp";
 import {
   capReached,
   dailyCap,
@@ -20,7 +19,6 @@ import {
   spentToday,
 } from "../src/spend";
 import * as store from "../src/store";
-import { askVerdict } from "../src/triage";
 import {
   AgentState,
   Kind,
@@ -73,7 +71,7 @@ describe("recording spend", () => {
     expect(spentToday().calls).toBe(0);
   });
 
-  test("each caller tags its role: a general turn, Home, triage, the Advisor, the doc pass", async () => {
+  test("each caller tags its role: a general turn, Home, the Advisor, the doc pass", async () => {
     const general = chatTask();
     const home = store.homeTask();
     store.addTurn({ taskId: home.id, role: TurnRole.you, author: "you", body: "what is open?" });
@@ -91,65 +89,13 @@ describe("recording spend", () => {
     const pool = new AgentPool({ config: fixedConfig(capped(100)) });
     await pool.request(general, "x", "owner");
     await pool.request(home.id, "x", "owner");
-    const m = store.insertMessage({
-      channel: "slack",
-      externalId: "slack:C1:1",
-      threadKey: "slack:C1:1",
-      author: "U9",
-      authorName: "Ruth",
-      title: "#eng",
-      body: "fyi",
-      receivedAt: new Date().toISOString(),
-      meta: { channel: "C1", ts: "1" },
-    })!;
-    await askVerdict(m, [m], null, config());
     await runAdvisor(config(), new Date(), true);
     await runDocPass(config(), new Date(), true);
     expect(store.taskSpend(general)).toMatchObject({ calls: 1 });
     expect(store.taskSpend(home.id)).toMatchObject({ calls: 1 });
     expect(spendRows().map((r) => r.role).sort()).toEqual(
-      ["advisor", "assistant", "doc-pass", "general", "triage"].sort(),
+      ["advisor", "assistant", "doc-pass", "general"].sort(),
     );
-  });
-
-  test("the Slack session's running total is recorded turn by turn", async () => {
-    const totals = [0.1, 0.25, 0.05];
-    const spawn = (): ProcLike => {
-      const pending: string[] = [];
-      let wake: (() => void) | null = null;
-      return {
-        write() {
-          pending.push(
-            JSON.stringify({
-              type: "result",
-              structured_output: {},
-              total_cost_usd: totals.shift(),
-              usage: { input_tokens: 1, output_tokens: 2 },
-            }),
-          );
-          wake?.();
-        },
-        lines: (async function* () {
-          for (;;) {
-            if (!pending.length) await new Promise<void>((r) => (wake = r));
-            wake = null;
-            while (pending.length) yield pending.shift()!;
-          }
-        })(),
-        kill() {},
-      };
-    };
-    // A fresh process every two turns: its total starts over.
-    const session = new PersistentClaude(() => ["claude"], { maxTurns: 2, spawn, model: "haiku" });
-    await session.ask("a");
-    await session.ask("b");
-    await session.ask("c");
-    const costs = store
-      .spendByRole(localDay(new Date()))
-      .find((r) => r.role === SpendRole.slack);
-    expect(costs?.calls).toBe(3);
-    // 0.10, then 0.25 - 0.10, then a new process's 0.05.
-    expect(costs?.cost).toBeCloseTo(0.3);
   });
 
   test("the report says today, by role and task, the week, and the cap", () => {

@@ -8,8 +8,8 @@
 // bot's, an app's, a join notice or its own answers. What it hears is the
 // owner talking to the Assistant, with the Assistant's limits, nothing more.
 
-import { CMD, LEGACY, SELF } from "../brand";
-import type { ConfigSource } from "../config";
+import { CMD, LEGACY, SELF } from "@riker/core/brand";
+import type { ConfigSource } from "@riker/core/config";
 import {
   answerKind,
   bindToThread,
@@ -18,8 +18,8 @@ import {
   takeForThread,
   type Pending,
 } from "./confirm";
-import { errorMessage, logger } from "../log";
-import * as store from "../store";
+import { errorMessage, logger } from "@riker/core/log";
+import * as store from "@riker/core/store";
 import {
   AgentState,
   Kind,
@@ -29,7 +29,7 @@ import {
   TurnStatus,
   type TaskRow,
   type TurnRow,
-} from "../types";
+} from "@riker/core/types";
 
 const log = logger("slack.remote");
 

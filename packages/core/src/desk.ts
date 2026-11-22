@@ -47,13 +47,7 @@ import {
   type ActionSpec,
 } from "./task-actions";
 import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
-import {
-  taskFromHeld,
-  triage,
-  type TriageEffect,
-  type TriageOutcome,
-  type VerdictAnswer,
-} from "./triage";
+import type { MoveGuard, Senders, Triage, TriageEffect, TriageOutcome } from "./plugins";
 import {
   AgentState,
   IdeaStatus,
@@ -90,6 +84,12 @@ export interface DeskOptions {
   // Fixture mode never touches your real settings (the hooks offer).
   offline?: boolean;
   onLearned?: (line: string) => void;
+  // The inbox's judge (core/plugins.ts); without one, r and m say so.
+  triage?: Triage;
+  // Ways out, by DraftAction type, from the plugins.
+  senders?: Senders;
+  // Moves that wait for the owner's yes (core/moves.ts asks each).
+  guards?: readonly MoveGuard[];
 }
 
 export class Desk {
@@ -103,6 +103,15 @@ export class Desk {
 
   get offline(): boolean {
     return Boolean(this.options.offline);
+  }
+
+  // What a move must answer instead of running (held for a yes), if any.
+  guardMove(verb: string, args: Record<string, string>, by: string): string | null {
+    for (const guard of this.options.guards ?? []) {
+      const held = guard(verb, args, by);
+      if (held !== null) return held;
+    }
+    return null;
   }
 
   // ctrl+z: this session's moves, newest first (core/undo.ts).
@@ -566,7 +575,7 @@ export class Desk {
 
   async send(taskId: number): Promise<string> {
     return this.cannotAsync(`send ${store.taskRef(taskId)}`, "it sent the draft", async () => {
-      return sendPending(this.config(), taskId);
+      return sendPending(this.config(), taskId, this.options.senders ?? {});
     });
   }
 
@@ -819,10 +828,12 @@ export class Desk {
         ok: false,
         why: `it is on ${store.taskRef(message.task_id)}: use ignore instead`,
       };
+    const judge = this.options.triage;
+    if (!judge) return { ok: false, why: "no triage is installed" };
     if (!store.claimMessage(messageId))
       return { ok: false, why: "triage is running on it now" };
     try {
-      const outcome = await triage(message, { config: this.config() });
+      const outcome = await judge.again(message, this.config());
       this.afterTriage(outcome, message);
       return { ok: true, outcome };
     } catch (err) {
@@ -843,9 +854,8 @@ export class Desk {
     return this.undos.track(() => {
       const message = store.getMessage(messageId);
       if (!message || message.task_id !== null) return null;
-      const answer = heldVerdict(messageId);
-      if (!answer) return this.fyiToTask(messageId);
-      const outcome = taskFromHeld(message, answer, this.config());
+      const outcome = this.options.triage?.fromHeld(message, this.config());
+      if (!outcome) return this.fyiToTask(messageId);
       this.afterTriage(outcome, message);
       return outcome.taskId === null ? null : store.getTask(outcome.taskId);
     }, madeTask);
@@ -1021,18 +1031,4 @@ function waitsOn(from: number, to: number, seen = new Set<number>()): boolean {
   if (seen.has(from)) return false;
   seen.add(from);
   return store.blockersOf(from).some((id) => waitsOn(id, to, seen));
-}
-
-// The model's verdict from the newest triage run that asked for one.
-function heldVerdict(messageId: number): VerdictAnswer | null {
-  for (const run of store.triageRunsFor(messageId)) {
-    if (!run.verdict) continue;
-    try {
-      const v = JSON.parse(run.verdict) as Partial<VerdictAnswer>;
-      if (v.verdict && v.verdict !== Verdict.fyi && v.title) return v as VerdictAnswer;
-    } catch {
-      // An unreadable run is skipped.
-    }
-  }
-  return null;
 }

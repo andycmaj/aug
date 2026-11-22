@@ -2,6 +2,8 @@
 // toMessage for notifications, readPrBatch and readPrView for PR status.
 // If a shape drifts from what Riker parses, these fail.
 
+import { triagePlugin } from "@riker/triage";
+import { githubPlugin } from "@riker/github";
 import {
   afterAll,
   beforeAll,
@@ -15,9 +17,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Engine } from "@riker/core/engine";
 import { unreadFeedback } from "@riker/core/feedback";
-import { pollGithub } from "@riker/core/ingest/github";
+import { pollGithub } from "@riker/github/ingest";
 import { setMux } from "@riker/core/mux";
-import { prChip, prBatchQuery, readPrView, type PrRef } from "@riker/core/pr";
+import { prChip, type PrRef } from "@riker/core/pr";
+import { prBatchQuery, readPrView } from "@riker/github/pr-status";
 import * as store from "@riker/core/store";
 import { Kind, PrChecks, PrReview, PrState } from "@riker/core/types";
 import {
@@ -236,16 +239,17 @@ describe("the engine on the sim", () => {
       startedBy: "riker",
     });
     const s = simState({ work: { taskId: work.id, ...checkout.work } });
+    const github = githubPlugin({ api: simApi(file), prs: simPrFetch(file) });
     const engine = new Engine({
       config: testConfig(),
       offline: true,
-      github: { api: simApi(file), prs: simPrFetch(file) },
+      plugins: [triagePlugin(), github],
     });
     for (const step of SCENARIOS["review-cycle"].steps) {
       const done = applyEvent(s, step.event);
       saveState(file, s);
       linkOpened(s, done);
-      await engine.pollGithub(true);
+      await github.connector.poll(true);
       await engine.triageInbox();
     }
     const feedback = unreadFeedback(work.id);

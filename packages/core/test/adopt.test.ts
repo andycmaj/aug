@@ -15,7 +15,6 @@ import {
 } from "../src/adopt";
 import { ARTIFACT_TOOLS } from "../src/hooks";
 import { setMux } from "../src/mux";
-import { realSpawn } from "../src/slack/claude-mcp";
 import { createProject } from "../src/projects";
 import * as store from "../src/store";
 import { AgentState, SessionKind } from "../src/types";
@@ -163,24 +162,5 @@ describe("user settings", () => {
     expect(lines.findIndex((l) => l.includes("RIKER_TASK_ID"))).toBeLessThan(exec);
     expect(lines.findIndex((l) => l.includes("@riker_project"))).toBeLessThan(exec);
     expect(script).toContain('adopt-hook "$1"');
-  });
-});
-
-describe("Riker's own claudes", () => {
-  // Riker run in a pane of a task's window once had its Slack claude (which
-  // loads user settings, so the guard) adopted as that task's newest
-  // session; s then resumed an id claude had no conversation for.
-  test("carry no pane, so the guard never adopts them", async () => {
-    const before = process.env.TMUX_PANE;
-    process.env.TMUX_PANE = "%5";
-    try {
-      const proc = realSpawn(["sh", "-c", 'echo "pane=${TMUX_PANE:-none}"']);
-      const seen: string[] = [];
-      for await (const line of proc.lines) seen.push(line);
-      expect(seen).toEqual(["pane=none"]);
-    } finally {
-      if (before === undefined) delete process.env.TMUX_PANE;
-      else process.env.TMUX_PANE = before;
-    }
   });
 });

@@ -4,8 +4,8 @@ AUG-0102. The owner drives Riker away from the terminal by writing in a Slack
 conversation only they are in. Riker hears each line as if it was typed in
 Home, and posts the Assistant's answer back in that message's thread.
 
-Code: `packages/core/src/slack/remote.ts` (what is heard, what is answered),
-`packages/core/src/slack/remote-links.ts` (token and claude-mcp reads and posts),
+Code: `packages/slack/src/remote.ts` (what is heard, what is answered),
+`packages/slack/src/remote-links.ts` (token and claude-mcp reads and posts),
 `Engine.startRemote` / `pollRemote`.
 
 ## Which conversation
@@ -79,7 +79,7 @@ an hour gets a short "no answer" note.
 
 ## Confirmations
 
-Code: `packages/core/src/slack/confirm.ts`, the gate in `runMove` (`core/moves.ts`).
+Code: `packages/slack/src/confirm.ts`, held through the Slack plugin's move guard (`confirmGuard`, which `runMove` in `core/moves.ts` asks).
 
 An Assistant turn that answers a Slack line asks for moves as
 `assistant via Slack` (`RIKER_ASKED_BY`), not `assistant`. From that asker,

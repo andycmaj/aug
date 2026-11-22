@@ -52,14 +52,13 @@ export function ConnectorLine() {
   //     riker.spendOn(localDay(riker.now())).cost,
   //     dailyCap(riker.desk.config()),
   //   );
-  const rows = () => [
-    { name: "github", s: riker.status().github },
-    { name: "slack", s: riker.status().slack },
-    // Shown once it is turned on.
-    ...(riker.status().remote.state === "off"
-      ? []
-      : [{ name: "remote", s: riker.status().remote }]),
-  ];
+  const rows = () =>
+    riker.engine.connections().flatMap((c) => {
+      const s = riker.status()[c.name];
+      // A quiet one is shown once it is turned on.
+      if (!s || (c.quietWhenOff && s.state === "off")) return [];
+      return [{ name: c.name, s }];
+    });
   return (
     <box
       flexDirection="row"

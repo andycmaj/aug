@@ -3,10 +3,10 @@
 // model cannot say yes for them: only a line the remote hears from the owner
 // runs it (remote.ts), within CONFIRM_MINUTES.
 
-import * as store from "../store";
+import * as store from "@riker/core/store";
+import { CONFIRM_MINUTES, SLACK_ASKER } from "@riker/core/types";
 
-// Who asks when the Assistant's turn answers a Slack line (RIKER_ASKED_BY).
-export const SLACK_ASKER = "assistant via Slack";
+export { CONFIRM_MINUTES, SLACK_ASKER };
 
 // The moves that wait for a yes: they spend money or end work.
 export const CONFIRM_MOVES: ReadonlySet<string> = new Set([
@@ -17,8 +17,6 @@ export const CONFIRM_MOVES: ReadonlySet<string> = new Set([
   "project_archive",
   "action",
 ]);
-
-export const CONFIRM_MINUTES = 10;
 
 const KEY = "slack.remote.confirm";
 

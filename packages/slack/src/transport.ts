@@ -1,6 +1,6 @@
 // Which way Riker talks to Slack, from slack.transport in config.
 
-import { slackToken, type RikerConfig } from "../config";
+import { slackToken, type RikerConfig } from "@riker/core/config";
 import { ClaudeMcpTransport } from "./claude-mcp";
 import { McpTransport } from "./mcp";
 import type { SlackTransport } from "./shared";

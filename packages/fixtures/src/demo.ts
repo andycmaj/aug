@@ -3,6 +3,9 @@
 // demo, and a coding agent is a small fake that fires the same hooks. Each
 // run starts from a fresh scratch home, so its changes reset when you quit.
 
+import { triagePlugin } from "@riker/triage";
+import { githubPlugin } from "@riker/github";
+import { slackPlugin } from "@riker/slack";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { envVar, inAgentEnv } from "@riker/core/brand";
 import { tmpdir } from "node:os";
@@ -11,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { setBrain, type BrainCall, type BrainResult } from "@riker/core/brain";
 import { DEFAULT_CONFIG, fixedConfig } from "@riker/core/config";
 import { localDay } from "@riker/core/rail";
-import { reviewBrief } from "@riker/core/triage";
+import { reviewBrief } from "@riker/triage/triage";
 import { openDb, useDb } from "@riker/core/db";
 import { DocName, ensureDocs, readDoc, writeDoc } from "@riker/core/docs";
 import { Engine } from "@riker/core/engine";
@@ -875,6 +878,7 @@ export function installFixture(name: string): Engine {
     config,
     offline: true,
     noWorktrees: true,
+    plugins: [triagePlugin(), githubPlugin(), slackPlugin()],
     launchOverride: (task, launch) => ({
       ...launch,
       argv: [process.execPath, fake, task.title],

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { setBrain, type BrainCall } from "../src/brain";
-import { mergeConfig } from "../src/config";
-import { Engine } from "../src/engine";
-import { claudeEnv } from "../src/self";
-import { runMove } from "../src/moves";
-import { CONFIRM_MINUTES, pendingConfirms, SLACK_ASKER } from "../src/slack/confirm";
+import { setBrain, type BrainCall } from "@riker/core/brain";
+import { mergeConfig } from "@riker/core/config";
+import { Engine } from "@riker/core/engine";
+import { claudeEnv } from "@riker/core/self";
+import { runMove } from "@riker/core/moves";
+import { CONFIRM_MINUTES, pendingConfirms, SLACK_ASKER } from "../src/confirm";
 import {
   notification,
   REPLY_MARK,
@@ -14,11 +14,12 @@ import {
   type RemoteLink,
   type RemoteMessage,
   type RemoteQuery,
-} from "../src/slack/remote";
-import { remoteLink, TokenRemoteLink } from "../src/slack/remote-links";
-import * as store from "../src/store";
-import { AgentState, Kind, SLACK_AUTHOR, TaskStatus, TurnRole, TurnStatus } from "../src/types";
-import { freshHome, testConfig } from "./support/helpers";
+} from "../src/remote";
+import { remoteLink, TokenRemoteLink } from "../src/remote-links";
+import { confirmGuard } from "../src/index";
+import * as store from "@riker/core/store";
+import { AgentState, Kind, SLACK_AUTHOR, TaskStatus, TurnRole, TurnStatus } from "@riker/core/types";
+import { freshHome, testConfig } from "@riker/core/test/support/helpers";
 
 const ME = "U_ME";
 const CHANNEL = "D_SELF";
@@ -92,7 +93,8 @@ beforeEach(async () => {
   });
   link = new FakeLink();
   ran = [];
-  engine = new Engine({ config: testConfig() });
+  // The Slack plugin's hold, without its pollers: this test drives a Remote.
+  engine = new Engine({ config: testConfig(), plugins: [{ name: "slack", guards: [confirmGuard] }] });
   remote = new Remote({
     link,
     config: testConfig(),

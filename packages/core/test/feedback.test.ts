@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { linkByBranch } from "../src/triage";
 import {
   formatFeedback,
   linkPr,
@@ -8,11 +7,9 @@ import {
   parsePrUrl,
   unreadFeedback,
 } from "../src/feedback";
-import { pollGithub, type GhNotification } from "../src/ingest/github";
-import { triage } from "../src/triage";
 import * as store from "../src/store";
 import { Kind, SessionKind } from "../src/types";
-import { freshHome, config } from "./support/helpers";
+import { freshHome } from "./support/helpers";
 
 beforeEach(() => freshHome());
 
@@ -48,23 +45,6 @@ function branchTask() {
 }
 
 describe("linking a PR to its task", () => {
-  test("a PR from the task's branch joins the task, and triage attaches to it", async () => {
-    const t = branchTask();
-    const m = prMessage(230, "Please add a test", { head: "keep-transfers" });
-    expect(linkByBranch(m)).toBe(t.id);
-    expect(store.threadsForTask(t.id)).toEqual(["github:acme/ledger#214", "github:acme/ledger#230"]);
-    expect(store.openTaskForThread("github:acme/ledger#230")?.id).toBe(t.id);
-    const outcome = await triage(m, { config: config() });
-    expect(outcome.taskId).toBe(t.id);
-    expect(store.listTasks()).toHaveLength(1);
-  });
-
-  test("other branches and other channels are not linked", () => {
-    branchTask();
-    expect(linkByBranch(prMessage(231, "x", { head: "someone-else" }))).toBeNull();
-    expect(linkByBranch(prMessage(232, "x"))).toBeNull();
-  });
-
   test("riker-tools pr links by URL", () => {
     const t = branchTask();
     expect(parsePrUrl("https://github.com/acme/ledger/pull/230/files")).toEqual({ repo: "acme/ledger", number: 230 });
@@ -73,61 +53,6 @@ describe("linking a PR to its task", () => {
     expect(store.openTaskForThread("github:acme/ledger#230")?.id).toBe(t.id);
   });
 
-  test("ingest fetches a PR's head only for repos with branch tasks", async () => {
-    const n: GhNotification = {
-      id: "1",
-      reason: "comment",
-      updated_at: "2026-11-07T10:00:00Z",
-      subject: {
-        title: "Keep transfers",
-        url: "https://api.github.com/repos/acme/ledger/pulls/230",
-        latest_comment_url: null,
-        type: "PullRequest",
-      },
-      repository: { full_name: "acme/ledger", html_url: "https://github.com/acme/ledger" },
-    };
-    const calls: string[] = [];
-    const api = async (path: string) => {
-      calls.push(path);
-      if (path === "user") return { login: "me" };
-      if (path.startsWith("notifications")) return [n];
-      return { user: { login: "erin" }, body: "LGTM?", head: { ref: "keep-transfers" } };
-    };
-    const without = await pollGithub(null, api);
-    expect(without[0].meta?.head).toBeUndefined();
-    const withHead = await pollGithub(null, api, (repo) => repo === "acme/ledger");
-    expect(withHead[0].meta?.head).toBe("keep-transfers");
-  });
-});
-
-describe("review requests at ingest", () => {
-  test("who a review request asks is read off the PR, in the one call", async () => {
-    const pullUrl = "https://api.github.com/repos/acme/ledger/pulls/231";
-    const n: GhNotification = {
-      id: "2",
-      reason: "review_requested",
-      updated_at: "2026-11-07T10:00:00Z",
-      subject: { title: "Faster CSV", url: pullUrl, latest_comment_url: null, type: "PullRequest" },
-      repository: { full_name: "acme/ledger", html_url: "https://github.com/acme/ledger" },
-    };
-    const calls: string[] = [];
-    const api = async (path: string) => {
-      calls.push(path);
-      if (path === "user") return { login: "Me" };
-      if (path.startsWith("notifications")) return [n];
-      return {
-        user: { login: "erin" },
-        body: "please review",
-        html_url: "https://github.com/acme/ledger/pull/231",
-        head: { ref: "faster-csv" },
-        requested_reviewers: [{ login: "me" }],
-        requested_teams: [{ slug: "payments" }],
-      };
-    };
-    const [m] = await pollGithub(null, api);
-    expect(m.meta?.requested).toEqual({ me: true, teams: ["acme/payments"] });
-    expect(calls.filter((c) => c.startsWith("repos/"))).toEqual(["repos/acme/ledger/pulls/231"]);
-  });
 });
 
 describe("feedback", () => {

@@ -1,0 +1,15 @@
+{
+  "name": "@riker/github",
+  "version": "0.0.1",
+  "description": "GitHub for Riker: notifications into the inbox, each task's PR status, the rate-limit gate, and sending comments, approvals and merges. A plugin core runs without knowing it.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./test/*": "./test/*.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@riker/core": "workspace:*"
+  }
+}

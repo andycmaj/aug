@@ -1,8 +1,8 @@
 // The two ways the remote reads and posts its one conversation, picked by
 // slack.transport like the triage poller.
 
-import { slackToken, type RikerConfig } from "../config";
-import { logger } from "../log";
+import { slackToken, type RikerConfig } from "@riker/core/config";
+import { logger } from "@riker/core/log";
 import { ClaudeMcpTransport, PersistentClaude, type SpawnFn } from "./claude-mcp";
 import type { RemoteLink, RemoteMessage, RemoteQuery, RemoteRead } from "./remote";
 import { slackApi, slackPostApi, type SlackApi, type SlackMessage } from "./token";

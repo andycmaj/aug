@@ -7,6 +7,7 @@ import type { RikerConfig } from "./config";
 import { draftSent } from "./lifecycle";
 import { logger } from "./log";
 import { messageMeta } from "./meta";
+import type { Send, Senders } from "./plugins";
 import * as store from "./store";
 import {
   ActionState,
@@ -69,102 +70,22 @@ export function actionFor(
   return null;
 }
 
-let impl: Sender = realSend;
+// Fixtures and tests replace every sender at once (nothing leaves the demo).
+let override: Sender | null = null;
 
-export function setSender(next: Sender): void {
-  impl = next;
+export function setSender(next: Sender | null): void {
+  override = next;
 }
 
 export class SendError extends Error {}
 
-async function gh(args: string[]): Promise<string> {
-  const proc = Bun.spawn(["gh", ...args], { stdout: "pipe", stderr: "pipe" });
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (code !== 0) throw new SendError(err.trim() || `gh exited ${code}`);
-  return out.trim();
-}
-
-// Slack replies go through whichever transport the engine chose.
-type SlackSend = (
-  action: Extract<DraftAction, { type: "slack_reply" }>,
-) => Promise<string>;
-
-let slackSend: SlackSend = () =>
-  Promise.reject(new SendError("Slack is not connected"));
-
-export function setSlackSender(next: SlackSend): void {
-  slackSend = next;
-}
-
-async function githubSend(
-  action: Extract<DraftAction, { type: "github_comment" }>,
-  config: RikerConfig,
-): Promise<string> {
-  const ref = `${action.repo}#${action.number}`;
-  switch (action.close) {
-    case "approve":
-      await gh([
-        "pr",
-        "review",
-        String(action.number),
-        "-R",
-        action.repo,
-        "--approve",
-        "--body",
-        action.body,
-      ]);
-      return `approved ${ref} with your comment`;
-    case "merge": {
-      await gh([
-        "api",
-        `repos/${action.repo}/issues/${action.number}/comments`,
-        "-f",
-        `body=${action.body}`,
-      ]);
-      const method = config.github.mergeMethod;
-      await gh([
-        "pr",
-        "merge",
-        String(action.number),
-        "-R",
-        action.repo,
-        `--${method}`,
-      ]);
-      return `commented and merged ${ref}`;
-    }
-    case "issue":
-      await gh([
-        "issue",
-        "close",
-        String(action.number),
-        "-R",
-        action.repo,
-        "--comment",
-        action.body,
-      ]);
-      return `closed ${ref} with your comment`;
-    default:
-      await gh([
-        "api",
-        `repos/${action.repo}/issues/${action.number}/comments`,
-        "-f",
-        `body=${action.body}`,
-      ]);
-      return `commented on ${ref}`;
-  }
-}
-
-async function realSend(
-  action: DraftAction,
-  config: RikerConfig,
-): Promise<string> {
-  return action.type === "slack_reply"
-    ? slackSend(action)
-    : githubSend(action, config);
+// Each action goes out through the plugin that brought its type
+// (core/plugins.ts); with none, it is not sent and says why.
+function send(action: DraftAction, config: RikerConfig, senders: Senders): Promise<string> {
+  if (override) return override(action, config);
+  const sender = senders[action.type] as Send | undefined;
+  if (!sender) return Promise.reject(new SendError(`nothing is connected to send a ${describeAction(action)}`));
+  return sender(action, config);
 }
 
 export function describeAction(action: DraftAction): string {
@@ -198,11 +119,12 @@ const log = logger("outbound");
 export async function sendPending(
   config: RikerConfig,
   taskId: number,
+  senders: Senders,
 ): Promise<string> {
   const pending = store.pendingAction(taskId);
   if (!pending) throw new SendError("nothing waits to be sent");
   try {
-    const receipt = await impl(pending.action, config);
+    const receipt = await send(pending.action, config, senders);
     log.info("sent", {
       task: taskId,
       action: describeAction(pending.action),

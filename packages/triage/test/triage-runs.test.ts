@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { triagePlugin } from "../src/index";
 import { Database } from "bun:sqlite";
-import { migrate } from "../src/db";
-import { Engine } from "../src/engine";
-import { setMux } from "../src/mux";
-import * as store from "../src/store";
+import { migrate } from "@riker/core/db";
+import { Engine } from "@riker/core/engine";
+import { setMux } from "@riker/core/mux";
+import * as store from "@riker/core/store";
 import { PROJECT_STEP, triage } from "../src/triage";
-import { ideaRow } from "../src/inbox";
-import { Kind, type MessageRow } from "../src/types";
-import { FakeMux } from "./support/fake-mux";
-import { config, fakeBrain, freshHome, testConfig } from "./support/helpers";
+import { ideaRow } from "@riker/core/inbox";
+import { Kind, type MessageRow } from "@riker/core/types";
+import { FakeMux } from "@riker/core/test/support/fake-mux";
+import { config, fakeBrain, freshHome, testConfig } from "@riker/core/test/support/helpers";
 
 function slackDm(n: number, body: string): MessageRow {
   return store.insertMessage({
@@ -166,7 +167,7 @@ describe("re-running triage", () => {
   beforeEach(() => {
     freshHome();
     setMux(new FakeMux());
-    engine = new Engine({ config: testConfig() });
+    engine = new Engine({ config: testConfig(), plugins: [triagePlugin()] });
   });
 
   test("adds a run to a message on no task", async () => {

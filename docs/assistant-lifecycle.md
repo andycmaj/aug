@@ -9,7 +9,7 @@ where its cost goes.
 ## One turn
 
 1. **Asked.** The owner's line in Home (the chat box, or a Slack remote line
-   with author `SLACK_AUTHOR`, `core/slack/remote.ts`) is a turn row. The
+   with author `SLACK_AUTHOR`, `@riker/slack` remote.ts) is a turn row. The
    ChatDriver asks the pool for a turn: `AgentPool.request(taskId, reason,
    by)` in `core/agents.ts`. The owner's turns run now; `by: "Riker"` turns
    wait when the pool is full or the day's spend cap is reached

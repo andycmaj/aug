@@ -19,7 +19,6 @@ import {
   type BindingSpec,
 } from "@andycmaj/opentui-app";
 import { useRiker } from "../context/riker";
-import { paths } from "@riker/core/paths";
 import type { InfoSection } from "@riker/core/info";
 import { actionText, describeAction } from "@riker/core/outbound";
 import type { RailItem } from "@riker/core/rail";
@@ -222,13 +221,18 @@ export function StatusModal(props: {
 }) {
   const theme = useTheme();
   const riker = useRiker();
-  const rows = () =>
-    [
-      ["GitHub", riker.status().github],
-      ["Slack", riker.status().slack],
-      ["Slack remote", riker.status().remote],
-      ["Advisor", riker.status().advisor],
-    ] as const;
+  const off = { state: "off", detail: "not started", at: null } as const;
+  const rows = () => [
+    ...riker.engine
+      .connections()
+      .map((c) => [c.label, riker.status()[c.name] ?? off] as const),
+    ["Advisor", riker.status().advisor] as const,
+  ];
+  const hints = () =>
+    riker.engine
+      .connections()
+      .flatMap((c) => (c.hint ? [c.hint] : []))
+      .join(" ");
   return (
     <Modal
       size="lg"
@@ -277,7 +281,7 @@ export function StatusModal(props: {
         <text
           fg={theme.textMuted}
           wrapMode="word"
-        >{`GitHub uses your gh login. Slack needs a user token in SLACK_TOKEN or ${paths.config()}.`}</text>
+        >{hints()}</text>
       </box>
     </Modal>
   );
