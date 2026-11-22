@@ -11,7 +11,7 @@ import {
   type HelpItem,
   type HelpItemOptions,
 } from "@andycmaj/opentui-app";
-import { useAug, ViewMode } from "../context/aug";
+import { useRiker, ViewMode } from "../context/riker";
 import { helpBindings, type HelpCtx } from "../keymap";
 
 // "escape" reads better as "esc" in a hint line.
@@ -47,13 +47,13 @@ export function fitHints(items: HelpItem[], width: number): HelpItem[] {
   return help ? [...out, help] : out;
 }
 
-export function AugFooter(props: {
+export function RikerFooter(props: {
   ctx: Accessor<HelpCtx>;
   left?: number;
   options?: HelpItemOptions;
 }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const dims = useTerminalDimensions();
   const bindings = useFocusBindings(() => props.ctx());
   const visible = createMemo(() =>
@@ -87,8 +87,8 @@ export function AugFooter(props: {
       <text flexShrink={0}>
         <span
           style={{
-            fg: aug.mode() === ViewMode.chat ? theme.primary : theme.textMuted,
-            attributes: aug.mode() === ViewMode.chat ? 1 : 0,
+            fg: riker.mode() === ViewMode.chat ? theme.primary : theme.textMuted,
+            attributes: riker.mode() === ViewMode.chat ? 1 : 0,
           }}
         >
           chat
@@ -96,8 +96,8 @@ export function AugFooter(props: {
         <span style={{ fg: theme.textMuted }}> | </span>
         <span
           style={{
-            fg: aug.mode() === ViewMode.board ? theme.primary : theme.textMuted,
-            attributes: aug.mode() === ViewMode.board ? 1 : 0,
+            fg: riker.mode() === ViewMode.board ? theme.primary : theme.textMuted,
+            attributes: riker.mode() === ViewMode.board ? 1 : 0,
           }}
         >
           board

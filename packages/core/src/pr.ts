@@ -243,7 +243,7 @@ export function prBatchQuery(prs: PrRef[]): string {
   return `query {\n  rateLimit { remaining resetAt }\n  ${fields.join("\n  ")}\n}\n${PR_FRAGMENT}`;
 }
 
-// The raw shapes, exported so the offline simulator (@aug/fixtures sim)
+// The raw shapes, exported so the offline simulator (@riker/fixtures sim)
 // builds its answers against them and cannot drift from what is parsed.
 export interface GqlPr
   extends Omit<

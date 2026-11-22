@@ -3,7 +3,7 @@
 // squash). Merged is a phase, not done: the owner cleans it up. Runs on its
 // own clock, since a local merge needs no network.
 
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { mergeUndone, workMerged } from "./lifecycle";
 import { errorMessage, logger } from "./log";
 import { mux } from "./mux";
@@ -16,7 +16,7 @@ const log = logger("merge");
 
 // The words for how it landed, false when it has not, null when nothing
 // can say.
-async function landed(config: AugConfig, task: TaskRow): Promise<string | false | null> {
+async function landed(config: RikerConfig, task: TaskRow): Promise<string | false | null> {
   const pr = taskPrStatus(task)?.status ?? null;
   if (pr?.state === PrState.merged) return `(PR #${pr.number})`;
   const path = repoPath(config, task.repo);
@@ -27,7 +27,7 @@ async function landed(config: AugConfig, task: TaskRow): Promise<string | false 
 }
 
 // One task at a time: a few git calls each.
-export async function checkMerges(config: AugConfig): Promise<number> {
+export async function checkMerges(config: RikerConfig): Promise<number> {
   let changed = 0;
   for (const task of store.listTasks()) {
     if (task.status !== TaskStatus.open && task.status !== TaskStatus.later) continue;

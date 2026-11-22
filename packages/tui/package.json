@@ -1,7 +1,7 @@
 {
-  "name": "@aug/tui",
+  "name": "@riker/tui",
   "version": "0.0.1",
-  "description": "aug's terminal UI on OpenTUI Solid: Chat, Board, the rail and the Canvas.",
+  "description": "Riker's terminal UI on OpenTUI Solid: Chat, Board, the rail and the Canvas.",
   "type": "module",
   "private": true,
   "exports": {
@@ -9,8 +9,8 @@
   },
   "dependencies": {
     "@andycmaj/opentui-app": "^0.5.10",
-    "@aug/core": "workspace:*",
-    "@aug/fixtures": "workspace:*",
+    "@riker/core": "workspace:*",
+    "@riker/fixtures": "workspace:*",
     "@opentui/core": "0.5.12",
     "@opentui/solid": "0.5.12",
     "citty": "^0.2.2",

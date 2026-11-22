@@ -24,12 +24,12 @@ import {
   useToast,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
-import { useAug, ViewMode } from "../context/aug";
-import { BOARD_COLUMNS, LANE_META } from "@aug/core/lanes";
-import { taskRef } from "@aug/core/rows";
-import { AgentState, Kind, type KnowledgeRow, type TaskRow } from "@aug/core/types";
+import { useRiker, ViewMode } from "../context/riker";
+import { BOARD_COLUMNS, LANE_META } from "@riker/core/lanes";
+import { taskRef } from "@riker/core/rows";
+import { AgentState, Kind, type KnowledgeRow, type TaskRow } from "@riker/core/types";
 import { BOARD_HELP_OPTIONS, BoardTab, type HelpCtx } from "../keymap";
-import { AugFooter } from "./footer";
+import { RikerFooter } from "./footer";
 import { boardTab, setBoardTab } from "./board-tab";
 import { CostTab } from "./cost-tab";
 import { useInboxTab } from "./inbox-tab";
@@ -52,7 +52,7 @@ const tab = boardTab;
 const setTab = setBoardTab;
 
 export function BoardMode() {
-  const aug = useAug();
+  const riker = useRiker();
   const theme = useTheme();
   const { showToast } = useToast();
   const { isPaneFocused } = useFocus();
@@ -66,13 +66,13 @@ export function BoardMode() {
   let costScroll: ScrollBoxRenderable | undefined;
 
   const columns = createMemo(() =>
-    BOARD_COLUMNS.map((c) => ({ ...c, tasks: aug.board()[c.key] })),
+    BOARD_COLUMNS.map((c) => ({ ...c, tasks: riker.board()[c.key] })),
   );
   const cardTask = (): TaskRow | null =>
     columns()[col()]?.tasks[
       Math.min(row(), (columns()[col()]?.tasks.length ?? 1) - 1)
     ] ?? null;
-  const knowledge = createMemo(() => aug.knowledge());
+  const knowledge = createMemo(() => riker.knowledge());
   const inbox = useInboxTab({
     active: () => tab() === Tab.inbox,
     actions: shell.actions,
@@ -92,14 +92,14 @@ export function BoardMode() {
   };
 
   const openInChat = (task: TaskRow) => {
-    aug.setMode(ViewMode.chat);
-    aug.selectTask(task.id);
+    riker.setMode(ViewMode.chat);
+    riker.selectTask(task.id);
   };
 
   const onTask = (fn: (t: TaskRow) => void) => () => {
     const t = target();
     if (!t) return false;
-    fn(aug.task(t.id) ?? t);
+    fn(riker.task(t.id) ?? t);
   };
 
   // c means one thing per tab, one command each, so the footer names it.
@@ -108,7 +108,7 @@ export function BoardMode() {
     shell.dialogs.show(() => (
         <PromptModal
           title="Knowledge: a durable discovery"
-          hint="topic: title - what was learned. Short-lived coordination is a handoff note (aug-tools note)."
+          hint="topic: title - what was learned. Short-lived coordination is a handoff note (riker-tools note)."
           placeholder="export: inter-company transfers - the bank feed keeps them, the export drops them"
           onSubmit={(line) => {
             const m = line.match(/^\s*([^:]+):\s*([^-–]+?)\s*[-–]\s*(.+)$/);
@@ -120,7 +120,7 @@ export function BoardMode() {
               );
               return;
             }
-            aug.desk.addKnowledge(m[1], m[2], m[3]);
+            riker.desk.addKnowledge(m[1], m[2], m[3]);
           }}
           onClose={shell.dialogs.close}
         />
@@ -208,7 +208,7 @@ export function BoardMode() {
       [Commands.PR_DASH]: () => {
         const t = target();
         if (!t) return false;
-        return shell.actions.togglePrDash(aug.task(t.id) ?? t);
+        return shell.actions.togglePrDash(riker.task(t.id) ?? t);
       },
     },
     { target: p.target },
@@ -230,12 +230,12 @@ export function BoardMode() {
       kind: t?.kind ?? null,
       hasDraft: false,
       live: Boolean(
-        t && (t.agent_state === AgentState.working || aug.isLive(t)),
+        t && (t.agent_state === AgentState.working || riker.isLive(t)),
       ),
       coding: t?.kind === Kind.coding,
       watching: false,
       started: false,
-      pr: Boolean(t && aug.taskPr(t)),
+      pr: Boolean(t && riker.taskPr(t)),
       board: tab(),
       ...(tab() === Tab.inbox ? inbox.ctx() : {}),
       ...(tab() === Tab.wins ? wins.ctx() : {}),
@@ -317,7 +317,7 @@ export function BoardMode() {
             </Match>
           </Switch>
         </box>
-        <AugFooter ctx={ctx} options={BOARD_HELP_OPTIONS} />
+        <RikerFooter ctx={ctx} options={BOARD_HELP_OPTIONS} />
         <box height={1} flexShrink={0} />
       </box>
       <shell.Modals ctx={ctx} subject={subject} />
@@ -332,7 +332,7 @@ function Columns(props: {
   width: number;
 }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const colWidth = () =>
     Math.max(20, Math.floor(props.width / props.columns.length) - 1);
   const scrolls: (ScrollBoxRenderable | undefined)[] = [];
@@ -399,7 +399,7 @@ function Columns(props: {
                       task={task}
                       on={selected()}
                       width={colWidth() - 2}
-                      spinner={aug.spinner()}
+                      spinner={riker.spinner()}
                     />
                   );
                 }}
@@ -421,8 +421,8 @@ function Card(props: {
   spinner: string;
 }) {
   const theme = useTheme();
-  const aug = useAug();
-  const session = createMemo(() => aug.latestSession(props.task.id));
+  const riker = useRiker();
+  const session = createMemo(() => riker.latestSession(props.task.id));
   const fg = () =>
     props.on ? contrastingForeground(theme.primary) : undefined;
   const line = () => {
@@ -435,7 +435,7 @@ function Card(props: {
       return `${LANE_META.waiting.mark} ${t.agent_says ?? "waiting on you"}`;
     if (t.agent_state === AgentState.queued)
       return `${LANE_META.queued.mark} ${t.queue_reason ?? "waiting to start"}`;
-    if (aug.pending().has(t.id))
+    if (riker.pending().has(t.id))
       return `${LANE_META.approve.mark} ready to send`;
     if (t.agent_state === AgentState.ready)
       return `${LANE_META.ready.mark} ${s?.result ?? LANE_META.ready.word}`;
@@ -479,7 +479,7 @@ function Knowledge(props: {
       fallback={
         <box paddingLeft={1}>
           <text fg={theme.textMuted}>
-            Nothing learned yet. Agents add discoveries with aug-tools knowledge
+            Nothing learned yet. Agents add discoveries with riker-tools knowledge
             add; c writes one.
           </text>
         </box>

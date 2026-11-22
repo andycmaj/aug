@@ -16,13 +16,13 @@ import {
   type Setter,
 } from "solid-js";
 import { createRequiredContext, PaletteMode } from "@andycmaj/opentui-app";
-import { coalesce } from "@aug/core/coalesce";
-import { dataVersion, TABLES, tableVersions, type Table } from "@aug/core/db";
-import type { Desk } from "@aug/core/desk";
-import { Engine, type EngineStatus } from "@aug/core/engine";
-import { laneOf, type BoardColumn, type LaneFacts } from "@aug/core/lanes";
-import { count, perfOn, sample, timing } from "@aug/core/perf";
-import { readModel, readsRun, type ReadModel } from "@aug/core/read-model";
+import { coalesce } from "@riker/core/coalesce";
+import { dataVersion, TABLES, tableVersions, type Table } from "@riker/core/db";
+import type { Desk } from "@riker/core/desk";
+import { Engine, type EngineStatus } from "@riker/core/engine";
+import { laneOf, type BoardColumn, type LaneFacts } from "@riker/core/lanes";
+import { count, perfOn, sample, timing } from "@riker/core/perf";
+import { readModel, readsRun, type ReadModel } from "@riker/core/read-model";
 import {
   baseKey,
   cycleFilter as nextFilter,
@@ -36,18 +36,18 @@ import {
   type RailFilter,
   type RailItem,
   type RailSection,
-} from "@aug/core/rail";
-import { onChange } from "@aug/core/store";
-import { NavHistory, type Place } from "@aug/core/nav-history";
+} from "@riker/core/rail";
+import { onChange } from "@riker/core/store";
+import { NavHistory, type Place } from "@riker/core/nav-history";
 import { useRenderPerf } from "./render-perf";
-import { AgentState, type TaskRow } from "@aug/core/types";
+import { AgentState, type TaskRow } from "@riker/core/types";
 
 export const ViewMode = { chat: "chat", board: "board" } as const;
 export type ViewMode = (typeof ViewMode)[keyof typeof ViewMode];
 
-// The read model's reads sit on the context itself: aug.task(id),
-// aug.turns(id), aug.pendingAction(id).
-interface AugContextValue extends ReadModel {
+// The read model's reads sit on the context itself: riker.task(id),
+// riker.turns(id), riker.pendingAction(id).
+interface RikerContextValue extends ReadModel {
   engine: Engine;
   // The owner's moves: what the keys and the palette call.
   desk: Desk;
@@ -110,12 +110,12 @@ interface AugContextValue extends ReadModel {
   setWantsInput: (on: boolean) => void;
 }
 
-const [AugContext, useAug] = createRequiredContext<AugContextValue>("Aug");
-export { useAug };
+const [RikerContext, useRiker] = createRequiredContext<RikerContextValue>("Riker");
+export { useRiker };
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-export function AugProvider(props: ParentProps<{ engine: Engine }>) {
+export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   const engine = props.engine;
   // One counter per table; a read subscribes to the ones it queries.
   const tableSignals = new Map<Table, [Accessor<number>, Setter<number>]>(
@@ -398,7 +398,7 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
   );
 
   return (
-    <AugContext.Provider
+    <RikerContext.Provider
       value={{
         ...reads,
         engine,
@@ -446,6 +446,6 @@ export function AugProvider(props: ParentProps<{ engine: Engine }>) {
       }}
     >
       {props.children}
-    </AugContext.Provider>
+    </RikerContext.Provider>
   );
 }

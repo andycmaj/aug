@@ -1,6 +1,6 @@
 // The one door to tmux, worktrunk and the checkouts on disk. tmux owns every coding agent's claude,
-// so it outlives aug and you can reach it from any client; aug only tags what
-// it made and reads the tags back. Identity is the @aug_project / @aug_task
+// so it outlives Riker and you can reach it from any client; Riker only tags what
+// it made and reads the tags back. Identity is the @riker_project / @riker_task
 // user options, never a name, so renaming a session or window breaks nothing.
 // Only this file imports libtmux (alpha, pinned exactly): its API churn and
 // any macOS trouble stay here. Tests swap in a fake with setMux.
@@ -9,21 +9,27 @@ import { Server, TmuxServerRestartedError } from "libtmux";
 import { perfOn, perfStart } from "./perf";
 import { inspect, scan, type CheckoutState, type FoundCheckout } from "./checkouts";
 import { logger } from "./log";
+import { CMD, LEGACY, legacyOption, NAME, option, optionFormat } from "./brand";
 import { shellQuote, toolsCommand } from "./self";
 
 const log = logger("mux");
 
-export const PROJECT_OPTION = "@aug_project";
-export const TASK_OPTION = "@aug_task";
-// How a script in a task's pane calls aug-tools: a hand-started claude has no
-// AUG_* env, but its window carries this beside the task tag.
-export const TOOLS_OPTION = "@aug_tools";
+export const PROJECT_OPTION = option("project");
+export const TASK_OPTION = option("task");
+// How a script in a task's pane calls riker-tools: a hand-started claude has no
+// RIKER_* env, but its window carries this beside the task tag.
+export const TOOLS_OPTION = option("tools");
+// Tags aug wrote before the rename: read when the new one is not set yet, and
+// copied over by copyLegacyTags (core/migrate-home.ts, and the engine's start).
+const CLIENT_OPTION = option("client");
+const PROJECT_READ = optionFormat("project");
+const TASK_READ = optionFormat("task");
 
 export interface MuxSession {
   id: string;
   name: string;
   projectId: number | null;
-  // aug's own viewers, never offered for adoption.
+  // Riker's own viewers, never offered for adoption.
   viewer: boolean;
 }
 
@@ -61,7 +67,7 @@ export interface NewWindow {
 }
 
 // A pane split off a task's own window, so whatever it runs (a diff viewer)
-// shows wherever that window does, aug's viewer included, instead of in a
+// shows wherever that window does, Riker's viewer included, instead of in a
 // window of its own.
 export interface SplitPane {
   paneId: string;
@@ -91,6 +97,10 @@ export interface Mux {
   tagSession(sessionId: string, projectId: number): Promise<void>;
   newWindow(w: NewWindow): Promise<MuxWindow>;
   tagWindow(windowId: string, taskId: number): Promise<void>;
+  // Gives every session and window aug tagged before the rename (@aug_*) the
+  // same tags under Riker's names, leaving ones already tagged alone.
+  // Answers how many it tagged.
+  copyLegacyTags(): Promise<number>;
   killWindow(windowId: string): Promise<void>;
   killSession(sessionId: string): Promise<void>;
   // From names the session to take it out of: a viewer links the same
@@ -104,20 +114,20 @@ export interface Mux {
   paneAlive(paneId: string): Promise<boolean>;
   // The panes of a window, or null when tmux has no such window.
   windowPanes(windowId: string): Promise<string[] | null>;
-  // Moves your own tmux client (the one aug runs in) to the session, or to
+  // Moves your own tmux client (the one Riker runs in) to the session, or to
   // one of its windows. The session is named because a viewer links the
   // same window, and tmux would otherwise land you in the viewer.
-  // It also tells that client, on its status line, how to get back to aug.
+  // It also tells that client, on its status line, how to get back to Riker.
   switchClient(sessionId: string, windowId?: string): Promise<void>;
   // The shell line that attaches a terminal to the session (or one of its
-  // windows), for when aug is not in a client of this server to move.
+  // windows), for when Riker is not in a client of this server to move.
   attachCommand(sessionId: string, windowId?: string): string;
   // argv for the embedded terminal: attaches a session of its own holding
   // just that window, so showing it never moves your real client.
   viewerArgv(viewerName: string, sessionId: string, windowId: string): string[];
   paneInfo(paneId: string): Promise<PaneInfo | null>;
-  // The window aug itself runs in, when that is on this server: a viewer of
-  // it would show aug showing the viewer, nested without end.
+  // The window Riker itself runs in, when that is on this server: a viewer of
+  // it would show Riker showing the viewer, nested without end.
   hostWindow(): Promise<string | null>;
   // The running server's version (not the tmux on PATH: an upgrade leaves the
   // old server up until it is killed), or null with no server.
@@ -205,15 +215,17 @@ const CLONE_TIMEOUT_MS = 10 * 60_000;
 // ── tmux ─────────────────────────────────────────────────────────────────
 
 const SEP = "\t";
-const SESSION_FORMAT = ["#{session_id}", "#{session_name}", `#{${PROJECT_OPTION}}`].join(SEP);
+const SESSION_FORMAT = ["#{session_id}", "#{session_name}", PROJECT_READ].join(SEP);
 const WINDOW_FORMAT = [
   "#{window_id}",
   "#{session_id}",
   "#{window_name}",
-  `#{${TASK_OPTION}}`,
+  TASK_READ,
 ].join(SEP);
 
-export const VIEWER_PREFIX = "aug-view-";
+export const VIEWER_PREFIX = `${CMD}-view-`;
+// An aug from before the rename may still have a viewer session open.
+const LEGACY_VIEWER_PREFIX = `${LEGACY.cmd}-view-`;
 const WATCH_PREFIX = `${VIEWER_PREFIX}watch-`;
 
 // Structural changes worth a reconcile; pane output never is.
@@ -258,7 +270,7 @@ function idOf(raw: string | undefined): number | null {
 }
 
 // Shown on your client after a jump. #{prefix} is your prefix key.
-export const BACK_TO_AUG = "aug: #{prefix} L goes back to aug";
+export const BACK_TO_RIKER = `${CMD}: #{prefix} L goes back to ${NAME}`;
 
 export interface TmuxSocket {
   socketName?: string;
@@ -323,8 +335,8 @@ export class TmuxMux implements Mux {
           "#{window_name}",
           "#{session_id}",
           "#{session_name}",
-          `#{${TASK_OPTION}}`,
-          `#{${PROJECT_OPTION}}`,
+          TASK_READ,
+          PROJECT_READ,
         ].join(SEP),
       ]);
       if (!line) return null;
@@ -393,7 +405,7 @@ export class TmuxMux implements Mux {
         id,
         name,
         projectId: idOf(project),
-        viewer: name.startsWith(VIEWER_PREFIX),
+        viewer: name.startsWith(VIEWER_PREFIX) || name.startsWith(LEGACY_VIEWER_PREFIX),
       };
     });
     // A viewer lists its task's window again; report each window once,
@@ -434,6 +446,43 @@ export class TmuxMux implements Mux {
   async tagWindow(windowId: string, taskId: number): Promise<void> {
     await this.cmd("set-option", ["-w", "-t", windowId, TASK_OPTION, String(taskId)]);
     await this.cmd("set-option", ["-w", "-t", windowId, TOOLS_OPTION, toolsCommand()]);
+  }
+
+  async copyLegacyTags(): Promise<number> {
+    let sessionLines: readonly string[];
+    let windowLines: readonly string[];
+    try {
+      sessionLines = await this.cmd("list-sessions", [
+        "-F",
+        ["#{session_id}", `#{${PROJECT_OPTION}}`, `#{${legacyOption("project")}}`].join(SEP),
+      ]);
+      windowLines = await this.cmd("list-windows", [
+        "-a",
+        "-F",
+        ["#{window_id}", `#{${TASK_OPTION}}`, `#{${legacyOption("task")}}`].join(SEP),
+      ]);
+    } catch (err) {
+      if (noServer(err)) return 0;
+      throw err;
+    }
+    let tagged = 0;
+    for (const line of sessionLines) {
+      const [id, now, old] = line.split(SEP);
+      if (!id || now || !idOf(old)) continue;
+      await this.tagSession(id, idOf(old)!);
+      tagged++;
+    }
+    // A window linked into a viewer is listed twice.
+    const seen = new Set<string>();
+    for (const line of windowLines) {
+      const [id, now, old] = line.split(SEP);
+      if (!id || seen.has(id) || now || !idOf(old)) continue;
+      seen.add(id);
+      // @riker_tools from this Riker, not aug's copy (its path is gone).
+      await this.tagWindow(id, idOf(old)!);
+      tagged++;
+    }
+    return tagged;
   }
 
   async killWindow(windowId: string): Promise<void> {
@@ -488,15 +537,15 @@ export class TmuxMux implements Mux {
 
   async switchClient(sessionId: string, windowId?: string): Promise<void> {
     // Named before the switch: tmux finds "the current client" through the
-    // session aug's pane is in, and once moved that client is not in it, so
+    // session Riker's pane is in, and once moved that client is not in it, so
     // the message after would go to whichever client tmux likes (a viewer).
     const [client] = await this.cmd("display-message", ["-p", "#{client_name}"]);
     const target = windowId ? `${sessionId}:${windowId}` : sessionId;
     const on = client?.trim() ? ["-c", client.trim()] : [];
     await this.cmd("switch-client", [...on, "-t", target]);
-    // switch-client -l (prefix L) is tmux's own "last session": aug's.
-    await this.cmd("display-message", [...on, "-d", "5000", BACK_TO_AUG]).catch(
-      (err: unknown) => log.debug("back-to-aug message failed", { err: String(err) }),
+    // switch-client -l (prefix L) is tmux's own "last session": Riker's.
+    await this.cmd("display-message", [...on, "-d", "5000", BACK_TO_RIKER]).catch(
+      (err: unknown) => log.debug("back-to-riker message failed", { err: String(err) }),
     );
   }
 
@@ -510,21 +559,21 @@ export class TmuxMux implements Mux {
     // into it and drops the placeholder, so the session holds claude and
     // nothing else. Linked, not grouped: tmux 3.7's choose-tree draws nothing
     // at all while any session group exists. The options make it a plain
-    // view: no status bar, no prefix (keys reach claude), gone as soon as aug
-    // detaches. aug itself may run inside tmux, which refuses to nest while
+    // view: no status bar, no prefix (keys reach claude), gone as soon as Riker
+    // detaches. Riker itself may run inside tmux, which refuses to nest while
     // TMUX is set.
     // It is still an ordinary session, the most recent one, so a bare
     // `tmux a`, switch-client or a destroyed session can drop your own
-    // terminal in here with no prefix (and keep it alive past aug). Any
-    // client but aug's is sent on to the project session. In a hook,
-    // client_name is the session's most recent client (usually aug's), so
+    // terminal in here with no prefix (and keep it alive past Riker). Any
+    // client but Riker's is sent on to the project session. In a hook,
+    // client_name is the session's most recent client (usually Riker's), so
     // the one that came in is hook_client, and only run-shell -C expands it
     // for -c. The id is escaped because tmux expands $VARS when the hook
     // runs.
     const bounce =
-      `if -F "#{!=:#{hook_client},#{@aug_client}}" ` +
+      `if -F "#{!=:#{hook_client},#{${CLIENT_OPTION}}}" ` +
       `"run-shell -C \\"switch-client -c '#{hook_client}' -t '${sessionId.replaceAll("$", "\\\\$")}'\\""`;
-    const placeholder = "aug-placeholder";
+    const placeholder = `${CMD}-placeholder`;
     return [
       "env", "-u", "TMUX",
       ...this.tmuxArgs(),
@@ -533,12 +582,12 @@ export class TmuxMux implements Mux {
       ";", "set-option", "status", "off",
       ";", "set-option", "prefix", "None",
       ";", "set-option", "destroy-unattached", "on",
-      ";", "set-option", "-F", "@aug_client", "#{client_name}",
+      ";", "set-option", "-F", CLIENT_OPTION, "#{client_name}",
       // A program's OSC 52 clipboard read (nvim's, over ssh) goes unanswered
       // on tmux's defaults: set-clipboard external drops it, and get-clipboard
       // buffer replies only from a paste buffer, silent when there is none.
       // nvim then hangs 10s per paste. With these tmux asks the most recent
-      // client's terminal, aug's while you type in the viewer, and aug
+      // client's terminal, Riker's while you type in the viewer, and Riker
       // answers from the system clipboard. Both are server-wide, so only
       // tmux's defaults are changed and a value set on purpose is kept.
       ";", "if-shell", "-F", "#{==:#{set-clipboard},external}", "set-option -s set-clipboard on",
@@ -550,8 +599,8 @@ export class TmuxMux implements Mux {
     ];
   }
 
-  // The control client attaches to a session of aug's own, so none of your
-  // panes' output streams into aug; tmux still reports structural changes
+  // The control client attaches to a session of Riker's own, so none of your
+  // panes' output streams into Riker; tmux still reports structural changes
   // in every other session (the unlinked-* events).
   async watch(onChange: () => void, signal: AbortSignal): Promise<void> {
     const state = await this.state();
@@ -619,7 +668,7 @@ export class TmuxMux implements Mux {
     const forkPoint = await git("merge-base", baseTip, tip);
     const tree = await git("rev-parse", `${tip}^{tree}`);
     if (!forkPoint || !tree) return false;
-    const squash = await git("commit-tree", tree, "-p", forkPoint, "-m", "aug: squash check");
+    const squash = await git("commit-tree", tree, "-p", forkPoint, "-m", "riker: squash check");
     if (!squash) return false;
     const cherry = await git("cherry", baseTip, squash);
     return cherry?.startsWith("-") ? base : false;

@@ -31,19 +31,19 @@ import {
   useTheme,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
-import { useAug } from "../context/aug";
+import { useRiker } from "../context/riker";
 import { useTerminals, type TermState } from "../context/terminals";
-import type { Lane, LaneMeta } from "@aug/core/lanes";
-import { prChip, prLine } from "@aug/core/pr";
-import { usd } from "@aug/core/spend";
+import type { Lane, LaneMeta } from "@riker/core/lanes";
+import { prChip, prLine } from "@riker/core/pr";
+import { usd } from "@riker/core/spend";
 import {
   type Mention,
   mentionAt,
   mentionRef,
   suggestMentions,
-} from "@aug/core/mentions";
-import type { RailItem } from "@aug/core/rail";
-import { taskRef } from "@aug/core/rows";
+} from "@riker/core/mentions";
+import type { RailItem } from "@riker/core/rail";
+import { taskRef } from "@riker/core/rows";
 import {
   AgentState,
   Kind,
@@ -51,8 +51,8 @@ import {
   ProposalStatus,
   type ProjectRow,
   type TaskRow,
-} from "@aug/core/types";
-import { inTmux } from "@aug/core/driver";
+} from "@riker/core/types";
+import { inTmux } from "@riker/core/driver";
 import { TerminalHost } from "./agent-terminal";
 import { ActionCard, ChatTurn } from "./chat-turn";
 import { actionTermId, unlessTyping, type TaskActions } from "./task-actions";
@@ -76,7 +76,7 @@ export function Canvas(props: {
   onSay: (text: string) => void;
   onCompose: Compose;
 }) {
-  const aug = useAug();
+  const riker = useRiker();
   const terminals = useTerminals();
   const { isPaneFocused, setActivePane, sidebarVisible } = useFocus();
   const leave = () => setActivePane("rail");
@@ -86,10 +86,10 @@ export function Canvas(props: {
 
   const width = () =>
     dims().width - (sidebarVisible() ? RAIL_WIDTH + 2 : 0) - 6;
-  const item = () => aug.selected();
+  const item = () => riker.selected();
   const task = createMemo(() => {
     const i = item();
-    return i?.type === "task" ? aug.task(i.task.id) : null;
+    return i?.type === "task" ? riker.task(i.task.id) : null;
   });
   const term = createMemo(() => {
     const t = task();
@@ -138,7 +138,7 @@ export function Canvas(props: {
   const prDash = usePrDash();
   createEffect(
     on(
-      () => aug.selectedKey(),
+      () => riker.selectedKey(),
       () => prDash.closeOthers(task()?.id ?? null),
     ),
   );
@@ -146,7 +146,7 @@ export function Canvas(props: {
   // A newly selected item opens at its newest line.
   createEffect(
     on(
-      () => aug.selectedKey(),
+      () => riker.selectedKey(),
       () => queueMicrotask(() => scrollRef?.scrollTo(scrollRef.scrollHeight)),
     ),
   );
@@ -240,9 +240,9 @@ export function Canvas(props: {
 
 function TaskHeader(props: { task: TaskRow; width: number }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const lane = () => {
-    const item = aug
+    const item = riker
       .items()
       .find((i) => i.type === "task" && i.task.id === props.task.id);
     return item?.type === "task" ? item.lane : null;
@@ -250,15 +250,15 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   const metaOf = useLaneMeta();
   const meta = () => (lane() ? metaOf(lane()!) : null);
   const came = createMemo(() => {
-    const first = aug.messages(props.task.id)[0];
+    const first = riker.messages(props.task.id)[0];
     const from = first
       ? `${CHANNEL_WORD[first.channel]} · ${first.author_name} · ${first.title}`
       : "typed by you";
-    return `${from} · ${dayClock(props.task.created_at, aug.now())}`;
+    return `${from} · ${dayClock(props.task.created_at, riker.now())}`;
   });
   // One line of what is attached: titles, else the bare address. o opens.
   const links = createMemo(() => {
-    const names = aug
+    const names = riker
       .taskLinks(props.task.id)
       .map((l) => l.title ?? l.url.replace(/^https?:\/\//, ""));
     return names.length
@@ -267,7 +267,7 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   });
   // The task's PR as of the last read; P opens it in ghdash.
   const pr = createMemo(() => {
-    const found = aug.taskPrStatus(props.task);
+    const found = riker.taskPrStatus(props.task);
     if (!found) return null;
     const { pr: ref, status } = found;
     const text = status
@@ -278,9 +278,9 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
       tone: status ? prChip(status).tone : ("muted" as const),
     };
   });
-  // What its headless turns have cost (aug-tools spend, the Board's Cost).
+  // What its headless turns have cost (riker-tools spend, the Board's Cost).
   const spent = () => {
-    const s = aug.taskSpend(props.task.id);
+    const s = riker.taskSpend(props.task.id);
     return s.calls ? ` · ${usd(s.cost)} spent` : "";
   };
   const says = () => {
@@ -382,23 +382,23 @@ function TaskChat(props: {
   width: number;
   scrollRef: (r: ScrollBoxRenderable) => void;
 }) {
-  const aug = useAug();
+  const riker = useRiker();
   const theme = useTheme();
-  const turns = createMemo(() => aug.turns(props.task.id));
+  const turns = createMemo(() => riker.turns(props.task.id));
   const latestAgentId = createMemo(
     () => [...turns()].reverse().find((t) => t.role === "agent")?.id ?? null,
   );
   // A System task's open proposals: which doc, how big, and why.
   const proposals = createMemo(() => {
     return props.task.kind === Kind.system
-      ? aug
+      ? riker
           .proposals(props.task.id)
           .filter((p) => p.status === ProposalStatus.open)
       : [];
   });
   // Shown until the agent starts from it; after that the chat carries on.
   const brief = createMemo((): string | null =>
-    aug.briefEditable(props.task.id) ? props.task.summary : null,
+    riker.briefEditable(props.task.id) ? props.task.summary : null,
   );
   const hint = createMemo((): [string, string][] => {
     const t = props.task;
@@ -460,7 +460,7 @@ function TaskChat(props: {
         {(text: Accessor<string>) => (
           <box flexDirection="column" marginBottom={1}>
             <text fg={theme.textMuted}>
-              {props.task.kind === Kind.system ? "aug asks" : "brief"}
+              {props.task.kind === Kind.system ? "Riker asks" : "brief"}
             </text>
             <text wrapMode="word">{text()}</text>
           </box>
@@ -502,11 +502,11 @@ function TaskChat(props: {
 }
 
 function PendingCard(props: { taskId: number }) {
-  const aug = useAug();
-  const pending = createMemo(() => aug.pendingAction(props.taskId));
+  const riker = useRiker();
+  const pending = createMemo(() => riker.pendingAction(props.taskId));
   return (
     <Show when={pending()}>
-      {(p: Accessor<NonNullable<ReturnType<typeof aug.pendingAction>>>) => (
+      {(p: Accessor<NonNullable<ReturnType<typeof riker.pendingAction>>>) => (
         <ActionCard action={p().action} result={p().turn.action_result} />
       )}
     </Show>
@@ -537,7 +537,7 @@ function ChatInput(props: {
   onCompose: Compose;
 }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const { setActivePane } = useFocus();
   const p = usePane("input");
   let input: InputRenderable | undefined;
@@ -621,7 +621,7 @@ function ChatInput(props: {
 
   const placeholder = () =>
     props.task.kind === Kind.home
-      ? "Ask about anything, or tell aug what to do... (@ names a task or project, ^g editor)"
+      ? "Ask about anything, or tell riker what to do... (@ names a task or project, ^g editor)"
       : props.task.kind === Kind.coding
         ? "Tell the coding agent... (enter sends, ^g editor, esc leaves)"
         : "Tell the agent what's wrong, or ask about anything here... (^g editor)";
@@ -649,7 +649,7 @@ function ChatInput(props: {
                 }
                 bg={i() === pick() ? theme.secondary : undefined}
               >
-                {truncate(mentionLine(m, (p) => aug.projectSummary(p).open), 70)}
+                {truncate(mentionLine(m, (p) => riker.projectSummary(p).open), 70)}
               </text>
             )}
           </For>
@@ -688,16 +688,16 @@ function ProjectView(props: {
   width: number;
 }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const p = () => props.item.project;
   const tasks = createMemo(() => {
-    return aug
+    return riker
       .tasksForProject(p().id)
       .filter((t) => t.status === "open" || t.status === "later");
   });
   const metaOf = useLaneMeta();
   const laneOfTask = (t: TaskRow) => {
-    const row = aug.items().find((i) => i.type === "task" && i.task.id === t.id);
+    const row = riker.items().find((i) => i.type === "task" && i.task.id === t.id);
     return row?.type === "task" ? metaOf(row.lane) : null;
   };
   return (
@@ -764,9 +764,9 @@ function ProjectView(props: {
 
 function Opening() {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const metaOf = useLaneMeta();
-  const hour = () => aug.now().getHours();
+  const hour = () => riker.now().getHours();
   const greeting = () =>
     hour() < 12
       ? "Good morning"
@@ -775,7 +775,7 @@ function Opening() {
         : "Good evening";
   const lanes = createMemo(() => {
     const counts = new Map<string, number>();
-    for (const i of aug.items()) {
+    for (const i of riker.items()) {
       if (i.type !== "task" || i.copy) continue;
       counts.set(i.lane, (counts.get(i.lane) ?? 0) + 1);
     }
@@ -786,7 +786,7 @@ function Opening() {
       <text fg={theme.primary} attributes={1}>
         {greeting()}
       </text>
-      <text fg={theme.textMuted}>{aug.now().toDateString()}</text>
+      <text fg={theme.textMuted}>{riker.now().toDateString()}</text>
       <box flexDirection="column" marginTop={1}>
         <For
           each={lanes()}

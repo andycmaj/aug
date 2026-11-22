@@ -11,12 +11,12 @@ Status: approved by the owner (2026-11-20), and built (Build order, steps 1-8). 
 - Moves (`core/moves.ts`) are the other-process bus: one registry, verb + args
   + `run(desk, task, args, by)`. Triage is a rule chain (`TRIAGE_RULES`) that
   returns effects. Both are the registry shape to copy.
-- Ways aug already runs work for a task, which actions reuse:
+- Ways Riker already runs work for a task, which actions reuse:
   - headless `claude -p` (`brain.think`, `BrainCall`): prompt, system, model,
     tools, allow, `pluginDirs`, `resume`;
   - telling the task's own agent (`driver.deliver`, `projects.tell`);
   - a program on the table (`useDocReview` runs revdiff with `terminals.open`)
-    or in a split of the agent's window (`aug-tools pane`);
+    or in a split of the agent's window (`riker-tools pane`);
   - capabilities (`core/capabilities.ts`, AUG-0057): a plugin loaded with
     `--plugin-dir` (refused if its skills' `allowed-tools` widen the grant),
     commands allowed on Bash, per role.
@@ -25,20 +25,20 @@ Status: approved by the owner (2026-11-20), and built (Build order, steps 1-8). 
 
 ## Core idea: an action is a skill, registered by name
 
-A skill already is "a named recipe an agent runs". aug adds only what a skill
-cannot say: which rows it applies to, how aug runs it, where its output goes,
+A skill already is "a named recipe an agent runs". Riker adds only what a skill
+cannot say: which rows it applies to, how Riker runs it, where its output goes,
 and when it runs by itself. So:
 
 - **The recipe is a skill** (`SKILL.md`): prompt, `allowed-tools`, any files
   it needs. The same skill works by hand in any claude session.
-- **The registration is aug's**: a short entry by name in `config.json`
+- **The registration is Riker's**: a short entry by name in `config.json`
   `actions`. Nothing is an action until it is registered, the same way nothing
   is granted until a role lists a capability.
 
 ```jsonc
 "actions": {
-  "summarize": { "skill": "aug:summarize", "via": "fork", "output": "turn" },
-  "guide":     { "skill": "aug:guide", "via": "fork", "capability": "plannotator",
+  "summarize": { "skill": "riker:summarize", "via": "fork", "output": "turn" },
+  "guide":     { "skill": "riker:guide", "via": "fork", "capability": "plannotator",
                  "kinds": ["coding"], "needs": ["worktree"],
                  "on": [{ "event": "ready" }] },
   "quiz":      { "skill": "quiz-me", "via": "pane", "kinds": ["coding"],
@@ -46,17 +46,17 @@ and when it runs by itself. So:
 }
 ```
 
-- Built-in recipes ship as skills in aug's own plugin (`aug:summarize`,
-  later `aug:guide`, `aug:quiz`), embedded in the binary (`with { type:
-  "text" }`, `packages/core/plugin/`) and written under `AUG_HOME/plugin`
+- Built-in recipes ship as skills in Riker's own plugin (`riker:summarize`,
+  later `riker:guide`, `riker:quiz`), embedded in the binary (`with { type:
+  "text" }`, `packages/core/plugin/`) and written under `RIKER_HOME/plugin`
   whenever a run needs it, so headless runs load it with `--plugin-dir` and
-  need no install step. `aug install actions` (an `install.ts` entry, with
+  need no install step. `riker install actions` (an `install.ts` entry, with
   the `pane` step) will put it in the user's Claude Code plugins too, for
-  interactive sessions and coding agents (`/aug:summarize`).
+  interactive sessions and coding agents (`/riker:summarize`).
 - Built-ins are registered by default. An entry in config with the same name
   changes it field by field; `"summarize": false` turns it off.
-- A registered skill that is missing is reported by name, with where aug
-  looked (`aug install --check` lists it too).
+- A registered skill that is missing is reported by name, with where Riker
+  looked (`riker install --check` lists it too).
 
 ### Fields of a registration (`TaskActionSpec`, `core/task-actions.ts`)
 
@@ -91,22 +91,22 @@ One runner per `via`, behind `desk.runAction(taskId, name, by)`, the way
   with `/<skill> <args>` as the text. It spends the agent's context and waits
   on it. Use it for actions that should change the agent's own work.
 - **pane**: interactive `claude "/<skill> <args>"` in a split of the agent's
-  window (the `aug-tools pane` mechanism), zoomed, shown in the viewer. With
+  window (the `riker-tools pane` mechanism), zoomed, shown in the viewer. With
   no live agent window, it opens on the table, as revdiff does. Interactive
   claude loads user settings, so every installed skill is there.
 
 How skills load headless: `--setting-sources ""` skips the user's skills.
 A plugin skill loads with `--plugin-dir` (AUG-0057's path, with its
 `allowed-tools` check). A bare user skill (`~/.claude/skills/quiz-me`) is
-wrapped: aug links it into a throwaway plugin folder and passes that. The
+wrapped: Riker links it into a throwaway plugin folder and passes that. The
 same widening check applies, so a skill that asks for more than its
 `capability` grants is refused with a reason, not run.
 
 An action never touches `agent_state` (the lifecycle's columns). A headless
 or fork run writes its own turn (`author: "action:<name>"`, running, then
 done or failed), so the rail does not say the agent is working. An action
-the owner asks for runs now. One aug starts by itself (Triggers) waits its
-turn under `maxActiveAgents`, as aug's chat turns do.
+the owner asks for runs now. One Riker starts by itself (Triggers) waits its
+turn under `maxActiveAgents`, as Riker's chat turns do.
 
 ## Triggers: actions in triage and the lifecycle
 
@@ -138,16 +138,16 @@ matched by plain rules (no model call), in the noise rules' shape:
 
 ## The initial three
 
-- **summarize** (`aug:summarize`, `fork`, output `turn`). The skill: the
+- **summarize** (`riker:summarize`, `fork`, output `turn`). The skill: the
   goal, what changed (commits and diff against `{base}`), decisions and why,
   what is left, what is blocked, in under 15 lines. A non-coding task falls
   back to `headless` over the turns.
-- **guide** (`aug:guide`, `fork`, output `guide`). One run does both the
+- **guide** (`riker:guide`, `fork`, output `guide`). One run does both the
   guided review and the agentic review: chapters, plus findings pinned to
   their lines. As built, see Build order, step 6: Plannotator keeps a saved
-  guide's notes but draws them nowhere, so aug posts the findings as
+  guide's notes but draws them nowhere, so Riker posts the findings as
   comments into the review it opens.
-- **quiz** (`aug:quiz`, shipped with aug, `pane`, `kinds: [coding]`). The
+- **quiz** (`riker:quiz`, shipped with Riker, `pane`, `kinds: [coding]`). The
   skill and its `args` are configurable: point `skill` at your own quiz skill
   to use it instead.
 
@@ -169,7 +169,7 @@ matched by plain rules (no model call), in the noise rules' shape:
 
 ## As a move
 
-`aug-tools move action AUG-0073 summarize` (verb `action`, positional `name`),
+`riker-tools move action AUG-0073 summarize` (verb `action`, positional `name`),
 so the Assistant can do "summarize AUG-0073". It is not in `AGENT_MOVES`, so
 agents cannot run actions on each other in a loop. A `pane` action answers
 "needs the TUI" as a move. AUG-0017's rename of `move` applies here like
@@ -180,8 +180,8 @@ everywhere else.
 Done (steps 1-3):
 
 - `core/task-actions.ts`: the registry (built-ins merged with config
-  `actions`), `whyNot`/`actionsFor`, the arg template, aug's plugin under
-  `AUG_HOME/plugin`, skill resolution (aug's plugin, or the plugin the
+  `actions`), `whyNot`/`actionsFor`, the arg template, Riker's plugin under
+  `RIKER_HOME/plugin`, skill resolution (Riker's plugin, or the plugin the
   action's `capability` grants).
 - `core/run-action.ts`: the headless and fork runners (`BrainCall.fork` adds
   `--fork-session --no-session-persistence`); `desk.runAction`; the `agent`
@@ -190,7 +190,7 @@ Done (steps 1-3):
   that reads the agent's turns (resume, denials, the latest answer, Slack
   remote) takes it for one. The chat draws it whole on an accent rule; the
   transcript names it as the action's.
-- `aug:summarize`; `.` opens the picker on rail and table rows; the palette
+- `riker:summarize`; `.` opens the picker on rail and table rows; the palette
   lists one entry per action that applies, beside the row's keys.
 - Checked for real (haiku, scratch home): a fork of a coding session in its
   worktree ran the skill, and its declared `git log`/`git diff` rules
@@ -199,32 +199,32 @@ Done (steps 1-3):
 Done (steps 4-5):
 
 - `actions.<name>.key` binds an action on the rail and the Canvas at start
-  (`buildKeymap(keys, keyedActions(config))`); a key aug already uses there,
+  (`buildKeymap(keys, keyedActions(config))`); a key Riker already uses there,
   or one an earlier action took, is refused (`actionKeys`) and logged, and
   the action stays in the picker. `.` also works on the Board's Columns.
-- `aug:quiz` (`pane`, coding with a worktree). The pane runner splits the
-  agent's live window, zoomed, with `claude --plugin-dir <aug's plugin>
-  "/aug:quiz ..."`; with no window it opens on the Canvas. The pane claude
-  gets `AUG_TASK_ID` and no `AUG_SESSION_ID`, so neither aug hook takes it
+- `riker:quiz` (`pane`, coding with a worktree). The pane runner splits the
+  agent's live window, zoomed, with `claude --plugin-dir <riker's plugin>
+  "/riker:quiz ..."`; with no window it opens on the Canvas. The pane claude
+  gets `RIKER_TASK_ID` and no `RIKER_SESSION_ID`, so neither Riker hook takes it
   for the task's agent (or adopts it). Its turn records only that it opened.
   Checked for real (haiku, private tmux): the skill read this branch's diff
   and asked its first question.
 - A bare user skill (`"skill": "quiz-me"`) runs headless wrapped in a plugin
-  of its own (`AUG_HOME/wrapped/<name>`, the skill linked in, invoked as
-  `/aug-user:<name>`). Its `allowed-tools` must stay within the action's
+  of its own (`RIKER_HOME/wrapped/<name>`, the skill linked in, invoked as
+  `/riker-user:<name>`). Its `allowed-tools` must stay within the action's
   capability (`pluginWidens`), or it is refused with the rules it asked for.
   In a pane it needs no wrapping: interactive claude loads the user's skills.
-- `aug install actions` is left out: every runner loads aug's plugin with
+- `riker install actions` is left out: every runner loads Riker's plugin with
   `--plugin-dir`, so nothing needs it installed. It would only make
-  `/aug:summarize` available in the owner's own sessions.
+  `/riker:summarize` available in the owner's own sessions.
 
 Done (step 6), the guide:
 
-- `aug:guide` (`fork`, coding with a worktree, output `guide`) answers with
+- `riker:guide` (`fork`, coding with a worktree, output `guide`) answers with
   Plannotator guide JSON only: chapters (Plannotator's own methodology) and
   review findings as line notes. It needs no plannotator capability: the
-  skill only reads git, and aug does the rest (`@aug/code-review-plannotator`, `guide.ts`).
-- aug makes the patch itself (`git diff <merge-base>`, main then master),
+  skill only reads git, and Riker does the rest (`@riker/code-review-plannotator`, `guide.ts`).
+- Riker makes the patch itself (`git diff <merge-base>`, main then master),
   fits the guide to it (files not in the patch dropped, files left out
   listed as unplaced, each file once, a note outside its file's hunks kept
   off the file), writes a v4 snapshot under What it made and saves it with
@@ -235,15 +235,15 @@ Done (step 6), the guide:
   feedback, sends nothing: `reviewNotes`).
 - The diff is in the prompts, in batches (AUG-0185). A forked run kept
   its session's habit of chained shell (`mb=$(git merge-base ...); git
-  diff $mb | head`), which aug's allow rules deny, and wrote its chapters
+  diff $mb | head`), which riker's allow rules deny, and wrote its chapters
   from memory with no findings; and nothing made a run read a big diff
   whole. So the guide no longer forks or reads the diff itself:
   - Base: `origin/<base>` when the remote has moved past the local branch
     (an unpulled local main put others' merged work in the change), else
-    the local one (`mergeBase` in `@aug/code-review-plannotator` `guide.ts`). The review aug opens
+    the local one (`mergeBase` in `@riker/code-review-plannotator` `guide.ts`). The review Riker opens
     takes the same ref (`plannotator review --base origin/main` works).
-  - aug takes the patch before the run (no change: refused before anything
-    is spent) and plans it (`@aug/code-review-plannotator` `batches.ts`): lock files are left
+  - Riker takes the patch before the run (no change: refused before anything
+    is spent) and plans it (`@riker/code-review-plannotator` `batches.ts`): lock files are left
     out of every prompt (and so unplaced); a file past 400k characters is
     named on the turn, not reviewed; the rest are grouped by what relates
     them, with no parser: files changed in the same commit of the branch,
@@ -258,9 +258,9 @@ Done (step 6), the guide:
     to the diff's own line numbers). Several are one call per batch, three
     at a time (`job: notes`: its files' summaries and notes, the index of
     every file beside them, Read allowed for the rest), then one `job:
-    chapters` call from the index and the summaries; aug lays the notes
+    chapters` call from the index and the summaries; riker lays the notes
     into the chapters, and a reviewed file no chapter names goes in a last
-    "Other changes", so no note is lost (`@aug/code-review-plannotator` `run.ts`).
+    "Other changes", so no note is lost (`@riker/code-review-plannotator` `run.ts`).
   - So every file's diff is in exactly one prompt, whatever the model
     chooses to read. What no call answered for, chapters that did not
     parse, files too large and denied calls are said on the turn and in
@@ -275,23 +275,23 @@ Done (step 6), the guide:
   `inboxCodeReview` on). The notes stay in the snapshot for when it does.
 - What it draws instead: comments posted into a live review
   (`POST /api/external-annotations`, in 0.28.61 and 0.29). The guide's
-  review starts on a port aug picks (`PLANNOTATOR_PORT`), and the TUI posts
+  review starts on a port Riker picks (`PLANNOTATOR_PORT`), and the TUI posts
   every finding once it answers (`postComments`, retrying for a minute): on
   its lines when one hunk shows them, else on its file naming the lines;
   Bug and Risk as concerns. They are pinned in the diff and in the guided
-  review alike, from "aug guide" (source `aug-guide`): decision 5. The
+  review alike, from "Riker guide" (source `riker-guide`): decision 5. The
   owner's Send Feedback carries every comment still there, unlabelled, so
   the message to the agent says it includes the findings the owner kept.
   An earlier build wrote findings into each chapter's overview instead.
 - Gaps (closed by AUG-0185, below): a guide a trigger saved had no review
-  aug opened, so no comments; the review offers the last session's
+  Riker opened, so no comments; the review offers the last session's
   comments as a recovered draft, so restoring it after a re-run doubled
   them.
 - Plannotator cannot hold the findings for a review opened later (checked
   in the 0.29.1 source): drafts are written by the browser page, a comment
   with a `source` is not counted as the reviewer's, `/api/draft` is
   internal, and the external-annotation store lives only as long as the
-  review process. So aug keeps them (AUG-0185, the owner's pick over
+  review process. So Riker keeps them (AUG-0185, the owner's pick over
   keeping a background review alive):
   - `saveGuide` writes `guide-findings.json` beside `guide.json`: the
     guide's id, title, base and each finding as its file and note, as the
@@ -302,23 +302,23 @@ Done (step 6), the guide:
     (`reviewComments`: on their lines when one hunk shows them, else on
     their file naming the lines; a file no longer in the change has nowhere
     to show one, so its findings are left out and the toast counts them),
-    and opens `plannotator review` on a port aug picks, as after a run.
-  - Every post first clears aug's own (`DELETE
-    /api/external-annotations?source=aug-guide`), then posts the batch, so
+    and opens `plannotator review` on a port Riker picks, as after a run.
+  - Every post first clears Riker's own (`DELETE
+    /api/external-annotations?source=riker-guide`), then posts the batch, so
     the findings are there once. Feedback goes to the agent on exit as
     before.
   - A guide a trigger ran opens nothing; its turn ends by pointing at Open
-    the guide's review instead of "the review aug opens".
+    the guide's review instead of "the review Riker opens".
   - Checked live (plannotator 0.29.1, scratch HOME, `PLANNOTATOR_BROWSER=none`):
     saved findings refit, posted 0.55s after the review started, posted
     again into the same review: it held 2 comments, not 4.
   - Restoring a recovered draft, checked in headless Chrome on 0.29.1: the
-    page saves aug's comments into its draft, and the next review of the
+    page saves Riker's comments into its draft, and the next review of the
     same change offers "Draft Recovered ... restore them?". Restored after
-    aug posts, before, or with the re-run's findings reworded, the page
+    Riker posts, before, or with the re-run's findings reworded, the page
     shows each finding once (badge 2), and Send Feedback carries each
     once: a restored comment with a `source` gives way to the live ones
-    from that source. Not doubled on 0.29.1 whether or not aug clears
+    from that source. Not doubled on 0.29.1 whether or not Riker clears
     first; the clear guards a review that is reused.
 - Not the Inbox: `submit_guide` refuses a v4 snapshot, drops notes unless
   `inboxCodeReview` is on, and the Inbox's first start writes
@@ -329,7 +329,7 @@ Done (step 6), the guide:
   comments, again on 0.28.61 with a scratch home: posted 0.5s after the
   review started, drawn under the line and as a file banner.
 
-Done (step 8): `aug-tools move action AUG-0012 [name]` (no name lists the
+Done (step 8): `riker-tools move action AUG-0012 [name]` (no name lists the
 ones that apply). It starts the run and answers at once (moves run one at
 a time, and an action takes minutes); a `pane` action answers that it
 needs the TUI. Not in `AGENT_MOVES`; from Slack it waits for the owner's
@@ -347,7 +347,7 @@ Done (step 7), triggers:
   effects and fires the actions, from the worker, a re-triage and `m` on a
   held message. The owner's own message on a thread fires nothing.
 - `ready`, `merged`, `done`: the engine reads `task_events` past a cursor
-  (`kv` `actions.events`) every 2 s, so an agent's `done` from aug-tools in
+  (`kv` `actions.events`) every 2 s, so an agent's `done` from riker-tools in
   another process is heard. `ready` is `finished` (sessions.result, which
   only `workFinished` sets). The first look starts at the newest event, so
   history runs nothing. No `pr` event yet: linking a PR writes no
@@ -363,7 +363,7 @@ All eight steps are built.
 
 ## Decisions (owner, 2026-11-20)
 
-1. quiz: aug ships `aug:quiz`; a registration can point at another skill.
+1. quiz: Riker ships `riker:quiz`; a registration can point at another skill.
 2. Picker key: `.`. Actions are also listed in the palette.
 3. Triggers: plain rules only (`on` matchers). No model-suggested actions.
 4. Registrations live in `config.json` `actions`.

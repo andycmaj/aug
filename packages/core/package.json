@@ -1,7 +1,7 @@
 {
-  "name": "@aug/core",
+  "name": "@riker/core",
   "version": "0.0.1",
-  "description": "aug's domain: the store, triage, the agent pool, the engine and the desk. No UI.",
+  "description": "Riker's domain: the store, triage, the agent pool, the engine and the desk. No UI.",
   "type": "module",
   "private": true,
   "exports": {
@@ -9,7 +9,7 @@
     "./*": "./src/*.ts"
   },
   "dependencies": {
-    "@aug/code-review-plannotator": "workspace:*",
+    "@riker/code-review-plannotator": "workspace:*",
     "libtmux": "0.1.2"
   }
 }

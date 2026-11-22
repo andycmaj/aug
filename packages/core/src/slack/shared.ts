@@ -24,7 +24,7 @@ export interface PollContext {
   cursor: SlackCursor;
   // Channel ids whose every message is triaged.
   watchChannels: string[];
-  // Threads aug tracks (open slack tasks), as "channel:thread_ts".
+  // Threads Riker tracks (open slack tasks), as "channel:thread_ts".
   trackedThreads: string[];
   // How far back a first look reaches.
   firstLookSeconds: number;

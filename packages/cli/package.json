@@ -1,15 +1,15 @@
 {
-  "name": "@aug/cli",
+  "name": "@riker/cli",
   "version": "0.0.1",
-  "description": "What runs aug from a shell: aug-tools, the compiled entry, the dev launcher and the compile script.",
+  "description": "What runs riker from a shell: riker-tools, the compiled entry, the dev launcher and the compile script.",
   "type": "module",
   "private": true,
   "exports": {
     "./*": "./src/*.ts"
   },
   "dependencies": {
-    "@aug/core": "workspace:*",
-    "@aug/tui": "workspace:*",
+    "@riker/core": "workspace:*",
+    "@riker/tui": "workspace:*",
     "@opentui/solid": "0.5.12",
     "citty": "^0.2.2"
   }

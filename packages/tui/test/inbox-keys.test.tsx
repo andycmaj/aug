@@ -7,9 +7,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testRender } from "@opentui/solid";
 import { App } from "../src/app";
-import { installFixture } from "@aug/fixtures/demo";
-import * as store from "@aug/core/store";
-import { TaskStatus } from "@aug/core/types";
+import { installFixture } from "@riker/fixtures/demo";
+import * as store from "@riker/core/store";
+import { TaskStatus } from "@riker/core/types";
 
 let destroy: (() => void) | undefined;
 let home: string | undefined;
@@ -19,8 +19,8 @@ afterEach(() => {
 });
 
 async function boot() {
-  home = mkdtempSync(join(tmpdir(), "aug-inbox-keys-"));
-  process.env.AUG_HOME = home;
+  home = mkdtempSync(join(tmpdir(), "riker-inbox-keys-"));
+  process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
   const setup = await testRender(() => <App engine={engine} />, {
     width: 160,
@@ -61,7 +61,7 @@ test("t opens the task even when it is done and off the rail", async () => {
   const { press, find, frame } = await boot();
   store.updateTask(RUTH_TASK, { status: TaskStatus.done });
   await find(RUTH);
-  expect(frame()).toContain("AUG-0002");
+  expect(frame()).toContain("RIKER-0002");
   await press("t");
   // The Canvas shows the task, not the overview's greeting.
   expect(frame()).toContain("Copier renewal - how many seats?");
@@ -73,15 +73,15 @@ test("x dismisses every message that joined a task, and the task stays", async (
   const joined = ["Zebra one", "Zebra two"].map((body, i) => {
     const m = store.insertMessage({
       channel: "slack",
-      externalId: `aug-0140-joined-${i}`,
-      threadKey: "slack:C9:aug-0140",
+      externalId: `riker-0140-joined-${i}`,
+      threadKey: "slack:C9:riker-0140",
       author: "U9",
       authorName: "Ruth Okafor",
       title: "#renewals",
       body,
       receivedAt: new Date(Date.now() + i * 1000).toISOString(),
     })!;
-    store.fileMessage(m.id, null, "joined AUG-0002", RUTH_TASK);
+    store.fileMessage(m.id, null, "joined RIKER-0002", RUTH_TASK);
     return m;
   });
   // One row for the task, newest first, saying how many.
@@ -99,7 +99,7 @@ test("x dismisses every message that joined a task, and the task stays", async (
 test("an idea's task column says it is only about that task", async () => {
   const { find, frame } = await boot();
   await find("seat count");
-  expect(frame()).toContain("about AUG-0002");
+  expect(frame()).toContain("about RIKER-0002");
 });
 
 test("x dismisses a message triage could not place", async () => {

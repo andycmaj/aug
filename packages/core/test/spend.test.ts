@@ -7,7 +7,7 @@ import {
   turnPrompt,
 } from "../src/agents";
 import { think } from "../src/brain";
-import { fixedConfig, type AugConfig } from "../src/config";
+import { fixedConfig, type RikerConfig } from "../src/config";
 import { runDocPass } from "../src/doc-pass";
 import { localDay } from "../src/rail";
 import { PersistentClaude, type ProcLike } from "../src/slack/claude-mcp";
@@ -32,7 +32,7 @@ import { config, fakeBrain, freshHome } from "./support/helpers";
 
 const DONE = { about: "a", did: "b", next: "c", state: "done" };
 
-function capped(dailyUsd: number, capEnabled = true): AugConfig {
+function capped(dailyUsd: number, capEnabled = true): RikerConfig {
   return { ...config(), maxActiveAgents: 4, spend: { capEnabled, dailyUsd } };
 }
 
@@ -183,13 +183,13 @@ describe("the daily cap", () => {
     expect(capReached(capped(60))).toBe(false);
   });
 
-  test("once reached, turns aug starts wait with the reason; the owner's still run", async () => {
+  test("once reached, turns Riker starts wait with the reason; the owner's still run", async () => {
     const [mine, augs] = [chatTask("mine"), chatTask("augs")];
     const calls = fakeBrain(() => DONE);
     recordSpend({ role: SpendRole.general }, null, { costUsd: 2 });
     const source = fixedConfig(capped(1));
     const pool = new AgentPool({ config: source });
-    expect(pool.request(augs, "autostart", "aug")).toBeNull();
+    expect(pool.request(augs, "autostart", "riker")).toBeNull();
     const held = store.getTask(augs)!;
     expect(held.agent_state).toBe(AgentState.queued);
     expect(held.queue_reason).toContain("daily spend cap reached ($2.00 of $1.00)");
@@ -205,12 +205,12 @@ describe("the daily cap", () => {
     expect(pool.isRunning(augs)).toBe(true);
   });
 
-  test("with the cap off, aug's turns run past any spend", async () => {
+  test("with the cap off, Riker's turns run past any spend", async () => {
     const t = chatTask();
     fakeBrain(() => DONE);
     recordSpend({ role: SpendRole.general }, null, { costUsd: 500 });
     const pool = new AgentPool({ config: fixedConfig(capped(1, false)) });
-    expect(pool.request(t, "autostart", "aug")).not.toBeNull();
+    expect(pool.request(t, "autostart", "riker")).not.toBeNull();
   });
 
   test("the owner's coding Start still goes when the cap holds chat turns", async () => {
@@ -218,7 +218,7 @@ describe("the daily cap", () => {
     fakeBrain(() => DONE);
     recordSpend({ role: SpendRole.general }, null, { costUsd: 2 });
     const pool = new AgentPool({ config: fixedConfig({ ...capped(1), maxActiveAgents: 1 }) });
-    expect(pool.request(chat, "autostart", "aug")).toBeNull();
+    expect(pool.request(chat, "autostart", "riker")).toBeNull();
     let release: () => void = () => {};
     const blocker = pool.claim(9999, () => new Promise<void>((r) => (release = r)));
     let started = false;

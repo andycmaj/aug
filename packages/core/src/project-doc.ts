@@ -4,7 +4,7 @@
 // ref is a new goal, and a goal whose line is gone is dropped (never deleted).
 
 import { checkMapped, checkRepo, describeProblem, expandHome, mapRepo, repoPath, tildePath } from "./repos";
-import type { AugConfig, ConfigSource } from "./config";
+import type { RikerConfig, ConfigSource } from "./config";
 import * as store from "./store";
 import { GoalStatus, type ProjectRow } from "./types";
 
@@ -18,7 +18,7 @@ const MARK: Record<GoalStatus, string> = {
   [GoalStatus.dropped]: "-",
 };
 
-export function renderProjectDoc(p: ProjectRow, config: AugConfig): string {
+export function renderProjectDoc(p: ProjectRow, config: RikerConfig): string {
   const goals = store
     .goalsForProject(p.id)
     .filter((g) => g.status !== GoalStatus.dropped);

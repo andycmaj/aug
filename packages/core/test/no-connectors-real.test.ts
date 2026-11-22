@@ -3,13 +3,13 @@
 // resumed session that connects them late re-adds their schemas every turn,
 // missing the prompt cache. Ungranted, none may load. Reads only the init
 // line, then kills claude, so it costs next to nothing; still needs the real
-// CLI and the owner's connectors, so it runs only with AUG_REAL_CLAUDE=1:
-//   AUG_REAL_CLAUDE=1 bun test test/no-connectors-real.test.ts
+// CLI and the owner's connectors, so it runs only with RIKER_REAL_CLAUDE=1:
+//   RIKER_REAL_CLAUDE=1 bun test test/no-connectors-real.test.ts
 
 import { describe, expect, test } from "bun:test";
 import { ASSISTANT_TOOLS, assistantAllow } from "../src/assistant";
 import { brainEnv, claudeArgs, type BrainCall } from "../src/brain";
-import { DEFAULT_CONFIG, type AugConfig } from "../src/config";
+import { DEFAULT_CONFIG, type RikerConfig } from "../src/config";
 import { claudeEnv } from "../src/self";
 import { freshHome } from "./support/helpers";
 
@@ -45,7 +45,7 @@ async function init(call: BrainCall): Promise<Init> {
   throw new Error("claude gave no init line");
 }
 
-function assistantCall(config: AugConfig): BrainCall {
+function assistantCall(config: RikerConfig): BrainCall {
   return {
     prompt: "Say ok.",
     model: "haiku",
@@ -54,14 +54,14 @@ function assistantCall(config: AugConfig): BrainCall {
   };
 }
 
-function granted(assistant: string[]): AugConfig {
+function granted(assistant: string[]): RikerConfig {
   return {
     ...DEFAULT_CONFIG,
     capabilities: { ...DEFAULT_CONFIG.capabilities, grants: { assistant } },
   };
 }
 
-describe.skipIf(!process.env.AUG_REAL_CLAUDE)("connectors in a headless turn", () => {
+describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("connectors in a headless turn", () => {
   test(
     "the Assistant with no MCP grant loads no MCP server",
     async () => {

@@ -33,7 +33,7 @@ describe("task info", () => {
     const t = store.createTask({ title: "buy milk", kind: Kind.task, channel: "owner" });
     const sections = itemInfo(taskItem(t));
     expect(sections.map((s) => s.title)).toEqual(["Task", "Source"]);
-    expect(value(taskItem(t), "ref")).toBe("AUG-0001");
+    expect(value(taskItem(t), "ref")).toBe("RIKER-0001");
     expect(value(taskItem(t), "url")).toBeUndefined();
   });
 

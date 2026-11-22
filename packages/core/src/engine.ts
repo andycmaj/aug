@@ -62,7 +62,7 @@ export interface EngineStatus {
 }
 
 export interface EngineOptions {
-  // config.json for a real aug, fixedConfig for tests and the fixture day.
+  // config.json for a real Riker, fixedConfig for tests and the fixture day.
   // Everything the engine owns reads it through this, never a global.
   config: ConfigSource;
   // Fixture mode: no pollers, no Advisor clock.
@@ -165,7 +165,7 @@ export class Engine {
     for (const l of this.statusListeners) l(this.status);
   }
 
-  // Your setup outside aug follows aug when it moves (a new checkout, the
+  // Your setup outside Riker follows Riker when it moves (a new checkout, the
   // compiled binary): stale installs are rewritten, nothing new goes in.
   private refreshInstalls(): void {
     try {
@@ -287,7 +287,7 @@ export class Engine {
   }
 
   // tmux keeps coding agents alive across restarts; reconcile asks it which
-  // still are. Anything else that was live died with the last aug.
+  // still are. Anything else that was live died with the last Riker.
   private recoverSessions(): void {
     recoverAtBoot(
       (taskId) => this.pool.isRunning(taskId),
@@ -295,9 +295,9 @@ export class Engine {
     );
   }
 
-  // aug-tools asks for moves from another process; its commit bumps
+  // riker-tools asks for moves from another process; its commit bumps
   // data_version, and the engine drains whatever is pending. A slot frees
-  // from a hook in another process or from aug's own stop and tmux watch,
+  // from a hook in another process or from Riker's own stop and tmux watch,
   // which data_version does not show, so the pool's queue is tried each tick.
   private draining = false;
   private watchMoves(): void {
@@ -415,7 +415,7 @@ export class Engine {
     return this.triaging;
   }
 
-  // At start: claims an aug that died left are new again, and the worker
+  // At start: claims a Riker that died left are new again, and the worker
   // takes whatever waits (inserted, never triaged; a retry come due).
   resumeTriage(): Promise<number> {
     const reset = store.resetTriaging();
@@ -428,7 +428,7 @@ export class Engine {
   }
 
   // The gate outlives a restart only for a rate limit: GitHub's reset time
-  // does not move because aug did.
+  // does not move because Riker did.
   private githubGate(): GithubGate {
     if (this.gate) return this.gate;
     const gate = new GithubGate(
@@ -601,7 +601,7 @@ export class Engine {
         trackedThreads,
         firstLookSeconds: 86400,
       });
-      // The remote's conversation is aug talking with the owner, not inbox.
+      // The remote's conversation is Riker talking with the owner, not inbox.
       const result = {
         ...polled,
         messages: polled.messages.filter((m) => m.meta?.channel !== own),
@@ -752,6 +752,13 @@ export class Engine {
   }
 
   async reconcile(by = "start"): Promise<void> {
+    if (by === "start")
+      try {
+        const tagged = await projects.copyLegacyTags();
+        if (tagged) log.info("copied aug's tmux tags", { tagged });
+      } catch (err) {
+        log.warn("copying aug's tmux tags failed", { err: errorMessage(err) });
+      }
     const done = perfStart("engine.reconcile", { by });
     try {
       await projects.reconcile();

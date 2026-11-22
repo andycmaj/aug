@@ -32,7 +32,7 @@ function task(kind: Kind = Kind.general) {
 
 function start(taskId: number, kind: SessionKind = SessionKind.chat) {
   const id = `s${++n}`;
-  sessionStarted({ id, taskId, kind, cwd: "/tmp", startedBy: "aug" });
+  sessionStarted({ id, taskId, kind, cwd: "/tmp", startedBy: "riker" });
   return { taskId, sessionId: id };
 }
 
@@ -67,7 +67,7 @@ describe("starting", () => {
       id: ref.sessionId,
       kind: SessionKind.chat,
       cwd: "/tmp",
-      startedBy: "aug",
+      startedBy: "riker",
     });
     expect(store.sessionsForTask(t.id)).toHaveLength(1);
     expect(store.getSession(ref.sessionId)!.ended_at).toBeNull();
@@ -287,7 +287,7 @@ describe("recovering at boot", () => {
     expect(agentOf(orphan.id)).toBe(AgentState.stopped);
   });
 
-  test("a task left waiting its turn is held for Start: its queue died with aug", () => {
+  test("a task left waiting its turn is held for Start: its queue died with Riker", () => {
     const waiting = task();
     const held = task();
     queued(waiting.id, "waiting its turn (4 agents at once)");

@@ -87,7 +87,7 @@ export function changed(): void {
 // IMMEDIATE takes the write lock up front, waiting out busy_timeout. A
 // deferred one that reads first cannot wait: SQLite answers "database is
 // locked" at once when its read has to become a write while another process
-// (a hook, aug-tools) writes. Nested batches are savepoints either way.
+// (a hook, riker-tools) writes. Nested batches are savepoints either way.
 export function batch<T>(fn: () => T): T {
   batching++;
   try {
@@ -703,7 +703,7 @@ export function settleMessage(
   run("UPDATE messages SET state = ?, next_at = ? WHERE id = ?", state, nextAt, id);
 }
 
-// At start: a message claimed by an aug that died is new again. One aug
+// At start: a message claimed by a Riker that died is new again. One Riker
 // runs per home, so every claim left is stale.
 export function resetTriaging(): number {
   const rows = db()
@@ -762,7 +762,7 @@ export function setPending(turnIds: number[], pending: boolean): void {
 }
 
 // What search reads of the rail tasks' chats: what you typed and what the
-// agents answered. Incoming turns repeat their messages; aug's own notes are
+// agents answered. Incoming turns repeat their messages; Riker's own notes are
 // noise.
 export type SearchTurn = Pick<
   TurnRow,
@@ -1574,7 +1574,7 @@ export function finishMove(id: number, ok: boolean, result: string): void {
   );
 }
 
-// A move nobody picked up is failed, not left to run whenever aug next starts.
+// A move nobody picked up is failed, not left to run whenever Riker next starts.
 export function abandonMove(id: number, why: string): boolean {
   const abandoned = db()
     .query(

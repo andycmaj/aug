@@ -437,7 +437,7 @@ describe("triage routing", () => {
       taskId: first.taskId!,
       kind: SessionKind.chat,
       cwd: "/tmp",
-      startedBy: "aug",
+      startedBy: "riker",
     });
     const own = store.insertMessage({
       channel: "slack",

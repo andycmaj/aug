@@ -1,6 +1,6 @@
 // Slack through the Web API with a user token, so replies go back as you and
 // the inbox is yours: direct messages, mentions of you, the configured
-// channels, and new replies on threads aug already tracks.
+// channels, and new replies on threads Riker already tracks.
 
 import { logger } from "../log";
 import type { NewMessage } from "../store";
@@ -80,7 +80,7 @@ export interface SlackPollInput {
   api: SlackApi;
   cursor: SlackCursor;
   watchChannels: string[];
-  // Threads aug tracks (open slack tasks), as "channel:thread_ts".
+  // Threads Riker tracks (open slack tasks), as "channel:thread_ts".
   trackedThreads: string[];
   // How far back a first look reaches.
   firstLookSeconds: number;
@@ -223,7 +223,7 @@ export async function pollSlack(
     log.debug("mention search skipped", { err });
   }
 
-  // New replies on threads aug tracks.
+  // New replies on threads Riker tracks.
   for (const tracked of input.trackedThreads) {
     const [channel, threadTs] = tracked.split(":");
     if (!channel || !threadTs) continue;

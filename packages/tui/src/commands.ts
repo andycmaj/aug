@@ -1,4 +1,4 @@
-// App commands: the framework's base commands plus aug's own.
+// App commands: the framework's base commands plus Riker's own.
 
 import { BaseCommands } from "@andycmaj/opentui-app";
 

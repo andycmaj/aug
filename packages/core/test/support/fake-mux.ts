@@ -11,7 +11,7 @@ import type {
   Worktree,
 } from "../../src/mux";
 
-// tmux and wt in memory. Records what aug asked for so tests can read it.
+// tmux and wt in memory. Records what Riker asked for so tests can read it.
 export class FakeMux implements Mux {
   sessions: MuxSession[] = [];
   windows: (MuxWindow & { cwd: string; env: Record<string, string>; argv: string[] })[] = [];
@@ -84,6 +84,11 @@ export class FakeMux implements Mux {
     const w = this.windows.find((w) => w.id === windowId);
     if (!w) throw new Error(`no window ${windowId}`);
     w.taskId = taskId;
+  }
+
+  // The fake has no tags from before the rename.
+  async copyLegacyTags(): Promise<number> {
+    return 0;
   }
 
   async killWindow(windowId: string): Promise<void> {

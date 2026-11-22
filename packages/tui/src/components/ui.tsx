@@ -7,10 +7,10 @@ import {
   type Theme,
   type ThemeColor,
 } from "@andycmaj/opentui-app";
-import { useAug } from "../context/aug";
-import { nerdFont } from "@aug/core/glyphs";
-import { laneMeta, type Lane, type LaneMeta, type Tone } from "@aug/core/lanes";
-import type { Channel, Priority } from "@aug/core/types";
+import { useRiker } from "../context/riker";
+import { nerdFont } from "@riker/core/glyphs";
+import { laneMeta, type Lane, type LaneMeta, type Tone } from "@riker/core/lanes";
+import type { Channel, Priority } from "@riker/core/types";
 
 export function toneColor(theme: Theme, tone: Tone): ThemeColor {
   switch (tone) {
@@ -38,8 +38,8 @@ export function toneColor(theme: Theme, tone: Tone): ThemeColor {
 // A lane's look with the marks this terminal's font can draw (nerdFont in
 // config, re-read each call so an edit shows without a restart).
 export function useLaneMeta(): (lane: Lane) => LaneMeta {
-  const aug = useAug();
-  return (lane) => laneMeta(lane, nerdFont(aug.desk.config()));
+  const riker = useRiker();
+  return (lane) => laneMeta(lane, nerdFont(riker.desk.config()));
 }
 
 export function priorityColor(

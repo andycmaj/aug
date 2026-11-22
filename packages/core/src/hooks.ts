@@ -1,6 +1,6 @@
 // State for a coding agent running interactively in an embedded terminal.
 // Claude Code fires hooks (configured per session with --settings) that run
-// `aug-tools hook <event>`; each one lands here and moves the session and its
+// `riker-tools hook <event>`; each one lands here and moves the session and its
 // task through the agent states. A turn runs from the prompt to Stop: idle
 // after it, unless it ended on a question (waiting on you).
 

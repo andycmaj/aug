@@ -328,7 +328,7 @@ describe("the daily doc pass", () => {
     expect(early.skipped).toBe("not due");
   });
 
-  test("an edit becomes a proposal, an aug-shaped lesson an idea", async () => {
+  test("an edit becomes a proposal, a riker-shaped lesson an idea", async () => {
     fakeBrain(() => ({
       edits: [
         { doc: "JOB.md", text: "# JOB\n\nShip the ledger.", reason: "settled" },
@@ -375,7 +375,7 @@ describe("the daily doc pass", () => {
     const [task] = systemTasks();
 
     const engine = new Engine({ config: testConfig() });
-    const owners = "Suggest aug ideas when I hit friction";
+    const owners = "Suggest riker ideas when I hit friction";
     engine.desk.remember(owners);
     syncDocs();
     expect(systemTasks()).toHaveLength(1);
@@ -570,7 +570,7 @@ describe("onboarding", () => {
 
   test("propose_doc reads no file outside the drafts folder", async () => {
     const engine = new Engine({ config: testConfig() });
-    const outside = join(process.env.AUG_HOME!, "config.json");
+    const outside = join(process.env.RIKER_HOME!, "config.json");
     writeFileSync(outside, "{}");
     const cases = [
       [{ doc: "JOB", file: outside }, "must be in"],

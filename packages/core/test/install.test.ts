@@ -36,7 +36,7 @@ const saved = {
 
 beforeEach(() => {
   freshHome();
-  dir = mkdtempSync(join(tmpdir(), "aug-install-"));
+  dir = mkdtempSync(join(tmpdir(), "riker-install-"));
   process.env.CLAUDE_CONFIG_DIR = join(dir, "claude");
   process.env.STARSHIP_CONFIG = join(dir, "starship.toml");
   // statusline needs a starship on PATH; any will do.
@@ -61,9 +61,9 @@ const settings = () =>
     readFileSync(join(dir, "claude", "settings.json"), "utf8"),
   ) as Record<string, unknown>;
 
-// Another aug home on the same machine: a test or a real-mode check.
+// Another Riker home on the same machine: a test or a real-mode check.
 function otherHome(): void {
-  process.env.AUG_HOME = mkdtempSync(join(tmpdir(), "aug-other-"));
+  process.env.RIKER_HOME = mkdtempSync(join(tmpdir(), "riker-other-"));
 }
 
 describe("starship.toml", () => {
@@ -78,7 +78,7 @@ describe("starship.toml", () => {
     test(`${name}: module in front once, uninstall gives the file back`, () => {
       const once = withStatusline(toml);
       expect(withStatusline(once)).toBe(once);
-      expect(once).toContain("[custom.aug_task]");
+      expect(once).toContain("[custom.riker_task]");
       expect(once.match(/^\s*claude-code = .*$/m)?.[0]).toContain(
         `"${STARSHIP_MODULE}$claude_model`,
       );
@@ -88,7 +88,7 @@ describe("starship.toml", () => {
   }
 });
 
-describe("aug install statusline", () => {
+describe("riker install statusline", () => {
   test("writes the helper and module, sets a missing statusLine, uninstalls", () => {
     writeFileSync(
       starshipConfigPath(),
@@ -124,27 +124,27 @@ describe("aug install statusline", () => {
     expect(settings().statusLine).toEqual({ type: "command", command: "mine" });
   });
 
-  test("a stale helper is refreshed, but not from another aug home", () => {
+  test("a stale helper is refreshed, but not from another riker home", () => {
     INSTALLS.statusline.install();
     writeFileSync(
       statusHelperPath(),
-      "#!/bin/sh\n# Installed by `aug install statusline` old\n",
+      "#!/bin/sh\n# Installed by `riker install statusline` old\n",
     );
-    const home = process.env.AUG_HOME;
+    const home = process.env.RIKER_HOME;
     otherHome();
     expect(INSTALLS.statusline.here()).toBe(false);
     refreshInstalls();
     expect(readFileSync(starshipConfigPath(), "utf8")).not.toContain(
-      process.env.AUG_HOME!,
+      process.env.RIKER_HOME!,
     );
-    process.env.AUG_HOME = home;
+    process.env.RIKER_HOME = home;
     expect(INSTALLS.statusline.state()).toBe(InstallState.stale);
     expect(refreshInstalls()).toContain("statusline");
     expect(INSTALLS.statusline.state()).toBe(InstallState.installed);
   });
 });
 
-describe("aug install revdiff", () => {
+describe("riker install revdiff", () => {
   function plugin(): string {
     const plugins = join(dir, "claude", "plugins");
     mkdirSync(join(plugins, "data", "revdiff-revdiff", "scripts"), {
@@ -179,7 +179,7 @@ describe("aug install revdiff", () => {
   });
 });
 
-describe("aug install hooks", () => {
+describe("riker install hooks", () => {
   test("an older install (a hook event missing) is stale and refreshed", () => {
     const file = join(dir, "claude", "settings.json");
     installHooks(file);

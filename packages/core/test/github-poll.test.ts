@@ -119,7 +119,7 @@ describe("the GitHub status line", () => {
       /^up to date · PR status rate limited until \d+:\d\d$/,
     );
     expect(calls).toContain("rate_limit");
-    // Survives a restart: the reset does not move because aug did.
+    // Survives a restart: the reset does not move because Riker did.
     expect(store.kvGet(`github.pause.${GhBudget.graphql}`)).toContain(
       String(reset * 1000),
     );

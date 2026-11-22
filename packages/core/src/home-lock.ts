@@ -1,4 +1,4 @@
-// One aug per home. Two on one home both drain the moves bus and both embed
+// One Riker per home. Two on one home both drain the moves bus and both embed
 // the same task windows, and two viewers of different sizes on one window
 // is what hangs tmux 3.7's server (see mux.viewerMayHang).
 
@@ -32,7 +32,7 @@ export function claimHome(opts: ClaimOptions = {}): Claim {
   const alive = opts.alive ?? pidAlive;
   ensureHome();
   // Exclusive create, so two starting at once cannot both win; a stale lock
-  // (its aug crashed) is removed and the create tried once more.
+  // (its Riker crashed) is removed and the create tried once more.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const fd = openSync(paths.lock(), "wx");

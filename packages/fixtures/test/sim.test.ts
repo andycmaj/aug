@@ -1,6 +1,6 @@
 // The sim's fake GitHub, read through the real parsers: pollGithub and
 // toMessage for notifications, readPrBatch and readPrView for PR status.
-// If a shape drifts from what aug parses, these fail.
+// If a shape drifts from what Riker parses, these fail.
 
 import {
   afterAll,
@@ -13,13 +13,13 @@ import {
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Engine } from "@aug/core/engine";
-import { unreadFeedback } from "@aug/core/feedback";
-import { pollGithub } from "@aug/core/ingest/github";
-import { setMux } from "@aug/core/mux";
-import { prChip, prBatchQuery, readPrView, type PrRef } from "@aug/core/pr";
-import * as store from "@aug/core/store";
-import { Kind, PrChecks, PrReview, PrState } from "@aug/core/types";
+import { Engine } from "@riker/core/engine";
+import { unreadFeedback } from "@riker/core/feedback";
+import { pollGithub } from "@riker/core/ingest/github";
+import { setMux } from "@riker/core/mux";
+import { prChip, prBatchQuery, readPrView, type PrRef } from "@riker/core/pr";
+import * as store from "@riker/core/store";
+import { Kind, PrChecks, PrReview, PrState } from "@riker/core/types";
 import {
   diffLines,
   makeCheckout,
@@ -41,15 +41,15 @@ import {
   type SimState,
 } from "../src/sim/github";
 import { linkOpened } from "../src/sim/link";
-import { FakeMux } from "@aug/core/test/support/fake-mux";
-import { fakeBrain, freshHome, testConfig } from "@aug/core/test/support/helpers";
+import { FakeMux } from "@riker/core/test/support/fake-mux";
+import { fakeBrain, freshHome, testConfig } from "@riker/core/test/support/helpers";
 
 let checkout: SimCheckout;
 let file: string;
 let scratch: string;
 
 beforeAll(() => {
-  scratch = mkdtempSync(join(tmpdir(), "aug-sim-test-"));
+  scratch = mkdtempSync(join(tmpdir(), "riker-sim-test-"));
   checkout = makeCheckout(repoRoot(process.cwd()), scratch);
 });
 
@@ -87,7 +87,7 @@ async function status(n: number) {
 beforeEach(() => {
   freshHome();
   setMux(new FakeMux());
-  file = join(process.env.AUG_HOME ?? "", "sim", "github.json");
+  file = join(process.env.RIKER_HOME ?? "", "sim", "github.json");
 });
 
 describe("the checkout", () => {
@@ -233,7 +233,7 @@ describe("the engine on the sim", () => {
       taskId: work.id,
       kind: "tmux",
       cwd: "/tmp",
-      startedBy: "aug",
+      startedBy: "riker",
     });
     const s = simState({ work: { taskId: work.id, ...checkout.work } });
     const engine = new Engine({

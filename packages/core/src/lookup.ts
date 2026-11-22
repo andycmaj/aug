@@ -1,4 +1,4 @@
-// What aug-tools' read commands print: tasks and projects as plain lines a
+// What riker-tools' read commands print: tasks and projects as plain lines a
 // model reads back. The Assistant and agents look things up here before they
 // move anything.
 
@@ -166,7 +166,7 @@ export function projectLine(p: ProjectRow): string {
   return `${p.name} [${p.status}${p.solo ? ", solo" : ""}] repos: ${s.repos.length ? s.repos.join(", ") : "none"}; ${s.open} open task${s.open === 1 ? "" : "s"}${s.working ? `, ${s.working} working` : ""}${s.goals ? `; goals ${s.goalsMet}/${s.goals} met` : ""}`;
 }
 
-// What `aug-tools project <name>` prints: the brief, the goals and how far
+// What `riker-tools project <name>` prints: the brief, the goals and how far
 // each has come, the docs, and the open work that names no goal.
 export function projectDetail(p: ProjectRow): string {
   const progress = projectProgress(p);

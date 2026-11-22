@@ -9,7 +9,7 @@
 // seen again in a month goes to the archive (core/doc-pass.ts).
 
 import { think } from "./brain";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { DocName, LEARNED_SECTIONS, readDoc, writeDoc } from "./docs";
 import * as store from "./store";
 import { SpendRole, type CorrectionRow } from "./types";
@@ -124,7 +124,7 @@ export function describeCorrection(c: CorrectionRow): string {
 }
 
 export async function learnFrom(
-  config: AugConfig,
+  config: RikerConfig,
   c: CorrectionRow,
 ): Promise<string | null> {
   if (!config.learning) return null;
@@ -132,7 +132,7 @@ export async function learnFrom(
   const result = await think({
     prompt: `${describeCorrection(c)}\n\nCurrent LEARNED.md:\n${learned}`,
     system:
-      "You maintain LEARNED.md, what aug has learned about how its owner works. Turn one correction into at most one lesson in plain words. Never record a secret. If an existing line already says it, either skip or return a stronger version that replaces it (strength + 1). Lines without an [s:...] tag were written by the owner: never replace them.",
+      "You maintain LEARNED.md, what Riker has learned about how its owner works. Turn one correction into at most one lesson in plain words. Never record a secret. If an existing line already says it, either skip or return a stronger version that replaces it (strength + 1). Lines without an [s:...] tag were written by the owner: never replace them.",
     schema: LESSON_SCHEMA,
     model: config.brain.triageModel,
     spend: { role: SpendRole.learn },
@@ -152,7 +152,7 @@ export async function learnFrom(
 
 // Record and learn in the background: a correction never waits on a model.
 export function correct(
-  config: AugConfig,
+  config: RikerConfig,
   c: Parameters<typeof store.addCorrection>[0],
   onLearned?: (line: string) => void,
 ): void {

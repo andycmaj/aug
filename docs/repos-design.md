@@ -15,7 +15,7 @@
 - On this machine: `andycmaj/codediff` maps to `codediff.nvim`, whose origin
   is `andycmaj/codediff.nvim`; `andycmaj/beanstream` is a project repo with
   no mapping, and its checkout has no `origin`. Sibling worktrees
-  (`aug.<branch>`) sit next to their checkouts.
+  (`riker.<branch>`) sit next to their checkouts.
 
 ## Design (as built)
 
@@ -64,7 +64,7 @@ gone is a `missing` problem with the found checkouts offered first.
 
 ### Managing it
 
-- `aug-tools repos [--scan]`: every repo (mapped or in a project), its path
+- `riker-tools repos [--scan]`: every repo (mapped or in a project), its path
   and state, its projects, other checkouts; then GitHub checkouts on disk
   with no path, the owner's own first.
 - `move repo <owner/repo> [--path] [--clone yes] [--rename] [--anyway yes]

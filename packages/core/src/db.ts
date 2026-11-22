@@ -1,5 +1,5 @@
 // The one SQLite file. WAL so the TUI can read while agent hooks (separate
-// `aug hook` processes) write; `PRAGMA data_version` tells the TUI when anyone
+// `riker hook` processes) write; `PRAGMA data_version` tells the TUI when anyone
 // else has committed.
 
 import { Database } from "bun:sqlite";
@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   state TEXT NOT NULL,
   says TEXT,
   last_tool TEXT,
-  started_by TEXT NOT NULL DEFAULT 'aug',
+  started_by TEXT NOT NULL DEFAULT 'riker',
   started_at TEXT NOT NULL,
   last_event_at TEXT NOT NULL,
   ended_at TEXT,
@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS task_threads (
 );
 
 -- URLs attached to a task by hand: a doc, a Slack thread, a ticket
--- elsewhere. Unlike task_threads, aug never reads what is behind them.
+-- elsewhere. Unlike task_threads, Riker never reads what is behind them.
 CREATE TABLE IF NOT EXISTS task_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   task_id INTEGER NOT NULL REFERENCES tasks(id),
@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS task_links (
   UNIQUE (task_id, url)
 );
 
--- Moves asked for from another process (aug-tools, run by the Assistant or
+-- Moves asked for from another process (riker-tools, run by the Assistant or
 -- an agent). The engine claims each one, runs it, and writes the result back.
 CREATE TABLE IF NOT EXISTS moves (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -384,7 +384,7 @@ export type Table = (typeof Table)[keyof typeof Table];
 export const TABLES: Table[] = Object.values(Table);
 
 // A counter per table, bumped by triggers, so a write from any process (an
-// agent's hook, aug-tools) says which table it touched. data_version only
+// agent's hook, riker-tools) says which table it touched. data_version only
 // says that something changed.
 function trackTables(db: Database): void {
   db.exec(
@@ -543,7 +543,7 @@ export function migrate(db: Database): void {
 // A file from before the inbox kept state: what its columns say. A message
 // triage filed is done; one the model failed on has had its try and stays
 // for the owner (no next_at, so the worker leaves it); one nothing filed
-// (aug died between insert and triage) is new, and the worker takes it.
+// (Riker died between insert and triage) is new, and the worker takes it.
 function backfillMessageState(db: Database): void {
   const ran =
     columns(db, "triage_runs").length > 0

@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { postComments, readFindings, setGuideTool } from "@aug/code-review-plannotator/guide";
-import { fakeReview } from "@aug/code-review-plannotator/test/support/fake-review";
-import { ANSWER, repo, sh } from "@aug/code-review-plannotator/test/support/repo";
+import { postComments, readFindings, setGuideTool } from "@riker/code-review-plannotator/guide";
+import { fakeReview } from "@riker/code-review-plannotator/test/support/fake-review";
+import { ANSWER, repo, sh } from "@riker/code-review-plannotator/test/support/repo";
 import { setBrain, type BrainResult } from "../src/brain";
 import { Engine } from "../src/engine";
 import { OPEN_REVIEW_TITLE } from "../src/guide-turn";
@@ -78,7 +78,7 @@ describe("the guide action", () => {
     expect(result.terminal!.argv.join(" ")).toContain("plannotator review --base");
     expect(result.terminal!.cwd).toBe(dir);
     expect(result.terminal!.feedback).toEndWith("guide-feedback.md");
-    // The review comes up on a port aug chose, so it can post the notes there.
+    // The review comes up on a port Riker chose, so it can post the notes there.
     const port = result.terminal!.comments!.port;
     expect(result.terminal!.env.PLANNOTATOR_PORT).toBe(String(port));
     expect(result.terminal!.comments!.list.map((c) => c.scope)).toEqual(["line", "file"]);
@@ -124,7 +124,7 @@ describe("the guide action", () => {
     const posted = await postComments(port, again.terminal!.comments!.list, { waitMs: 3000, everyMs: 50 });
     void review.server.stop(true);
     expect(posted).toEqual({ ok: true });
-    expect(review.calls[0]).toBe("DELETE /api/external-annotations?source=aug-guide");
+    expect(review.calls[0]).toBe("DELETE /api/external-annotations?source=riker-guide");
     expect(review.held().map((c) => c.scope)).toEqual(["line", "file"]);
   });
 
@@ -156,7 +156,7 @@ describe("the guide action", () => {
     expect(result.terminal).toBeUndefined();
     const turn = store.turnsForTask(task.id).find((x) => x.role === TurnRole.action)!;
     expect(turn.body).toContain(OPEN_REVIEW_TITLE);
-    expect(turn.body).not.toContain("The review aug opens");
+    expect(turn.body).not.toContain("The review Riker opens");
     expect(engine.desk.hasGuideReview(task.id)).toBe(true);
   });
 
@@ -205,7 +205,7 @@ describe("the guide action", () => {
       asked++;
       return { text: "", structured: null, sessionId: null, durationMs: 1, isError: false };
     });
-    const { engine, task } = codingTask(join(tmpdir(), "aug-guide-gone-worktree"));
+    const { engine, task } = codingTask(join(tmpdir(), "riker-guide-gone-worktree"));
     const started = engine.desk.runAction(task.id, "guide");
     expect("error" in started && started.error).toContain("is gone");
     expect(asked).toBe(0);

@@ -1,26 +1,26 @@
 // Claude Docs from a real headless `claude -p`, under a task agent's own
 // tools, allow rules and dontAsk mode (AUG-0119). Costs tokens and needs the
-// claude.ai Claude Docs connector, so it runs only with AUG_REAL_CLAUDE=1:
-//   AUG_REAL_CLAUDE=1 bun test test/docs-grant-real.test.ts
+// claude.ai Claude Docs connector, so it runs only with RIKER_REAL_CLAUDE=1:
+//   RIKER_REAL_CLAUDE=1 bun test test/docs-grant-real.test.ts
 // Nothing here writes a doc: the write is only ever denied.
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { GENERAL_TOOLS, generalAllow, turnSystem } from "../src/agents";
 import { claudeBrain, setBrain, think } from "../src/brain";
 import { grantSteps } from "../src/capabilities";
-import { DEFAULT_CONFIG, type AugConfig } from "../src/config";
+import { DEFAULT_CONFIG, type RikerConfig } from "../src/config";
 import { freshHome } from "./support/helpers";
 
 const DOCS = "mcp__claude_ai_Claude_Docs__";
 
-function granted(general: string[]): AugConfig {
+function granted(general: string[]): RikerConfig {
   return {
     ...DEFAULT_CONFIG,
     capabilities: { ...DEFAULT_CONFIG.capabilities, grants: { general } },
   };
 }
 
-async function run(config: AugConfig, prompt: string) {
+async function run(config: RikerConfig, prompt: string) {
   const steps: string[] = [];
   const result = await think({
     prompt,
@@ -37,7 +37,7 @@ async function run(config: AugConfig, prompt: string) {
 // and is denied, or declines it from the prompt's grant line without trying
 // (2 of 5 runs with docs.read): both are right, so neither is required.
 function expectWriteRefused(
-  config: AugConfig,
+  config: RikerConfig,
   { result, steps }: Awaited<ReturnType<typeof run>>,
 ) {
   const denied = result.denied ?? [];
@@ -51,7 +51,7 @@ function expectWriteRefused(
   expect(result.text).toContain("docs.write");
 }
 
-describe.skipIf(!process.env.AUG_REAL_CLAUDE)("Claude Docs grants through real claude", () => {
+describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("Claude Docs grants through real claude", () => {
   afterAll(() => setBrain(async () => {
     throw new Error("no brain after the real-claude test");
   }));
@@ -66,7 +66,7 @@ describe.skipIf(!process.env.AUG_REAL_CLAUDE)("Claude Docs grants through real c
       const config = granted(["slack.read"]);
       const got = await run(
         config,
-        `Call ${DOCS}batch once with container {"kind":"project","create":{"name":"aug probe","doc":{"markdown":"# aug probe"}}} and batch []. Then stop and say what happened.`,
+        `Call ${DOCS}batch once with container {"kind":"project","create":{"name":"riker probe","doc":{"markdown":"# riker probe"}}} and batch []. Then stop and say what happened.`,
       );
       expectWriteRefused(config, got);
     },
@@ -81,7 +81,7 @@ describe.skipIf(!process.env.AUG_REAL_CLAUDE)("Claude Docs grants through real c
       const config = granted(["docs.read"]);
       const got = await run(
         config,
-        `Call ${DOCS}guide with items ["topic.index"], then call ${DOCS}batch once with container {"kind":"project","create":{"name":"aug probe","doc":{"markdown":"# aug probe"}}} and batch []. Then stop.`,
+        `Call ${DOCS}guide with items ["topic.index"], then call ${DOCS}batch once with container {"kind":"project","create":{"name":"riker probe","doc":{"markdown":"# riker probe"}}} and batch []. Then stop.`,
       );
       expect(got.steps.some((s) => s.startsWith(`${DOCS}guide`))).toBe(true);
       const denied = got.result.denied ?? [];

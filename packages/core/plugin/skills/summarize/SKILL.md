@@ -1,6 +1,6 @@
 ---
 name: summarize
-description: Summarize the work done so far on an aug task, for its owner. Use when asked what a task's agent has done, where the work stands, or for a recap of a task.
+description: Summarize the work done so far on a Riker task, for its owner. Use when asked what a task's agent has done, where the work stands, or for a recap of a task.
 allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Bash(git status:*), Bash(git show:*)
 ---
 

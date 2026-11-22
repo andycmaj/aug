@@ -1,4 +1,4 @@
-// Option B, reserved: aug as a direct MCP client to a local Slack MCP server
+// Option B, reserved: Riker as a direct MCP client to a local Slack MCP server
 // (no model in the loop). Not built yet; selecting it says so in the status
 // line instead of failing quietly. Config keys reserved: slack.mcp.command,
 // slack.mcp.url.

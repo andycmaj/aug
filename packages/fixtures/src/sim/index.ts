@@ -1,5 +1,5 @@
-// `bun run sim`: the real aug on a scratch home, polling a fake GitHub
-// (./github.ts) instead of gh. Triage, PR status, the rail, `aug-tools
+// `bun run sim`: the real Riker on a scratch home, polling a fake GitHub
+// (./github.ts) instead of gh. Triage, PR status, the rail, `riker-tools
 // feedback` and nudges all run unchanged; `bun run sim:do` from another
 // terminal (or a scenario) makes things happen on it. Never a real GitHub
 // call: the api, the PR batch and Send are all the sim's.
@@ -7,18 +7,18 @@
 import { watch, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { setBrain, type BrainCall, type BrainResult } from "@aug/core/brain";
-import { DEFAULT_CONFIG, fixedConfig } from "@aug/core/config";
-import { openDb, useDb } from "@aug/core/db";
-import { ensureDocs } from "@aug/core/docs";
-import { Engine } from "@aug/core/engine";
-import { configureLog, logger } from "@aug/core/log";
-import { setMux, TmuxMux } from "@aug/core/mux";
-import { setSender } from "@aug/core/outbound";
-import { taskPr } from "@aug/core/pr";
-import { paths } from "@aug/core/paths";
-import * as store from "@aug/core/store";
-import { Kind, type TaskRow } from "@aug/core/types";
+import { setBrain, type BrainCall, type BrainResult } from "@riker/core/brain";
+import { DEFAULT_CONFIG, fixedConfig } from "@riker/core/config";
+import { openDb, useDb } from "@riker/core/db";
+import { ensureDocs } from "@riker/core/docs";
+import { Engine } from "@riker/core/engine";
+import { configureLog, logger } from "@riker/core/log";
+import { setMux, TmuxMux } from "@riker/core/mux";
+import { setSender } from "@riker/core/outbound";
+import { taskPr } from "@riker/core/pr";
+import { paths } from "@riker/core/paths";
+import * as store from "@riker/core/store";
+import { Kind, type TaskRow } from "@riker/core/types";
 import { demoBrain, demoHome } from "../demo";
 import { makeCheckout, repoRoot, worktreeFor } from "./checkout";
 import { applyEvent, playScenario, SCENARIOS } from "./events";
@@ -48,9 +48,9 @@ function seed(file: string): SimState {
   const source = repoRoot(dirname(fileURLToPath(import.meta.url)));
   const checkout = makeCheckout(source, paths.home());
   const work = store.createTask({
-    title: "Simulated work on the aug checkout",
+    title: "Simulated work on the riker checkout",
     summary:
-      "A coding task on a scratch clone of aug (no remote: nothing pushes). Its branch is a few real commits ahead of main; `bun run sim:do pr-open --mine` opens its PR.",
+      "A coding task on a scratch clone of Riker (no remote: nothing pushes). Its branch is a few real commits ahead of main; `bun run sim:do pr-open --mine` opens its PR.",
     kind: Kind.coding,
     repo: SIM_REPO,
     branch: checkout.work.branch,
@@ -104,7 +104,7 @@ export function installSim(opts: SimOptions): {
     throw new Error(
       `no scenario "${opts.scenario}" (one of ${Object.keys(SCENARIOS).join(", ")})`,
     );
-  process.env.AUG_HOME = demoHome(process.env, "aug-sim-");
+  process.env.RIKER_HOME = demoHome(process.env, "riker-sim-");
   useDb(openDb());
   ensureDocs();
   const file = statePath(paths.home());
@@ -133,7 +133,7 @@ export function installSim(opts: SimOptions): {
       : DEFAULT_CONFIG.brain,
     spend: haiku ? { capEnabled: true, dailyUsd: 2 } : DEFAULT_CONFIG.spend,
     autostart: false,
-    tmuxSocket: "aug-sim",
+    tmuxSocket: "riker-sim",
     log: { enabled: true, level: "info" },
   });
   configureLog(() => config.get().log);

@@ -83,7 +83,7 @@ beforeEach(async () => {
   setBrain(async (call) => {
     calls.push(call);
     return {
-      text: "**Done.** Made AUG-0002.",
+      text: "**Done.** Made RIKER-0002.",
       structured: null,
       sessionId: call.sessionId ?? call.resume ?? null,
       durationMs: 1,
@@ -138,7 +138,7 @@ describe("the Slack remote", () => {
     expect(link.posts[0]).toMatchObject({
       channel: CHANNEL,
       threadTs: msg.ts,
-      text: `${REPLY_MARK} *Done.* Made AUG-0002.`,
+      text: `${REPLY_MARK} *Done.* Made RIKER-0002.`,
     });
     // The thread stays live for replies, and nothing is posted twice.
     await remote.tick();
@@ -170,7 +170,7 @@ describe("the Slack remote", () => {
 
   test("refuses a conversation with anyone else in it, and hears nothing", async () => {
     link.members = [ME, "U_OTHER"];
-    link.messages = [owner("stop AUG-0003")];
+    link.messages = [owner("stop RIKER-0003")];
     await expect(remote.tick()).rejects.toThrow("other member");
     expect(calls).toHaveLength(0);
     // Turned private again, the line is still there to hear.
@@ -228,7 +228,7 @@ describe("the answer as Slack shows it", () => {
     expect(toSlack("## Plan\n**one** thing")).toBe(`${REPLY_MARK} *Plan*\n*one* thing`);
     const long = toSlack("x".repeat(5000));
     expect(long.length).toBeLessThan(3700);
-    expect(long).toContain("the rest is in aug's Home");
+    expect(long).toContain("the rest is in Riker's Home");
   });
 });
 
@@ -292,11 +292,11 @@ describe("config and links", () => {
 });
 
 describe("held moves from Slack", () => {
-  // The Assistant asks for `verb` mid-turn, the way aug-tools would.
+  // The Assistant asks for `verb` mid-turn, the way riker-tools would.
   function assistantAsks(verb: string, args: Record<string, string>, says = "I'll do that.") {
     setBrain(async (call) => {
       calls.push(call);
-      const moved = await runMove(engine.desk, verb, args, call.env?.AUG_ASKED_BY ?? "assistant");
+      const moved = await runMove(engine.desk, verb, args, call.env?.RIKER_ASKED_BY ?? "assistant");
       held.push(moved.result);
       return {
         text: says,
@@ -328,11 +328,11 @@ describe("held moves from Slack", () => {
 
   test("a Slack turn asks as the Slack asker, a terminal turn as the Assistant", async () => {
     await askedInSlack("hi");
-    expect(calls[0]?.env?.AUG_ASKED_BY).toBe(SLACK_ASKER);
+    expect(calls[0]?.env?.RIKER_ASKED_BY).toBe(SLACK_ASKER);
     const home = store.homeTask();
     await engine.desk.say(home.id, "from the terminal");
     await settled();
-    expect(calls[1]?.env?.AUG_ASKED_BY).toBe("assistant");
+    expect(calls[1]?.env?.RIKER_ASKED_BY).toBe("assistant");
   });
 
   test("stop is held, its answer asks for a yes, and yes in the thread runs it as the owner's", async () => {

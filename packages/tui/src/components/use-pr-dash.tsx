@@ -4,16 +4,16 @@
 
 import { existsSync } from "node:fs";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
-import { useAug, ViewMode } from "../context/aug";
+import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
-import { taskPr } from "@aug/core/pr";
-import { taskRef } from "@aug/core/rows";
-import type { TaskRow } from "@aug/core/types";
+import { taskPr } from "@riker/core/pr";
+import { taskRef } from "@riker/core/rows";
+import type { TaskRow } from "@riker/core/types";
 
 export const prDashId = (taskId: number) => `ghdash-${taskId}`;
 
 export function usePrDash() {
-  const aug = useAug();
+  const riker = useRiker();
   const terminals = useTerminals();
   const { setActivePane } = useFocus();
   const { showToast } = useToast();
@@ -36,8 +36,8 @@ export function usePrDash() {
       showToast("ghdash is not on PATH", 4000, "error");
       return;
     }
-    aug.setMode(ViewMode.chat);
-    aug.selectTask(task.id);
+    riker.setMode(ViewMode.chat);
+    riker.selectTask(task.id);
     closeOthers(task.id);
     terminals.open({
       id,
@@ -55,7 +55,7 @@ export function usePrDash() {
         if (!state || state.running) return;
         terminals.close(id);
         if (code) showToast(`ghdash exited ${code}`, 4000, "error");
-        if (aug.selectedKey() === `t${task.id}`) setActivePane("canvas");
+        if (riker.selectedKey() === `t${task.id}`) setActivePane("canvas");
       },
     });
     setTimeout(() => setActivePane("canvas"), 0);

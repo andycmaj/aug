@@ -1,7 +1,7 @@
 // The Assistant handing in a real doc through a real `claude -p`, under the
 // same tools, allow rules and dontAsk mode as Home (AUG-0093). Costs tokens,
-// so it runs only with AUG_REAL_CLAUDE=1:
-//   AUG_REAL_CLAUDE=1 bun test test/propose-doc-real.test.ts
+// so it runs only with RIKER_REAL_CLAUDE=1:
+//   RIKER_REAL_CLAUDE=1 bun test test/propose-doc-real.test.ts
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { ASSISTANT_TOOLS, assistantAllow, assistantSystem } from "../src/assistant";
@@ -17,7 +17,7 @@ import { REAL_JOB } from "./support/doc-fixture";
 import { FakeMux } from "./support/fake-mux";
 import { freshHome, testConfig, config } from "./support/helpers";
 
-describe.skipIf(!process.env.AUG_REAL_CLAUDE)("propose_doc through real claude", () => {
+describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("propose_doc through real claude", () => {
   afterAll(() => setBrain(async () => {
     throw new Error("no brain after the real-claude test");
   }));
@@ -26,7 +26,7 @@ describe.skipIf(!process.env.AUG_REAL_CLAUDE)("propose_doc through real claude",
     "a multi-line Markdown doc is handed in without a denial",
     async () => {
       freshHome();
-      // aug-tools runs in its own process: it must see this database.
+      // riker-tools runs in its own process: it must see this database.
       useDb(openDb(paths.db()));
       setMux(new FakeMux());
       setBrain(claudeBrain);
@@ -43,7 +43,7 @@ describe.skipIf(!process.env.AUG_REAL_CLAUDE)("propose_doc through real claude",
           model: "haiku",
           tools: ASSISTANT_TOOLS,
           allow: assistantAllow(config()),
-          env: { AUG_ASKED_BY: "assistant", ...toolsEnv() },
+          env: { RIKER_ASKED_BY: "assistant", ...toolsEnv() },
         });
         expect(result.denied ?? []).toEqual([]);
       } finally {

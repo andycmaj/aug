@@ -1,5 +1,5 @@
 // Runs a command in a split of the caller's own tmux window. A diff viewer an
-// agent opens (revdiff) then shows wherever that window does, aug's viewer
+// agent opens (revdiff) then shows wherever that window does, Riker's viewer
 // included; tmux would otherwise put a window of its own in the session, or a
 // popup on whichever client it picks.
 
@@ -34,7 +34,7 @@ export async function runInPane(run: PaneRun): Promise<PaneResult> {
     const paneId = await mux().splitPane(split);
     return { paneId, exitCode: null };
   }
-  const dir = mkdtempSync(join(tmpdir(), "aug-pane-"));
+  const dir = mkdtempSync(join(tmpdir(), "riker-pane-"));
   const exitFile = join(dir, "exit");
   try {
     const paneId = await mux().splitPane({ ...split, exitFile });

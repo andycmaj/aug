@@ -1,5 +1,5 @@
-// Where the library's warnings go: nowhere unless the caller says (aug hands
-// it its own logger, so they land in aug.log).
+// Where the library's warnings go: nowhere unless the caller says (Riker hands
+// it its own logger, so they land in riker.log).
 
 export interface GuideLog {
   warn(msg: string, fields?: Record<string, unknown>): void;

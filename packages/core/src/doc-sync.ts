@@ -1,9 +1,9 @@
-// What happens to the brain docs when aug starts: the one-time SOUL to
+// What happens to the brain docs when Riker starts: the one-time SOUL to
 // PERSONA rename, shipped docs kept up to date, LEARNED.md's sections, the
 // onboarding offer, and the trash pruned.
 //
 // Shipped updates are notify-only. Per doc, `kv` holds the hash of the shipped
-// text aug last saw. When the shipped text changes: a missing file is
+// text Riker last saw. When the shipped text changes: a missing file is
 // written; a file still exactly the old shipped text is replaced; a file the
 // owner edited is left alone and, for a shipped doc, gets one SYSTEM task.
 // Owner docs (PERSONA, JOB, STYLE) ship only templates, so an edited one is
@@ -41,7 +41,7 @@ export interface SyncResult {
 }
 
 // Before PERSONA.md there were SOUL.md (the red lines) and COUNSEL.md (how
-// aug speaks to you). They become one file; the only owner text aug ever
+// Riker speaks to you). They become one file; the only owner text Riker ever
 // rewrites is the old names, inside the docs. Everything is in .trash first.
 export function migrateSoul(at = new Date()): boolean {
   const soulFile = docPath("SOUL.md");
@@ -106,7 +106,7 @@ export function syncShipped(): Pick<SyncResult, "updated" | "asked"> {
           doc: name,
           source: ProposalSource.shipped,
           proposed: shipped,
-          reason: `aug ships a new ${name}; yours has edits`,
+          reason: `Riker ships a new ${name}; yours has edits`,
         });
         asked.push(name);
       }

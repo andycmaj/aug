@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // code-review-plannotator review: a guided review of the checkout's change,
-// without aug. It writes guide.json (Plannotator's snapshot),
+// without Riker. It writes guide.json (Plannotator's snapshot),
 // guide-findings.json and usage.json (each call's cost and tokens, for
 // comparing models and batch sizes) to --out, imports the guide into
 // Plannotator unless --no-plannotator, and with --open starts

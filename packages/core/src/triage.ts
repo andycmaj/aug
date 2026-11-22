@@ -9,7 +9,7 @@
 // which keeps it testable and keeps the agent pool in one place.
 
 import { think } from "./brain";
-import type { AugConfig, EscalateRules, NoiseRule } from "./config";
+import type { RikerConfig, EscalateRules, NoiseRule } from "./config";
 import { logger } from "./log";
 import { DocName, forPrompt, head } from "./docs";
 import { parsePrUrl } from "./feedback";
@@ -156,7 +156,7 @@ export function verdictPrompt(
 
 export function verdictSystem(config: TriageConfig): string {
   return [
-    "You are the triage brain of aug, the owner's work manager. You read one arriving message and return a verdict. You never act.",
+    "You are the triage brain of Riker, the owner's work manager. You read one arriving message and return a verdict. You never act.",
     "",
     forPrompt(config, DocName.triage),
     docsBlock(config, { persona: true, job: true, learned: true }),
@@ -294,7 +294,7 @@ export function linkByBranch(message: MessageRow): number | null {
 // What the rules read from config, handed in as a value so no rule reaches
 // for the global itself.
 export type TriageConfig = Pick<
-  AugConfig,
+  RikerConfig,
   "autostart" | "brain" | "triage" | "docBudgets" | "github"
 >;
 

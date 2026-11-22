@@ -8,7 +8,7 @@ import { createSignal, type Accessor, type JSX } from "solid-js";
 import { existsSync, readFileSync } from "node:fs";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
-import { useAug, ViewMode } from "../context/aug";
+import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
 import {
   ARCHIVE,
@@ -18,30 +18,30 @@ import {
   docPath,
   docSize,
   overBudget,
-} from "@aug/core/docs";
+} from "@riker/core/docs";
 import {
   formatBytes,
   openerArgv,
   openTarget,
   parseFiles,
   type MadeFile,
-} from "@aug/core/files";
-import { infoTitle, itemInfo } from "@aug/core/info";
-import { errorMessage, logger } from "@aug/core/log";
-import { claudeSettingsPath, hooksInstalled, installHooks } from "@aug/core/adopt";
-import { strayLabel, type Stray } from "@aug/core/strays";
-import { baseKey, neighborKey, type RailItem } from "@aug/core/rail";
-import { taskRef } from "@aug/core/rows";
-import { postComments, reviewNotes } from "@aug/code-review-plannotator/guide";
-import { OPEN_REVIEW_TITLE } from "@aug/core/guide-turn";
-import type { ActionResult } from "@aug/core/run-action";
-import { actionsFor, keyedActions } from "@aug/core/task-actions";
+} from "@riker/core/files";
+import { infoTitle, itemInfo } from "@riker/core/info";
+import { errorMessage, logger } from "@riker/core/log";
+import { claudeSettingsPath, hooksInstalled, installHooks } from "@riker/core/adopt";
+import { strayLabel, type Stray } from "@riker/core/strays";
+import { baseKey, neighborKey, type RailItem } from "@riker/core/rail";
+import { taskRef } from "@riker/core/rows";
+import { postComments, reviewNotes } from "@riker/code-review-plannotator/guide";
+import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
+import type { ActionResult } from "@riker/core/run-action";
+import { actionsFor, keyedActions } from "@riker/core/task-actions";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
-import type { NoiseRule } from "@aug/core/config";
-import type { Jump } from "@aug/core/desk";
-import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "@aug/core/inbox";
-import { messageMeta } from "@aug/core/meta";
-import { Kind, Priority, type MessageRow, type TaskRow } from "@aug/core/types";
+import type { NoiseRule } from "@riker/core/config";
+import type { Jump } from "@riker/core/desk";
+import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "@riker/core/inbox";
+import { messageMeta } from "@riker/core/meta";
+import { Kind, Priority, type MessageRow, type TaskRow } from "@riker/core/types";
 import {
   ChoiceModal,
   ConfirmSendModal,
@@ -81,11 +81,11 @@ export function useDialogs(): Dialogs {
 }
 
 export function useActions(dialogs: Dialogs) {
-  const aug = useAug();
+  const riker = useRiker();
   const terminals = useTerminals();
   const { showToast } = useToast();
   const { setActivePane } = useFocus();
-  const desk = aug.desk;
+  const desk = riker.desk;
   const editor = useEditor();
   const { attachViewer } = useViewer();
   const { togglePrDash } = usePrDash();
@@ -97,16 +97,16 @@ export function useActions(dialogs: Dialogs) {
   // walks on. Only under the cursor: the cursor steps to a neighbor (not
   // the task's other row), the selection stays.
   function advanceFrom(key: string) {
-    if (aug.selectedKey() === key) {
-      const next = aug.walk(1) ?? aug.walk(-1);
-      if (!next) aug.select(null);
+    if (riker.selectedKey() === key) {
+      const next = riker.walk(1) ?? riker.walk(-1);
+      if (!next) riker.select(null);
       return;
     }
-    const cursor = aug.cursorKey();
+    const cursor = riker.cursorKey();
     if (cursor && baseKey(cursor) === key) {
-      aug.moveCursor(
+      riker.moveCursor(
         neighborKey(
-          aug
+          riker
             .shownItems()
             .map((i) => i.key)
             .filter((k) => k === cursor || baseKey(k) !== key),
@@ -119,13 +119,13 @@ export function useActions(dialogs: Dialogs) {
   // ── projects ──────────────────────────────────────────────────────────
 
   // The first project you make or adopt offers the hooks that pick up
-  // claudes you start by hand. Asked once; `aug hooks` is there after.
+  // claudes you start by hand. Asked once; `riker hooks` is there after.
   function offerHooks() {
     if (desk.offline || hooksInstalled() || !desk.offerHooksOnce()) return;
     dialogs.show(() => (
       <ChoiceModal
         title="Pick up claudes you start by hand?"
-        hint={`Adds hooks to ${claudeSettingsPath()} that only act inside a project's tmux session. Undo with: aug uninstall hooks`}
+        hint={`Adds hooks to ${claudeSettingsPath()} that only act inside a project's tmux session. Undo with: riker uninstall hooks`}
         choices={[
           {
             label: "Yes, install the hooks",
@@ -182,7 +182,7 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
-  // A tmux session becomes a project; a claude started outside aug becomes
+  // A tmux session becomes a project; a claude started outside Riker becomes
   // a task in one. The project it joins comes first when you are on it.
   async function adopt(projectId?: number) {
     let sessions: Awaited<ReturnType<typeof desk.adoptableSessions>>;
@@ -233,12 +233,12 @@ export function useActions(dialogs: Dialogs) {
               : `${taskRef(task.id)}: quit that claude, then s continues it here`,
             stray.pane ? 3000 : 6000,
           );
-          aug.selectTask(task.id);
+          riker.selectTask(task.id);
           offerHooks();
         },
         (err) => showToast(`Could not adopt: ${errorMessage(err)}`, 4000, "error"),
       );
-    const active = aug.projects().filter((p) => p.status === "active");
+    const active = riker.projects().filter((p) => p.status === "active");
     const ordered = [
       ...active.filter((p) => p.id === projectId),
       ...active.filter((p) => p.id !== projectId),
@@ -262,7 +262,7 @@ export function useActions(dialogs: Dialogs) {
         () => showToast(`${taskRef(task.id)} moved`),
         (err) => showToast(`Could not move: ${errorMessage(err)}`, 4000, "error"),
       );
-    const others = aug.projects().filter((p) => p.id !== task.project_id);
+    const others = riker.projects().filter((p) => p.id !== task.project_id);
     dialogs.show(() => (
       <ChoiceModal
         title={`Move ${taskRef(task.id)} to a project`}
@@ -277,9 +277,9 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function archiveProject(projectId: number) {
-    const project = aug.project(projectId);
+    const project = riker.project(projectId);
     if (!project) return;
-    const open = aug
+    const open = riker
       .tasksForProject(projectId)
       .filter((t) => t.status === "open" || t.status === "later").length;
     dialogs.show(() => (
@@ -302,11 +302,11 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
-  // aug outside tmux has no client to move: the line to run instead.
+  // Riker outside tmux has no client to move: the line to run instead.
   function jumped(outcome: Jump, gone: string) {
     if (outcome === "gone") showToast(gone);
     else if (outcome !== "jumped")
-      showToast(`aug is not in tmux; in a terminal run: ${outcome.attach}`, 10000);
+      showToast(`Riker is not in tmux; in a terminal run: ${outcome.attach}`, 10000);
   }
 
   async function jumpToProject(projectId: number) {
@@ -409,11 +409,11 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function acceptDocs(task: TaskRow) {
-    showToast(aug.desk.acceptDocs(task.id), 4000);
+    showToast(riker.desk.acceptDocs(task.id), 4000);
   }
 
   function rejectDocs(task: TaskRow) {
-    showToast(aug.desk.rejectDocs(task.id), 4000);
+    showToast(riker.desk.rejectDocs(task.id), 4000);
   }
 
   function ignore(task: TaskRow) {
@@ -484,7 +484,7 @@ export function useActions(dialogs: Dialogs) {
       env: run.env,
       onExit: () => {
         terminals.close(id);
-        if (aug.selectedKey() === `t${task.id}`) setActivePane("canvas");
+        if (riker.selectedKey() === `t${task.id}`) setActivePane("canvas");
         if (run.feedback) sendReviewNotes(task, run.feedback);
       },
     });
@@ -497,13 +497,13 @@ export function useActions(dialogs: Dialogs) {
 
   // What the owner sent from plannotator review goes to the agent, as if
   // typed; an approval or a review closed without feedback sends nothing
-  // (reviewNotes). It carries aug's comments the owner kept, unlabelled, so
+  // (reviewNotes). It carries Riker's comments the owner kept, unlabelled, so
   // the message says so.
   function sendReviewNotes(task: TaskRow, file: string) {
     const notes = reviewNotes(existsSync(file) ? readFileSync(file, "utf8") : "");
     if (!notes) return;
     desk
-      .say(task.id, `My notes from the guided review in Plannotator (with the review findings aug posted there that I kept):\n\n${notes}`)
+      .say(task.id, `My notes from the guided review in Plannotator (with the review findings riker posted there that I kept):\n\n${notes}`)
       .then(
         () => showToast(`Your review notes went to ${taskRef(task.id)}'s agent`, 4000),
         (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),
@@ -578,7 +578,7 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function send(task: TaskRow) {
-    const pending = aug.pendingAction(task.id);
+    const pending = riker.pendingAction(task.id);
     if (!pending) {
       showToast("Nothing waits to be sent");
       return;
@@ -622,8 +622,8 @@ export function useActions(dialogs: Dialogs) {
   // ── on an Inbox row ───────────────────────────────────────────────────
 
   function goToTask(taskId: number) {
-    aug.setMode(ViewMode.chat);
-    aug.selectTask(taskId);
+    riker.setMode(ViewMode.chat);
+    riker.selectTask(taskId);
   }
 
   // m: a message triage did not make work becomes a task; an idea is
@@ -650,7 +650,7 @@ export function useActions(dialogs: Dialogs) {
 
   function inboxIgnore(row: InboxRow) {
     if (row.type !== "message" || row.taskId === null) return false;
-    const task = aug.task(row.taskId);
+    const task = riker.task(row.taskId);
     if (!task) return false;
     desk.ignore(task.id);
     showToast("Ignored: triage will learn from it");
@@ -743,12 +743,12 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function walk(direction: 1 | -1) {
-    const current = aug.selected();
+    const current = riker.selected();
     if (direction === 1 && current) {
       if (current.type === "task" && current.task.unread_result)
         desk.readResult(current.task.id);
     }
-    const key = aug.walk(direction);
+    const key = riker.walk(direction);
     if (!key)
       showToast(
         direction === 1
@@ -769,8 +769,8 @@ export function useActions(dialogs: Dialogs) {
             }
             onSubmit={(title) => {
               const task = desk.newTask(title, kind);
-              aug.setMode(ViewMode.chat);
-              aug.selectTask(task.id);
+              riker.setMode(ViewMode.chat);
+              riker.selectTask(task.id);
               if (kind === Kind.general)
                 void desk.startAgent(task.id, { note: title });
             }}
@@ -822,7 +822,7 @@ export function useActions(dialogs: Dialogs) {
     if (item.type !== "task") return [];
     const seen = new Set<string>();
     const out: MadeFile[] = [];
-    for (const turn of [...aug.turns(item.task.id)].reverse()) {
+    for (const turn of [...riker.turns(item.task.id)].reverse()) {
       for (const f of parseFiles(turn.files)) {
         if (seen.has(f.path) || !existsSync(f.path)) continue;
         seen.add(f.path);
@@ -844,7 +844,7 @@ export function useActions(dialogs: Dialogs) {
   // and what the agent made.
   function openLink(item: RailItem) {
     const url = item.type === "task" ? item.task.url : null;
-    const links = item.type === "task" ? aug.taskLinks(item.task.id) : [];
+    const links = item.type === "task" ? riker.taskLinks(item.task.id) : [];
     const short = (u: string) => u.replace(/^https?:\/\//, "").slice(0, 30);
     const choices = [
       ...(url
@@ -933,7 +933,7 @@ export function useActions(dialogs: Dialogs) {
       () => {
         const item = get();
         if (item?.type !== "task") return false;
-        const fresh = aug.task(item.task.id);
+        const fresh = riker.task(item.task.id);
         if (!fresh || (fresh.kind === Kind.home && !home)) return false;
         if ((fresh.kind === Kind.system) !== system) return false;
         return fn(fresh);

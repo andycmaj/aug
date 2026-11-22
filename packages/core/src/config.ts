@@ -1,4 +1,4 @@
-// ~/.aug/config.json. Every key is optional; a missing file means defaults,
+// ~/.riker/config.json. Every key is optional; a missing file means defaults,
 // which is enough to run with `gh` logged in and SLACK_TOKEN set.
 
 import {
@@ -43,7 +43,7 @@ export interface NavKeys {
   forward?: string;
 }
 
-export interface AugConfig {
+export interface RikerConfig {
   github: {
     enabled: boolean;
     pollSeconds: number;
@@ -61,7 +61,7 @@ export interface AugConfig {
     enabled: boolean;
     // token: the Web API with a user token. claude-mcp: Claude with a Slack
     // MCP (e.g. the claude.ai Slack connector), for when there is no token.
-    // mcp: aug as a direct MCP client (reserved, not built).
+    // mcp: Riker as a direct MCP client (reserved, not built).
     transport: "token" | "claude-mcp" | "mcp";
     // Which MCP server is Slack (substring of its name); default: one named slack.
     mcpServer?: string;
@@ -98,11 +98,11 @@ export interface AugConfig {
     slackModel: string;
   };
   // How many agents may be working at once, chat and coding alike. Past it,
-  // chat turns aug starts by itself and your coding Starts wait their turn;
+  // chat turns Riker starts by itself and your coding Starts wait their turn;
   // a chat turn you ask for never waits.
   maxActiveAgents: number;
-  // What aug's own model calls may cost (core/spend.ts). Once today's spend
-  // reaches dailyUsd, chat turns aug starts by itself wait (with the reason
+  // What Riker's own model calls may cost (core/spend.ts). Once today's spend
+  // reaches dailyUsd, chat turns Riker starts by itself wait (with the reason
   // on the task) and the Advisor skips its run; turns you start or type to
   // still run. Coding agents in tmux are not counted.
   spend: {
@@ -152,12 +152,12 @@ export interface AugConfig {
   // Opens a link or a file an agent made: a command, or argv; the target is
   // appended. Default: open (macOS), wslview (WSL), xdg-open (Linux).
   opener?: string | string[];
-  // The file log (core/log.ts). Off by default; AUG_DEV=1 or AUG_LOG turn it
+  // The file log (core/log.ts). Off by default; RIKER_DEV=1 or RIKER_LOG turn it
   // on without touching config.
   log: {
     enabled: boolean;
     level: "trace" | "debug" | "info" | "warn" | "error";
-    // Default: aug.log under AUG_HOME.
+    // Default: riker.log under RIKER_HOME.
     file?: string;
     // Rolls over to <file>.1 past this; default 10 MB.
     maxBytes?: number;
@@ -186,7 +186,7 @@ export interface AugConfig {
   actions?: Record<string, ActionConfig>;
 }
 
-export const DEFAULT_CONFIG: AugConfig = {
+export const DEFAULT_CONFIG: RikerConfig = {
   github: { enabled: true, pollSeconds: 120, repos: {}, mergeMethod: "squash", reviewTeams: [] },
   slack: { enabled: true, transport: "token", pollSeconds: 60, channels: [] },
   remote: { enabled: false, pollSeconds: 15, notify: [] },
@@ -246,8 +246,8 @@ const CLAUDE_MCP_POLL_SECONDS = 180;
 const CLAUDE_MCP_REMOTE_SECONDS = 60;
 
 export function mergeConfig(
-  raw: DeepPartial<AugConfig> & LegacyKeys,
-): AugConfig {
+  raw: DeepPartial<RikerConfig> & LegacyKeys,
+): RikerConfig {
   const { agentsAtOnce, ...rest } = raw;
   const slackPoll =
     raw.slack?.pollSeconds ??
@@ -287,7 +287,7 @@ export function mergeConfig(
       grants: { ...raw.capabilities?.grants },
     },
     actions: { ...raw.actions },
-  } as AugConfig;
+  } as RikerConfig;
 }
 
 function mtimeOf(file: string): number | null {
@@ -298,11 +298,11 @@ function mtimeOf(file: string): number | null {
   }
 }
 
-function readFile(file: string): AugConfig {
-  let raw: DeepPartial<AugConfig> = {};
+function readFile(file: string): RikerConfig {
+  let raw: DeepPartial<RikerConfig> = {};
   if (existsSync(file)) {
     try {
-      raw = JSON.parse(readFileSync(file, "utf8")) as DeepPartial<AugConfig>;
+      raw = JSON.parse(readFileSync(file, "utf8")) as DeepPartial<RikerConfig>;
     } catch {
       raw = {};
     }
@@ -312,7 +312,7 @@ function readFile(file: string): AugConfig {
 
 // One read of config.json, for an entry point that needs a setting before
 // it has a source to hand around (the theme, the log, the tmux server).
-export function loadConfig(file = paths.config()): AugConfig {
+export function loadConfig(file = paths.config()): RikerConfig {
   return readFile(file);
 }
 
@@ -321,17 +321,17 @@ export function loadConfig(file = paths.config()): AugConfig {
 // long-lived holder keeps the source and asks get() when it needs a setting,
 // so an edit (yours, a learned noise rule, a repo mapped mid-start) is seen
 // on the next use without a restart. Functions that run once take the
-// AugConfig value get() returned.
+// RikerConfig value get() returned.
 export interface ConfigSource {
-  get(): AugConfig;
-  update(change: (config: AugConfig) => AugConfig): AugConfig;
+  get(): RikerConfig;
+  update(change: (config: RikerConfig) => RikerConfig): RikerConfig;
 }
 
-// ~/.aug/config.json, re-read when its mtime changes.
+// ~/.riker/config.json, re-read when its mtime changes.
 export function fileConfig(file = paths.config()): ConfigSource {
-  let cached: AugConfig | undefined;
+  let cached: RikerConfig | undefined;
   let cachedMtime: number | null = null;
-  const get = (): AugConfig => {
+  const get = (): RikerConfig => {
     const mtime = mtimeOf(file);
     if (cached && mtime === cachedMtime) return cached;
     cached = readFile(file);
@@ -352,7 +352,7 @@ export function fileConfig(file = paths.config()): ConfigSource {
 }
 
 // In memory, never the file: tests and the fixture day.
-export function fixedConfig(initial: AugConfig = DEFAULT_CONFIG): ConfigSource {
+export function fixedConfig(initial: RikerConfig = DEFAULT_CONFIG): ConfigSource {
   let current = initial;
   return {
     get: () => current,
@@ -363,6 +363,6 @@ export function fixedConfig(initial: AugConfig = DEFAULT_CONFIG): ConfigSource {
   };
 }
 
-export function slackToken(config: AugConfig): string | undefined {
+export function slackToken(config: RikerConfig): string | undefined {
   return process.env.SLACK_TOKEN ?? config.slack.token;
 }

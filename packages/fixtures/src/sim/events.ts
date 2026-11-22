@@ -134,7 +134,7 @@ function openPr(
     title:
       e.title ??
       (mine
-        ? "Simulated work from the aug checkout"
+        ? "Simulated work from the riker checkout"
         : `Simulated change #${number}`),
     body:
       e.body ??

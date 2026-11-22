@@ -149,9 +149,9 @@ export const EndReason = {
   closed: "you closed the task",
   window: "its window closed",
   exited: "claude exited",
-  restart: "aug restarted",
+  restart: "Riker restarted",
   cancelled: "start taken back",
-  adopted: "running outside aug",
+  adopted: "running outside Riker",
 } as const;
 
 // A task whose agent had already finished keeps ready: the result still
@@ -341,7 +341,7 @@ export function draftSent(taskId: number): void {
     store.updateTask(taskId, { agent_says: null });
 }
 
-// Sessions alive when aug last quit are not alive now, except in tmux, which
+// Sessions alive when Riker last quit are not alive now, except in tmux, which
 // keeps coding agents up across restarts (reconcile asks it which still are).
 // A chat turn cut off reads as stopped, with Continue.
 export function recoverAtBoot(
@@ -354,7 +354,7 @@ export function recoverAtBoot(
       sessionEnded({ taskId: s.task_id, sessionId: s.id }, EndReason.restart);
     }
     for (const task of store.listTasks()) {
-      // The queue that held it waiting its turn died with the last aug.
+      // The queue that held it waiting its turn died with the last Riker.
       if (
         task.agent_state === AgentState.queued &&
         task.queue_reason !== HELD_FOR_START

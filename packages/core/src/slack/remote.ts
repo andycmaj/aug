@@ -3,11 +3,12 @@
 // clock. Each new line of theirs goes to Home as if typed there, and the
 // Assistant's answer is posted back in that message's thread.
 //
-// The conversation is the trust boundary: aug refuses one with anyone else
+// The conversation is the trust boundary: Riker refuses one with anyone else
 // in it, and inside it hears only the owner's own plain messages, never a
 // bot's, an app's, a join notice or its own answers. What it hears is the
 // owner talking to the Assistant, with the Assistant's limits, nothing more.
 
+import { CMD, LEGACY, SELF } from "../brand";
 import type { ConfigSource } from "../config";
 import {
   answerKind,
@@ -63,7 +64,7 @@ export interface RemoteQuery {
   threads: string[];
 }
 
-// How aug reads and posts that one conversation: the Web API with a token,
+// How Riker reads and posts that one conversation: the Web API with a token,
 // or Claude with a Slack MCP.
 export interface RemoteLink {
   readonly kind: "token" | "claude-mcp";
@@ -79,10 +80,12 @@ export interface RemoteLink {
 }
 
 // Every answer starts with this, so a reader that sees the owner's own name
-// on aug's posts (both links post as the owner) can tell them apart.
-export const REPLY_MARK = "[aug]";
+// on Riker's posts (both links post as the owner) can tell them apart.
+export const REPLY_MARK = `[${CMD}]`;
+// What aug marked its posts with before the rename: still not the owner's.
+const LEGACY_MARK = `[${LEGACY.cmd}]`;
 
-// Slack answers stay short: past this the rest is in aug.
+// Slack answers stay short: past this the rest is in Riker.
 const REPLY_CHARS = 3500;
 
 // A thread stays live for replies this long after its last line.
@@ -117,7 +120,7 @@ interface RemoteState {
   // thread ts -> when it last had a line (ISO)
   threads: Record<string, string>;
   waiting: Waiting[];
-  // ts of what aug posted, newest last.
+  // ts of what Riker posted, newest last.
   posted: string[];
   outbox: Outgoing[];
   // task id -> its agent state when last looked; unset until the first look.
@@ -152,7 +155,7 @@ function saveState(state: RemoteState): void {
   store.kvSet(STATE_KEY, JSON.stringify(state));
 }
 
-// The conversation the triage poller must skip: aug's own talk with the owner.
+// The conversation the triage poller must skip: Riker's own talk with the owner.
 export function remoteChannel(config: ConfigSource): string | undefined {
   const c = config.get().remote;
   if (!c.enabled) return undefined;
@@ -173,24 +176,23 @@ export function notPrivate(read: RemoteRead): string | null {
 
 // Mark-stripped: leading emoji shortcodes, Markdown and spaces.
 function startsWithMark(text: string): boolean {
-  return text
-    .replace(/^(\s|[*_~`>]|:[a-z0-9_+-]+:)+/i, "")
-    .startsWith(REPLY_MARK);
+  const bare = text.replace(/^(\s|[*_~`>]|:[a-z0-9_+-]+:)+/i, "");
+  return bare.startsWith(REPLY_MARK) || bare.startsWith(LEGACY_MARK);
 }
 
-// Why aug does not hear this message, or null when it is the owner's.
+// Why Riker does not hear this message, or null when it is the owner's.
 export function skipReason(
   msg: RemoteMessage,
   me: string,
   posted: Set<string>,
 ): string | null {
-  if (posted.has(msg.ts)) return "aug posted it";
+  if (posted.has(msg.ts)) return "riker posted it";
   if (msg.bot) return "a bot or app wrote it";
   if (msg.subtype && msg.subtype !== "thread_broadcast")
     return `subtype ${msg.subtype}`;
   if (msg.user !== me) return "not the owner";
   if (!msg.text.trim()) return "empty";
-  if (startsWithMark(msg.text)) return "aug's answer";
+  if (startsWithMark(msg.text)) return "Riker's answer";
   return null;
 }
 
@@ -202,7 +204,7 @@ export function toSlack(text: string): string {
     .replace(/^#{1,6}\s+(.+)$/gm, "*$1*");
   const clipped =
     body.length > REPLY_CHARS
-      ? `${body.slice(0, REPLY_CHARS).trimEnd()}\n… (the rest is in aug's Home)`
+      ? `${body.slice(0, REPLY_CHARS).trimEnd()}\n… (the rest is in Riker's Home)`
       : body;
   return `${REPLY_MARK} ${clipped || "(no answer)"}`;
 }
@@ -400,7 +402,7 @@ export class Remote {
         store.addTurn({
           taskId: home.id,
           role: TurnRole.trigger,
-          author: "aug",
+          author: SELF,
           body: `In Slack the owner said yes to ${h.says}: ${outcome.result}`,
         });
       }
@@ -415,7 +417,7 @@ export class Remote {
     store.addTurn({
       taskId: home.id,
       role: TurnRole.trigger,
-      author: "aug",
+      author: SELF,
       body: `In Slack the owner did not say yes, so nothing was done: ${says}`,
     });
     if (kind === "no") {
@@ -494,7 +496,7 @@ export class Remote {
       if (!done.has(key)) {
         let text = turn
           ? toSlack(answerText(turn))
-          : `${REPLY_MARK} No answer: the Assistant did not run. Try again, or look in aug.`;
+          : `${REPLY_MARK} No answer: the Assistant did not run. Try again, or look in riker.`;
         if (turn) {
           bindToThread(turn.id, w.threadTs);
           const holds = pendingConfirms().filter(

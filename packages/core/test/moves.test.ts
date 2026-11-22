@@ -54,11 +54,11 @@ describe("the moves bus", () => {
 
   test("an unknown task, verb or missing arg fails with a reason", async () => {
     const task = engine.desk.newTask("Ping Sam", Kind.general);
-    const noTask = ask("done", { task: "AUG-0999" });
+    const noTask = ask("done", { task: "RIKER-0999" });
     const noVerb = ask("explode", {});
     const noArg = ask("remind", { task: store.taskRef(task.id) });
     await engine.drainMoves();
-    expect(store.getMove(noTask.id)!.result).toBe("no task AUG-0999");
+    expect(store.getMove(noTask.id)!.result).toBe("no task RIKER-0999");
     expect(store.getMove(noVerb.id)!.result).toStartWith("no move explode");
     expect(store.getMove(noArg.id)!.result).toBe("remind needs --days");
     for (const m of [noTask, noVerb, noArg])
@@ -78,7 +78,7 @@ describe("the moves bus", () => {
     const move = ask("done", { task: store.taskRef(task.id) });
     const row = await waitForMove(move.id, { pickupMs: 20, pollMs: 5 });
     expect(row.status).toBe(MoveStatus.failed);
-    expect(row.result).toContain("is aug running");
+    expect(row.result).toContain("is riker running");
     await engine.drainMoves();
     expect(store.getTask(task.id)!.status).toBe(TaskStatus.open);
   });
@@ -124,7 +124,7 @@ describe("the moves bus when changes counts trigger rows (bun 1.3)", () => {
   });
 
   test("the emulation counts the trigger's row", () => {
-    const move = ask("done", { task: "AUG-0001" });
+    const move = ask("done", { task: "RIKER-0001" });
     const result = db()
       .query("UPDATE moves SET result = 'x' WHERE id = ?")
       .run(move.id);
@@ -155,7 +155,7 @@ describe("the moves bus when changes counts trigger rows (bun 1.3)", () => {
       pollMs: 5,
     });
     expect(row.status).toBe(MoveStatus.failed);
-    expect(row.result).toContain("is aug running");
+    expect(row.result).toContain("is riker running");
   });
 });
 
@@ -172,7 +172,7 @@ describe("waiting on a move another claimer took", () => {
         runMs: 50,
         pollMs: 10,
       });
-      expect(row.result).toBe("still running: check aug");
+      expect(row.result).toBe("still running: check riker");
       expect(abandon.mock.calls.length).toBeGreaterThan(0);
       expect(reads.mock.calls.length).toBeLessThan(20);
     } finally {
@@ -312,10 +312,10 @@ describe("making and placing tasks", () => {
         title: "Fill in JOB.md",
         kind: "coding",
         project: "AUG Bootstrap",
-        brief: "Write JOB.md from the thread in AUG-0001",
+        brief: "Write JOB.md from the thread in RIKER-0001",
         from: store.taskRef(parent.id),
       },
-      "agent AUG-0001",
+      "agent RIKER-0001",
     );
     expect(out.ok).toBe(true);
     const made = store.listTasks().find((t) => t.title === "Fill in JOB.md")!;
@@ -325,25 +325,25 @@ describe("making and placing tasks", () => {
       project_id: project.id,
       repo: "acme/api",
       from_task_id: parent.id,
-      summary: "Write JOB.md from the thread in AUG-0001",
+      summary: "Write JOB.md from the thread in RIKER-0001",
     });
     expect(store.turnsForTask(made.id)[0].body).toBe(
-      `Made from ${store.taskRef(parent.id)} by agent AUG-0001`,
+      `Made from ${store.taskRef(parent.id)} by agent RIKER-0001`,
     );
     expect(store.turnsForTask(parent.id).at(-1)!.body).toContain(
-      `agent AUG-0001 made ${store.taskRef(made.id)} (coding in aug-bootstrap)`,
+      `agent RIKER-0001 made ${store.taskRef(made.id)} (coding in aug-bootstrap)`,
     );
   });
 
   test("a project that does not exist is named back with the ones that do", async () => {
-    await engine.desk.createProject("aug-mvp");
+    await engine.desk.createProject("riker-mvp");
     const out = await engine.runMove("new", {
       title: "x",
       project: "aug-bootstrap",
     });
     expect(out).toEqual({
       ok: false,
-      result: "no project aug-bootstrap. Projects: aug-mvp. Make one with project_new.",
+      result: "no project aug-bootstrap. Projects: riker-mvp. Make one with project_new.",
     });
     expect(store.listTasks()).toHaveLength(0);
   });
@@ -409,7 +409,7 @@ describe("making and placing tasks", () => {
     expect(store.getTask(task.id)!.summary).toBe("keep me");
   });
 
-  async function child(parentTitle: string, by = "agent AUG-0001") {
+  async function child(parentTitle: string, by = "agent RIKER-0001") {
     const parent = engine.desk.newTask(parentTitle, Kind.general);
     await engine.runMove(
       "new",
@@ -433,7 +433,7 @@ describe("making and placing tasks", () => {
 
   test("when its agent finishes, the result line goes back to the task it came from", async () => {
     const { parent, made, last } = await child("JOB.md is empty");
-    store.createSession({ id: "s1", taskId: made.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "aug" });
+    store.createSession({ id: "s1", taskId: made.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "riker" });
     handleDone({ taskId: made.id, sessionId: "s1" }, { summary: "JOB.md written; 3 sections" });
     expect(store.getTask(made.id)!.status).toBe(TaskStatus.done);
     expect(last().body).toBe(
@@ -591,7 +591,7 @@ describe("links", () => {
     store.addTaskLink(task.id, doc, "the plan", "you");
     expect(taskDetail(task)).toContain(`Link: the plan ${doc}`);
     expect(codingBrief(config(), task)).toContain(`Link: the plan ${doc}`);
-    expect(movesHelp()).toContain("- move link AUG-0000 <url> [--title <what it is, in a few words>]");
+    expect(movesHelp()).toContain("- move link RIKER-0000 <url> [--title <what it is, in a few words>]");
   });
 });
 
@@ -640,7 +640,7 @@ describe("the noise move", () => {
     const out = await engine.runMove(
       "noise",
       { reason: "x", author: "sam" },
-      "agent AUG-0001",
+      "agent RIKER-0001",
     );
     expect(out.ok).toBe(false);
     expect(loadConfig().triage.noise).toEqual(DEFAULT_CONFIG.triage.noise);
@@ -648,7 +648,7 @@ describe("the noise move", () => {
 });
 
 describe("config the engine reads", () => {
-  test("an edit to config.json while aug runs is seen by the next move", async () => {
+  test("an edit to config.json while Riker runs is seen by the next move", async () => {
     engine = new Engine({ config: fileConfig() });
     const file = paths.config();
     writeFileSync(file, JSON.stringify({ autostart: false }));

@@ -4,16 +4,16 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { useFocus, useToast } from "@andycmaj/opentui-app";
-import { useAug, ViewMode } from "../context/aug";
+import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
-import { writeReview } from "@aug/core/proposals";
-import { taskRef } from "@aug/core/rows";
-import { Kind, type TaskRow } from "@aug/core/types";
+import { writeReview } from "@riker/core/proposals";
+import { taskRef } from "@riker/core/rows";
+import { Kind, type TaskRow } from "@riker/core/types";
 
 export const docReviewId = (taskId: number) => `review-${taskId}`;
 
 export function useDocReview() {
-  const aug = useAug();
+  const riker = useRiker();
   const terminals = useTerminals();
   const { setActivePane } = useFocus();
   const { showToast } = useToast();
@@ -46,8 +46,8 @@ export function useDocReview() {
     }
     const id = docReviewId(task.id);
     terminals.close(id);
-    aug.setMode(ViewMode.chat);
-    aug.selectTask(task.id);
+    riker.setMode(ViewMode.chat);
+    riker.selectTask(task.id);
     terminals.open({
       id,
       title: `${taskRef(task.id)} ${task.title}`,
@@ -65,13 +65,13 @@ export function useDocReview() {
         const state = terminals.get(id);
         if (!state || state.running) return;
         terminals.close(id);
-        if (aug.selectedKey() === `t${task.id}`) setActivePane("canvas");
+        if (riker.selectedKey() === `t${task.id}`) setActivePane("canvas");
         const notes = existsSync(files.out)
           ? readFileSync(files.out, "utf8").trim()
           : "";
         if (!notes) return;
         showToast("redrafting from your notes…", 3000);
-        void aug.desk.redraftDocs(task.id, notes).then((line) => {
+        void riker.desk.redraftDocs(task.id, notes).then((line) => {
           showToast(line, 4000);
         });
       },

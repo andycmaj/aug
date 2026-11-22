@@ -15,8 +15,8 @@ import {
   type PaletteAction,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
-import { useAug, ViewMode } from "../context/aug";
-import { DOC_PURPOSE, DocName, docPath } from "@aug/core/docs";
+import { useRiker, ViewMode } from "../context/riker";
+import { DOC_PURPOSE, DocName, docPath } from "@riker/core/docs";
 import { BoardTab, type HelpCtx } from "../keymap";
 import { useActions, useDialogs, type Actions, type Dialogs } from "./actions";
 import { FocusHelp } from "./focus-help";
@@ -24,7 +24,7 @@ import { INBOX_KEY, setBoardTab } from "./board-tab";
 import { SearchModal, StatusModal } from "./modals";
 import { RailLegend } from "./rail";
 import { useFocusBindings } from "./footer";
-import { logger } from "@aug/core/log";
+import { logger } from "@riker/core/log";
 import { paletteEntries, type PaletteExtra } from "../palette";
 
 export interface ShellApi {
@@ -47,7 +47,7 @@ export function useShell(opts: {
   extraPalette?: () => PaletteExtra[];
 }): ShellApi {
   const renderer = useRenderer();
-  const aug = useAug();
+  const riker = useRiker();
   const focus = useFocus();
   const { activeModal, openModal, closeModal, toggleSidebar } = focus;
   const { showToast } = useToast();
@@ -62,16 +62,16 @@ export function useShell(opts: {
     opts.typing() ? false : fn();
 
   const quit = () => {
-    aug.engine.stop();
+    riker.engine.stop();
     renderer.destroy();
     process.exit(0);
   };
 
   const toggleView = () =>
-    aug.setMode(aug.mode() === ViewMode.chat ? ViewMode.board : ViewMode.chat);
+    riker.setMode(riker.mode() === ViewMode.chat ? ViewMode.board : ViewMode.chat);
   const pollNow = () => {
     showToast("Checking GitHub and Slack...");
-    void aug.engine.pollNow();
+    void riker.engine.pollNow();
   };
   // A row found from the Board opens in Chat, where the Canvas is. A jump
   // lands on the rail, never attached: the row it picks may be another
@@ -79,27 +79,27 @@ export function useShell(opts: {
   const openFromSearch = (key: string) => {
     if (key === INBOX_KEY) {
       setBoardTab(BoardTab.inbox);
-      aug.setMode(ViewMode.board);
+      riker.setMode(ViewMode.board);
       return;
     }
     if (focus.isPaneFocused("canvas")) focus.setActivePane("rail");
-    aug.goTo(key);
+    riker.goTo(key);
   };
   const history = (direction: 1 | -1) => {
-    if (!aug.history(direction))
+    if (!riker.history(direction))
       showToast(direction < 0 ? "Nowhere further back" : "Nowhere further forward");
   };
   // Newest move first; one that cannot be undone, or whose task changed
   // since, says so and leaves the stack, so ctrl+z again reaches the one
   // before it.
   const undo = () =>
-    void aug.desk.undo().then(
+    void riker.desk.undo().then(
       (r) => showToast(r.text, r.ok ? 3000 : 5000, r.ok ? "info" : "error"),
       (err) => showToast(`Could not undo: ${err instanceof Error ? err.message : String(err)}`, 5000, "error"),
     );
   const advisor = () => {
     showToast("The Advisor is reading your work...");
-    void aug.engine.advisorNow();
+    void riker.engine.advisorNow();
   };
 
   useScope(
@@ -111,13 +111,13 @@ export function useShell(opts: {
       [Commands.SIDEBAR_TOGGLE]: toggleSidebar,
       [Commands.FOCUS_NEXT]: focus.cyclePane,
       [Commands.VIEW_TOGGLE]: unlessTyping(toggleView),
-      [Commands.ASK_OPEN]: unlessTyping(aug.goHome),
+      [Commands.ASK_OPEN]: unlessTyping(riker.goHome),
       [Commands.NEW_TASK]: unlessTyping(actions.newTask),
       [Commands.POLL_NOW]: pollNow,
       [Commands.DOCS_OPEN]: unlessTyping(actions.docs),
       [Commands.STATUS_OPEN]: unlessTyping(() => openModal("status")),
       [Commands.WALK_NEXT]: unlessTyping(() => {
-        aug.setMode(ViewMode.chat);
+        riker.setMode(ViewMode.chat);
         actions.walk(1);
       }),
       [Commands.WALK_BACK]: unlessTyping(() => actions.walk(-1)),
@@ -172,7 +172,7 @@ export function useShell(opts: {
         label: e.label,
         hint: e.hint,
         // Context is a short list about one row: no headers.
-        group: aug.paletteMode() === PaletteMode.ALL ? e.group : undefined,
+        group: riker.paletteMode() === PaletteMode.ALL ? e.group : undefined,
         inContext: e.inContext,
         run: () => {
           const cmd = e.cmd;
@@ -181,7 +181,7 @@ export function useShell(opts: {
         },
       }));
     const title = () => {
-      if (aug.paletteMode() === PaletteMode.ALL) return "All commands";
+      if (riker.paletteMode() === PaletteMode.ALL) return "All commands";
       const subject = props.subject?.();
       return subject ? `Commands · ${subject}` : "Commands";
     };
@@ -189,8 +189,8 @@ export function useShell(opts: {
       <CommandPalette
         actions={entries()}
         title={title()}
-        mode={aug.paletteMode()}
-        onModeChange={aug.setPaletteMode}
+        mode={riker.paletteMode()}
+        onModeChange={riker.setPaletteMode}
         onClose={closeModal}
       />
     );
@@ -211,7 +211,7 @@ export function useShell(opts: {
             onClose={closeModal}
             footer={
               <box flexDirection="column">
-                <Show when={aug.mode() === ViewMode.chat}>
+                <Show when={riker.mode() === ViewMode.chat}>
                   <RailLegend />
                 </Show>
                 <text fg={theme.textMuted} marginTop={1}>

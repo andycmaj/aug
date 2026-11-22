@@ -38,7 +38,7 @@ describe("@ mentions", () => {
     const build = task("Fix the build");
     const flaky = task("Flaky deploy fix");
     expect(suggestTasks("fix").map((t) => t.id)).toEqual([build.id, flaky.id]);
-    expect(suggestTasks("AUG-2").map((t) => t.id)).toEqual([flaky.id]);
+    expect(suggestTasks("RIKER-2").map((t) => t.id)).toEqual([flaky.id]);
     expect(suggestTasks("fdx").map((t) => t.id)).toEqual([flaky.id]);
     expect(suggestTasks("zzz")).toEqual([]);
   });
@@ -64,17 +64,17 @@ describe("@ mentions", () => {
   test("projects are offered by name, tasks first when they match as well", () => {
     const fix = task("Fix the build");
     project("fixtures");
-    project("aug bootstrap");
+    project("riker bootstrap");
     const old = project("augury");
     store.updateProject(old.id, { status: ProjectStatus.archived });
     expect(refs("fix")).toEqual([store.taskRef(fix.id), "fixtures"]);
-    expect(refs("boot")).toEqual(["aug-bootstrap"]);
+    expect(refs("boot")).toEqual(["riker-bootstrap"]);
     // A whole name beats a name it begins.
     expect(refs("fixtures")).toEqual(["fixtures"]);
     // A number is a task ref, never a project.
     expect(refs(String(fix.id))).toEqual([store.taskRef(fix.id)]);
-    // "aug" may be a ref on its way; a project it begins comes first.
-    expect(refs("aug")).toEqual(["aug-bootstrap", store.taskRef(fix.id)]);
+    // "riker" (or "aug", from before the rename) may be a ref on its way; a project it begins comes first.
+    expect(refs("riker")).toEqual(["riker-bootstrap", store.taskRef(fix.id)]);    expect(refs("aug")).toEqual([store.taskRef(fix.id)]);
   });
 
   test("a project's ref finds it again, whatever its name holds", () => {
@@ -87,16 +87,16 @@ describe("@ mentions", () => {
 
   test("a ref copied with its @ still names what it named", () => {
     const t = task("Fix the build");
-    const p = project("aug bootstrap");
+    const p = project("riker bootstrap");
     expect(store.parseTaskRef(`@${store.taskRef(t.id)}`)).toBe(t.id);
-    expect(findProject("@aug-bootstrap")?.id).toBe(p.id);
+    expect(findProject("@riker-bootstrap")?.id).toBe(p.id);
   });
 
   test("the Assistant reads back the projects a message names", () => {
-    const a = project("aug bootstrap");
+    const a = project("riker bootstrap");
     project("ledger");
     expect(
-      mentionedProjects("move it to @aug-bootstrap, not @nothing or ledger").map(
+      mentionedProjects("move it to @riker-bootstrap, not @nothing or ledger").map(
         (p) => p.id,
       ),
     ).toEqual([a.id]);
@@ -111,10 +111,10 @@ describe("@ mentions", () => {
 });
 
 test("projects match by name or session, ignoring case and punctuation", () => {
-  store.createProject({ name: "aug bootstrap", tmuxSession: "aug-bootstrap" });
-  expect(findProject("AUG-Bootstrap")?.name).toBe("aug bootstrap");
-  expect(findProject("augbootstrap")?.name).toBe("aug bootstrap");
-  expect(findProject("aug")).toBeNull();
+  store.createProject({ name: "riker bootstrap", tmuxSession: "riker-bootstrap" });
+  expect(findProject("RIKER-Bootstrap")?.name).toBe("riker bootstrap");
+  expect(findProject("rikerbootstrap")?.name).toBe("riker bootstrap");
+  expect(findProject("riker")).toBeNull();
 });
 
 describe("status line", () => {

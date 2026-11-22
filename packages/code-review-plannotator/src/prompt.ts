@@ -1,7 +1,7 @@
 // The job instructions (skill/SKILL.md) for a caller with no plugin to load
 // them from: the body goes in the system prompt, and its `allowed-tools` are
-// what the call may run. aug loads the same file as its plugin skill
-// `aug:guide` instead, so there is one text of them.
+// what the call may run. Riker loads the same file as its plugin skill
+// `riker:guide` instead, so there is one text of them.
 
 import skill from "../skill/SKILL.md" with { type: "text" };
 

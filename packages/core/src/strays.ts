@@ -1,4 +1,4 @@
-// Claudes started outside aug: in a tmux session of your own, or a plain
+// Claudes started outside Riker: in a tmux session of your own, or a plain
 // terminal. Each running claude writes ~/.claude/sessions/<pid>.json (its
 // session id, cwd and, inside tmux, its pane), which is how they are found.
 // Adopting one makes it a coding task in a project: a claude in tmux keeps
@@ -7,8 +7,9 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { OWN_ENTRYPOINTS } from "./brand";
 import { adoptedTitle, claudeDir, gitInfo, type GitInfo } from "./adopt";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import { EndReason, sessionEnded, sessionStarted, turnEnded } from "./lifecycle";
 import { logger } from "./log";
 import { mux, type PaneInfo } from "./mux";
@@ -55,8 +56,8 @@ export function parseClaudeProcess(text: string): ClaudeProcess | null {
   // someone's work in progress.
   const kind = str(raw.kind);
   if (!pid || !sessionId || !cwd || (kind && kind !== "interactive")) return null;
-  // aug's own headless claudes (claudeEnv).
-  if (str(raw.entrypoint) === "aug") return null;
+  // Riker's own headless claudes (claudeEnv).
+  if (OWN_ENTRYPOINTS.includes(str(raw.entrypoint) ?? "")) return null;
   const pane = str(raw.tmux)?.match(/(%\d+)$/)?.[1] ?? null;
   // A name claude derived from the folder (beanstream-00) names nothing.
   const source = str(raw.nameSource);
@@ -106,7 +107,7 @@ function parentMap(): Map<number, number> {
 export interface StraySource {
   claudes(): ClaudeProcess[];
   alive(pid: number): boolean;
-  // Whether pid runs under ancestor: a pane id names a pane on aug's tmux
+  // Whether pid runs under ancestor: a pane id names a pane on Riker's tmux
   // server only if the claude is that pane's process or below it.
   under(pid: number, ancestor: number): boolean;
   git(cwd: string): GitInfo;
@@ -136,7 +137,7 @@ export function setStraySource(source: StraySource | null): void {
 
 export interface Stray {
   claude: ClaudeProcess;
-  // Its pane on aug's tmux server; null outside tmux (or on another server).
+  // Its pane on Riker's tmux server; null outside tmux (or on another server).
   pane: PaneInfo | null;
   git: GitInfo;
 }
@@ -152,8 +153,8 @@ export function strayRef(s: Stray): string {
   return s.claude.sessionId.slice(0, 8);
 }
 
-// Running claudes that are nobody's task: not aug's own, not in a window a
-// task already holds, and not the claude in the window aug runs in.
+// Running claudes that are nobody's task: not Riker's own, not in a window a
+// task already holds, and not the claude in the window Riker runs in.
 export async function findStrays(source: StraySource = (current ?? realSource)()): Promise<Stray[]> {
   const host = await mux().hostWindow();
   const strays: Stray[] = [];
@@ -192,7 +193,7 @@ export function matchStray(strays: Stray[], ref: string): Stray {
 }
 
 export async function adoptStray(
-  config: AugConfig,
+  config: RikerConfig,
   stray: Stray,
   project: ProjectRow,
 ): Promise<TaskRow> {

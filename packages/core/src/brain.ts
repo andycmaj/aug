@@ -12,7 +12,7 @@ import { recordSpend, type SpendTag } from "./spend";
 
 const log = logger("brain");
 
-// Enough of a JSON schema to type the ones aug writes; claude checks the rest.
+// Enough of a JSON schema to type the ones Riker writes; claude checks the rest.
 export interface JsonSchema {
   readonly type?: string;
   readonly properties?: Readonly<Record<string, unknown>>;
@@ -43,7 +43,7 @@ export interface BrainCall {
   // "user" loads the user's settings, which is the only way claude.ai
   // connectors (MCP servers) load. Default skips them.
   settingSources?: "" | "user";
-  // Added to the child's environment (aug-tools reads who is asking here).
+  // Added to the child's environment (riker-tools reads who is asking here).
   env?: Record<string, string>;
   onStep?: (step: string) => void;
   // Each finished tool call with what it gave back (a headless call has no
@@ -84,7 +84,7 @@ export interface TokenUsage {
   cacheWrite: number;
 }
 
-// The result event's usage block, in aug's names.
+// The result event's usage block, in Riker's names.
 export function tokenUsage(
   event: Pick<StreamEvent, "usage">,
 ): TokenUsage | undefined {

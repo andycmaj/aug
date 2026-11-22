@@ -50,7 +50,7 @@ describe("remote URLs", () => {
 describe("on disk", () => {
   let root: string;
   beforeAll(() => {
-    root = realpathSync(mkdtempSync(join(tmpdir(), "aug-checkouts-")));
+    root = realpathSync(mkdtempSync(join(tmpdir(), "riker-checkouts-")));
     checkout(join(root, "acme", "api"), {
       upstream: "git@github.com:acme/api.git",
       origin: "https://github.com/me/api.git",

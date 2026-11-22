@@ -57,7 +57,7 @@ describe("table versions", () => {
   });
 
   test("a write from another connection shows in this one's versions", () => {
-    const file = join(mkdtempSync(join(tmpdir(), "aug-tv-")), "aug.db");
+    const file = join(mkdtempSync(join(tmpdir(), "riker-tv-")), "riker.db");
     const mine = openDb(file);
     const theirs = openDb(file);
     useDb(mine);
@@ -107,7 +107,7 @@ describe("read model", () => {
     })!;
     store.fileMessage(message.id, Verdict.task, "test", withPr.id);
     store.addTurn({ taskId: plain.id, role: TurnRole.agent, body: "hi" });
-    store.createSession({ id: "s1", taskId: plain.id, kind: SessionKind.tmux, cwd: "/", startedBy: "aug" });
+    store.createSession({ id: "s1", taskId: plain.id, kind: SessionKind.tmux, cwd: "/", startedBy: "riker" });
     store.addTaskLink(plain.id, "https://example.com", null, "you");
     store.addProjectLink(project.id, "https://example.com/doc", null, "you");
     store.addProposal({ taskId: plain.id, doc: "PERSONA.md", source: ProposalSource.evolve, base: "", proposed: "x" });

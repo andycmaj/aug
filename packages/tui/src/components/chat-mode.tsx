@@ -4,21 +4,21 @@
 import { createEffect, createMemo, Show } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
 import { useFocus, useTheme } from "@andycmaj/opentui-app";
-import { useAug } from "../context/aug";
+import { useRiker } from "../context/riker";
 import { useTerminals } from "../context/terminals";
-import { taskRef } from "@aug/core/rows";
-import { AgentState, Kind } from "@aug/core/types";
+import { taskRef } from "@riker/core/rows";
+import { AgentState, Kind } from "@riker/core/types";
 import type { HelpCtx } from "../keymap";
 import { Canvas } from "./canvas";
-import { AugFooter } from "./footer";
+import { RikerFooter } from "./footer";
 import { Rail, RAIL_WIDTH } from "./rail";
 import { useShell } from "./shell";
 import { PaletteGroup, type PaletteExtra } from "../palette";
-import { actionsFor } from "@aug/core/task-actions";
-import { OPEN_REVIEW_TITLE } from "@aug/core/guide-turn";
+import { actionsFor } from "@riker/core/task-actions";
+import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
 
 export function ChatMode() {
-  const aug = useAug();
+  const riker = useRiker();
   const theme = useTheme();
   const terminals = useTerminals();
   const dims = useTerminalDimensions();
@@ -30,11 +30,11 @@ export function ChatMode() {
 
   // Every action that applies to the row the keys act on, one entry each.
   const taskActionEntries = (): PaletteExtra[] => {
-    const item = isPaneFocused("rail") ? aug.cursorItem() : aug.selected();
+    const item = isPaneFocused("rail") ? riker.cursorItem() : riker.selected();
     if (item?.type !== "task") return [];
-    const task = aug.task(item.task.id);
+    const task = riker.task(item.task.id);
     if (!task) return [];
-    return actionsFor(aug.desk.config(), task).map((a) => ({
+    return actionsFor(riker.desk.config(), task).map((a) => ({
       id: `action-${a.name}`,
       group: PaletteGroup.row,
       label: `Action: ${a.title}`,
@@ -42,7 +42,7 @@ export function ChatMode() {
       inContext: true,
       run: () => shell.actions.runAction(task, a.name),
     })).concat(
-      aug.desk.hasGuideReview(task.id)
+      riker.desk.hasGuideReview(task.id)
         ? [{
             id: "action-guide-review",
             group: PaletteGroup.row,
@@ -57,37 +57,37 @@ export function ChatMode() {
 
   // `a` from anywhere (the Board too) lands in Home's box.
   createEffect(() => {
-    if (!aug.wantsInput() || aug.selectedKey() !== `t${aug.homeId}`) return;
-    aug.setWantsInput(false);
+    if (!riker.wantsInput() || riker.selectedKey() !== `t${riker.homeId}`) return;
+    riker.setWantsInput(false);
     setActivePane("input");
   });
 
   // A key on the rail acts on the row under the cursor; on the Canvas, on the
   // selected row.
-  const canvasActions = shell.actions.taskActions(aug.selected, () =>
+  const canvasActions = shell.actions.taskActions(riker.selected, () =>
     setActivePane("input"),
   );
-  const railActions = shell.actions.taskActions(aug.cursorItem, () => {
-    aug.select(aug.cursorKey());
+  const railActions = shell.actions.taskActions(riker.cursorItem, () => {
+    riker.select(riker.cursorKey());
     setActivePane("input");
   });
 
   const onSay = (text: string) => {
-    const item = aug.selected();
+    const item = riker.selected();
     if (item?.type !== "task") return;
-    const task = aug.task(item.task.id);
+    const task = riker.task(item.task.id);
     if (task) shell.actions.say(task, text);
   };
 
   const onCompose = (initial: string, keep: (text: string) => void) => {
-    const item = aug.selected();
+    const item = riker.selected();
     if (item?.type !== "task") return;
-    const task = aug.task(item.task.id);
+    const task = riker.task(item.task.id);
     if (task) shell.actions.compose(task, initial, keep);
   };
 
   const baseCtx = createMemo((): HelpCtx => {
-    const item = isPaneFocused("rail") ? aug.cursorItem() : aug.selected();
+    const item = isPaneFocused("rail") ? riker.cursorItem() : riker.selected();
     if (!item)
       return {
         item: null,
@@ -114,22 +114,22 @@ export function ChatMode() {
     const live =
       t.agent_state === AgentState.working ||
       Boolean(terminals.forTask(t.id)?.running) ||
-      aug.isLive(t);
+      riker.isLive(t);
     return {
       item: "task",
       kind: t.kind,
-      hasDraft: aug.pending().has(t.id),
+      hasDraft: riker.pending().has(t.id),
       live,
       coding: t.kind === Kind.coding,
       watching: Boolean(t.watching),
-      started: !aug.briefEditable(t.id),
-      pr: aug.taskPr(t) !== null,
+      started: !riker.briefEditable(t.id),
+      pr: riker.taskPr(t) !== null,
     };
   });
 
   // What the palette's context mode is about: the row the keys act on.
   const subject = (): string | null => {
-    const item = isPaneFocused("rail") ? aug.cursorItem() : aug.selected();
+    const item = isPaneFocused("rail") ? riker.cursorItem() : riker.selected();
     if (!item) return null;
     if (item.type === "project") return `project ${item.project.name}`;
     return `${taskRef(item.task.id)} ${item.task.title}`;
@@ -139,7 +139,7 @@ export function ChatMode() {
     (): HelpCtx => ({
       ...baseCtx(),
       typing: isPaneFocused("input"),
-      filtered: aug.railFilter().size > 0,
+      filtered: riker.railFilter().size > 0,
       attached: terminals.attached() !== null,
     }),
   );
@@ -157,7 +157,7 @@ export function ChatMode() {
         </Show>
         <box flexDirection="column" flexGrow={1}>
           <Canvas actions={canvasActions} onSay={onSay} onCompose={onCompose} />
-          <AugFooter ctx={ctx} left={sidebarVisible() ? RAIL_WIDTH + 2 : 0} />
+          <RikerFooter ctx={ctx} left={sidebarVisible() ? RAIL_WIDTH + 2 : 0} />
           <box height={1} flexShrink={0} />
         </box>
       </box>

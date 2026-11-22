@@ -2,7 +2,7 @@
 // sim:do` and the scenarios write, and that the fake `gh api` and GraphQL
 // batch below read on every call. Its answers are typed as the shapes
 // core/ingest/github.ts and core/pr.ts parse, and the PR batch goes through
-// the real readPrBatch, so aug polls this exactly as it polls GitHub.
+// the real readPrBatch, so Riker polls this exactly as it polls GitHub.
 
 import {
   existsSync,
@@ -17,16 +17,16 @@ import type {
   GhItem,
   GhNotification,
   GhPull,
-} from "@aug/core/ingest/github";
+} from "@riker/core/ingest/github";
 import {
   readPrBatch,
   type GqlAnswer,
   type GqlPr,
   type PrFetch,
   type PrRef,
-} from "@aug/core/pr";
+} from "@riker/core/pr";
 
-export const SIM_REPO = "sim/aug";
+export const SIM_REPO = "sim/riker";
 export const SIM_ME = "you";
 
 export const CheckStatus = {
@@ -230,7 +230,7 @@ export function toComment(
 }
 
 // A review's notification carries its line comments in the body, so what
-// aug reads off it (and hands an agent through `aug-tools feedback`) has
+// Riker reads off it (and hands an agent through `riker-tools feedback`) has
 // them; GitHub would need one more call per comment.
 export function toReview(s: SimState, pr: number, r: SimReview): GhItem {
   const lines = r.comments

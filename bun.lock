@@ -12,47 +12,47 @@
       },
     },
     "packages/cli": {
-      "name": "@aug/cli",
+      "name": "@riker/cli",
       "version": "0.0.1",
       "dependencies": {
-        "@aug/core": "workspace:*",
-        "@aug/tui": "workspace:*",
         "@opentui/solid": "0.5.12",
+        "@riker/core": "workspace:*",
+        "@riker/tui": "workspace:*",
         "citty": "^0.2.2",
       },
     },
     "packages/code-review-plannotator": {
-      "name": "@aug/code-review-plannotator",
+      "name": "@riker/code-review-plannotator",
       "version": "0.0.1",
       "bin": {
         "code-review-plannotator": "./src/cli.ts",
       },
     },
     "packages/core": {
-      "name": "@aug/core",
+      "name": "@riker/core",
       "version": "0.0.1",
       "dependencies": {
-        "@aug/code-review-plannotator": "workspace:*",
+        "@riker/code-review-plannotator": "workspace:*",
         "libtmux": "0.1.2",
       },
     },
     "packages/fixtures": {
-      "name": "@aug/fixtures",
+      "name": "@riker/fixtures",
       "version": "0.0.1",
       "dependencies": {
-        "@aug/core": "workspace:*",
+        "@riker/core": "workspace:*",
         "citty": "^0.2.2",
       },
     },
     "packages/tui": {
-      "name": "@aug/tui",
+      "name": "@riker/tui",
       "version": "0.0.1",
       "dependencies": {
         "@andycmaj/opentui-app": "^0.5.10",
-        "@aug/core": "workspace:*",
-        "@aug/fixtures": "workspace:*",
         "@opentui/core": "0.5.12",
         "@opentui/solid": "0.5.12",
+        "@riker/core": "workspace:*",
+        "@riker/fixtures": "workspace:*",
         "citty": "^0.2.2",
         "ghostty-opentui": "1.5.0",
         "solid-js": "1.9.12",
@@ -65,16 +65,6 @@
     "@andycmaj/opentui-app": ["@andycmaj/opentui-app@0.5.10", "", { "dependencies": { "@ansi-tools/parser": "^1.1.0", "@opentui/keymap": "0.5.12", "marked": "^17.0.1" }, "peerDependencies": { "@opentui/core": "0.5.12", "@opentui/solid": "0.5.12", "solid-js": "1.9.12" } }, "sha512-P0JBIYoIHBt1D59iuQg1OIqC6XS8/s2vAdmE+V03tbBfID60DTpRPen8UQarwPvYOPg9NyOcQGlc2ScaScxwWg=="],
 
     "@ansi-tools/parser": ["@ansi-tools/parser@1.1.0", "", {}, "sha512-jPLW4AF9KkhinubLrc5yQt8aE3cbXQ7qzVCffmrCEDCe0XnRmW7/QmljKItg9G6j7/LeJ++xT5bQFgZLny7HnQ=="],
-
-    "@aug/cli": ["@aug/cli@workspace:packages/cli"],
-
-    "@aug/code-review-plannotator": ["@aug/code-review-plannotator@workspace:packages/code-review-plannotator"],
-
-    "@aug/core": ["@aug/core@workspace:packages/core"],
-
-    "@aug/fixtures": ["@aug/fixtures@workspace:packages/fixtures"],
-
-    "@aug/tui": ["@aug/tui@workspace:packages/tui"],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 
@@ -163,6 +153,16 @@
     "@opentui/solid": ["@opentui/solid@0.5.12", "", { "dependencies": { "@babel/core": "7.28.0", "@babel/preset-typescript": "7.27.1", "@opentui/core": "0.5.12", "babel-plugin-module-resolver": "5.0.2", "babel-preset-solid": "1.9.12", "entities": "7.0.1", "s-js": "^0.4.9" }, "peerDependencies": { "solid-js": "1.9.12" } }, "sha512-hAiVlVMtT7AkHGblKwcW1YAuXtxkSy1XSf/RRc4j3IlG3mTNX0bhJdnGOo3Xw14EqeZMp41Mcp5WzHAzMm/DzA=="],
 
     "@resvg/resvg-wasm": ["@resvg/resvg-wasm@2.6.2", "", {}, "sha512-FqALmHI8D4o6lk/LRWDnhw95z5eO+eAa6ORjVg09YRR7BkcM6oPHU9uyC0gtQG5vpFLvgpeU4+zEAz2H8APHNw=="],
+
+    "@riker/cli": ["@riker/cli@workspace:packages/cli"],
+
+    "@riker/code-review-plannotator": ["@riker/code-review-plannotator@workspace:packages/code-review-plannotator"],
+
+    "@riker/core": ["@riker/core@workspace:packages/core"],
+
+    "@riker/fixtures": ["@riker/fixtures@workspace:packages/fixtures"],
+
+    "@riker/tui": ["@riker/tui@workspace:packages/tui"],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

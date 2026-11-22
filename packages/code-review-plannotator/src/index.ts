@@ -1,4 +1,4 @@
-// @aug/code-review-plannotator: a guided review of a branch's change, in
+// @riker/code-review-plannotator: a guided review of a branch's change, in
 // batches of related files, with findings pinned to their lines, saved into
 // Plannotator. The model call is the caller's (`GuideAsk`).
 

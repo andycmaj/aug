@@ -12,12 +12,12 @@ import {
   type ThemeColor,
 } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
-import { useAug } from "../context/aug";
-import { localDay, MAX_WINS } from "@aug/core/rail";
-import { prChip } from "@aug/core/pr";
-import { taskRef } from "@aug/core/rows";
-import { tokens, usd } from "@aug/core/spend";
-import { TurnRole, type TaskRow, type TurnRow } from "@aug/core/types";
+import { useRiker } from "../context/riker";
+import { localDay, MAX_WINS } from "@riker/core/rail";
+import { prChip } from "@riker/core/pr";
+import { taskRef } from "@riker/core/rows";
+import { tokens, usd } from "@riker/core/spend";
+import { TurnRole, type TaskRow, type TurnRow } from "@riker/core/types";
 import {
   eventWords,
   Outcome,
@@ -25,7 +25,7 @@ import {
   type DayRow,
   type WinDetail,
   type WinsDay,
-} from "@aug/core/wins-board";
+} from "@riker/core/wins-board";
 import type { Actions } from "./actions";
 import { clock, toneColor, useLaneMeta } from "./ui";
 
@@ -53,11 +53,11 @@ const OUTCOME_LOOK: Record<Outcome, { mark: string; word: string; tone: "success
 };
 
 export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
-  const aug = useAug();
-  const today = () => localDay(aug.now());
+  const riker = useRiker();
+  const today = () => localDay(riker.now());
   const day = () => focusDay() ?? today();
   const days = createMemo((): WinsDay[] =>
-    opts.active() ? [aug.winsDay(day(), aug.now()), aug.winsDay(shiftDay(day(), -1), aug.now())] : [],
+    opts.active() ? [riker.winsDay(day(), riker.now()), riker.winsDay(shiftDay(day(), -1), riker.now())] : [],
   );
   const lines = createMemo((): WinsLine[] =>
     days().flatMap((d) =>
@@ -103,7 +103,7 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
 
   const task = (): TaskRow | null => {
     const l = opts.active() ? line() : null;
-    return l ? (aug.task(l.row.task.id) ?? l.row.task) : null;
+    return l ? (riker.task(l.row.task.id) ?? l.row.task) : null;
   };
 
   return {
@@ -330,7 +330,7 @@ function Row(props: {
 
 function turnLine(t: TurnRow): string {
   const first = (s: string | null) => (s ?? "").split("\n").find((l) => l.trim())?.trim() ?? "";
-  const who = t.role === TurnRole.you ? "you" : t.role === TurnRole.agent ? "agent" : t.role === TurnRole.incoming ? t.author || "in" : "aug";
+  const who = t.role === TurnRole.you ? "you" : t.role === TurnRole.agent ? "agent" : t.role === TurnRole.incoming ? t.author || "in" : "riker";
   const what = t.role === TurnRole.agent ? first(t.did) || first(t.about) || first(t.body) : first(t.body);
   return `${clockCol(t.started_at)}${who}: ${what}`;
 }
@@ -348,8 +348,8 @@ function hours(ms: number): string {
 // The open row: what the task is, its PR, and what happened to it that day.
 function Detail(props: { taskId: number; day: string; width: number }) {
   const theme = useTheme();
-  const aug = useAug();
-  const detail = createMemo((): WinDetail | null => aug.winDetail(props.taskId, props.day));
+  const riker = useRiker();
+  const detail = createMemo((): WinDetail | null => riker.winDetail(props.taskId, props.day));
   const width = () => Math.max(20, props.width - 10);
   const sub = (text: string) => (
     <text fg={theme.secondary} marginTop={1}>

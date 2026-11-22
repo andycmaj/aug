@@ -1,8 +1,8 @@
 // What is slow in real use, measured where it happens. Each op (a read, a
 // tmux call, a poll) keeps a per-minute histogram in memory; a timing at or
 // past log.slowMs also keeps an example (the slowest few per op per minute).
-// Once a minute, and at exit, they go to perf.db under AUG_HOME, and
-// `aug-tools perf` reads them back as p50/p95/max per op.
+// Once a minute, and at exit, they go to perf.db under RIKER_HOME, and
+// `riker-tools perf` reads them back as p50/p95/max per op.
 //
 // Rides on the log: off unless it is on (core/log.ts), and then off again
 // with log.perf: false. Off, every call is one boolean check. Names and
@@ -10,7 +10,7 @@
 // booleans and short names (a table, a verb), never a task's or a message's
 // text.
 //
-// perf.db is its own file so a flush never moves aug.db's data_version,
+// perf.db is its own file so a flush never moves riker.db's data_version,
 // which would wake the TUI's refresh and the engine's moves drain.
 
 import { Database } from "bun:sqlite";
@@ -54,7 +54,7 @@ interface Example {
 let enabled: boolean | undefined;
 let readAt = -1;
 let slowMs = DEFAULT_SLOW_MS;
-let proc = "aug";
+let proc = "riker";
 let windowStart = minuteOf(new Date());
 const aggs = new Map<string, Agg>();
 const examples = new Map<string, Example[]>();
@@ -242,7 +242,7 @@ function ensureFlushing(): void {
 }
 
 // Writes what this process has gathered since the last flush. Never throws:
-// perf must not take aug down.
+// perf must not take Riker down.
 export function flushPerf(): void {
   if (!aggs.size && !examples.size) return;
   const minute = windowStart;
@@ -335,7 +335,7 @@ function sampleProcess(): void {
 }
 
 export interface PerfStart {
-  // What the rows say made them: "aug" (the TUI) or "aug-tools".
+  // What the rows say made them: "Riker" (the TUI) or "riker-tools".
   proc: string;
   // The TUI samples its own CPU, memory and loop lag; a hook does not.
   sampleProcess?: boolean;
@@ -553,7 +553,7 @@ export function perfText(report: PerfReport): string {
   if (!report.rows.length) {
     out.push(
       "",
-      "nothing recorded: perf rides on the log (AUG_LOG, log.enabled or AUG_DEV)",
+      "nothing recorded: perf rides on the log (RIKER_LOG, log.enabled or RIKER_DEV)",
     );
     return out.join("\n");
   }

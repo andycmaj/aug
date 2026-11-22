@@ -1,4 +1,4 @@
-// SYSTEM tasks: aug asking the owner about its own brain docs. Each holds one
+// SYSTEM tasks: Riker asking the owner about its own brain docs. Each holds one
 // or more proposals (a whole new text for one doc, drafted against `base`),
 // and the owner accepts or rejects the lot. Accept writes the docs (the old
 // files go to .trash) and archives the LEARNED.md lines they absorbed.
@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { think } from "./brain";
-import type { AugConfig } from "./config";
+import type { RikerConfig } from "./config";
 import {
   archiveLearned,
   DOC_PURPOSE,
@@ -68,7 +68,7 @@ const KEYS =
 function summaryFor(source: string, doc: DocName, reason: string): string {
   switch (source) {
     case ProposalSource.shipped:
-      return `aug ships a new ${doc}. Yours has edits, so it was left alone. e: read the diff in revdiff. y: take the shipped one (yours goes to docs/.trash). x: keep yours.`;
+      return `Riker ships a new ${doc}. Yours has edits, so it was left alone. e: read the diff in revdiff. y: take the shipped one (yours goes to docs/.trash). x: keep yours.`;
     default:
       return `${reason}\n\n${KEYS}`;
   }
@@ -161,7 +161,7 @@ function absorbed(p: DocProposalRow): string[] {
 export function mergeText(ours: string, base: string, theirs: string): string | null {
   if (ours === base) return theirs;
   if (theirs === base || ours === theirs) return ours;
-  const dir = mkdtempSync(join(tmpdir(), "aug-merge-"));
+  const dir = mkdtempSync(join(tmpdir(), "riker-merge-"));
   try {
     const files = { ours, base, theirs };
     for (const [name, text] of Object.entries(files))
@@ -260,7 +260,7 @@ const REDRAFT_SCHEMA = {
 // model call per doc, the proposal revised in place. A shipped version has
 // nobody to redraft it.
 export async function redraftProposals(
-  config: AugConfig,
+  config: RikerConfig,
   taskId: number,
   notes: string,
 ): Promise<string> {
@@ -295,7 +295,7 @@ export async function redraftProposals(
         "## The owner's notes on the proposal (file:line, then the note)",
         notes,
       ].join("\n\n"),
-      system: `You revise a proposed edit to ${doc} (${DOC_PURPOSE[doc]}), one of the brain docs that aug, the owner's work manager, puts into its prompts. Apply the owner's notes that are about ${doc}; leave the rest of the proposal as it is. Keep it under ${docBudget(config, doc)} characters, plain Markdown, written as the owner speaking. Never record a secret.`,
+      system: `You revise a proposed edit to ${doc} (${DOC_PURPOSE[doc]}), one of the brain docs that riker, the owner's work manager, puts into its prompts. Apply the owner's notes that are about ${doc}; leave the rest of the proposal as it is. Keep it under ${docBudget(config, doc)} characters, plain Markdown, written as the owner speaking. Never record a secret.`,
       schema: REDRAFT_SCHEMA,
       model: config.brain.assistantModel,
       spend: { role: SpendRole.redraft, taskId },

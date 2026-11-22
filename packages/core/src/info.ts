@@ -1,4 +1,4 @@
-// What I shows: everything aug knows about a rail item, as labeled rows
+// What I shows: everything Riker knows about a rail item, as labeled rows
 // under headings. Empty facts are left out, so a fresh to-do reads short.
 
 import { existsSync } from "node:fs";

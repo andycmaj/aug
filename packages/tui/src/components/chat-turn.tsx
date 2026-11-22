@@ -1,13 +1,14 @@
-// One line of a task's chat. What came in, what you typed and aug's short
+// One line of a task's chat. What came in, what you typed and Riker's short
 // triggers sit indented on a rule; the agent's turns read as three short
 // sections. An older turn folds to its "What I did" and keeps its draft,
 // read-only, with where it went since.
 
+import { SELF } from "@riker/core/brand";
 import { createMemo, For, Match, Show, Switch, type Accessor } from "solid-js";
 import { Markdown, useTheme } from "@andycmaj/opentui-app";
-import { useAug } from "../context/aug";
-import { refusalLines } from "@aug/core/capabilities";
-import { actionText, describeAction } from "@aug/core/outbound";
+import { useRiker } from "../context/riker";
+import { refusalLines } from "@riker/core/capabilities";
+import { actionText, describeAction } from "@riker/core/outbound";
 import {
   formatBytes,
   parseCsv,
@@ -16,9 +17,9 @@ import {
   readPreview,
   tableLines,
   type MadeFile,
-} from "@aug/core/files";
-import { turnSteps } from "@aug/core/rows";
-import { TurnRole, type DraftAction, type TurnRow } from "@aug/core/types";
+} from "@riker/core/files";
+import { turnSteps } from "@riker/core/rows";
+import { TurnRole, type DraftAction, type TurnRow } from "@riker/core/types";
 import { CHANNEL_WORD, clock, dayClock, duration } from "./ui";
 
 export function ChatTurn(props: {
@@ -27,7 +28,7 @@ export function ChatTurn(props: {
   width: number;
 }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const t = () => props.turn;
 
   return (
@@ -46,7 +47,7 @@ export function ChatTurn(props: {
         >
           <text
             fg={theme.primary}
-          >{`You · ${dayClock(t().started_at, aug.now())}`}</text>
+          >{`You · ${dayClock(t().started_at, riker.now())}`}</text>
           <text fg={theme.text} wrapMode="word">
             {t().body}
           </text>
@@ -71,9 +72,9 @@ export function ChatTurn(props: {
 
 function IncomingTurn(props: { turn: TurnRow; width: number }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const message = createMemo(() =>
-    props.turn.message_id ? aug.message(props.turn.message_id) : null,
+    props.turn.message_id ? riker.message(props.turn.message_id) : null,
   );
   const where = () => {
     const m = message();
@@ -92,7 +93,7 @@ function IncomingTurn(props: { turn: TurnRow; width: number }) {
       <text
         fg={theme.secondary}
         wrapMode="word"
-      >{`${where()} · ${dayClock(props.turn.started_at, aug.now())}`}</text>
+      >{`${where()} · ${dayClock(props.turn.started_at, riker.now())}`}</text>
       <text fg={theme.text} wrapMode="word">
         {props.turn.body}
       </text>
@@ -102,7 +103,7 @@ function IncomingTurn(props: { turn: TurnRow; width: number }) {
 
 function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const steps = createMemo(
     () => turnSteps(props.turn),
   );
@@ -113,10 +114,10 @@ function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
     props.turn.action ? (JSON.parse(props.turn.action) as DraftAction) : null,
   );
   const ran = () =>
-    duration(props.turn.started_at, props.turn.finished_at, aug.now());
+    duration(props.turn.started_at, props.turn.finished_at, riker.now());
   // the running clock needs the spinner's tick, not the 30s clock
   const liveRan = () => {
-    aug.spinner();
+    riker.spinner();
     return duration(props.turn.started_at, null, new Date());
   };
 
@@ -137,7 +138,7 @@ function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
         >
           <span
             style={{ fg: theme.info }}
-          >{`${aug.spinner()} working ${liveRan()}`}</span>
+          >{`${riker.spinner()} working ${liveRan()}`}</span>
         </Show>
         <Show when={!running() && steps().length > 0}>
           <span
@@ -163,7 +164,7 @@ function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
           </text>
         </Match>
         {/* Home is a conversation: every answer stays whole, unheaded. */}
-        <Match when={props.turn.author === "aug"}>
+        <Match when={props.turn.author === SELF}>
           <box flexDirection="column" paddingLeft={2}>
             <Markdown
               text={props.turn.did ?? props.turn.body}
@@ -259,13 +260,13 @@ const PREVIEW_LINES = 40;
 // whole, on a rule of its own so it never reads as the agent's turn.
 function ActionTurn(props: { turn: TurnRow; width: number }) {
   const theme = useTheme();
-  const aug = useAug();
+  const riker = useRiker();
   const steps = createMemo(() => turnSteps(props.turn));
   const refusals = createMemo(() => refusalLines(steps()));
   const files = createMemo(() => parseFiles(props.turn.files));
   const running = () => props.turn.status === "running";
   const liveRan = () => {
-    aug.spinner();
+    riker.spinner();
     return duration(props.turn.started_at, null, new Date());
   };
   return (
@@ -287,10 +288,10 @@ function ActionTurn(props: { turn: TurnRow; width: number }) {
         <Show
           when={running()}
           fallback={
-            <span style={{ fg: theme.textMuted }}>{`ran ${duration(props.turn.started_at, props.turn.finished_at, aug.now())}`}</span>
+            <span style={{ fg: theme.textMuted }}>{`ran ${duration(props.turn.started_at, props.turn.finished_at, riker.now())}`}</span>
           }
         >
-          <span style={{ fg: theme.info }}>{`${aug.spinner()} running ${liveRan()}`}</span>
+          <span style={{ fg: theme.info }}>{`${riker.spinner()} running ${liveRan()}`}</span>
         </Show>
       </text>
       <Switch>

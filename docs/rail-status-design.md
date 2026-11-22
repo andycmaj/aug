@@ -31,7 +31,7 @@ except an agent-closed task whose result is unread.
 - Esc in a coding agent fires no Stop hook, so the row stays `working`
   until the window goes. Nothing checks.
 - `saved` is the owner's Stop (and close while live, and an adopted stray);
-  `stopped` is everything else (crash, window gone, `/exit`, aug restart).
+  `stopped` is everything else (crash, window gone, `/exit`, Riker restart).
   Both resume the same way with `s`. `/exit` typed by the owner reads as
   stopped, so the split does not even track intent.
 - `waiting_on` is free text ("waiting on them"); one task waiting on
@@ -159,7 +159,7 @@ as today):
 | idle | ◇ | agent idle | turn over, at its prompt, not asking | `stop` hook, no question |
 | waiting | ◆ | waiting on you | needs your answer: a question, a permission, a choice | AskUserQuestion, permission notification, a turn that ends asking |
 | stopped | ■ | agent stopped | not running; `s` resumes it | any session end |
-| ready | ◈ | ready for review | finished; the result waits on you to review, push or close (or, if it closed the task, to read) | `aug-tools done`, a chat turn that answered |
+| ready | ◈ | ready for review | finished; the result waits on you to review, push or close (or, if it closed the task, to read) | `riker-tools done`, a chat turn that answered |
 
 ### Changes
 
@@ -176,11 +176,11 @@ as today):
 - **saved merges into stopped** (AUG-0100). Both resume the same way, and
   the split was not reliable (`/exit` read as a crash). Why it ended goes in
   a new `sessions.end_reason` ("you stopped it", "you closed the task",
-  "its window closed", "claude exited", "aug restarted", "failed: ...");
+  "its window closed", "claude exited", "Riker restarted", "failed: ...");
   the Canvas and the row's sub line show it. Migrated: `saved` -> `stopped`.
 - **idle is new** (AUG-0101). Turns are bracketed by explicit signals:
   - start: `prompt` hook (UserPromptSubmit; typed by you or delivered by
-    aug), any `tool` hook while not finished.
+    Riker), any `tool` hook while not finished.
   - end: `stop` hook. It reads the last assistant message
     (`last_assistant_message` in the payload, else the transcript's tail):
     ending in a question is **waiting**, otherwise **idle**.
@@ -205,7 +205,7 @@ none ──Start──> queued ──runs──> working <──prompt/tool─�
                stopped <──end──────┤                                     │
                   │   (any session end, from any live state)   answer ───┘─> working
                   └──s (resume)──> working
-working/idle/waiting ──aug-tools done──> ready (stays while it winds down:
+working/idle/waiting ──riker-tools done──> ready (stays while it winds down:
                                           idle, waiting and the window closing
                                           leave it ready)
 ready ──prompt (your new input) / s (restart)──> working

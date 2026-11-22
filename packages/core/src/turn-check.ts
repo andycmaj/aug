@@ -1,7 +1,7 @@
 // The safety net under the turn signals. A turn ends with claude's Stop hook,
 // but Esc (an interrupted turn) fires none, so a row could read working
 // forever. Each running claude says busy or idle in its own
-// ~/.claude/sessions/<pid>.json; a session aug has as working, quiet for a
+// ~/.claude/sessions/<pid>.json; a session Riker has as working, quiet for a
 // while, that claude calls idle, is idle.
 
 import { readdirSync, readFileSync } from "node:fs";

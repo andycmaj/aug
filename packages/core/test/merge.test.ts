@@ -85,7 +85,7 @@ describe("branchMerged (real git)", () => {
   }
 
   test("no work, unmerged, fast-forwarded and squashed", async () => {
-    const repo = mkdtempSync(join(tmpdir(), "aug-merge-"));
+    const repo = mkdtempSync(join(tmpdir(), "riker-merge-"));
     const git = (...a: string[]) => sh(repo, "git", ...a);
     const commit = async (file: string) => {
       await Bun.write(join(repo, file), file);

@@ -1,11 +1,11 @@
-// When aug may call GitHub next. aug shares the owner's API budget with
+// When Riker may call GitHub next. Riker shares the owner's API budget with
 // their own gh and their agents', so a rate limit pauses that budget's calls
-// until GitHub says it is back, and aug stops short of draining it
+// until GitHub says it is back, and Riker stops short of draining it
 // (GRAPHQL_RESERVE). A 5xx or a dropped connection backs off, doubling each
 // time it happens again, until a call works; one PR that keeps failing backs
 // off on its own without holding up the rest.
 
-// The two budgets aug spends: REST (notifications) and GraphQL (PR status).
+// The two budgets Riker spends: REST (notifications) and GraphQL (PR status).
 export const GhBudget = { rest: "core", graphql: "graphql" } as const;
 export type GhBudget = (typeof GhBudget)[keyof typeof GhBudget];
 
@@ -34,7 +34,7 @@ export interface GhRemaining {
   resetAt: string;
 }
 
-// Below this many GraphQL points aug stops reading PR status until the
+// Below this many GraphQL points Riker stops reading PR status until the
 // reset, so the owner's own gh and their agents keep the rest.
 export const GRAPHQL_RESERVE = 1000;
 // A secondary rate limit says no reset time; GitHub asks for a minute or

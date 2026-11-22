@@ -74,27 +74,27 @@ describe("Claude's session files", () => {
     const text = JSON.stringify({
       pid: 7381,
       sessionId: "1d643864-e936",
-      cwd: "/src/aug",
+      cwd: "/src/riker",
       kind: "interactive",
       tmux: "aug-misc:@200.%228",
-      name: "AUG-0022",
+      name: "RIKER-0022",
       status: "idle",
     });
     expect(parseClaudeProcess(text)).toEqual({
       pid: 7381,
       sessionId: "1d643864-e936",
-      cwd: "/src/aug",
+      cwd: "/src/riker",
       pane: "%228",
-      name: "AUG-0022",
+      name: "RIKER-0022",
       status: "idle",
     });
   });
 
-  test("a claude outside tmux has no pane; print runs, aug's own and junk are skipped", () => {
+  test("a claude outside tmux has no pane; print runs, Riker's own and junk are skipped", () => {
     const base = { pid: 1, sessionId: "s", cwd: "/x" };
     expect(parseClaudeProcess(JSON.stringify(base))?.pane).toBeNull();
     expect(parseClaudeProcess(JSON.stringify({ ...base, kind: "print" }))).toBeNull();
-    expect(parseClaudeProcess(JSON.stringify({ ...base, entrypoint: "aug" }))).toBeNull();
+    expect(parseClaudeProcess(JSON.stringify({ ...base, entrypoint: "riker" }))).toBeNull();
     expect(parseClaudeProcess(JSON.stringify({ pid: 1 }))).toBeNull();
     expect(parseClaudeProcess("{nope")).toBeNull();
   });
@@ -116,14 +116,14 @@ describe("Claude's session files", () => {
 });
 
 describe("finding strays", () => {
-  test("live claudes no task holds, minus aug's own and the one aug runs beside", async () => {
+  test("live claudes no task holds, minus Riker's own and the one Riker runs beside", async () => {
     const mine = await ownSession("beanstream", 101);
     const gone = await ownSession("old", 201);
     dead.add(gone.pid);
     const known = await ownSession("known", 301);
-    const project = await createProject(config(), { name: "Aug" });
+    const project = await createProject(config(), { name: "Riker" });
     const task = store.createTask({ title: "x", kind: Kind.coding, channel: "owner", projectId: project.id });
-    store.createSession({ id: known.sessionId, taskId: task.id, kind: SessionKind.tmux, cwd: "/", startedBy: "aug" });
+    store.createSession({ id: known.sessionId, taskId: task.id, kind: SessionKind.tmux, cwd: "/", startedBy: "riker" });
     const host = await ownSession("host", 401);
     fake.host = host.pane;
     const tagged = await ownSession("tagged", 501);
@@ -231,13 +231,13 @@ describe("the adopt move", () => {
     const move = store.enqueueMove("adopt", { project: "Ledger", claude: "beanstream" }, "you");
     await engine.drainMoves();
     const row = store.getMove(move.id)!;
-    expect(row.result).toMatch(/^adopted beanstream:claude .* as AUG-\d+ in Ledger/);
+    expect(row.result).toMatch(/^adopted beanstream:claude .* as RIKER-\d+ in Ledger/);
   });
 
   test("an agent cannot adopt, and an unknown claude says which there are", async () => {
     await ownSession("beanstream", 101);
     await createProject(config(), { name: "Ledger" });
-    const byAgent = store.enqueueMove("adopt", { project: "Ledger", claude: "beanstream" }, "agent AUG-0001");
+    const byAgent = store.enqueueMove("adopt", { project: "Ledger", claude: "beanstream" }, "agent RIKER-0001");
     const unknown = store.enqueueMove("adopt", { project: "Ledger", claude: "nope" }, "you");
     await engine.drainMoves();
     expect(store.getMove(byAgent.id)!.result).toStartWith("adopt is the owner's move");

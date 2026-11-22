@@ -1,7 +1,7 @@
 // The inbox's one worker. Pollers only insert messages (state new) and move
 // their cursors on; this takes them oldest first, the way the engine takes
 // moves: claim, run the chain, settle. A claim is a try, so a message that
-// keeps failing (or keeps killing aug mid-triage) stops after
+// keeps failing (or keeps killing Riker mid-triage) stops after
 // TRIAGE_MAX_ATTEMPTS and waits on the Inbox tab for the owner.
 //
 // A burst on one thread is one triage: messages on the same thread_key that

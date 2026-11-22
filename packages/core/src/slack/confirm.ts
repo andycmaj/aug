@@ -5,7 +5,7 @@
 
 import * as store from "../store";
 
-// Who asks when the Assistant's turn answers a Slack line (AUG_ASKED_BY).
+// Who asks when the Assistant's turn answers a Slack line (RIKER_ASKED_BY).
 export const SLACK_ASKER = "assistant via Slack";
 
 // The moves that wait for a yes: they spend money or end work.
@@ -31,7 +31,7 @@ const VERB_WORDS: Record<string, string> = {
   action: "run an action on",
 };
 
-// The move in the owner's words: "stop the agent on AUG-0012 (fix the
+// The move in the owner's words: "stop the agent on RIKER-0012 (fix the
 // flaky test)".
 export function describeMove(verb: string, args: Record<string, string>): string {
   const words = VERB_WORDS[verb] ?? verb;
@@ -50,7 +50,7 @@ export interface Pending {
   id: number;
   verb: string;
   args: Record<string, string>;
-  // What the owner reads: "stop AUG-0012 (fix the flaky test)".
+  // What the owner reads: "stop RIKER-0012 (fix the flaky test)".
   says: string;
   // Home's turn that asked for it, until its answer is posted.
   turnId: number | null;

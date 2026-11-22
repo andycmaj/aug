@@ -1,4 +1,4 @@
-// The guide's calls (aug's docs/task-actions-design.md, guide in batches). A
+// The guide's calls (Riker's docs/task-actions-design.md, guide in batches). A
 // change that fits one call is one call (job whole): the whole numbered
 // diff in the prompt, the guide JSON back. A bigger one is one call per
 // batch (job notes: its files' summaries and review notes), a few at a time,

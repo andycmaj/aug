@@ -1,5 +1,5 @@
 // Every move the owner makes, once: the buttons in the TUI, the verbs the
-// Assistant and agents ask for through aug-tools, and the tests all come
+// Assistant and agents ask for through riker-tools, and the tests all come
 // here. The desk changes the store, teaches LEARNED.md from corrections, and
 // hands agent work to the task's driver. It runs nothing on a clock: the
 // engine does, and owns a desk.
@@ -25,7 +25,7 @@ import { nudgeText } from "./feedback";
 import { correct } from "./learn";
 import { holdForStart, taskClosed, taskDropped } from "./lifecycle";
 import { localDay, MAX_WINS } from "./rail";
-import type { AugConfig, ConfigSource, NoiseRule } from "./config";
+import type { RikerConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
 import * as projects from "./projects";
 import { applyProjectDoc, renderProjectDoc } from "./project-doc";
@@ -133,7 +133,7 @@ export class Desk {
 
   // Read each time a setting is used, so an edit to config.json (or a move
   // below) applies without a restart.
-  config(): AugConfig {
+  config(): RikerConfig {
     return this.options.config.get();
   }
 
@@ -316,7 +316,7 @@ export class Desk {
   }
 
   // The task's last guide, reopened in Plannotator with its findings and no
-  // model run (@aug/code-review-plannotator). Nothing to undo: it opens a review.
+  // model run (@riker/code-review-plannotator). Nothing to undo: it opens a review.
   hasGuideReview(taskId: number): boolean {
     const task = store.getTask(taskId);
     return !!task && hasGuideReview(task);
@@ -329,7 +329,7 @@ export class Desk {
   }
 
   private startAction(
-    config: AugConfig,
+    config: RikerConfig,
     task: TaskRow,
     spec: ActionSpec,
     event?: ActionEvent,
@@ -430,7 +430,7 @@ export class Desk {
     );
   }
 
-  // Claudes started outside aug, and making one a task in a project.
+  // Claudes started outside Riker, and making one a task in a project.
   async strays(): Promise<Stray[]> {
     // The fixture day never reads your real claudes.
     return this.offline ? [] : findStrays();
@@ -951,7 +951,7 @@ export class Desk {
       if (!task) {
         task = systemTask(
           "Your docs: the interview",
-          "aug interviews you in this task's terminal; its drafts land here.",
+          "riker interviews you in this task's terminal; its drafts land here.",
         );
         store.kvSet(ONBOARD_TASK, String(task.id));
       }

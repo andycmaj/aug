@@ -8,7 +8,7 @@
 
 import { onCleanup } from "solid-js";
 import { useRenderer } from "@opentui/solid";
-import { perfOn, sample, timing } from "@aug/core/perf";
+import { perfOn, sample, timing } from "@riker/core/perf";
 
 export function useRenderPerf(): void {
   if (!perfOn()) return;

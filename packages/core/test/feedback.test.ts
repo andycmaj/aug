@@ -65,7 +65,7 @@ describe("linking a PR to its task", () => {
     expect(linkByBranch(prMessage(232, "x"))).toBeNull();
   });
 
-  test("aug-tools pr links by URL", () => {
+  test("riker-tools pr links by URL", () => {
     const t = branchTask();
     expect(parsePrUrl("https://github.com/acme/ledger/pull/230/files")).toEqual({ repo: "acme/ledger", number: 230 });
     expect(linkPr(t.id, "https://github.com/acme/ledger/issues/9")).toBeNull();
@@ -140,7 +140,7 @@ describe("feedback", () => {
     prMessage(214, "also check the CSV path");
     const first = unreadFeedback(t.id);
     expect(first.map((m) => m.body)).toEqual(["Please add a test", "also check the CSV path"]);
-    expect(nudgeText(t.id)).toContain("2 new comments on AUG-0001");
+    expect(nudgeText(t.id)).toContain("2 new comments on RIKER-0001");
     expect(nudgeText(t.id)).toContain("feedback");
     expect(formatFeedback(first)).toContain("erin on acme/ledger#230");
     markFeedbackRead(t.id, first);

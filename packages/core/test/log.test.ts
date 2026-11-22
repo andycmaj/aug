@@ -17,8 +17,8 @@ const read = () =>
   existsSync(paths.log()) ? readFileSync(paths.log(), "utf8") : "";
 
 afterEach(() => {
-  delete process.env.AUG_LOG;
-  delete process.env.AUG_DEV;
+  delete process.env.RIKER_LOG;
+  delete process.env.RIKER_DEV;
   resetLog();
 });
 
@@ -32,8 +32,8 @@ describe("log settings", () => {
 
   test("dev mode logs debug and up", () => {
     freshHome();
-    expect(resolveLogSettings({ AUG_DEV: "1" })?.level).toBe("debug");
-    expect(resolveLogSettings({ AUG_DEV: "0" })).toBeNull();
+    expect(resolveLogSettings({ RIKER_DEV: "1" })?.level).toBe("debug");
+    expect(resolveLogSettings({ RIKER_DEV: "0" })).toBeNull();
   });
 
   test("config turns it on at its level", () => {
@@ -43,11 +43,11 @@ describe("log settings", () => {
     expect(s?.file).toBe(paths.log());
   });
 
-  test("AUG_LOG wins over config and dev mode", () => {
+  test("RIKER_LOG wins over config and dev mode", () => {
     freshHome({ log: { enabled: true, level: "warn" } });
-    expect(resolveLogSettings({ AUG_LOG: "trace" })?.level).toBe("trace");
-    expect(resolveLogSettings({ AUG_LOG: "on" })?.level).toBe("debug");
-    expect(resolveLogSettings({ AUG_LOG: "off", AUG_DEV: "1" })).toBeNull();
+    expect(resolveLogSettings({ RIKER_LOG: "trace" })?.level).toBe("trace");
+    expect(resolveLogSettings({ RIKER_LOG: "on" })?.level).toBe("debug");
+    expect(resolveLogSettings({ RIKER_LOG: "off", RIKER_DEV: "1" })).toBeNull();
   });
 
   test("a partial log section in config keeps the defaults", () => {
@@ -99,7 +99,7 @@ describe("writing", () => {
     const blocker = join(paths.home(), "blocker");
     writeFileSync(blocker, "");
     freshHome({
-      log: { enabled: true, level: "info", file: join(blocker, "aug.log") },
+      log: { enabled: true, level: "info", file: join(blocker, "riker.log") },
     });
     expect(() => logger("x").error("lost")).not.toThrow();
   });

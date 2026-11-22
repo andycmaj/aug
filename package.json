@@ -1,5 +1,5 @@
 {
-  "name": "@aug/root",
+  "name": "@riker/root",
   "version": "0.0.1",
   "description": "A local work manager TUI: GitHub and Slack become tasks, Claude does the work, nothing goes out until you approve. A Taskuary clone on OpenTUI Solid.",
   "type": "module",
@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "AUG_DEV=1 bun packages/cli/script/aug.ts",
-    "demo": "AUG_FIXTURE=demo bun run --conditions=browser --preload @opentui/solid/preload ./packages/cli/src/aug.ts",
-    "sim": "bun run --conditions=browser --preload @opentui/solid/preload ./packages/cli/src/aug.ts sim",
+    "dev": "RIKER_DEV=1 bun packages/cli/script/riker.ts",
+    "demo": "RIKER_FIXTURE=demo bun run --conditions=browser --preload @opentui/solid/preload ./packages/cli/src/riker.ts",
+    "sim": "bun run --conditions=browser --preload @opentui/solid/preload ./packages/cli/src/riker.ts sim",
     "sim:do": "bun run ./packages/fixtures/src/sim/do.ts",
-    "debug": "AUG_DEV=1 SHOW_CONSOLE=true bun run --inspect-wait --conditions=browser --preload @opentui/solid/preload ./packages/cli/src/aug.ts",
+    "debug": "RIKER_DEV=1 SHOW_CONSOLE=true bun run --inspect-wait --conditions=browser --preload @opentui/solid/preload ./packages/cli/src/riker.ts",
     "compile": "bun run packages/cli/script/compile.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",

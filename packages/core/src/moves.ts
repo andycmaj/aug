@@ -1,7 +1,7 @@
-// Every move the Assistant or an agent can make, in one registry. aug-tools
+// Every move the Assistant or an agent can make, in one registry. riker-tools
 // reads it for its commands and help, the desk for its dispatch, which
 // runs each on its desk. A move from
-// another process goes through the `moves` table: aug-tools inserts it and
+// another process goes through the `moves` table: riker-tools inserts it and
 // waits, the desk claims it, runs it, and writes back one line of result.
 
 import { readFileSync, realpathSync, rmSync } from "node:fs";
@@ -44,9 +44,9 @@ export interface MoveArg {
 
 export interface MoveSpec {
   help: string;
-  // Acts on one task, named by the `task` arg (AUG-0012).
+  // Acts on one task, named by the `task` arg (RIKER-0012).
   task: boolean;
-  // The arg aug-tools takes without a flag (after the task, when the move
+  // The arg riker-tools takes without a flag (after the task, when the move
   // has one).
   positional?: string;
   args: Record<string, MoveArg>;
@@ -54,7 +54,7 @@ export interface MoveSpec {
     desk: Desk,
     task: TaskRow | null,
     args: Record<string, string>,
-    // "you", "assistant", or "agent AUG-0012".
+    // "you", "assistant", or "agent RIKER-0012".
     by: string,
   ): string | Promise<string>;
 }
@@ -65,14 +65,14 @@ function ref(task: TaskRow | null): string {
   return task ? store.taskRef(task.id) : "";
 }
 
-// Another task named in an argument (--on AUG-0012).
+// Another task named in an argument (--on RIKER-0012).
 function taskArg(value: string): number {
   const id = store.parseTaskRef(value);
   if (!id || !store.getTask(id)) throw new MoveError(`no task ${value}`);
   return id;
 }
 
-// Kinds a move may make or set; anything else is aug's own.
+// Kinds a move may make or set; anything else is Riker's own.
 const KINDS = [Kind.general, Kind.coding, Kind.reply, Kind.task] as const;
 
 function kindNamed(name: string): Kind {
@@ -416,7 +416,7 @@ export const MOVES: Record<string, MoveSpec> = {
       project: { help: "the project it belongs to" },
       repo: { help: "coding: owner/repo (default: the project's first repo)" },
       goal: { help: "the project goal it works toward (G3); puts it in that project" },
-      from: { help: "the task this comes out of (AUG-0012); it hears back" },
+      from: { help: "the task this comes out of (RIKER-0012); it hears back" },
     },
     run(desk, _task, args, by) {
       const kind = args.kind ? kindNamed(args.kind) : Kind.general;
@@ -549,7 +549,7 @@ export const MOVES: Record<string, MoveSpec> = {
   block_on: {
     help: "Mark the task blocked by another task; it hears when that one is done",
     task: true,
-    args: { on: { help: "the task it waits for (AUG-0000)", required: true } },
+    args: { on: { help: "the task it waits for (RIKER-0000)", required: true } },
     run(desk, task, args, by) {
       try {
         return desk.blockOn(task!.id, taskArg(args.on), by);
@@ -562,7 +562,7 @@ export const MOVES: Record<string, MoveSpec> = {
   unblock: {
     help: "No longer blocked by a task (no --on: by any)",
     task: true,
-    args: { on: { help: "the task it waited for (AUG-0000)" } },
+    args: { on: { help: "the task it waited for (RIKER-0000)" } },
     run(desk, task, args) {
       return desk.unblock(task!.id, args.on?.trim() ? taskArg(args.on) : undefined);
     },
@@ -629,7 +629,7 @@ export const MOVES: Record<string, MoveSpec> = {
     },
   },
   adopt: {
-    help: "Make a claude started outside aug (another tmux session, a terminal) a coding task in a project. Without --claude, lists them",
+    help: "Make a claude started outside Riker (another tmux session, a terminal) a coding task in a project. Without --claude, lists them",
     task: false,
     positional: "claude",
     args: {
@@ -851,7 +851,7 @@ export const MOVES: Record<string, MoveSpec> = {
     task: false,
     args: {
       doc: { help: "PERSONA | JOB | STYLE", required: true },
-      file: { help: "the file you wrote the whole doc to, in aug's drafts/docs folder" },
+      file: { help: "the file you wrote the whole doc to, in Riker's drafts/docs folder" },
       text: { help: "the whole doc inline (no Markdown headings: use --file)" },
       reason: { help: "one line: why" },
     },
@@ -936,7 +936,7 @@ export async function runMove(
     if (!task)
       return {
         ok: false,
-        result: args.task ? `no task ${args.task}` : `${verb} needs --task AUG-0000`,
+        result: args.task ? `no task ${args.task}` : `${verb} needs --task RIKER-0000`,
       };
     if (task.kind === Kind.home)
       return { ok: false, result: `${args.task} is Home, not a task` };
@@ -981,15 +981,15 @@ export async function runMove(
   }
 }
 
-// A move older than this was asked of an aug that wasn't running: it fails
-// rather than surprising the owner when aug next starts.
+// A move older than this was asked of a Riker that wasn't running: it fails
+// rather than surprising the owner when Riker next starts.
 export const MOVE_STALE_MS = 60_000;
 
 export async function drainMoves(desk: Desk, at = Date.now()): Promise<number> {
   let ran = 0;
   for (const move of store.pendingMoves()) {
     if (at - Date.parse(move.created_at) > MOVE_STALE_MS) {
-      store.abandonMove(move.id, "expired: aug was not running to make it");
+      store.abandonMove(move.id, "expired: riker was not running to make it");
       continue;
     }
     if (!store.claimMove(move.id)) continue;
@@ -1008,7 +1008,7 @@ export async function drainMoves(desk: Desk, at = Date.now()): Promise<number> {
 }
 
 export interface WaitOptions {
-  // How long a pending move may sit before giving up on aug.
+  // How long a pending move may sit before giving up on Riker.
   pickupMs?: number;
   // How long a claimed move may run (a coding start makes a worktree).
   runMs?: number;
@@ -1032,11 +1032,11 @@ export async function waitForMove(
     // Losing the race to abandon means the engine claimed it just now: keep
     // waiting, and sleep like any other poll rather than spin.
     if (move.status === MoveStatus.pending && waited > pickupMs) {
-      if (store.abandonMove(id, "aug did not pick it up: is aug running?"))
+      if (store.abandonMove(id, "riker did not pick it up: is riker running?"))
         return store.getMove(id)!;
     }
     if (waited > pickupMs + runMs)
-      return { ...move, status: MoveStatus.failed, result: "still running: check aug" };
+      return { ...move, status: MoveStatus.failed, result: "still running: check riker" };
     await Bun.sleep(pollMs);
   }
 }

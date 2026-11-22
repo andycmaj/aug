@@ -3,8 +3,9 @@
 // hears the write and polls (ctrl+r does too). Plain TS, no Solid.
 
 import { existsSync, readFileSync } from "node:fs";
+import { envVar } from "@riker/core/brand";
 import { defineCommand, runMain } from "citty";
-import { openDb, useDb } from "@aug/core/db";
+import { openDb, useDb } from "@riker/core/db";
 import {
   applyToFile,
   playScenario,
@@ -19,7 +20,7 @@ import { linkOpened, POINTER } from "./link";
 function simHome(named?: string): string {
   const home =
     named ||
-    process.env.AUG_SIM_HOME ||
+    envVar("SIM_HOME") ||
     (existsSync(POINTER) ? readFileSync(POINTER, "utf8").trim() : "");
   if (!home || !existsSync(statePath(home))) {
     console.error(
@@ -33,7 +34,7 @@ function simHome(named?: string): string {
 const common = {
   home: {
     type: "string",
-    description: "the sim's AUG_HOME (default: the one running now)",
+    description: "the sim's RIKER_HOME (default: the one running now)",
   },
   pr: {
     type: "string",
@@ -52,10 +53,10 @@ function apply(args: { home?: string }, event: SimEvent): void {
   report(home, file, done);
 }
 
-// The owner's PR is the work task's, as `aug-tools pr` links it.
+// The owner's PR is the work task's, as `riker-tools pr` links it.
 function report(home: string, file: string, done: Applied): void {
   if (done.opened) {
-    process.env.AUG_HOME = home;
+    process.env.RIKER_HOME = home;
     useDb(openDb());
     linkOpened(loadState(file), done);
   }
