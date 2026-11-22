@@ -6,8 +6,7 @@ import type { TurnAnswer } from "./agents";
 import type { RikerConfig } from "./config";
 import { draftSent } from "./lifecycle";
 import { logger } from "./log";
-import { messageMeta } from "./meta";
-import type { Send, Senders } from "./plugins";
+import type { DraftKind, RikerPlugin } from "./plugins";
 import * as store from "./store";
 import {
   ActionState,
@@ -27,49 +26,6 @@ export function lastIncoming(taskId: number): MessageRow | null {
   return messages[messages.length - 1] ?? null;
 }
 
-// The model says what to send; where it goes comes from the thread itself,
-// never from the model.
-export function actionFor(
-  task: TaskRow,
-  answer: TurnAnswer["action"],
-): DraftAction | null {
-  if (!answer?.text.trim()) return null;
-  const message = lastIncoming(task.id);
-  if (!message) return null;
-  const meta = messageMeta(message);
-  if (meta.channel === "slack") {
-    if (!meta.slackChannel) return null;
-    const threadTs = meta.thread_ts ?? (meta.dm ? null : meta.ts);
-    return {
-      type: "slack_reply",
-      channel: meta.slackChannel,
-      thread_ts: threadTs ?? undefined,
-      to: message.author_name,
-      text: answer.text.trim(),
-    };
-  }
-  if (meta.channel === "github") {
-    if (!meta.repo || !meta.number) return null;
-    const isPr = meta.type === "PullRequest";
-    const close =
-      answer.kind === "close_issue" && !isPr
-        ? ("issue" as const)
-        : answer.kind === "merge_pr" && isPr
-          ? ("merge" as const)
-          : answer.kind === "approve_pr" && isPr
-            ? ("approve" as const)
-            : undefined;
-    return {
-      type: "github_comment",
-      repo: meta.repo,
-      number: meta.number,
-      body: answer.text.trim(),
-      close,
-    };
-  }
-  return null;
-}
-
 // Fixtures and tests replace every sender at once (nothing leaves the demo).
 let override: Sender | null = null;
 
@@ -79,38 +35,56 @@ export function setSender(next: Sender | null): void {
 
 export class SendError extends Error {}
 
-// Each action goes out through the plugin that brought its type
-// (core/plugins.ts); with none, it is not sent and says why.
-function send(action: DraftAction, config: RikerConfig, senders: Senders): Promise<string> {
-  if (override) return override(action, config);
-  const sender = senders[action.type] as Send | undefined;
-  if (!sender) return Promise.reject(new SendError(`nothing is connected to send a ${describeAction(action)}`));
-  return sender(action, config);
-}
+// Every kind of draft the plugins brought (core/plugins.ts), by type. Core
+// knows no kind itself: it builds, words, rewrites and sends a draft through
+// the kind that made it, and one no plugin brings is said by its type and
+// not sent.
+export class Drafts {
+  private kinds = new Map<string, DraftKind>();
 
-export function describeAction(action: DraftAction): string {
-  if (action.type === "slack_reply") {
-    return `Slack reply${action.to ? ` to ${action.to}` : ""}${action.thread_ts ? " (in thread)" : ""}`;
+  constructor(kinds: readonly DraftKind[] = []) {
+    for (const kind of kinds) {
+      if (this.kinds.has(kind.type)) throw new Error(`two plugins draft ${kind.type}`);
+      this.kinds.set(kind.type, kind);
+    }
   }
-  const what =
-    action.close === "merge"
-      ? "comment + merge"
-      : action.close === "issue"
-        ? "comment + close issue"
-        : action.close === "approve"
-          ? "approve with comment"
-          : "comment";
-  return `GitHub ${what} on ${action.repo}#${action.number}`;
-}
 
-export function actionText(action: DraftAction): string {
-  return action.type === "slack_reply" ? action.text : action.body;
-}
+  // The model says what to send; where it goes comes from the thread itself,
+  // never from the model: the first kind that can answer its last message.
+  for(task: TaskRow, answer: TurnAnswer["action"]): DraftAction | null {
+    const text = answer?.text.trim();
+    if (!answer || !text) return null;
+    const message = lastIncoming(task.id);
+    if (!message) return null;
+    for (const kind of this.kinds.values()) {
+      const draft = kind.build(message, { ...answer, text });
+      if (draft) return draft;
+    }
+    return null;
+  }
 
-export function withText(action: DraftAction, text: string): DraftAction {
-  return action.type === "slack_reply"
-    ? { ...action, text }
-    : { ...action, body: text };
+  describe(action: DraftAction): string {
+    return this.kinds.get(action.type)?.describe(action) ?? `${action.type} draft`;
+  }
+
+  text(action: DraftAction): string {
+    return this.kinds.get(action.type)?.text(action) ?? "";
+  }
+
+  withText(action: DraftAction, text: string): DraftAction {
+    return this.kinds.get(action.type)?.withText(action, text) ?? action;
+  }
+
+  static of(plugins: readonly RikerPlugin[]): Drafts {
+    return new Drafts(plugins.flatMap((p) => p.drafts ?? []));
+  }
+
+  send(action: DraftAction, config: RikerConfig): Promise<string> {
+    if (override) return override(action, config);
+    const kind = this.kinds.get(action.type);
+    if (!kind) return Promise.reject(new SendError(`nothing is connected to send a ${this.describe(action)}`));
+    return kind.send(action, config);
+  }
 }
 
 const log = logger("outbound");
@@ -119,15 +93,15 @@ const log = logger("outbound");
 export async function sendPending(
   config: RikerConfig,
   taskId: number,
-  senders: Senders,
+  drafts: Drafts,
 ): Promise<string> {
   const pending = store.pendingAction(taskId);
   if (!pending) throw new SendError("nothing waits to be sent");
   try {
-    const receipt = await send(pending.action, config, senders);
+    const receipt = await drafts.send(pending.action, config);
     log.info("sent", {
       task: taskId,
-      action: describeAction(pending.action),
+      action: drafts.describe(pending.action),
       receipt,
     });
     store.batch(() => {
@@ -147,7 +121,7 @@ export async function sendPending(
     const message = err instanceof Error ? err.message : String(err);
     log.error("send failed", {
       task: taskId,
-      action: describeAction(pending.action),
+      action: drafts.describe(pending.action),
       err,
     });
     store.updateTurn(pending.turn.id, {
@@ -159,13 +133,13 @@ export async function sendPending(
 
 // The owner rewrote the draft before sending. Returns the words it replaced
 // (the caller keeps them as a correction: editing a draft teaches voice).
-export function editPending(taskId: number, text: string): string | null {
+export function editPending(taskId: number, text: string, drafts: Drafts): string | null {
   const pending = store.pendingAction(taskId);
   if (!pending) return null;
-  const before = actionText(pending.action);
+  const before = drafts.text(pending.action);
   if (before.trim() === text.trim()) return null;
   store.updateTurn(pending.turn.id, {
-    action: JSON.stringify(withText(pending.action, text)),
+    action: JSON.stringify(drafts.withText(pending.action, text)),
   });
   return before;
 }

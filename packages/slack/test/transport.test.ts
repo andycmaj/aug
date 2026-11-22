@@ -11,6 +11,7 @@ import { McpTransport } from "../src/mcp";
 import { rawToNewMessage } from "../src/shared";
 import { TokenTransport } from "../src/token";
 import { slackTransport } from "../src/transport";
+import { slackConfig } from "../src/config";
 import { fakeBrain, freshHome } from "@riker/core/test/support/helpers";
 
 const TOOLS = [
@@ -276,14 +277,22 @@ describe("claude-mcp transport", () => {
   });
 });
 
+describe("slack's section", () => {
+  test("its model is read from brain.slackModel in a file written before it moved", () => {
+    expect(slackConfig.of(mergeConfig({})).model).toBe("haiku");
+    expect(slackConfig.of(mergeConfig({ brain: { slackModel: "sonnet" } } as never)).model).toBe("sonnet");
+    expect(slackConfig.of(mergeConfig({ slack: { model: "opus" }, brain: { slackModel: "sonnet" } } as never)).model).toBe("opus");
+  });
+});
+
 describe("transport selection", () => {
   test("from config; claude-mcp polls less often unless told", () => {
     expect(slackTransport({ ...DEFAULT_CONFIG }).kind).toBe("token");
     const mcp = mergeConfig({ slack: { transport: "claude-mcp" } });
-    expect(mcp.slack.pollSeconds).toBe(180);
+    expect(slackConfig.of(mcp).pollSeconds).toBe(180);
     expect(slackTransport(mcp).kind).toBe("claude-mcp");
     expect(
-      mergeConfig({ slack: { transport: "claude-mcp", pollSeconds: 90 } }).slack
+      slackConfig.of(mergeConfig({ slack: { transport: "claude-mcp", pollSeconds: 90 } }))
         .pollSeconds,
     ).toBe(90);
   });

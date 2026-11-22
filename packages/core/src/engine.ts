@@ -6,9 +6,10 @@
 import { advisorDue, runAdvisor } from "./advisor";
 import { runDocPass } from "./doc-pass";
 import { AgentPool, type CodingLaunch } from "./agents";
-import type { ConfigSource } from "./config";
+import { CORE_KEYS, type ConfigSource } from "./config";
 import { dataVersion, now } from "./db";
 import { Desk } from "./desk";
+import { Drafts } from "./outbound";
 import { syncDocs } from "./doc-sync";
 import { refreshInstalls } from "./install";
 import { Drivers } from "./driver";
@@ -27,7 +28,6 @@ import {
   type ConnectorContext,
   type ConnectorStatus,
   type RikerPlugin,
-  type Senders,
   type Triage,
   type Triaged,
   type TriageEffect,
@@ -95,6 +95,11 @@ export class Engine {
     if (judges.length > 1) throw new Error("more than one plugin brings triage");
     this.judge = judges[0] ?? null;
     const plugins = options.plugins ?? [];
+    const keys = new Set<string>(CORE_KEYS);
+    for (const section of plugins.flatMap((p) => p.config ?? [])) {
+      if (keys.has(section.key)) throw new Error(`config key ${section.key} is taken`);
+      keys.add(section.key);
+    }
     this.connectors = plugins.flatMap((p) => p.connectors ?? []);
     const names = new Set<string>(["advisor"]);
     for (const c of this.connectors) {
@@ -102,9 +107,12 @@ export class Engine {
       names.add(c.name);
       this.status = { ...this.status, [c.name]: off("not started") };
     }
-    const senders: Senders = {};
-    for (const p of plugins) Object.assign(senders, p.senders);
-    this.pool = new AgentPool({ config });
+    const drafts = Drafts.of(plugins);
+    this.pool = new AgentPool({
+      config,
+      drafts,
+      assistantLines: (c) => plugins.flatMap((p) => p.assistant?.(c) ?? []),
+    });
     this.drivers = new Drivers({
       pool: this.pool,
       config,
@@ -117,7 +125,7 @@ export class Engine {
       offline: options.offline,
       onLearned: options.onLearned,
       triage: this.judge ?? undefined,
-      senders,
+      drafts,
       guards: plugins.flatMap((p) => p.guards ?? []),
     });
     for (const c of this.connectors) c.attach(this.connectorContext(c));

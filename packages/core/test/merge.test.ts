@@ -14,7 +14,7 @@ import { config, freshHome } from "./support/helpers";
 let fake: FakeMux;
 
 beforeEach(() => {
-  freshHome({ github: { ...DEFAULT_CONFIG.github, repos: { "acme/api": "/src/api" } } });
+  freshHome({ repos: { "acme/api": "/src/api" } });
   fake = new FakeMux();
   setMux(fake);
 });

@@ -1,5 +1,10 @@
 // ~/.riker/config.json. Every key is optional; a missing file means defaults,
 // which is enough to run with `gh` logged in and SLACK_TOKEN set.
+//
+// Core's own keys are RikerConfig's. A plugin's (github, slack, remote) are
+// its ConfigSection: core keeps what the file holds under that key as it was
+// written and never looks inside; the plugin reads it through its section,
+// which lays its defaults under it.
 
 import {
   existsSync,
@@ -20,7 +25,8 @@ export interface NoiseRule {
   author?: string;
   title?: string;
   body?: string;
-  channel?: "github" | "slack";
+  // A message's channel, as its plugin names it ("github", "slack").
+  channel?: string;
   // GitHub's notification reason: ci_activity, subscribed, ...
   githubReason?: string[];
 }
@@ -44,58 +50,13 @@ export interface NavKeys {
 }
 
 export interface RikerConfig {
-  github: {
-    enabled: boolean;
-    pollSeconds: number;
-    // owner/repo -> local checkout, where a coding agent works.
-    repos: Record<string, string>;
-    // Merge method for "Approve and close" on a pull request.
-    mergeMethod: "merge" | "squash" | "rebase";
-    // GitHub teams whose review asks are yours, as org/team-slug (or a bare
-    // slug for any org). A PR that requests a review of one of them or of
-    // you, or tags one of them or you, always becomes a review task
-    // (@riker/triage).
-    reviewTeams: string[];
-  };
-  slack: {
-    enabled: boolean;
-    // token: the Web API with a user token. claude-mcp: Claude with a Slack
-    // MCP (e.g. the claude.ai Slack connector), for when there is no token.
-    // mcp: Riker as a direct MCP client (reserved, not built).
-    transport: "token" | "claude-mcp" | "mcp";
-    // Which MCP server is Slack (substring of its name); default: one named slack.
-    mcpServer?: string;
-    // Reserved for transport "mcp".
-    mcp?: { command?: string[]; url?: string };
-    // A user token (xoxp-): replies go back as you, not as a bot.
-    token?: string;
-    pollSeconds: number;
-    // Channel ids whose every message is triaged; elsewhere only DMs and
-    // mentions of you are.
-    channels: string[];
-  };
-  // Talking to the Assistant from Slack (@riker/slack remote.ts): your
-  // messages in one conversation that only you are in reach Home, and its
-  // answers come back in the thread. Separate from slack.enabled (the
-  // inbound triage poller) and off until turned on. It reads and posts the
-  // way slack.transport says.
-  remote: {
-    enabled: boolean;
-    // Your self-DM (D...) or a private channel with only you in it. The
-    // token transport finds your self-DM when unset; claude-mcp needs it.
-    channel?: string;
-    // Default 15 with a token, 60 under claude-mcp (each read is a turn).
-    pollSeconds: number;
-    // Posts to the same conversation when a task's agent finished (coding
-    // work, or work it closed) or is waiting for you. None by default.
-    notify: ("finished" | "waiting")[];
-  };
+  // owner/repo -> local checkout, where a coding agent works (core/repos.ts).
+  // Read from github.repos in a file written before it moved here.
+  repos: Record<string, string>;
   brain: {
     triageModel: string;
     agentModel: string;
     assistantModel: string;
-    // Reads and sends Slack under transport claude-mcp.
-    slackModel: string;
   };
   // How many agents may be working at once, chat and coding alike. Past it,
   // chat turns Riker starts by itself and your coding Starts wait their turn;
@@ -136,6 +97,11 @@ export interface RikerConfig {
     // What may make a task without you: anything else the model calls work
     // waits in the Inbox under "needs you", and m makes it a task.
     escalate: EscalateRules;
+    // GitHub teams whose review asks are yours, as org/team-slug (or a bare
+    // slug for any org). A PR that requests a review of one of them or of
+    // you, or tags one of them or you, always becomes a review task
+    // (@riker/triage). Read from github.reviewTeams in an older file.
+    reviewTeams: string[];
   };
   theme: "default" | "terminal" | "mono" | "tokyo-night";
   // Whether the terminal's font is a Nerd Font, for marks like merged's
@@ -184,17 +150,16 @@ export interface RikerConfig {
   // Task actions by name (core/task-actions.ts): a built-in changed field by
   // field, turned off with false, or a new one registered.
   actions?: Record<string, ActionConfig>;
+  // A plugin's section, by its key (ConfigSection): kept as written.
+  [section: string]: unknown;
 }
 
 export const DEFAULT_CONFIG: RikerConfig = {
-  github: { enabled: true, pollSeconds: 120, repos: {}, mergeMethod: "squash", reviewTeams: [] },
-  slack: { enabled: true, transport: "token", pollSeconds: 60, channels: [] },
-  remote: { enabled: false, pollSeconds: 15, notify: [] },
+  repos: {},
   brain: {
     triageModel: "haiku",
     agentModel: "sonnet",
     assistantModel: "sonnet",
-    slackModel: "haiku",
   },
   maxActiveAgents: 4,
   spend: { capEnabled: true, dailyUsd: 25 },
@@ -219,6 +184,7 @@ export const DEFAULT_CONFIG: RikerConfig = {
       github: ["assign", "mention", "review_requested"],
       slack: ["dm", "mention"],
     },
+    reviewTeams: [],
   },
   theme: "default",
   log: { enabled: false, level: "info" },
@@ -235,41 +201,27 @@ type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K];
 };
 
-// Keys renamed since they first shipped, still read from an old file.
+// Keys renamed or moved since they first shipped, still read from an old
+// file. github.repos and github.reviewTeams were core's and triage's inside
+// GitHub's section; they move out of it on the first read, so a write
+// leaves only the new key.
 interface LegacyKeys {
   agentsAtOnce?: number;
+  github?: { repos?: Record<string, string>; reviewTeams?: string[] } & Record<string, unknown>;
 }
-
-// Under claude-mcp every poll is a model turn, so it polls less often unless
-// told otherwise.
-const CLAUDE_MCP_POLL_SECONDS = 180;
-const CLAUDE_MCP_REMOTE_SECONDS = 60;
 
 export function mergeConfig(
   raw: DeepPartial<RikerConfig> & LegacyKeys,
 ): RikerConfig {
-  const { agentsAtOnce, ...rest } = raw;
-  const slackPoll =
-    raw.slack?.pollSeconds ??
-    (raw.slack?.transport === "claude-mcp"
-      ? CLAUDE_MCP_POLL_SECONDS
-      : DEFAULT_CONFIG.slack.pollSeconds);
+  const { agentsAtOnce, github, ...rest } = raw;
+  const { repos: oldRepos, reviewTeams: oldTeams, ...githubRest } = github ?? {};
   return {
     ...DEFAULT_CONFIG,
     ...rest,
+    ...(github ? { github: githubRest } : {}),
     maxActiveAgents:
       raw.maxActiveAgents ?? agentsAtOnce ?? DEFAULT_CONFIG.maxActiveAgents,
-    github: { ...DEFAULT_CONFIG.github, ...raw.github },
-    slack: { ...DEFAULT_CONFIG.slack, ...raw.slack, pollSeconds: slackPoll },
-    remote: {
-      ...DEFAULT_CONFIG.remote,
-      ...raw.remote,
-      pollSeconds:
-        raw.remote?.pollSeconds ??
-        (raw.slack?.transport === "claude-mcp"
-          ? CLAUDE_MCP_REMOTE_SECONDS
-          : DEFAULT_CONFIG.remote.pollSeconds),
-    },
+    repos: { ...oldRepos, ...raw.repos },
     brain: { ...DEFAULT_CONFIG.brain, ...raw.brain },
     spend: { ...DEFAULT_CONFIG.spend, ...raw.spend },
     chat: { ...DEFAULT_CONFIG.chat, ...raw.chat },
@@ -277,6 +229,7 @@ export function mergeConfig(
       ...DEFAULT_CONFIG.triage,
       ...raw.triage,
       escalate: { ...DEFAULT_CONFIG.triage.escalate, ...raw.triage?.escalate },
+      reviewTeams: raw.triage?.reviewTeams ?? oldTeams ?? DEFAULT_CONFIG.triage.reviewTeams,
     },
     log: { ...DEFAULT_CONFIG.log, ...raw.log },
     capabilities: {
@@ -288,6 +241,51 @@ export function mergeConfig(
     },
     actions: { ...raw.actions },
   } as RikerConfig;
+}
+
+// ── a plugin's section ──────────────────────────────────────────────────
+
+// A plugin's part of config.json, under its own key: its defaults, and how
+// what the file holds is laid over them. `of` reads it from a config value,
+// whole (once per value); `config` lets a default follow another key (the
+// remote polls less often under Slack's claude-mcp transport).
+export interface ConfigSection<T> {
+  key: string;
+  defaults: T;
+  of(config: RikerConfig): T;
+}
+
+// Core's own keys, which no section may take.
+export const CORE_KEYS: ReadonlySet<string> = new Set([
+  ...Object.keys(DEFAULT_CONFIG),
+  "tmuxSocket",
+  "docBudgets",
+  "nerdFont",
+  "keys",
+  "scratchRepo",
+  "repoRoots",
+  "opener",
+  "actions",
+]);
+
+export function configSection<T extends object>(
+  key: string,
+  defaults: T,
+  merge: (written: Partial<T>, config: RikerConfig) => T = (written) => ({ ...defaults, ...written }),
+): ConfigSection<T> {
+  const read = new WeakMap<RikerConfig, T>();
+  return {
+    key,
+    defaults,
+    of(config) {
+      const known = read.get(config);
+      if (known) return known;
+      const written = config[key];
+      const whole = merge(written && typeof written === "object" ? (written as Partial<T>) : {}, config);
+      read.set(config, whole);
+      return whole;
+    },
+  };
 }
 
 function mtimeOf(file: string): number | null {
@@ -361,8 +359,4 @@ export function fixedConfig(initial: RikerConfig = DEFAULT_CONFIG): ConfigSource
       return current;
     },
   };
-}
-
-export function slackToken(config: RikerConfig): string | undefined {
-  return process.env.SLACK_TOKEN ?? config.slack.token;
 }

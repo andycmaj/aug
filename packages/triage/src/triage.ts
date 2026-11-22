@@ -280,7 +280,7 @@ export function linkByBranch(message: MessageRow): number | null {
 // for the global itself.
 export type TriageConfig = Pick<
   RikerConfig,
-  "autostart" | "brain" | "triage" | "docBudgets" | "github"
+  "autostart" | "brain" | "triage" | "docBudgets" | "repos"
 >;
 
 // The model's verdict, or why there is none.
@@ -373,7 +373,7 @@ const afterClose: TriageRule = {
 };
 
 // A pull request that asks a review of you, or of a team you watch
-// (github.reviewTeams), or tags either, is always a review task. Who was
+// (triage.reviewTeams), or tags either, is always a review task. Who was
 // asked is read at ingest and a tagged team from the comment, so the claim
 // needs no model; the model's verdict, when there is one, only gives its
 // words.
@@ -382,7 +382,7 @@ const reviewAsk: TriageRule = {
   handle: async (i) => {
     const pr = prOf(i.message);
     if (!pr) return pass("not a pull request");
-    const yours = reviewIsYours(i.message, i.config.github.reviewTeams);
+    const yours = reviewIsYours(i.message, i.config.triage.reviewTeams);
     if (!yours.ok) return pass(yours.error);
     const j = await i.judged();
     return ok(createReview(i.message, pr, j.ok ? j.value : null, yours.value, i.config));
@@ -434,7 +434,7 @@ const GITHUB_WHY: Record<string, string> = {
 
 // Why this message may make a task without the owner, or null: it waits in
 // the Inbox for them (whyHeld says why). Config's triage.escalate is the
-// list, and github.reviewTeams the teams (as the review ask rule reads
+// list, and triage.reviewTeams the teams (as the review ask rule reads
 // them); anything that is neither GitHub nor Slack was asked for by hand.
 // A PR's review ask or tag of you or a watched team never gets here: the
 // review ask rule made its task.
@@ -470,8 +470,8 @@ function whyHeld(message: MessageRow): string {
   if (meta.channel === "slack") return "not a DM to you or a mention of you";
   if (meta.channel !== "github") return "no escalation rule";
   if (meta.reason === "review_requested" && meta.requested)
-    return `review requested of ${meta.requested.teams.join(", ") || "someone else"}, not a team in github.reviewTeams`;
-  if (meta.reason === "team_mention") return "mentions a team not in github.reviewTeams";
+    return `review requested of ${meta.requested.teams.join(", ") || "someone else"}, not a team in triage.reviewTeams`;
+  if (meta.reason === "team_mention") return "mentions a team not in triage.reviewTeams";
   return `GitHub says ${meta.reason ?? "nothing"}, which you do not escalate`;
 }
 
@@ -480,7 +480,7 @@ function whyHeld(message: MessageRow): string {
 const escalate: TriageRule = {
   name: "escalation",
   handle: async ({ message, judged, config }) => {
-    const why = escalation(message, config.triage.escalate, config.github.reviewTeams);
+    const why = escalation(message, config.triage.escalate, config.triage.reviewTeams);
     if (why) return pass(`${why}: it becomes a task`);
     const j = await judged();
     const reason = whyHeld(message);
@@ -1001,7 +1001,7 @@ function createReview(
       messageId: message.id,
       startedAt: message.received_at,
     });
-    if (!config.github.repos[pr.repo])
+    if (!config.repos[pr.repo])
       store.addTurn({
         taskId: created.id,
         role: TurnRole.trigger,

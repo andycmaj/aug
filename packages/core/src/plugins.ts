@@ -7,7 +7,8 @@
 // Dependencies run one way: a plugin package imports @riker/core, never the
 // reverse, and plugins never import each other.
 
-import type { ConfigSource, RikerConfig } from "./config";
+import type { TurnAnswer } from "./agents";
+import type { ConfigSection, ConfigSource, RikerConfig } from "./config";
 import type { NewMessage } from "./store";
 import type {
   DraftAction,
@@ -111,15 +112,28 @@ export interface Connector {
   pollNow?(): Promise<void>;
 }
 
-// Sends one drafted action of its type; resolves to a receipt line.
-export type Send<T extends DraftAction = DraftAction> = (
-  action: T,
-  config: RikerConfig,
-) => Promise<string>;
+// ── drafts: the one road out ───────────────────────────────────────────
 
-export type Senders = {
-  [K in DraftAction["type"]]?: Send<Extract<DraftAction, { type: K }>>;
-};
+// What the model said to send (TurnAnswer.action), trimmed and not empty.
+export type DraftAnswer = NonNullable<TurnAnswer["action"]>;
+
+// One kind of draft a plugin sends, and everything core says or does about
+// it: core keeps a draft as its JSON and asks the kind that built it. A
+// plugin's kinds never share a type with another plugin's.
+export interface DraftKind<T extends DraftAction = DraftAction> {
+  type: string;
+  // The draft answering `message` (a task's last incoming one), where it
+  // goes read from the message itself, never from the model. Null when the
+  // message is not on this plugin's channel or lacks what a reply needs.
+  build(message: MessageRow, answer: DraftAnswer): T | null;
+  // What the owner reads before pressing Send: "Slack reply to Ann".
+  describe(action: T): string;
+  // The words the owner may rewrite, and the draft with them rewritten.
+  text(action: T): string;
+  withText(action: T, text: string): T;
+  // Sends it; resolves to a receipt line.
+  send(action: T, config: RikerConfig): Promise<string>;
+}
 
 // A move the owner must say yes to before it runs: the guard answers what
 // to say instead (held), or null to let it run.
@@ -131,8 +145,13 @@ export type MoveGuard = (
 
 export interface RikerPlugin {
   name: string;
+  // Its parts of config.json, each under its own key (core/config.ts).
+  config?: ConfigSection<object>[];
   triage?: Triage;
   connectors?: Connector[];
-  senders?: Senders;
+  drafts?: DraftKind[];
   guards?: MoveGuard[];
+  // Lines for the Assistant's system prompt (core/assistant.ts): what this
+  // plugin lets it look up, and how a line heard from its place is answered.
+  assistant?(config: RikerConfig): string[];
 }

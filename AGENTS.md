@@ -26,20 +26,29 @@ other way (a new package gets a line in its `ALLOWED`).
 - **Plugins** (`core/plugins.ts`): what another package adds to Riker. A
   `RikerPlugin` brings a `Triage` (at most one), `connectors` (each a
   status line, attached at construction, started off the fixture day),
-  `senders` by `DraftAction` type and move `guards`. An entry point hands
-  the engine its list (`plugins: [triagePlugin(), githubPlugin(),
-  slackPlugin()]` in `index.tsx`, the fixture day, the sim); core imports
-  none of them. A test picks only what it drives: `githubPlugin({ api,
+  `drafts` (each a `DraftKind`: it builds a draft from a task's last
+  message, words it, rewrites its text and sends it; core holds them in
+  `Drafts`, `desk.drafts` for the TUI), move `guards`, its `config`
+  sections (`configSection(key, defaults, merge)`: core keeps what the file
+  holds under that key as written, the plugin reads it whole with
+  `section.of(config)`) and `assistant` lines for the Assistant's system
+  prompt. Core's vocabulary stays open: a `Channel` is a string, a
+  `DraftAction` a `type` plus the plugin's own fields. An entry point hands
+  the engine its list (`rikerPlugins()` in `tui/src/plugins.ts`, which
+  `index.tsx` and riker-tools both read; the fixture day and the sim have
+  their own); core imports none of them. A test picks only what it drives: `githubPlugin({ api,
   prs, clock })`, `slackPlugin({ transport, remoteLink })`.
 - **`@riker/triage`**: the chain of rules (`src/triage.ts`) and the inbox's
   worker (`src/worker.ts`); `triagePlugin()`.
 - **`@riker/github`**: notifications in (`ingest.ts`), the rate-limit gate
   (`gate.ts`), each task's PR status read (`pr-status.ts`; the rail's words
-  for it stay `core/pr.ts`), sends through gh (`send.ts`), the poll
-  (`connector.ts`); `githubPlugin()`.
+  for it stay `core/pr.ts`), its draft (`draft.ts`, sent through gh in
+  `send.ts`), its config (`config.ts`), the poll (`connector.ts`);
+  `githubPlugin()`.
 - **`@riker/slack`**: the transports (`transport.ts`, `token.ts`,
   `claude-mcp.ts`, `mcp.ts`), the poller and the remote (`connector.ts`,
-  `remote.ts`, `remote-links.ts`), the hold on moves asked from Slack
+  `remote.ts`, `remote-links.ts`), its draft (`draft.ts`), its `slack` and
+  `remote` config (`config.ts`), the hold on moves asked from Slack
   (`confirm.ts`, `confirmGuard`); `slackPlugin()`.
 - **`@riker/code-review-plannotator`**: the guided review as a library, runnable
   without Riker: the patch (`patchFor`, origin/<base> merge base), batches of
@@ -90,7 +99,7 @@ Tests live beside their package (`packages/<name>/test/`).
   `libtmux` (alpha, pinned exactly). Identity is the `@riker_project` /
   `@riker_task` user options, never names. Tests use `packages/core/test/support/fake-mux.ts`; real
   tmux checks use a private server (`-L`), never the default one.
-- **Where a repo is checked out is `core/repos.ts`**: `github.repos` in
+- **Where a repo is checked out is `core/repos.ts`**: `repos` in
   config is the owner's one path per repo; `core/checkouts.ts` (behind the
   Mux) inspects a path and scans `repoRoots` for checkouts. Every coding
   start checks the path first, and `needs: path` carries what is wrong and
@@ -141,9 +150,10 @@ Tests live beside their package (`packages/<name>/test/`).
 - **The Slack remote is `@riker/slack` `remote.ts`** (`docs/slack-remote.md`):
   opt-in (`remote.enabled`), separate from the triage poller. It reads one
   conversation only the owner is in (self-DM or a private channel), hears
-  the owner's own plain lines into Home (author `SLACK_AUTHOR`) and posts
-  the Assistant's answer in the thread, marked `[riker]`. A turn answering
-  Slack asks as `SLACK_ASKER`; `runMove` holds the moves in `CONFIRM_MOVES`
+  the owner's own plain lines into Home (author `SLACK_AUTHOR`, core's
+  `heardVia("Slack")`) and posts the Assistant's answer in the thread,
+  marked `[riker]`. A turn answering Slack asks as `SLACK_ASKER`
+  (`askedVia`); `runMove` holds the moves in `CONFIRM_MOVES`
   for the owner's yes in that thread (`confirm.ts`, the plugin's move guard).
 - **Views read through the read model** (`core/read-model.ts`), never the
   store: `riker.task(id)`, `riker.turns(id)`, `riker.pendingAction(id)` and the
@@ -197,7 +207,7 @@ Tests live beside their package (`packages/<name>/test/`).
   one project, else the one the model named). A pull request review is
   coding, on the PR's repo and `pr:N`, with a guided Plannotator review as
   its brief: the `review ask` rule always makes one when a PR requests a
-  review of, or tags, the owner or a team in `github.reviewTeams` (who was
+  review of, or tags, the owner or a team in `triage.reviewTeams` (who was
   asked is read at ingest, a tagged team from the comment), and a review
   the model finds elsewhere becomes one too. An
   unmapped repo is said on the task, never guessed; Start asks.
@@ -215,7 +225,9 @@ Tests live beside their package (`packages/<name>/test/`).
   the fixture day a `fixedConfig()`. The engine gives it to its pool,
   drivers and desk, which call `get()` each time they use a setting, so an
   edit applies without a restart; functions below them take the `RikerConfig`
-  value, and components read `desk.config()`. Writes (`noise`, a repo
+  value, and components read `desk.config()`. A plugin's keys (`github`,
+  `slack`, `remote`) are its `ConfigSection`s, read with `section.of`;
+  the engine refuses one that takes a core key. Writes (`noise`, a repo
   mapped mid-start) are `update()` on the desk. `loadConfig()` is one read
   for an entry point that has no source (riker-tools' log and tmux server).
 - **The agent lifecycle is `core/lifecycle.ts`.** Every change to a task's

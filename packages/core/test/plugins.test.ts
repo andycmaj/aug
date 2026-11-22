@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { configSection } from "../src/config";
 import { Engine } from "../src/engine";
 import { setMux } from "../src/mux";
-import type { Connector, ConnectorContext, RikerPlugin } from "../src/plugins";
+import type { Connector, ConnectorContext, DraftKind, RikerPlugin } from "../src/plugins";
 import * as store from "../src/store";
 import { Kind, MessageState, TurnRole } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
@@ -140,7 +141,7 @@ describe("a plugin's triage", () => {
   });
 });
 
-describe("a plugin's senders and guards", () => {
+describe("a plugin's drafts and guards", () => {
   function draft(): number {
     const t = store.createTask({ title: "reply", kind: Kind.general, channel: "github" });
     const turn = store.addTurn({ taskId: t.id, role: TurnRole.agent, body: "draft" });
@@ -148,20 +149,33 @@ describe("a plugin's senders and guards", () => {
     return t.id;
   }
 
-  test("a draft goes out through the sender for its type", async () => {
-    const sent: string[] = [];
-    engine = new Engine({
-      config: testConfig(),
-      offline: true,
-      plugins: [{ name: "gh", senders: { github_comment: async (a) => (sent.push(a.body), "commented") } }],
-    });
+  const comment: DraftKind = {
+    type: "github_comment",
+    build: () => null,
+    describe: (a) => `comment on ${String(a.repo)}`,
+    text: (a) => String(a.body),
+    withText: (a, body) => ({ ...a, body }),
+    send: async (a) => (sent.push(String(a.body)), "commented"),
+  };
+  let sent: string[] = [];
+  beforeEach(() => (sent = []));
+
+  test("a draft goes out through the kind that made it, in its words", async () => {
+    engine = new Engine({ config: testConfig(), offline: true, plugins: [{ name: "gh", drafts: [comment] }] });
+    expect(engine.desk.drafts.describe(store.pendingAction(draft())!.action)).toBe("comment on a/b");
     expect(await engine.desk.send(draft())).toBe("commented");
     expect(sent).toEqual(["thanks"]);
   });
 
-  test("with no sender for its type, nothing goes and it says why", async () => {
+  test("with no kind for its type, nothing goes and it says why", async () => {
     engine = new Engine({ config: testConfig(), offline: true });
-    await expect(engine.desk.send(draft())).rejects.toThrow("nothing is connected to send a GitHub comment");
+    await expect(engine.desk.send(draft())).rejects.toThrow("nothing is connected to send a github_comment draft");
+  });
+
+  test("two plugins cannot bring one kind", () => {
+    expect(
+      () => new Engine({ config: testConfig(), offline: true, plugins: [{ name: "a", drafts: [comment] }, { name: "b", drafts: [comment] }] }),
+    ).toThrow("two plugins draft github_comment");
   });
 
   test("a guard holds a move instead of running it", async () => {
@@ -176,5 +190,26 @@ describe("a plugin's senders and guards", () => {
     expect(store.getTask(t.id)!.status).toBe("open");
     expect((await engine.runMove("done", { task: ref }, "you")).ok).toBe(true);
     expect(store.getTask(t.id)!.status).toBe("done");
+  });
+});
+
+describe("a plugin's config", () => {
+  test("a section may not take a core key, or one another plugin has", () => {
+    const repos = configSection("repos", {});
+    const mine = configSection("mine", {});
+    expect(() => new Engine({ config: testConfig(), offline: true, plugins: [{ name: "a", config: [repos] }] })).toThrow(
+      "config key repos is taken",
+    );
+    expect(
+      () =>
+        new Engine({
+          config: testConfig(),
+          offline: true,
+          plugins: [
+            { name: "a", config: [mine] },
+            { name: "b", config: [mine] },
+          ],
+        }),
+    ).toThrow("config key mine is taken");
   });
 });

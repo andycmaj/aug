@@ -58,7 +58,7 @@ const rules = (extra: Partial<typeof DEFAULT_CONFIG.triage.escalate> = {}) => ({
   ...DEFAULT_CONFIG.triage.escalate,
   ...extra,
 });
-// github.reviewTeams: none watched unless a test says.
+// triage.reviewTeams: none watched unless a test says.
 const none: string[] = [];
 
 describe("what escalates", () => {
@@ -77,7 +77,7 @@ describe("what escalates", () => {
   });
 
   // On a PR these are the review ask rule's; on an issue they reach here.
-  test("GitHub: a team's review request or tag only for a team in github.reviewTeams", () => {
+  test("GitHub: a team's review request or tag only for a team in triage.reviewTeams", () => {
     const teamAsked = gh({ reason: "review_requested", requested: { me: false, teams: ["acme/payroll"] } });
     expect(escalation(teamAsked, rules(), none)).toBeNull();
     expect(escalation(teamAsked, rules(), ["acme/payroll"])).toBe("review requested of acme/payroll");

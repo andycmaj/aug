@@ -21,7 +21,7 @@ let fake: FakeMux;
 
 beforeEach(() => {
   freshHome({
-    github: { ...DEFAULT_CONFIG.github, repos: { "acme/api": "/src/api" } },
+    repos: { "acme/api": "/src/api" },
   });
   fakeBrain(() => null);
   fake = new FakeMux();
@@ -659,10 +659,11 @@ describe("config the engine reads", () => {
     expect(loadConfig().autostart).toBe(false);
     writeFileSync(
       file,
+      // Written before repos left GitHub's section: still read.
       JSON.stringify({ github: { repos: { "acme/web": "/src/web" } } }),
     );
     utimesSync(file, 2_000, 2_000);
-    expect(engine.desk.config().github.repos).toEqual({ "acme/web": "/src/web" });
+    expect(engine.desk.config().repos).toEqual({ "acme/web": "/src/web" });
     expect(engine.desk.config().autostart).toBe(true);
   });
 });

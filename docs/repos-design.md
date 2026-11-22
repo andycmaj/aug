@@ -2,7 +2,7 @@
 
 ## Today
 
-- `config.github.repos` maps `owner/repo` to one path. Hand-edited, or set
+- `config.repos` (once `github.repos`) maps `owner/repo` to one path. Hand-edited, or set
   once by the "Where is X checked out?" prompt (`mapRepo`) or `move start
   --repo --path`.
 - `projects.repos` (SQLite) lists a project's repos by name. Set when a
@@ -26,7 +26,7 @@ in one go.
 ### One module, config the only store
 
 `core/repos.ts` is the door. Config keeps the owner's choice, one path per
-repo in the same `github.repos` shape, so hand edits keep working. What is
+repo in the same `repos` shape, so hand edits keep working. What is
 on disk is scanned on demand (kept a minute in memory), not cached in
 SQLite: a scan of ~/workspace is plain `readdir`s and `.git/config` reads
 (`core/checkouts.ts`, behind the Mux like every other git touch, so tests

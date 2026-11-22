@@ -322,10 +322,11 @@ footer.stamp { font-family: var(--f-code); font-size: 0.75rem; color: var(--mute
     <div class="pkgs" id="pkgsEl"></div>
     <div class="sec-head">
       <h3>What a plugin brings: <code>RikerPlugin</code> (<code>core/plugins.ts</code>)</h3>
-      <p class="lede">An entry point hands the engine its list: <code>plugins: [triagePlugin(), githubPlugin(), slackPlugin()]</code> in <code>tui/src/index.tsx</code>, the fixture day and the sim. Core runs what they bring without importing them. A test picks only what it drives: <code>githubPlugin({ api, prs, clock })</code>, <code>slackPlugin({ transport, remoteLink })</code>.</p>
+      <p class="lede">An entry point hands the engine its list: <code>rikerPlugins()</code> in <code>tui/src/plugins.ts</code> (<code>[triagePlugin(), githubPlugin(), slackPlugin()]</code>), which <code>index.tsx</code> and riker-tools both read; the fixture day and the sim pass their own. Core runs what they bring without importing them. A test picks only what it drives: <code>githubPlugin({ api, prs, clock })</code>, <code>slackPlugin({ transport, remoteLink })</code>.</p>
     </div>
     <div class="tbl"><table><thead><tr><th>field</th><th>what it is</th><th>brought by</th></tr></thead><tbody id="pluginFields"></tbody></table></div>
-    <div class="note"><b>still to do · RIKER-0201</b><span>Core imports no connection, but still names them: the <code>Channel</code> and <code>DraftAction</code> unions and <code>SLACK_AUTHOR</code>/<code>SLACK_ASKER</code> in <code>core/types.ts</code>, <code>GithubMeta</code>/<code>SlackMeta</code> in <code>core/meta.ts</code>, <code>outbound.actionFor</code>, config's <code>github</code>, <code>slack</code>, <code>remote</code> and <code>triage</code> sections, the Assistant's GitHub and Slack prompt lines, and the <code>messages</code>, <code>triage_*</code> and <code>pr_status</code> tables. The plan: a plugin brings its draft builder and words, its config section and its prompt lines, and <code>Channel</code>/<code>DraftAction</code> open up. New <code>RikerPlugin</code> fields are agreed with RIKER-0190 (below, <a href="#guide">guided review</a>).</span></div>
+    <div class="note"><b>open vocabulary · RIKER-0201</b><span>Core names no connection in its vocabulary: a <code>Channel</code> is a string (core knows only <code>owner</code>), a <code>DraftAction</code> is a <code>type</code> plus the plugin's own fields, and an owner line heard elsewhere is authored <code>heardVia(place)</code> (<code>"you via Slack"</code>) and answered as <code>askedVia(place)</code>. A plugin's config key is its <code>configSection</code>: core keeps what the file holds there as written, the plugin reads it whole with <code>section.of(config)</code>. Core's own <code>repos</code> and triage's <code>triage.reviewTeams</code> left GitHub's section; an older file's <code>github.repos</code> and <code>github.reviewTeams</code> are read into them.</span></div>
+    <div class="note"><b>still to do · RIKER-0208</b><span>What core still names: <code>GithubMeta</code>/<code>SlackMeta</code> in <code>core/meta.ts</code> (triage reads them and cannot import GitHub), the triage config section and the <code>noise</code> move's <code>--github_reason</code> (needs plugin-brought moves, with RIKER-0190), the close-outs in the turn schema (<code>close_issue</code>, <code>merge_pr</code>, <code>approve_pr</code>, <code>done --close</code>), <code>feedback.ts</code> and <code>pr.ts</code> thread keys, <code>GH_READS</code>, and the <code>messages</code>, <code>triage_*</code> and <code>pr_status</code> tables.</span></div>
   </section>
 
   <section id="triage">
@@ -456,7 +457,7 @@ $ bun packages/code-review-plannotator/src/cli.ts review \
           <li>A package registers a task action through <code>RikerPlugin</code>: its skill text, its runner and <code>ask</code>, how its result becomes a turn, its follow-up actions ("Open the guide's review") and its UI hooks.</li>
           <li>The guide glue moves out of core into the plannotator package or an adapter (<code>@riker/plugin-plannotator</code>), handed to the engine at the entry point like <code>triagePlugin()</code>.</li>
           <li><code>ALLOWED.core</code> becomes <code>[]</code>: core imports no other package.</li>
-          <li>To settle first (the task opens by grilling the owner): what a plugin can contribute (actions, picker entries, palette, keys, triggers, turn rendering), how plugins are found, and which parts of <code>task-actions.ts</code> and <code>run-action.ts</code> become the plugin API. Agreed with RIKER-0201 so connections and actions share one shape.</li>
+          <li>To settle first (the task opens by grilling the owner): what a plugin can contribute (actions, picker entries, palette, keys, triggers, turn rendering), how plugins are found, and which parts of <code>task-actions.ts</code> and <code>run-action.ts</code> become the plugin API. One shape with the connections: a new <code>RikerPlugin</code> field, the way RIKER-0201 added <code>drafts</code>, <code>config</code> and <code>assistant</code>.</li>
         </ul>
       </div>
     </div>
@@ -488,7 +489,7 @@ $ bun packages/code-review-plannotator/src/cli.ts review \
     <div class="tbl ftree"><table><tbody id="ftree"></tbody></table></div>
   </section>
 
-  <footer class="stamp">Checked against andycmaj/riker main at 51a20db (2026-11-22). Plans named here (RIKER-0188, RIKER-0190, RIKER-0201) were open then.</footer>
+  <footer class="stamp">Checked against andycmaj/riker main at bfef526 with RIKER-0201 merged (2026-11-22). Plans named here (RIKER-0188, RIKER-0190, RIKER-0208) were open then.</footer>
 </div>
 
 <script>
@@ -510,9 +511,9 @@ const N = {
   slack: { c:0, r:1, layer:"out", t:"Slack", s:"SlackTransport", files:["packages/slack/src/transport.ts","packages/slack/src/token.ts","packages/slack/src/claude-mcp.ts","packages/slack/src/mcp.ts"],
     d:"Chosen by slack.transport: token (a user token, replies go as you), claude-mcp (a persistent claude -p whose session can only read, plus a one-shot send call), or mcp (reserved, a stub).",
     rules:["The claude-mcp reading session gets read tools only; every write tool is denied.","Each Send is its own call whose only tool is send and whose only input is your approved words.","Under -p, claude.ai connectors connect before the first request only with MCP_CONNECTION_NONBLOCKING=false.","The Slack remote (opt-in) reads one conversation only you are in, hears your lines into Home and posts the Assistant's answer, marked [riker]."] },
-  outbound: { c:0, r:2, layer:"core", t:"Outbound", s:"outbound.ts · senders", files:["core/outbound.ts","core/plugins.ts"],
-    d:"The only road out. A drafted action goes nowhere until you press Send; then the plugin that owns its type sends it (senders: github_comment from @riker/github, slack_reply from @riker/slack).",
-    rules:["Where a reply goes comes from the thread's meta, never from the model.","Sending never closes the task. Mark done does.","Building a draft per channel is still core's (outbound.actionFor); RIKER-0201 moves it into the plugins."] },
+  outbound: { c:0, r:2, layer:"core", t:"Outbound", s:"outbound.ts · Drafts", files:["core/outbound.ts","core/plugins.ts","packages/github/src/draft.ts","packages/slack/src/draft.ts"],
+    d:"The only road out. A drafted action goes nowhere until you press Send. Drafts holds every DraftKind the plugins brought (github_comment from @riker/github, slack_reply from @riker/slack): the kind that can answer the task's last message builds the draft, words it, rewrites its text and sends it.",
+    rules:["Where a reply goes comes from the thread's meta, never from the model.","Sending never closes the task. Mark done does.","Core knows no kind: one no plugin brings is said by its type and not sent."] },
   docs: { c:0, r:3, layer:"store", t:"Docs", s:"~/.riker/docs/*.md", files:["core/docs.ts","core/doc-sync.ts","core/proposals.ts","packages/core/defaults/"],
     d:"PERSONA, JOB, STYLE, TRIAGE, CODING, ASSISTANT and LEARNED. Prompts read them. Seeded from defaults; a file you already have is never overwritten, and a shipped update only notifies.",
     rules:["LEARNED.md is written by learning; the rest are yours to edit.","Every edit Riker wants that you did not ask for is a proposal on a System task (doc_proposals): the Advisor's daily doc pass, the onboarding interview, shipped versions.","Accepting lays only the proposal's own changes over the doc as it is now (git merge-file)."] },
@@ -538,7 +539,7 @@ const N = {
     d:"OpenTUI + Solid on @andycmaj/opentui-app. Two modes: Chat (the rail beside the Canvas, which shows the selected row) and Board (Wins, Columns, Knowledge, Inbox, Cost), each with its own FocusProvider.",
     rules:["Views read through the read model (riker.task(id), riker.turns(id), ...), never the store; a read re-runs only when a table it names changes.","Components call actions.tsx, which asks the desk. Nothing in components/ imports core/projects.","TerminalsProvider sits above both modes, so PTYs survive the switch.","keymap.ts is the single binding table; the footer, ? help and : palette all list from it."] },
   engine: { c:2, r:1, layer:"core", t:"Engine", s:"engine.ts", files:["core/engine.ts","core/plugins.ts"],
-    d:"What runs. It takes the plugins an entry point hands it: attaches their connectors, keeps their triage, senders and move guards. Then the inbox worker, the Advisor's clock, reminders, merge checks, event-triggered actions, the moves drain and the tmux watch. It owns a desk.",
+    d:"What runs. It takes the plugins an entry point hands it: attaches their connectors, keeps their triage, kinds of draft (handed to the pool and the desk) and move guards, refuses a config section that takes a core key, and hands the pool their lines for the Assistant's prompt. Then the inbox worker, the Advisor's clock, reminders, merge checks, event-triggered actions, the moves drain and the tmux watch. It owns a desk.",
     rules:["At start: sync docs, refresh stale installs, ensure the Home task, recover sessions, reconcile tmux.","Moves drain on data_version (250 ms check); reconcile every 30 s plus a live tmux watch; task_events read every 2 s for action triggers.","Offline (fixture) mode starts no connector and no Advisor.","Config is handed down as a ConfigSource; get() each time, so an edit applies without a restart."] },
   desk: { c:2, r:2, layer:"core", t:"Desk", s:"desk.ts", files:["core/desk.ts","core/undo.ts","packages/tui/src/components/actions.tsx"],
     d:"Every owner move, once: say, startAgent, stopAgent, close, send, editDraft, redraft, remind, watch, ignore, reopen, setPriority, setKind, moveTask, runAction, guideReview, afterTriage and more. TUI keys, the palette, the moves bus and tests all come here.",
@@ -550,7 +551,7 @@ const N = {
     d:"Skills Riker runs on one task: summarize, guide, quiz built in, more from config actions. desk.runAction runs one headless, on a fork of the agent's session, through the agent, or in a pane; its answer is a turn of its own.",
     rules:["An action never touches agent_state.","Triggers (on) run one with no key; never a pane action, never past the spend cap.","The guide's calls go through @riker/code-review-plannotator with Riker's brain as the ask."] },
   assistant: { c:3, r:0, layer:"agent", t:"Assistant", s:"assistant.ts · Home", files:["core/assistant.ts","core/mentions.ts"],
-    d:"Home's agent and your main way to drive Riker. Each turn is a claude -p resumed by session id, allowed riker-tools, file and web reads, gh reads and the assistant role's grants.",
+    d:"Home's agent and your main way to drive Riker. Each turn is a claude -p resumed by session id, allowed riker-tools, file and web reads, gh reads and the assistant role's grants. Its system prompt is core's words plus each plugin's assistant lines.",
     rules:["It never sends. A Send is only ever your press.","Home is a kind: home task; listTasks() never returns it, so nothing that lists work sees it.","'Where things stand' is counts, and a resumed session gets only what changed since it last heard."] },
   moves: { c:3, r:1, layer:"bus", t:"Moves bus", s:"moves.ts · moves table", files:["core/moves.ts"],
     d:"One registry (verb, args, help, run) feeds riker-tools move <verb>, the Assistant's prompt and the engine's dispatch. Rows in the moves table carry requests across processes.",
@@ -618,8 +619,8 @@ const E = [
   ["review","plannotator","guide import · comments"],
   ["learn","brain","lesson from a correction"],
   ["learn","docs","LEARNED.md"],
-  ["outbound","github","sender: github_comment"],
-  ["outbound","slack","sender: slack_reply"],
+  ["outbound","github","draft: github_comment"],
+  ["outbound","slack","draft: slack_reply"],
   ["outbound","lifecycle","draftSent"],
   ["drivers","pool","ChatDriver"],
   ["drivers","projects","TmuxDriver"],
@@ -652,12 +653,12 @@ const TRACES = {
     { n:["pool","lifecycle","store"], e:["pool>lifecycle","lifecycle>store"], t:"turnFinished", b:"If the agent asked you something the task is waiting ◆; otherwise ready ◈. The draft waits, and the rail shows ↑ ready to send.", f:"core/lifecycle.ts · turnFinished" },
     { n:["store","tui"], e:["store>tui"], t:"The rail updates", b:"The write bumped table_versions for tasks and turns; the read model re-runs only the reads that name them, and the rail redraws.", f:"core/read-model.ts · context/riker.tsx" },
     { n:["tui","desk","outbound"], e:["tui>desk","desk>outbound"], t:"You press Send", b:"actions.tsx asks desk.send. Editing or redrafting instead counts as a correction and feeds learning.", f:"components/actions.tsx → core/desk.ts" },
-    { n:["outbound","slack","lifecycle"], e:["outbound>slack","outbound>lifecycle"], t:"It goes out as you", b:"Outbound hands the slack_reply to the sender @riker/slack registered. The destination comes from the thread's meta (channel and thread_ts), never from the model. draftSent clears what the agent was waiting on. Sending does not close the task.", f:"core/outbound.ts · packages/slack/src/index.ts" },
+    { n:["outbound","slack","lifecycle"], e:["outbound>slack","outbound>lifecycle"], t:"It goes out as you", b:"Outbound sends the slack_reply through the DraftKind @riker/slack brought, which built it from the thread's meta (channel and thread_ts), never from the model. draftSent clears what the agent was waiting on. Sending does not close the task.", f:"core/outbound.ts · packages/slack/src/draft.ts" },
   ]},
   coding: { label: "Review request → coding agent", glyph: "◐", steps: [
     { n:["github","connectors","engine"], e:["engine>connectors","github>connectors"], t:"A review is requested", b:"The GitHub connector reads your participating notifications since github.since, inside gate.ts's budget. Who was asked (you, or a team) is read at ingest.", f:"packages/github/src/ingest.ts" },
     { n:["connectors","store","triage"], e:["connectors>store"], t:"Arrived: linkByBranch", b:"A PR whose head branch is a task's worktree branch joins that task's threads before triage runs. This one is new.", f:"packages/triage/src/index.ts · arrived" },
-    { n:["engine","triage","store"], e:["engine>triage","triage>store"], t:"The review ask rule", b:"A PR that asks a review of you, or of a team in github.reviewTeams, is always a review task: coding, on the PR's repo and pr:N, with a guided Plannotator review as its brief. The model only gives its words.", f:"packages/triage/src/triage.ts · reviewAsk" },
+    { n:["engine","triage","store"], e:["engine>triage","triage>store"], t:"The review ask rule", b:"A PR that asks a review of you, or of a team in triage.reviewTeams, is always a review task: coding, on the PR's repo and pr:N, with a guided Plannotator review as its brief. The model only gives its words.", f:"packages/triage/src/triage.ts · reviewAsk" },
     { n:["triage","lifecycle","store"], e:["triage>lifecycle","lifecycle>store"], t:"Held for you", b:"holdForStart: agent_state queued ◌ with 'held for you: press Start'. A coding agent never starts by itself.", f:"core/lifecycle.ts · holdForStart" },
     { n:["tui","desk","drivers"], e:["tui>desk","desk>drivers"], t:"You press Start", b:"desk.startAgent asks the TmuxDriver. It checks the repo's checkout path (core/repos.ts) first; without a mapping, a path or a branch it answers needs: repo | path | branch, and the TUI opens that dialog.", f:"components/use-agent-start.tsx → core/driver.ts" },
     { n:["drivers","projects","mux","tmux"], e:["drivers>projects","projects>mux","mux>tmux"], t:"A window in the project's session", b:"wt makes the worktree. mux opens a window in the project's tmux session, tags it @riker_project / @riker_task, and launches interactive claude with the brief and per-session hook settings.", f:"core/projects.ts · core/mux.ts" },
@@ -887,11 +888,11 @@ renderExplore();
 const PKGS = [
   ["@riker/core", "The domain: store, engine, desk, lifecycle, agent pool, hooks, outbound drafts, learning, the Assistant, the Advisor, task actions. No opentui or solid. Also its embedded text (defaults/, Riker's plugin/, contrib/revdiff/) and the test helpers other packages import (freshHome(), fakeBrain(), fake-mux).", "imports: code-review-plannotator (until RIKER-0190)"],
   ["@riker/triage", "The chain of rules (triage.ts) and the inbox's worker (worker.ts).", "hands core: <code>triage</code> (arrived, next, again, fromHeld)"],
-  ["@riker/github", "Notifications in (ingest.ts), the rate-limit gate (gate.ts), each task's PR status (pr-status.ts), sends through gh (send.ts), the poll (connector.ts).", "hands core: <code>connectors</code> [github], <code>senders</code> { github_comment }"],
-  ["@riker/slack", "The transports (token, claude-mcp, mcp), the poller and the remote, and the hold on moves asked from Slack (confirm.ts).", "hands core: <code>connectors</code> [slack, remote], <code>senders</code> { slack_reply }, <code>guards</code> [confirmGuard]"],
+  ["@riker/github", "Notifications in (ingest.ts), the rate-limit gate (gate.ts), each task's PR status (pr-status.ts), its draft (draft.ts, sent through gh in send.ts), its config (config.ts), the poll (connector.ts).", "hands core: <code>connectors</code> [github], <code>drafts</code> [github_comment], <code>config</code> [github], <code>assistant</code> (gh reads)"],
+  ["@riker/slack", "The transports (token, claude-mcp, mcp), the poller and the remote, its draft (draft.ts), its slack and remote config (config.ts), and the hold on moves asked from Slack (confirm.ts).", "hands core: <code>connectors</code> [slack, remote], <code>drafts</code> [slack_reply], <code>config</code> [slack, remote], <code>guards</code> [confirmGuard], <code>assistant</code> (the Slack line)"],
   ["@riker/code-review-plannotator", "The guided review as a library, runnable without Riker: patchFor, planBatches, reviewInBatches with an injected ask, fitGuide, saveGuide, postComments, the CLI and skill/SKILL.md.", "imports nothing of Riker's"],
   ["@riker/fixtures", "The demo day (bun run demo), the offline GitHub sim (bun run sim, sim:do) and a fake claude that fires real hooks.", "passes the three plugins to its engine"],
-  ["@riker/tui", "The UI: index.tsx, app, components, context, terminal, keymap, palette; and cli.ts, the riker argv parser.", "index.tsx: <code>plugins: [triagePlugin(), githubPlugin(), slackPlugin()]</code>"],
+  ["@riker/tui", "The UI: index.tsx, app, components, context, terminal, keymap, palette; and cli.ts, the riker argv parser.", "plugins.ts: <code>rikerPlugins()</code>, read by index.tsx and riker-tools"],
   ["@riker/cli", "What a shell runs: src/riker.ts (the one entry; riker tools … is riker-tools), src/riker-tools.ts, script/riker.ts (bun dev, restarts on RESTART_CODE), script/compile.ts (dist/riker).", "tells core where riker-tools is: <code>setToolsEntry</code>"],
 ];
 $("#pkgsEl").innerHTML = PKGS.map(([n, p, g]) => `<div class="pkg"><span class="nm">${esc(n)}</span><p>${esc(p)}</p><span class="gives">${g}</span></div>`).join("");
@@ -899,8 +900,10 @@ const PLUGIN_FIELDS = [
   ["name", "The plugin's name.", "every plugin"],
   ["triage", "The inbox's judge (at most one): arrived() on a fresh message, next() for the worker, again() and fromHeld() for the owner's r and m. Without one, messages wait in the Inbox untriaged.", "@riker/triage"],
   ["connectors", "Sources and lines, each with its own clock and status line. attach(ctx) once at construction, start() off the fixture day, pollNow() for the owner's check now.", "@riker/github, @riker/slack"],
-  ["senders", "One Send per DraftAction type; resolves to a receipt line. Outbound calls it on your Send.", "@riker/github, @riker/slack"],
+  ["drafts", "DraftKinds, one per type: build(message, answer) from a task's last message (null when not its channel), describe() the words before Send, text() and withText() for your edit, send() to a receipt line. Two plugins never share a type.", "@riker/github, @riker/slack"],
   ["guards", "MoveGuards: a move the owner must say yes to first. The guard answers what to say instead, or null to let it run.", "@riker/slack (confirmGuard)"],
+  ["config", "ConfigSections: configSection(key, defaults, merge). Core keeps that key of config.json as written; the plugin reads it whole with section.of(config). The engine refuses a core key or one another plugin took.", "@riker/github (github), @riker/slack (slack, remote)"],
+  ["assistant", "assistant(config): lines for the Assistant's system prompt, such as what it may look up and how a line heard from the plugin's place is answered.", "@riker/github, @riker/slack"],
 ];
 $("#pluginFields").innerHTML = PLUGIN_FIELDS.map(([f, w, b]) => `<tr><td>${esc(f)}</td><td>${esc(w)}</td><td>${esc(b)}</td></tr>`).join("");
 
@@ -912,7 +915,7 @@ const GATES = [
   { nm:"noise", ds:"A config.triage.noise rule matches: a bot wrote it, CI activity, a state change on a thread you only follow, or a pattern taught with the noise move.", out:"fyi" },
   { nm:"same thread", ds:"A GitHub issue or Slack thread is one conversation, so it attaches to its open task. Not for DMs.", out:"attach" },
   { nm:"after close", ds:"They wrote after the close (your own reply doesn't count): it attaches to the closed task.", out:"attach" },
-  { nm:"review ask", ds:"A PR asking a review of you or a github.reviewTeams team, or tagging one: always a coding review task on pr:N, held for Start. The model gives only its words.", out:"review task", model:true },
+  { nm:"review ask", ds:"A PR asking a review of you or a triage.reviewTeams team, or tagging one: always a coding review task on pr:N, held for Start. The model gives only its words.", out:"review task", model:true },
   { nm:"unjudged", ds:"The first rule that needs the verdict asks for it. If the call fails: filed as 'awaiting AI triage', never assumed work; the worker retries.", out:"failed", model:true },
   { nm:"same ask", ds:"A DM is a stream of asks, so the model's same_ask decides whether it joins the open task.", out:"attach" },
   { nm:"judged fyi", ds:"The model says fyi: filed, nothing made.", out:"fyi" },
@@ -1178,7 +1181,7 @@ const DOORS = [
   ["core/plugins.ts", "The only way a package adds to Riker", "RikerPlugin: triage, connectors, senders, guards. Core runs what an entry point hands it and imports none of them."],
   ["core/mux.ts", "Only door to tmux and wt", "The only importer of libtmux (alpha, pinned exactly). Identity is @riker_project / @riker_task, never a name."],
   ["core/lifecycle.ts", "Only writer of agent_state", "Every agent and session state change is a named transition."],
-  ["core/outbound.ts", "Only road out", "Nothing leaves without your Send; the destination comes from the thread, not the model; the plugin's sender sends it."],
+  ["core/outbound.ts", "Only road out", "Nothing leaves without your Send; the destination comes from the thread, not the model; the plugin's DraftKind builds, words and sends it."],
   ["core/desk.ts", "Every owner move", "One method per thing you can do. TUI keys, the palette, moves, triggers and tests all land here."],
   ["core/moves.ts", "Every cross-process request", "One registry for riker-tools, the Assistant's prompt and dispatch. New verbs go here only."],
   ["core/task-actions.ts", "Every task action", "Built-ins plus config actions; which rows, how it runs, where the answer goes, what triggers it. The recipe is a skill."],
@@ -1188,7 +1191,7 @@ const DOORS = [
   ["core/brand.ts", "Every name Riker goes by", "Command, tools, home, RIKER_* env, RIKER- refs, @riker_* options; aug's spellings in LEGACY. Never spell one inline."],
   ["core/install.ts", "Everything Riker writes outside its home", "One registry (hooks, statusline, revdiff) behind riker install | uninstall [name] [--check]. Scripts are embedded so the compiled binary carries them."],
   ["core/brain.ts", "Every headless model call", "claude -p with user settings skipped; setBrain swaps it in tests."],
-  ["core/config.ts", "Config, handed down", "An entry point makes the ConfigSource; everything below calls get() each use, so an edit applies without a restart."],
+  ["core/config.ts", "Config, handed down", "An entry point makes the ConfigSource; everything below calls get() each use, so an edit applies without a restart. A plugin's key is its configSection, read with section.of."],
   ["core/undo.ts", "ctrl+z", "This session's moves, 50 deep: onTask keeps a task before and after; cannot records what has outside effects."],
   ["core/log.ts", "All logging", "Writes riker.log under RIKER_HOME, never the terminal. Off unless RIKER_LOG, log.enabled or RIKER_DEV."],
   ["tui/src/keymap.ts", "Every key binding", "One table; the footer, ? help and : palette all list from it. Each mode has its own FocusProvider."],

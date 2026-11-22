@@ -34,7 +34,7 @@ let fake: FakeMux;
 
 beforeEach(() => {
   freshHome({
-    github: { ...DEFAULT_CONFIG.github, repos: { "acme/api": "/src/api" } },
+    repos: { "acme/api": "/src/api" },
   });
   fake = new FakeMux();
   setMux(fake);
@@ -86,10 +86,7 @@ describe("helpers", () => {
 describe("repo choices", () => {
   test("a coding task with no repo is offered its project's repos first, then mapped ones", async () => {
     freshHome({
-      github: {
-        ...DEFAULT_CONFIG.github,
-        repos: { "acme/api": "/src/api", "acme/web": "/src/web" },
-      },
+      repos: { "acme/api": "/src/api", "acme/web": "/src/web" },
     });
     const t = codingTask(null, "Spike");
     expect(repoChoices(config(), t)).toEqual(["acme/api", "acme/web"]);

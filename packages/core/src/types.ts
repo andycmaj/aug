@@ -3,13 +3,13 @@
 
 import { SELF } from "./brand";
 
+// Where a message or task came from: the owner, or a plugin's channel named
+// as that plugin names it ("github", "slack"). Core knows only the owner's.
 export const Channel = {
-  github: "github",
-  slack: "slack",
   // Typed by the owner (a new task, a line in a chat).
   owner: "owner",
 } as const;
-export type Channel = (typeof Channel)[keyof typeof Channel];
+export type Channel = string;
 
 // Triage's five roads plus watch. fyi creates no task; the rest are task kinds.
 export const Verdict = {
@@ -228,14 +228,17 @@ export const TurnRole = {
 } as const;
 export type TurnRole = (typeof TurnRole)[keyof typeof TurnRole];
 
-// The author of an owner line that came from Slack (@riker/slack remote.ts):
-// the Assistant answers it short, since it is read in Slack.
-export const SLACK_AUTHOR = "you via Slack";
-// Who asks when the Assistant's turn answers a Slack line (RIKER_ASKED_BY):
-// @riker/slack holds the moves that start or end work for the owner's yes.
-export const SLACK_ASKER = "assistant via Slack";
-// How long such a hold waits for that yes.
-export const CONFIRM_MINUTES = 10;
+// An owner line a plugin heard from somewhere else (@riker/slack's remote)
+// is said with the author `you via <place>`: the Assistant answers it short,
+// since it is read there, and its turn asks as `assistant via <place>`
+// (RIKER_ASKED_BY), so that plugin's guard can hold a move for the owner's
+// yes there.
+export const heardVia = (place: string): string => `you via ${place}`;
+export const askedVia = (place: string): string => `assistant via ${place}`;
+
+export function placeHeard(author: string | null): string | null {
+  return author?.match(/^you via (.+)$/)?.[1] ?? null;
+}
 
 export const ActionState = {
   pending: "pending",
@@ -531,23 +534,13 @@ export interface CorrectionRow {
 }
 
 // The action an agent sets up for one press. Nothing in it runs until the
-// owner sends it.
-export type DraftAction =
-  | {
-      type: "slack_reply";
-      channel: string;
-      thread_ts?: string;
-      to?: string;
-      text: string;
-    }
-  | {
-      type: "github_comment";
-      repo: string;
-      number: number;
-      body: string;
-      // The close-out riding with the comment, done in the same press.
-      close?: "issue" | "merge" | "approve";
-    };
+// owner sends it. Its type names the plugin's DraftKind that built it
+// (core/plugins.ts), which also words it and sends it; the rest of its shape
+// is that plugin's.
+export interface DraftAction {
+  type: string;
+  [field: string]: unknown;
+}
 
 // Who a model call was for, on its spend row (core/spend.ts).
 export const SpendRole = {

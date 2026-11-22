@@ -3,7 +3,9 @@ import { setBrain, type BrainCall } from "../src/brain";
 import { AgentPool } from "../src/agents";
 import { buildRail } from "../src/rail";
 import * as store from "../src/store";
-import { Kind, TurnRole } from "../src/types";
+import { heardVia, Kind, TurnRole } from "../src/types";
+import { Engine } from "../src/engine";
+import { transcript } from "../src/transcript";
 import { freshHome, withLimit, testConfig, config } from "./support/helpers";
 
 let calls: BrainCall[];
@@ -337,3 +339,31 @@ describe("a chat turn leaves a session the cache has lost, or Home's grown too b
     expect(calls[2].prompt).toContain("look into it");
   });
 });
+
+describe("what the plugins tell the Assistant", () => {
+  test("their lines are in its system prompt, and nothing of theirs without them", async () => {
+    const home = store.homeTask();
+    say(home.id, "anything new?");
+    const engine = new Engine({
+      config: testConfig(),
+      offline: true,
+      plugins: [{ name: "chat", assistant: () => ["## Chat", "- Look things up with chat-cli."] }],
+    });
+    await engine.pool.request(home.id, "the owner typed", "owner");
+    await new AgentPool({ config: withLimit(4) }).request(home.id, "again", "owner");
+    expect(calls[0]!.system).toContain("## Chat\n- Look things up with chat-cli.");
+    expect(calls[1]!.system).not.toContain("## Chat");
+    expect(calls[1]!.system).not.toContain("## GitHub");
+    expect(calls[1]!.system).not.toContain("A line from Slack");
+  });
+
+  test("a line heard elsewhere is answered there, and the turn asks as from there", async () => {
+    const home = store.homeTask();
+    store.addTurn({ taskId: home.id, role: TurnRole.you, author: heardVia("Chat"), body: "stop RIKER-0002" });
+    await new AgentPool({ config: withLimit(4) }).request(home.id, "the owner typed", "owner");
+    expect(calls[0]!.env).toMatchObject({ RIKER_ASKED_BY: "assistant via Chat" });
+    expect(calls[0]!.prompt).toContain("The owner wrote from Chat (your answer goes back there");
+    expect(transcript(store.turnsForTask(home.id))).toContain("wrote from Chat");
+  });
+});
+

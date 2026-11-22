@@ -240,7 +240,8 @@ function dbSteps(file: string, dry: boolean): string[] {
 
 // ── config.json ──────────────────────────────────────────────────────────
 
-// github.repos is keyed by slug; the path stays (Phase 3 moves the checkout).
+// repos is keyed by slug; the path stays (Phase 3 moves the checkout). A
+// file from before repos left GitHub's section holds it as github.repos.
 function configSteps(file: string, dry: boolean): string[] {
   let raw: Record<string, unknown>;
   try {
@@ -249,12 +250,14 @@ function configSteps(file: string, dry: boolean): string[] {
     return [];
   }
   const github = raw.github as { repos?: Record<string, string> } | undefined;
-  const repos = github?.repos;
+  const holder = (raw.repos ? raw : github) as { repos?: Record<string, string> } | undefined;
+  const repos = holder?.repos;
   if (!repos || !(LEGACY.repo in repos) || REPO in repos) return [];
-  const line = `config.json: github.repos ${LEGACY.repo} becomes ${REPO} (${repos[LEGACY.repo]})`;
+  const key = holder === raw ? "repos" : "github.repos";
+  const line = `config.json: ${key} ${LEGACY.repo} becomes ${REPO} (${repos[LEGACY.repo]})`;
   if (dry) return [line];
   // Rebuilt in order, so the key keeps its place in the file.
-  github!.repos = Object.fromEntries(
+  holder!.repos = Object.fromEntries(
     Object.entries(repos).map(([slug, path]) => [slug === LEGACY.repo ? REPO : slug, path]),
   );
   writeFileSync(file, JSON.stringify(raw, null, 2) + "\n");

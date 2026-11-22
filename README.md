@@ -41,7 +41,7 @@ bun dev                       # or: bun packages/cli/script/riker.ts
       denied, so text inside a message has nothing to post with.
     - Each Send is a separate one-shot call whose only tool is the send tool
       and whose only input is your approved words.
-    - Every poll is a model turn (haiku by default, `brain.slackModel`), so it
+    - Every poll is a model turn (haiku by default, `slack.model`; once `brain.slackModel`), so it
       polls every 180s unless you set `slack.pollSeconds`.
     - `slack.mcpServer` picks the server when its name doesn't say "slack".
   - **`mcp`** (Riker as a direct MCP client to a local Slack MCP server) is
@@ -70,26 +70,27 @@ the Advisor proposes a shorter one; past twice it, prompts cut it with a note.
 
 ### Config
 
-`~/.riker/config.json`. Every key is optional:
+`~/.riker/config.json`. Every key is optional. `github`, `slack` and
+`remote` belong to their plugins (`@riker/github`, `@riker/slack`), which
+read their own defaults under what you write:
 
 ```json
 {
+  "repos": { "northwind/ledger": "/Users/me/src/ledger" },
   "github": {
     "pollSeconds": 120,
-    "mergeMethod": "squash",
-    "repos": { "northwind/ledger": "/Users/me/src/ledger" },
-    "reviewTeams": ["northwind/payments"]
+    "mergeMethod": "squash"
   },
   "slack": {
     "transport": "token",
     "pollSeconds": 60,
-    "channels": ["C0123ABC"]
+    "channels": ["C0123ABC"],
+    "model": "haiku"
   },
   "brain": {
     "triageModel": "haiku",
     "agentModel": "sonnet",
-    "assistantModel": "sonnet",
-    "slackModel": "haiku"
+    "assistantModel": "sonnet"
   },
   "opener": "open",
   "maxActiveAgents": 4,
@@ -102,7 +103,8 @@ the Advisor proposes a shorter one; past twice it, prompts cut it with a note.
     "escalate": {
       "github": ["assign", "mention", "review_requested"],
       "slack": ["dm", "mention"]
-    }
+    },
+    "reviewTeams": ["northwind/payments"]
   },
   "theme": "default",
   "log": { "enabled": false, "level": "info" },
@@ -112,10 +114,12 @@ the Advisor proposes a shorter one; past twice it, prompts cut it with a note.
 }
 ```
 
-`github.repos` maps a repository to its local checkout; a coding task gets a
+`repos` maps a repository to its local checkout (a file from before it
+moved is read from `github.repos`); a coding task gets a
 worktree of it (Riker asks for the path the first time a repo is unmapped).
 A pull request that requests a review of you, or of a team in
-`github.reviewTeams` (`org/team-slug`, or a bare slug for any org), or tags
+`triage.reviewTeams` (`org/team-slug`, or a bare slug for any org; once
+`github.reviewTeams`), or tags
 you or one of those teams in a comment, always becomes a coding task on the
 PR's branch (`pr:N`) whose brief is a guided Plannotator review; other review
 asks the triage model finds are coding tasks too.
@@ -145,7 +149,7 @@ turns either off.
 `triage.escalate` says what else may become a task without you. On GitHub
 that is the notification reasons listed (by default: assigned to you, a
 mention of you, a review requested of you). A review requested only of a
-team, or an `@org/team` tag, counts only for a team in `github.reviewTeams`.
+team, or an `@org/team` tag, counts only for a team in `triage.reviewTeams`.
 On Slack it is a DM to you or a message that mentions you. Anything else the model calls work is
 held in the Inbox as "needs you", and `m` there makes the task its verdict
 describes.

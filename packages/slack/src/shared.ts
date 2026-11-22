@@ -4,9 +4,9 @@
 // as the same NewMessage, so dedupe and triage never know the difference.
 
 import type { NewMessage } from "@riker/core/store";
-import type { DraftAction } from "@riker/core/types";
+import type { SlackReply } from "./draft";
 
-export type SlackReply = Extract<DraftAction, { type: "slack_reply" }>;
+export type { SlackReply };
 
 export interface SlackCursor {
   // channel id -> newest ts seen (token transport)

@@ -28,7 +28,7 @@ import { now, writeWhenFree } from "./db";
 import { DocName, forPrompt } from "./docs";
 import { docsBlock } from "./prompts";
 import { changedFiles, snapshotDir } from "./files";
-import { actionFor, lastIncoming } from "./outbound";
+import { Drafts, lastIncoming } from "./outbound";
 import {
   EndReason,
   queued,
@@ -268,6 +268,10 @@ export function turnPrompt(
 export interface PoolOptions {
   // Read at each turn, so maxActiveAgents and the models follow an edit.
   config: ConfigSource;
+  // The plugins' kinds of draft, which make a turn's answer a draft.
+  drafts?: Drafts;
+  // The plugins' lines for the Assistant's system prompt.
+  assistantLines?: (config: RikerConfig) => string[];
 }
 
 interface Running {
@@ -335,7 +339,11 @@ export class AgentPool {
   private starting = new Set<number>();
   private waiting: Waiting[] = [];
 
-  constructor(private options: PoolOptions) {}
+  private readonly drafts: Drafts;
+
+  constructor(private options: PoolOptions) {
+    this.drafts = options.drafts ?? new Drafts();
+  }
 
   private limit(): number {
     return this.options.config.get().maxActiveAgents;
@@ -512,7 +520,7 @@ export class AgentPool {
     try {
       const result = await think({
         ...(home
-          ? assistantCall(config, history, reason, resume, where)
+          ? assistantCall(config, history, reason, resume, where, this.options.assistantLines?.(config) ?? [])
           : generalCall(config, task, history, reason, Boolean(resume))),
         cwd,
         ...(resume ? { resume } : { sessionId }),
@@ -560,7 +568,7 @@ export class AgentPool {
           turnFinished(ref, { asking: null, at: finished });
           return;
         }
-        const action = actionFor(store.getTask(taskId) ?? task, answer.action);
+        const action = this.drafts.for(store.getTask(taskId) ?? task, answer.action);
         store.updateTurn(turn.id, {
           status: "done",
           about: answer.about,
@@ -677,7 +685,7 @@ export function hookSettings(): Record<string, unknown> {
 export function codingCwd(config: RikerConfig, task: TaskRow): string {
   // The interview writes its drafts there, so Write needs no other folder.
   if (task.kind === Kind.system) return docDraftsDir();
-  const mapped = task.repo ? config.github.repos[task.repo] : undefined;
+  const mapped = task.repo ? config.repos[task.repo] : undefined;
   if (mapped) return mapped;
   if (config.scratchRepo) return config.scratchRepo;
   const dir = paths.work(task.id);
