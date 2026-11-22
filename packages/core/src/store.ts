@@ -967,10 +967,38 @@ export function addNote(
   return one<NoteRow>("SELECT * FROM notes WHERE id = ?", id)!;
 }
 
+// The board keeps only the latest few notes per task: the rest were what
+// later notes corrected or moved past.
+export const NOTES_PER_TASK = 3;
+
+const NOTE_COLUMNS = "id, author, label, body, task_id, read_by, created_at";
+
+// The board, newest first: a task's notes leave it when the task is done or
+// dropped (they stay on the task: notesForTask), and an open task shows its
+// latest NOTES_PER_TASK. A note on no task stays until it falls off the
+// limit.
 export function listNotes(limit = 100): NoteRow[] {
   return all<NoteRow>(
-    "SELECT * FROM notes ORDER BY created_at DESC, id DESC LIMIT ?",
+    `SELECT ${NOTE_COLUMNS} FROM (
+       SELECT n.*, ROW_NUMBER() OVER (
+         PARTITION BY COALESCE(n.task_id, -n.id)
+         ORDER BY n.created_at DESC, n.id DESC
+       ) AS nth
+       FROM notes n LEFT JOIN tasks t ON t.id = n.task_id
+       WHERE t.id IS NULL OR t.status NOT IN ('done', 'dropped')
+     )
+     WHERE nth <= ?
+     ORDER BY created_at DESC, id DESC LIMIT ?`,
+    NOTES_PER_TASK,
     limit,
+  );
+}
+
+// Every note an agent left on the task, oldest first.
+export function notesForTask(taskId: number): NoteRow[] {
+  return all<NoteRow>(
+    "SELECT * FROM notes WHERE task_id = ? ORDER BY created_at, id",
+    taskId,
   );
 }
 

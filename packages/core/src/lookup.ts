@@ -77,6 +77,9 @@ export function linkLine(l: TaskLinkRow | ProjectLinkRow): string {
   return l.title ? `${l.title} ${l.url}` : l.url;
 }
 
+// The board drops a task's notes when it closes; its detail keeps the latest.
+const TASK_NOTES = 10;
+
 export function taskDetail(t: TaskRow, turns = 12): string {
   const facts = [
     taskLine(t),
@@ -88,8 +91,12 @@ export function taskDetail(t: TaskRow, turns = 12): string {
     t.waiting_on ? `Waiting on: ${t.waiting_on}` : "",
     t.agent_says ? `Agent says: ${t.agent_says}` : "",
   ].filter(Boolean);
+  const notes = store
+    .notesForTask(t.id)
+    .slice(-TASK_NOTES)
+    .map((n) => `Note ${n.created_at.slice(0, 16)} ${n.author} [${n.label}]: ${n.body}`);
   const said = transcript(store.turnsForTask(t.id).slice(-turns));
-  return said ? `${facts.join("\n")}\n\n${said}` : facts.join("\n");
+  return [[...facts, ...notes].join("\n"), said].filter(Boolean).join("\n\n");
 }
 
 const isOpen = (t: TaskRow) =>
