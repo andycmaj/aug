@@ -8,7 +8,6 @@ import { createMemo, For, Match, Show, Switch, type Accessor } from "solid-js";
 import { Markdown, useTheme } from "@andycmaj/opentui-app";
 import { useRiker } from "../context/riker";
 import { refusalLines } from "@riker/core/capabilities";
-import { actionText, describeAction } from "@riker/core/outbound";
 import {
   formatBytes,
   parseCsv,
@@ -190,7 +189,7 @@ function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
             <Show when={action()}>
               {(a: Accessor<DraftAction>) => (
                 <text fg={theme.textMuted} wrapMode="word">
-                  {`draft (${props.turn.action_state === "sent" ? "sent" : "not sent"}): ${firstLine(actionText(a()))}`}
+                  {`draft (${props.turn.action_state === "sent" ? "sent" : "not sent"}): ${firstLine(riker.desk.drafts.text(a()))}`}
                 </text>
               )}
             </Show>
@@ -230,7 +229,7 @@ function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
             </Show>
             <Show when={action() && props.turn.action_state !== "pending"}>
               <text fg={theme.textMuted} marginTop={1} wrapMode="word">
-                {`${describeAction(action()!)}: ${props.turn.action_state === "sent" ? (props.turn.action_result ?? "sent") : props.turn.action_state}`}
+                {`${riker.desk.drafts.describe(action()!)}: ${props.turn.action_state === "sent" ? (props.turn.action_result ?? "sent") : props.turn.action_state}`}
               </text>
             </Show>
           </box>
@@ -423,6 +422,7 @@ export function ActionCard(props: {
   result: string | null;
 }) {
   const theme = useTheme();
+  const riker = useRiker();
   return (
     <box
       flexDirection="column"
@@ -437,7 +437,7 @@ export function ActionCard(props: {
     >
       <box flexDirection="row" justifyContent="space-between">
         <text fg={theme.success} attributes={1}>
-          {`↑ ${describeAction(props.action)}`}
+          {`↑ ${riker.desk.drafts.describe(props.action)}`}
         </text>
         <text>
           <span style={{ fg: theme.primary }}>y</span>
@@ -449,7 +449,7 @@ export function ActionCard(props: {
         </text>
       </box>
       <text fg={theme.text} wrapMode="word" marginTop={1}>
-        {actionText(props.action)}
+        {riker.desk.drafts.text(props.action)}
       </text>
       <Show when={props.result}>
         <text fg={theme.error} wrapMode="word" marginTop={1}>

@@ -8,11 +8,11 @@ import { errorMessage, logger } from "@riker/core/log";
 import { paths } from "@riker/core/paths";
 import type { Connector, ConnectorContext } from "@riker/core/plugins";
 import * as store from "@riker/core/store";
-import { TaskStatus, type DraftAction } from "@riker/core/types";
+import { TaskStatus } from "@riker/core/types";
 import { SendError } from "@riker/core/outbound";
 import { Remote, remoteChannel, type RemoteLink } from "./remote";
 import { remoteLink } from "./remote-links";
-import { EMPTY_CURSOR, type SlackCursor, type SlackTransport } from "./shared";
+import { EMPTY_CURSOR, type SlackCursor, type SlackReply, type SlackTransport } from "./shared";
 import { slackTransport } from "./transport";
 
 const log = logger("slack");
@@ -64,7 +64,7 @@ export class SlackConnector implements Connector {
   }
 
   // Replies go out through whichever transport polls.
-  send(action: Extract<DraftAction, { type: "slack_reply" }>): Promise<string> {
+  send(action: SlackReply): Promise<string> {
     return this.transport
       ? this.transport.send(action)
       : Promise.reject(new SendError("Slack is not connected"));

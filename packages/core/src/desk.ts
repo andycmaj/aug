@@ -29,7 +29,7 @@ import type { RikerConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
 import * as projects from "./projects";
 import { applyProjectDoc, renderProjectDoc } from "./project-doc";
-import { editPending, sendPending } from "./outbound";
+import { Drafts, editPending, sendPending } from "./outbound";
 import * as repos from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
@@ -47,7 +47,7 @@ import {
   type ActionSpec,
 } from "./task-actions";
 import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
-import type { MoveGuard, Senders, Triage, TriageEffect, TriageOutcome } from "./plugins";
+import type { MoveGuard, Triage, TriageEffect, TriageOutcome } from "./plugins";
 import {
   AgentState,
   IdeaStatus,
@@ -86,14 +86,18 @@ export interface DeskOptions {
   onLearned?: (line: string) => void;
   // The inbox's judge (core/plugins.ts); without one, r and m say so.
   triage?: Triage;
-  // Ways out, by DraftAction type, from the plugins.
-  senders?: Senders;
+  // The plugins' kinds of draft: how one is worded, edited and sent.
+  drafts?: Drafts;
   // Moves that wait for the owner's yes (core/moves.ts asks each).
   guards?: readonly MoveGuard[];
 }
 
 export class Desk {
-  constructor(private options: DeskOptions) {}
+  readonly drafts: Drafts;
+
+  constructor(private options: DeskOptions) {
+    this.drafts = options.drafts ?? new Drafts();
+  }
 
   private learnedNotice = (line: string) => this.options.onLearned?.(line);
 
@@ -575,13 +579,13 @@ export class Desk {
 
   async send(taskId: number): Promise<string> {
     return this.cannotAsync(`send ${store.taskRef(taskId)}`, "it sent the draft", async () => {
-      return sendPending(this.config(), taskId, this.options.senders ?? {});
+      return sendPending(this.config(), taskId, this.drafts);
     });
   }
 
   editDraft(taskId: number, text: string): boolean {
     const before = this.cannot(`edit ${store.taskRef(taskId)}`, "the draft is edited again, not undone", () =>
-      editPending(taskId, text),
+      editPending(taskId, text, this.drafts),
     );
     if (before === null) return false;
     correct(

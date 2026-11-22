@@ -5,7 +5,8 @@
   "type": "module",
   "private": true,
   "exports": {
-    "./index": "./src/index.tsx"
+    "./index": "./src/index.tsx",
+    "./plugins": "./src/plugins.ts"
   },
   "dependencies": {
     "@andycmaj/opentui-app": "^0.5.10",

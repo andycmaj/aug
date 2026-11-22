@@ -3,7 +3,7 @@
 
 import type { RikerConfig } from "@riker/core/config";
 import { SendError } from "@riker/core/outbound";
-import type { DraftAction } from "@riker/core/types";
+import type { GithubComment } from "./draft";
 
 export async function gh(args: string[]): Promise<string> {
   const proc = Bun.spawn(["gh", ...args], { stdout: "pipe", stderr: "pipe" });
@@ -17,7 +17,7 @@ export async function gh(args: string[]): Promise<string> {
 }
 
 export async function githubSend(
-  action: Extract<DraftAction, { type: "github_comment" }>,
+  action: GithubComment,
   config: RikerConfig,
 ): Promise<string> {
   const ref = `${action.repo}#${action.number}`;

@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { describeStep } from "./brain";
 import type { TurnAnswer } from "./agents";
-import { actionFor } from "./outbound";
+import { Drafts } from "./outbound";
 import {
   EndReason,
   sessionActivity,
@@ -218,7 +218,7 @@ export interface DoneArgs {
 // The agent says it is finished. The session is written up; the task waits
 // for you with its close-out when a reply is owed, otherwise it is done (and
 // stays on the rail until you have read it).
-export function handleDone(env: HookEnv, args: DoneArgs): string {
+export function handleDone(env: HookEnv, args: DoneArgs, drafts: Drafts = new Drafts()): string {
   const task = store.getTask(env.taskId);
   if (!task) return `no task ${env.taskId}`;
   const session = store.getSession(env.sessionId);
@@ -231,7 +231,7 @@ export function handleDone(env: HookEnv, args: DoneArgs): string {
           ? "approve_pr"
           : "reply";
   const action = args.reply
-    ? actionFor(task, { kind, text: args.reply })
+    ? drafts.for(task, { kind, text: args.reply })
     : null;
   const ownerSession = session?.started_by === "owner";
   const closes = !action && !ownerSession && !lastIncomingNeedsReply(task.id);

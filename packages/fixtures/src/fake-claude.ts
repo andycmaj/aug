@@ -6,6 +6,9 @@
 import { createInterface } from "node:readline";
 import { envVar } from "@riker/core/brand";
 import { handleDone, handleHook } from "@riker/core/hooks";
+import { Drafts } from "@riker/core/outbound";
+import { githubPlugin } from "@riker/github";
+import { slackPlugin } from "@riker/slack";
 
 const env = {
   taskId: Number(envVar("TASK_ID")),
@@ -68,7 +71,7 @@ for await (const line of rl) {
         reply:
           "Fixed: the export now keeps inter-company transfers (the missing 4,180). Test added.",
         close: "issue",
-      }),
+      }, Drafts.of([githubPlugin(), slackPlugin()])),
     );
     console.log(dim("finished - the reply waits for your Send in Riker"));
     rl.close();

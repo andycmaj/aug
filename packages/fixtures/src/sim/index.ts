@@ -5,7 +5,7 @@
 // call: the api, the PR batch and Send are all the sim's.
 
 import { triagePlugin } from "@riker/triage";
-import { githubPlugin } from "@riker/github";
+import { githubPlugin, type GithubComment } from "@riker/github";
 import { slackPlugin } from "@riker/slack";
 import { watch, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -143,9 +143,10 @@ export function installSim(opts: SimOptions): {
   setMux(new TmuxMux(config.get().tmuxSocket));
   if (!haiku) setBrain(simBrain);
   // Send lands on the sim's GitHub as the owner's own doing.
-  setSender(async (action) => {
-    if (action.type === "slack_reply")
+  setSender(async (draft) => {
+    if (draft.type !== "github_comment")
       return "the sim has no Slack: nothing was sent";
+    const action = draft as GithubComment;
     const done = (() => {
       const s = loadState(file);
       const pr = action.number;

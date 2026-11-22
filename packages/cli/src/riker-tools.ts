@@ -14,6 +14,8 @@ import {
 } from "@riker/core/feedback";
 import { handleDone, handleHook, type HookEnv, type HookPayload } from "@riker/core/hooks";
 import { loadConfig } from "@riker/core/config";
+import { Drafts } from "@riker/core/outbound";
+import { rikerPlugins } from "@riker/tui/plugins";
 import { configureLog, logger } from "@riker/core/log";
 import {
   findProject,
@@ -185,11 +187,11 @@ const done = defineCommand({
         ? args.close
         : undefined;
     console.log(
-      handleDone(await env(), {
-        summary: args.summary,
-        reply: args.reply,
-        close,
-      }),
+      handleDone(
+        await env(),
+        { summary: args.summary, reply: args.reply, close },
+        Drafts.of(rikerPlugins()),
+      ),
     );
   },
 });

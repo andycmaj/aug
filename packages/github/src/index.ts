@@ -3,9 +3,9 @@
 
 import type { RikerPlugin } from "@riker/core/plugins";
 import { GithubConnector, type GithubOptions } from "./connector";
-import { githubSend } from "./send";
+import { githubComment, type GithubComment } from "./draft";
 
-export { GithubConnector, type GithubOptions };
+export { GithubConnector, githubComment, type GithubComment, type GithubOptions };
 
 export function githubPlugin(options: GithubOptions = {}): RikerPlugin & { connector: GithubConnector } {
   const connector = new GithubConnector(options);
@@ -13,6 +13,6 @@ export function githubPlugin(options: GithubOptions = {}): RikerPlugin & { conne
     name: "github",
     connector,
     connectors: [connector],
-    senders: { github_comment: githubSend },
+    drafts: [githubComment],
   };
 }

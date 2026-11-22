@@ -6,7 +6,6 @@ import { useFocus, useToast } from "@andycmaj/opentui-app";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
 import { draftFile, readDraft, removeDraft, writeDraft } from "@riker/core/drafts";
-import { actionText } from "@riker/core/outbound";
 import { taskRef } from "@riker/core/rows";
 import type { TaskRow } from "@riker/core/types";
 
@@ -49,7 +48,7 @@ export function useEditor() {
     if (!pending) return false;
     const ref = taskRef(task.id);
     const file = draftFile(ref);
-    writeDraft(file, actionText(pending.action));
+    writeDraft(file, desk.drafts.text(pending.action));
     openEditor(file, `draft for ${ref}`, () => {
       const text = readDraft(file);
       if (text && desk.editDraft(task.id, text)) showToast("Draft updated");

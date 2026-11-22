@@ -531,23 +531,13 @@ export interface CorrectionRow {
 }
 
 // The action an agent sets up for one press. Nothing in it runs until the
-// owner sends it.
-export type DraftAction =
-  | {
-      type: "slack_reply";
-      channel: string;
-      thread_ts?: string;
-      to?: string;
-      text: string;
-    }
-  | {
-      type: "github_comment";
-      repo: string;
-      number: number;
-      body: string;
-      // The close-out riding with the comment, done in the same press.
-      close?: "issue" | "merge" | "approve";
-    };
+// owner sends it. Its type names the plugin's DraftKind that built it
+// (core/plugins.ts), which also words it and sends it; the rest of its shape
+// is that plugin's.
+export interface DraftAction {
+  type: string;
+  [field: string]: unknown;
+}
 
 // Who a model call was for, on its spend row (core/spend.ts).
 export const SpendRole = {

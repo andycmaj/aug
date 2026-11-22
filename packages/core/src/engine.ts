@@ -9,6 +9,7 @@ import { AgentPool, type CodingLaunch } from "./agents";
 import type { ConfigSource } from "./config";
 import { dataVersion, now } from "./db";
 import { Desk } from "./desk";
+import { Drafts } from "./outbound";
 import { syncDocs } from "./doc-sync";
 import { refreshInstalls } from "./install";
 import { Drivers } from "./driver";
@@ -27,7 +28,6 @@ import {
   type ConnectorContext,
   type ConnectorStatus,
   type RikerPlugin,
-  type Senders,
   type Triage,
   type Triaged,
   type TriageEffect,
@@ -102,9 +102,8 @@ export class Engine {
       names.add(c.name);
       this.status = { ...this.status, [c.name]: off("not started") };
     }
-    const senders: Senders = {};
-    for (const p of plugins) Object.assign(senders, p.senders);
-    this.pool = new AgentPool({ config });
+    const drafts = Drafts.of(plugins);
+    this.pool = new AgentPool({ config, drafts });
     this.drivers = new Drivers({
       pool: this.pool,
       config,
@@ -117,7 +116,7 @@ export class Engine {
       offline: options.offline,
       onLearned: options.onLearned,
       triage: this.judge ?? undefined,
-      senders,
+      drafts,
       guards: plugins.flatMap((p) => p.guards ?? []),
     });
     for (const c of this.connectors) c.attach(this.connectorContext(c));

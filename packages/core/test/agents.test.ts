@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { AgentPool, codingLaunch, hookSettings } from "../src/agents";
-import { actionFor } from "../src/outbound";
+import { Drafts } from "../src/outbound";
+import type { DraftKind } from "../src/plugins";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -27,6 +28,18 @@ import {
   TurnRole,
 } from "../src/types";
 import { fakeBrain, freshHome, withLimit, config } from "./support/helpers";
+
+// A plugin's kind of draft, as core sees one: built from the last message,
+// where it goes read from that message.
+const reply: DraftKind = {
+  type: "test_reply",
+  build: (message, answer) => ({ type: "test_reply", to: message.author_name, text: answer.text }),
+  describe: (a) => `reply to ${String(a.to)}`,
+  text: (a) => String(a.text),
+  withText: (a, text) => ({ ...a, text }),
+  send: async () => "sent",
+};
+const drafts = new Drafts([reply]);
 
 let seq = 0;
 function slackTask(): number {
@@ -71,19 +84,13 @@ describe("general agent turns", () => {
       state: "ready",
       action: { kind: "reply", text: "42 seats." },
     }));
-    const pool = new AgentPool({ config: withLimit(4) });
+    const pool = new AgentPool({ config: withLimit(4), drafts });
     await pool.request(taskId, "test", "owner");
     const turn = store.turnsForTask(taskId).at(-1)!;
     expect(turn.role).toBe(TurnRole.agent);
     expect(turn.did).toContain("42 seats");
     const pending = store.pendingAction(taskId)!;
-    expect(pending.action).toEqual({
-      type: "slack_reply",
-      channel: "C1",
-      thread_ts: "111.1",
-      to: "Ruth",
-      text: "42 seats.",
-    });
+    expect(pending.action).toEqual({ type: "test_reply", to: "Ruth", text: "42 seats." });
     expect(store.getTask(taskId)!.agent_state).toBe(AgentState.ready);
     // read-only tools, denied without asking
     expect(calls[0].allow).toContain("Bash(gh pr view:*)");
@@ -100,7 +107,7 @@ describe("general agent turns", () => {
       state: "ready",
       action: { kind: "reply", text: `draft ${++n}` },
     }));
-    const pool = new AgentPool({ config: withLimit(4) });
+    const pool = new AgentPool({ config: withLimit(4), drafts });
     await pool.request(taskId, "first", "owner");
     await pool.request(taskId, "second", "owner");
     expect(calls[1].resume).toBe(calls[0].sessionId);
@@ -133,38 +140,6 @@ describe("general agent turns", () => {
     expect(store.getTask(ids[1])!.agent_state).toBe(AgentState.queued);
     expect(pool.request(ids[2], "x", "owner")).not.toBeNull();
     await first;
-  });
-
-  test("GitHub close-outs only where the system has them", () => {
-    const t = store.createTask({
-      title: "x",
-      kind: Kind.general,
-      channel: "github",
-    });
-    const m = store.insertMessage({
-      channel: "github",
-      externalId: "gh:1",
-      threadKey: "github:a/b#3",
-      author: "erin",
-      authorName: "erin",
-      title: "",
-      body: "x",
-      receivedAt: new Date().toISOString(),
-      meta: { repo: "a/b", number: 3, type: "Issue" },
-    })!;
-    store.fileMessage(m.id, "general", "", t.id);
-    expect(actionFor(t, { kind: "merge_pr", text: "done" })).toEqual({
-      type: "github_comment",
-      repo: "a/b",
-      number: 3,
-      body: "done",
-      close: undefined,
-    });
-    expect(
-      actionFor(t, { kind: "close_issue", text: "fixed" })?.type ===
-        "github_comment" &&
-        actionFor(t, { kind: "close_issue", text: "fixed" }),
-    ).toMatchObject({ close: "issue" });
   });
 });
 

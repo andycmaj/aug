@@ -20,7 +20,6 @@ import {
 } from "@andycmaj/opentui-app";
 import { useRiker } from "../context/riker";
 import type { InfoSection } from "@riker/core/info";
-import { actionText, describeAction } from "@riker/core/outbound";
 import type { RailItem } from "@riker/core/rail";
 import { goToList, searchIndex, type SearchHit } from "@riker/core/search";
 import { INBOX_KEY } from "./board-tab";
@@ -185,6 +184,7 @@ export function ConfirmSendModal(props: {
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const riker = useRiker();
   return (
     <Modal
       size="lg"
@@ -202,12 +202,12 @@ export function ConfirmSendModal(props: {
       }}
     >
       <ModalHeader
-        title={`Send: ${describeAction(props.action)}?`}
+        title={`Send: ${riker.desk.drafts.describe(props.action)}?`}
         hint="y send · n/esc cancel"
       />
       <box paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
         <text fg={theme.text} wrapMode="word">
-          {actionText(props.action)}
+          {riker.desk.drafts.text(props.action)}
         </text>
       </box>
     </Modal>
