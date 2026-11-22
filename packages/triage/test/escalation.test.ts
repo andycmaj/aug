@@ -3,17 +3,18 @@
 // m makes it a task. Joined messages fold into one Inbox row per task.
 
 import { beforeEach, describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG, mergeConfig } from "../src/config";
-import { Engine } from "../src/engine";
-import { inboxCount, inboxRows, InboxFilter, InboxResult, inFilter, rowMessages } from "../src/inbox";
-import { setMux } from "../src/mux";
-import { polledToRaw } from "../src/slack/claude-mcp";
-import { rawToNewMessage } from "../src/slack/shared";
-import * as store from "../src/store";
+import { triagePlugin } from "../src/index";
+import { DEFAULT_CONFIG, mergeConfig } from "@riker/core/config";
+import { Engine } from "@riker/core/engine";
+import { inboxCount, inboxRows, InboxFilter, InboxResult, inFilter, rowMessages } from "@riker/core/inbox";
+import { setMux } from "@riker/core/mux";
+import { polledToRaw } from "@riker/core/slack/claude-mcp";
+import { rawToNewMessage } from "@riker/core/slack/shared";
+import * as store from "@riker/core/store";
 import { escalation, triage } from "../src/triage";
-import { Kind, type MessageRow } from "../src/types";
-import { FakeMux } from "./support/fake-mux";
-import { config, fakeBrain, freshHome, testConfig } from "./support/helpers";
+import { Kind, type MessageRow } from "@riker/core/types";
+import { FakeMux } from "@riker/core/test/support/fake-mux";
+import { config, fakeBrain, freshHome, testConfig } from "@riker/core/test/support/helpers";
 
 let n = 0;
 function gh(meta: Record<string, unknown>, body = "please take a look"): MessageRow {
@@ -128,7 +129,7 @@ describe("work no rule names is held for you", () => {
 
   test("m makes the task its verdict describes, and it leaves needs-you", async () => {
     setMux(new FakeMux());
-    const engine = new Engine({ config: testConfig() });
+    const engine = new Engine({ config: testConfig(), plugins: [triagePlugin()] });
     work();
     const m = gh({ reason: "comment" });
     await triage(m, { config: config() });

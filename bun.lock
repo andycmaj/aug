@@ -41,7 +41,15 @@
       "version": "0.0.1",
       "dependencies": {
         "@riker/core": "workspace:*",
+        "@riker/triage": "workspace:*",
         "citty": "^0.2.2",
+      },
+    },
+    "packages/triage": {
+      "name": "@riker/triage",
+      "version": "0.0.1",
+      "dependencies": {
+        "@riker/core": "workspace:*",
       },
     },
     "packages/tui": {
@@ -53,6 +61,7 @@
         "@opentui/solid": "0.5.12",
         "@riker/core": "workspace:*",
         "@riker/fixtures": "workspace:*",
+        "@riker/triage": "workspace:*",
         "citty": "^0.2.2",
         "ghostty-opentui": "1.5.0",
         "solid-js": "1.9.12",
@@ -161,6 +170,8 @@
     "@riker/core": ["@riker/core@workspace:packages/core"],
 
     "@riker/fixtures": ["@riker/fixtures@workspace:packages/fixtures"],
+
+    "@riker/triage": ["@riker/triage@workspace:packages/triage"],
 
     "@riker/tui": ["@riker/tui@workspace:packages/tui"],
 

@@ -1,0 +1,15 @@
+{
+  "name": "@riker/triage",
+  "version": "0.0.1",
+  "description": "Riker's triage: the chain of rules that routes each inbox message, and the inbox's one worker. A plugin core runs without knowing it.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./test/*": "./test/*.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@riker/core": "workspace:*"
+  }
+}

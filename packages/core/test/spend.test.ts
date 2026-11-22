@@ -20,7 +20,6 @@ import {
   spentToday,
 } from "../src/spend";
 import * as store from "../src/store";
-import { askVerdict } from "../src/triage";
 import {
   AgentState,
   Kind,
@@ -73,7 +72,7 @@ describe("recording spend", () => {
     expect(spentToday().calls).toBe(0);
   });
 
-  test("each caller tags its role: a general turn, Home, triage, the Advisor, the doc pass", async () => {
+  test("each caller tags its role: a general turn, Home, the Advisor, the doc pass", async () => {
     const general = chatTask();
     const home = store.homeTask();
     store.addTurn({ taskId: home.id, role: TurnRole.you, author: "you", body: "what is open?" });
@@ -91,24 +90,12 @@ describe("recording spend", () => {
     const pool = new AgentPool({ config: fixedConfig(capped(100)) });
     await pool.request(general, "x", "owner");
     await pool.request(home.id, "x", "owner");
-    const m = store.insertMessage({
-      channel: "slack",
-      externalId: "slack:C1:1",
-      threadKey: "slack:C1:1",
-      author: "U9",
-      authorName: "Ruth",
-      title: "#eng",
-      body: "fyi",
-      receivedAt: new Date().toISOString(),
-      meta: { channel: "C1", ts: "1" },
-    })!;
-    await askVerdict(m, [m], null, config());
     await runAdvisor(config(), new Date(), true);
     await runDocPass(config(), new Date(), true);
     expect(store.taskSpend(general)).toMatchObject({ calls: 1 });
     expect(store.taskSpend(home.id)).toMatchObject({ calls: 1 });
     expect(spendRows().map((r) => r.role).sort()).toEqual(
-      ["advisor", "assistant", "doc-pass", "general", "triage"].sort(),
+      ["advisor", "assistant", "doc-pass", "general"].sort(),
     );
   });
 

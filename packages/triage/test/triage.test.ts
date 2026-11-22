@@ -1,24 +1,24 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { taskClosed } from "../src/lifecycle";
-import * as store from "../src/store";
-import { DEFAULT_CONFIG } from "../src/config";
-import { err, ok } from "../src/result";
+import { taskClosed } from "@riker/core/lifecycle";
+import * as store from "@riker/core/store";
+import { DEFAULT_CONFIG } from "@riker/core/config";
+import { err, ok } from "@riker/core/result";
 import {
   PASS,
   TRIAGE_RULES,
   triage,
   type TriageRule,
 } from "../src/triage";
-import { DocName, writeDoc } from "../src/docs";
+import { DocName, writeDoc } from "@riker/core/docs";
 import {
   AgentState,
   SessionKind,
   TaskStatus,
   TurnRole,
   type MessageRow,
-} from "../src/types";
-import { setBrain } from "../src/brain";
-import { fakeBrain, freshHome, config, testConfig } from "./support/helpers";
+} from "@riker/core/types";
+import { setBrain } from "@riker/core/brain";
+import { fakeBrain, freshHome, config, testConfig } from "@riker/core/test/support/helpers";
 
 function slackDm(
   n: number,

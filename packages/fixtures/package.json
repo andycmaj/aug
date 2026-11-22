@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@riker/core": "workspace:*",
+    "@riker/triage": "workspace:*",
     "citty": "^0.2.2"
   }
 }

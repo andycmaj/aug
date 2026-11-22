@@ -2,6 +2,7 @@
 // toMessage for notifications, readPrBatch and readPrView for PR status.
 // If a shape drifts from what Riker parses, these fail.
 
+import { triagePlugin } from "@riker/triage";
 import {
   afterAll,
   beforeAll,
@@ -239,6 +240,7 @@ describe("the engine on the sim", () => {
     const engine = new Engine({
       config: testConfig(),
       offline: true,
+      plugins: [triagePlugin()],
       github: { api: simApi(file), prs: simPrFetch(file) },
     });
     for (const step of SCENARIOS["review-cycle"].steps) {

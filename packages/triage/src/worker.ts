@@ -8,11 +8,11 @@
 // arrived within BATCH_WINDOW_MS of each other are read as one message (the
 // latest, carrying all their text), and the earlier ones follow it.
 
-import { logger } from "./log";
-import { perfStart } from "./perf";
-import * as store from "./store";
+import { logger } from "@riker/core/log";
+import { perfStart } from "@riker/core/perf";
+import * as store from "@riker/core/store";
 import { triage, type TriageDeps, type TriageOutcome } from "./triage";
-import { MessageState, type MessageRow } from "./types";
+import { MessageState, type MessageRow } from "@riker/core/types";
 
 export const TRIAGE_MAX_ATTEMPTS = 4;
 // 1, 4, then 16 minutes between tries: a model outage gets time to pass.

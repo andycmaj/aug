@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { linkByBranch } from "../src/triage";
 import {
   formatFeedback,
   linkPr,
@@ -9,7 +8,6 @@ import {
   unreadFeedback,
 } from "../src/feedback";
 import { pollGithub, type GhNotification } from "../src/ingest/github";
-import { triage } from "../src/triage";
 import * as store from "../src/store";
 import { Kind, SessionKind } from "../src/types";
 import { freshHome, config } from "./support/helpers";
@@ -48,23 +46,6 @@ function branchTask() {
 }
 
 describe("linking a PR to its task", () => {
-  test("a PR from the task's branch joins the task, and triage attaches to it", async () => {
-    const t = branchTask();
-    const m = prMessage(230, "Please add a test", { head: "keep-transfers" });
-    expect(linkByBranch(m)).toBe(t.id);
-    expect(store.threadsForTask(t.id)).toEqual(["github:acme/ledger#214", "github:acme/ledger#230"]);
-    expect(store.openTaskForThread("github:acme/ledger#230")?.id).toBe(t.id);
-    const outcome = await triage(m, { config: config() });
-    expect(outcome.taskId).toBe(t.id);
-    expect(store.listTasks()).toHaveLength(1);
-  });
-
-  test("other branches and other channels are not linked", () => {
-    branchTask();
-    expect(linkByBranch(prMessage(231, "x", { head: "someone-else" }))).toBeNull();
-    expect(linkByBranch(prMessage(232, "x"))).toBeNull();
-  });
-
   test("riker-tools pr links by URL", () => {
     const t = branchTask();
     expect(parsePrUrl("https://github.com/acme/ledger/pull/230/files")).toEqual({ repo: "acme/ledger", number: 230 });

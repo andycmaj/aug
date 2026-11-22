@@ -8,17 +8,17 @@
 // Triage never starts work itself: it returns effects for the caller to run,
 // which keeps it testable and keeps the agent pool in one place.
 
-import { think } from "./brain";
-import type { RikerConfig, EscalateRules, NoiseRule } from "./config";
-import { logger } from "./log";
-import { DocName, forPrompt, head } from "./docs";
-import { parsePrUrl } from "./feedback";
-import { messageMeta, type GithubMeta } from "./meta";
-import { docsBlock } from "./prompts";
-import { finishSuperseded, holdForStart } from "./lifecycle";
-import { err, ok, type Result } from "./result";
-import { projectRepos } from "./rows";
-import * as store from "./store";
+import { think } from "@riker/core/brain";
+import type { RikerConfig, EscalateRules, NoiseRule } from "@riker/core/config";
+import { logger } from "@riker/core/log";
+import { DocName, forPrompt, head } from "@riker/core/docs";
+import { parsePrUrl } from "@riker/core/feedback";
+import { messageMeta, type GithubMeta } from "@riker/core/meta";
+import { docsBlock } from "@riker/core/prompts";
+import { finishSuperseded, holdForStart } from "@riker/core/lifecycle";
+import { err, ok, type Result } from "@riker/core/result";
+import { projectRepos } from "@riker/core/rows";
+import * as store from "@riker/core/store";
 import {
   AgentState,
   Kind,
@@ -35,25 +35,11 @@ import {
   type ProjectRow,
   type TaskRow,
   type TriageVerdict,
-} from "./types";
+} from "@riker/core/types";
 
-export type TriageEffect =
-  | { type: "agent-turn"; taskId: number; reason: string }
-  | { type: "agent-message"; taskId: number; messageId: number };
+import type { ProjectPick, TriageEffect, TriageOutcome } from "@riker/core/plugins";
 
-export interface TriageOutcome {
-  verdict: TriageVerdict;
-  taskId: number | null;
-  reason: string;
-  effects: TriageEffect[];
-  // A new task only: the project it was filed under, or why none.
-  project?: ProjectPick;
-}
-
-export interface ProjectPick {
-  projectId: number | null;
-  reason: string;
-}
+export type { ProjectPick, TriageEffect, TriageOutcome };
 
 const OPENER =
   /^(hi|hey|hello|yo|hiya|morning|good morning|you there|are you there|ping|got a sec|quick question)[\s!.?,:)]*$/i;
@@ -800,6 +786,20 @@ export function taskFromHeld(
   const outcome = createFromVerdict(message, answer, config);
   store.markMessageRead(message.id);
   return outcome;
+}
+
+// The model's verdict from the newest triage run that asked for one.
+export function heldVerdict(messageId: number): VerdictAnswer | null {
+  for (const run of store.triageRunsFor(messageId)) {
+    if (!run.verdict) continue;
+    try {
+      const v = JSON.parse(run.verdict) as Partial<VerdictAnswer>;
+      if (v.verdict && v.verdict !== Verdict.fyi && v.title) return v as VerdictAnswer;
+    } catch {
+      // An unreadable run is skipped.
+    }
+  }
+  return null;
 }
 
 function createFromVerdict(

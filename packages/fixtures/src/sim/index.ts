@@ -4,6 +4,7 @@
 // terminal (or a scenario) makes things happen on it. Never a real GitHub
 // call: the api, the PR batch and Send are all the sim's.
 
+import { triagePlugin } from "@riker/triage";
 import { watch, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -172,6 +173,7 @@ export function installSim(opts: SimOptions): {
   const engine = new Engine({
     config,
     noWorktrees: true,
+    plugins: [triagePlugin()],
     github: { api: simApi(file), prs: simPrFetch(file) },
     launchOverride: (task, launch) => {
       const cwd = simCwd(task, file) ?? launch.cwd;

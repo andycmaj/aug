@@ -41,8 +41,7 @@ import { setSlackSender } from "./outbound";
 import * as store from "./store";
 import { ActionEvent } from "./task-actions";
 import { settleStaleTurns } from "./turn-check";
-import { linkByBranch, type TriageEffect } from "./triage";
-import { triageNext } from "./triage-worker";
+import type { RikerPlugin, Triage, Triaged, TriageEffect } from "./plugins";
 import { SessionKind, TaskStatus, type TaskRow } from "./types";
 
 export type ConnectorState = "off" | "polling" | "ok" | "error";
@@ -78,6 +77,8 @@ export interface EngineOptions {
   github?: { api?: GhApi; prs?: PrFetch; clock?: GateClock };
   // Replaces the remote's Slack link chosen from config (tests).
   remoteLink?: RemoteLink;
+  // What other packages add (core/plugins.ts): triage, connections.
+  plugins?: readonly RikerPlugin[];
 }
 
 // A poll this slow is worth saying so on the status line.
@@ -129,8 +130,13 @@ export class Engine {
     advisor: off("not started"),
   };
 
+  private readonly judge: Triage | null;
+
   constructor(private options: EngineOptions) {
     const { config } = options;
+    const judges = (options.plugins ?? []).flatMap((p) => (p.triage ? [p.triage] : []));
+    if (judges.length > 1) throw new Error("more than one plugin brings triage");
+    this.judge = judges[0] ?? null;
     this.slack = options.slack ?? null;
     this.pool = new AgentPool({ config });
     this.drivers = new Drivers({
@@ -144,6 +150,7 @@ export class Engine {
       config,
       offline: options.offline,
       onLearned: options.onLearned,
+      triage: this.judge ?? undefined,
     });
   }
 
@@ -366,7 +373,7 @@ export class Engine {
       const row = measure("engine.insert_message", () => store.insertMessage(m));
       if (!row) continue;
       fresh++;
-      linkByBranch(row);
+      this.judge?.arrived?.(row);
     }
     if (fresh && !this.options.offline) void this.triageInbox();
     return fresh;
@@ -378,6 +385,8 @@ export class Engine {
   private triaging: Promise<number> | null = null;
   private triageAgain = false;
   triageInbox(): Promise<number> {
+    const judge = this.judge;
+    if (!judge) return Promise.resolve(0);
     if (this.triaging) {
       this.triageAgain = true;
       return this.triaging;
@@ -387,9 +396,9 @@ export class Engine {
       do {
         this.triageAgain = false;
         for (;;) {
-          let done: Awaited<ReturnType<typeof triageNext>>;
+          let done: Triaged | null;
           try {
-            done = await triageNext({ config: this.options.config.get() });
+            done = await judge.next(this.options.config.get());
           } catch (err) {
             // Its messages wait for their retry; the next tick goes on.
             log.error("triage failed", { err: errorMessage(err) });
@@ -418,6 +427,7 @@ export class Engine {
   // At start: claims a Riker that died left are new again, and the worker
   // takes whatever waits (inserted, never triaged; a retry come due).
   resumeTriage(): Promise<number> {
+    if (!this.judge) return Promise.resolve(0);
     const reset = store.resetTriaging();
     if (reset) log.info("triage claims reset", { messages: reset });
     return this.triageInbox();

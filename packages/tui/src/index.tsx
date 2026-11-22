@@ -6,6 +6,7 @@ import { App } from "./app";
 import { CrashGuard } from "./components/crash-guard";
 import { parseCLI } from "./cli";
 import { fileConfig } from "@riker/core/config";
+import { triagePlugin } from "@riker/triage";
 import { Engine } from "@riker/core/engine";
 import { claimHome, releaseHome } from "@riker/core/home-lock";
 import { configureLog, logCrashes, logger } from "@riker/core/log";
@@ -52,7 +53,7 @@ if (cli.sim) {
   engine = installFixture(cli.fixture);
 } else {
   setMux(new TmuxMux(config.get().tmuxSocket));
-  engine = new Engine({ config });
+  engine = new Engine({ config, plugins: [triagePlugin()] });
 }
 
 // Before the TUI takes the terminal, so the refusal is readable.
