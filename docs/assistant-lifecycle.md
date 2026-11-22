@@ -9,7 +9,8 @@ where its cost goes.
 ## One turn
 
 1. **Asked.** The owner's line in Home (the chat box, or a Slack remote line
-   with author `SLACK_AUTHOR`, `@riker/slack` remote.ts) is a turn row. The
+   with author `SLACK_AUTHOR`, `heardVia("Slack")`, `@riker/slack`
+   remote.ts) is a turn row. The
    ChatDriver asks the pool for a turn: `AgentPool.request(taskId, reason,
    by)` in `core/agents.ts`. The owner's turns run now; `by: "Riker"` turns
    wait when the pool is full or the day's spend cap is reached
@@ -35,8 +36,11 @@ where its cost goes.
    - `allow`: `assistantAllow(config)`, riker-tools and gh reads, the reads,
      Write in the doc drafts folder, and `capabilityAllow("assistant")`.
    - `model`: `config.brain.assistantModel` (sonnet by default).
-   - `env`: `RIKER_ASKED_BY` is `SLACK_ASKER` when the turn answers Slack, so
-     the moves that start or end work wait for the owner's yes there.
+   - `env`: `RIKER_ASKED_BY` is `askedVia(place)` when the turn answers a
+     line heard elsewhere (`SLACK_ASKER` for Slack), so that plugin's guard
+     holds the moves that start or end work for the owner's yes there.
+   - `system`: core's words plus each plugin's `assistant` lines (GitHub's
+     gh reads, Slack's hold).
 4. **Run.** `think()` (`core/brain.ts`) runs `claude` with `claudeArgs(call)`
    and `brainEnv(call)`, in `paths.work(taskId)`. Steps stream onto the turn
    row as they come. A move the Assistant makes goes through `riker-tools move`
