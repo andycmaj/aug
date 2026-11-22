@@ -24,6 +24,15 @@ import {
   withoutLines,
   writeDoc,
 } from "./docs";
+import {
+  applyPlan,
+  KNOWLEDGE_DOC,
+  parsePlan,
+  planReason,
+  reviewTexts,
+  snapshot,
+  type KnowledgePlan,
+} from "./knowledge";
 import { taskClosed } from "./lifecycle";
 import { paths } from "./paths";
 import * as store from "./store";
@@ -145,6 +154,31 @@ export function propose(p: Proposal): DocProposalRow {
   });
 }
 
+// The doc pass's plan for Knowledge, on its own System task like a doc's: a
+// newer plan revises the open one in place.
+export function proposeKnowledge(plan: KnowledgePlan): DocProposalRow {
+  const reason = planReason(plan);
+  const fields = { proposed: JSON.stringify(plan), reason, base: snapshot(plan) };
+  const existing = store.openProposalFor(KNOWLEDGE_DOC, ProposalSource.evolve);
+  if (existing) {
+    store.reviseProposal(existing.id, { ...fields, absorbs: [] });
+    store.updateTask(existing.task_id, { summary: `${reason}\n\n${KEYS}` });
+    store.addTurn({
+      taskId: existing.task_id,
+      role: TurnRole.trigger,
+      body: `Knowledge proposal revised:\n${reason}`,
+    });
+    return store.getProposal(existing.id)!;
+  }
+  const task = systemTask("Knowledge: proposed cleanup", `${reason}\n\n${KEYS}`);
+  return store.addProposal({
+    taskId: task.id,
+    doc: KNOWLEDGE_DOC,
+    source: ProposalSource.evolve,
+    ...fields,
+  });
+}
+
 function absorbed(p: DocProposalRow): string[] {
   try {
     const lines = JSON.parse(p.absorbs) as unknown;
@@ -206,6 +240,14 @@ export function acceptProposals(taskId: number): string {
   const wrote: string[] = [];
   const held: string[] = [];
   for (const p of open) {
+    if (p.doc === KNOWLEDGE_DOC) {
+      const { done, skipped } = applyPlan(parsePlan(p.proposed));
+      store.setProposalStatus(p.id, ProposalStatus.accepted);
+      wrote.push(
+        `Knowledge (${done} change${done === 1 ? "" : "s"}${skipped ? `, ${skipped} skipped: their entries were retired since` : ""})`,
+      );
+      continue;
+    }
     if (!isDocName(p.doc)) continue;
     const doc = p.doc;
     const text = rebased(p);
@@ -278,7 +320,7 @@ export async function redraftProposals(
     store.addTurn({
       taskId,
       role: TurnRole.trigger,
-      body: "Nothing here to redraft: a shipped version is taken (y) or kept (x)",
+      body: "Nothing here to redraft: y takes it as it is, x keeps what you have",
     });
     return "nothing to redraft";
   }
@@ -332,6 +374,20 @@ export interface ReviewFiles {
   stale: DocName[];
 }
 
+// One file's diff by git diff --no-index, its paths cut back to its name.
+function fileDiff(dir: string, name: string, yours: string, proposed: string): string {
+  writeFileSync(join(dir, "yours", name), yours);
+  writeFileSync(join(dir, "proposed", name), proposed);
+  const run = Bun.spawnSync(
+    ["git", "diff", "--no-index", "--no-color", join("yours", name), join("proposed", name)],
+    { cwd: dir, stdout: "pipe", stderr: "pipe" },
+  );
+  return run.stdout
+    .toString()
+    .replaceAll(`a/yours/${name}`, `a/${name}`)
+    .replaceAll(`b/proposed/${name}`, `b/${name}`);
+}
+
 // The task's proposals as one diff file for revdiff (or a pager). Each doc's
 // diff comes from git diff --no-index, its paths cut back to the doc's name.
 export function writeReview(taskId: number): ReviewFiles | null {
@@ -344,29 +400,16 @@ export function writeReview(taskId: number): ReviewFiles | null {
   const parts: string[] = [];
   const stale: DocName[] = [];
   for (const p of open) {
+    if (p.doc === KNOWLEDGE_DOC) {
+      const { yours, proposed } = reviewTexts(parsePlan(p.proposed));
+      parts.push(fileDiff(dir, `${KNOWLEDGE_DOC}.md`, yours, proposed));
+      continue;
+    }
     const doc = isDocName(p.doc) ? p.doc : null;
     if (!doc) continue;
     const merged = rebased(p);
     if (merged === null) stale.push(doc);
-    writeFileSync(join(dir, "yours", doc), merged === null ? p.base : readDoc(doc));
-    writeFileSync(join(dir, "proposed", doc), merged ?? p.proposed);
-    const run = Bun.spawnSync(
-      [
-        "git",
-        "diff",
-        "--no-index",
-        "--no-color",
-        join("yours", doc),
-        join("proposed", doc),
-      ],
-      { cwd: dir, stdout: "pipe", stderr: "pipe" },
-    );
-    parts.push(
-      run.stdout
-        .toString()
-        .replaceAll(`a/yours/${doc}`, `a/${doc}`)
-        .replaceAll(`b/proposed/${doc}`, `b/${doc}`),
-    );
+    parts.push(fileDiff(dir, doc, merged === null ? p.base : readDoc(doc), merged ?? p.proposed));
   }
   const diff = join(dir, "proposal.diff");
   writeFileSync(diff, parts.join(""));

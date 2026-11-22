@@ -1037,8 +1037,30 @@ export function addKnowledge(
   return one<KnowledgeRow>("SELECT * FROM hub WHERE id = ?", id)!;
 }
 
+// What agents read: entries the owner has not retired or merged away.
 export function listKnowledge(): KnowledgeRow[] {
-  return all<KnowledgeRow>("SELECT * FROM hub ORDER BY topic, created_at, id");
+  return all<KnowledgeRow>(
+    "SELECT * FROM hub WHERE retired_at IS NULL ORDER BY topic, created_at, id",
+  );
+}
+
+export function getKnowledge(id: number): KnowledgeRow | null {
+  return one<KnowledgeRow>("SELECT * FROM hub WHERE id = ?", id);
+}
+
+// Out of what agents read, kept with why (and the entry it was merged into).
+export function retireKnowledge(
+  id: number,
+  why: string,
+  supersededBy: number | null = null,
+): void {
+  run(
+    "UPDATE hub SET retired_at = ?, retired_why = ?, superseded_by = ? WHERE id = ? AND retired_at IS NULL",
+    now(),
+    why,
+    supersededBy,
+    id,
+  );
 }
 
 export function addIdea(

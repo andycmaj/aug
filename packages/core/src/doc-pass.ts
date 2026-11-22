@@ -25,18 +25,28 @@ import {
   staleWatching,
   writeDoc,
 } from "./docs";
+import {
+  checkPlan,
+  KNOWLEDGE_SCHEMA,
+  KNOWLEDGE_SYSTEM,
+  knowledgeSection,
+  planEmpty,
+  type RepoFiles,
+} from "./knowledge";
 import { describeCorrection } from "./learn";
 import { logger } from "./log";
-import { propose } from "./proposals";
+import { propose, proposeKnowledge } from "./proposals";
 import * as store from "./store";
 import { capReached } from "./spend";
-import { ProposalSource, SpendRole } from "./types";
+import { ProposalSource, SpendRole, type KnowledgeRow } from "./types";
 
 const log = logger("doc-pass");
 
 export const DOC_PASS_EVERY_MS = 24 * 3600 * 1000;
 const LAST_RUN = "docpass.lastRun";
 const SEEN = "docpass.seen";
+// The hash of the Knowledge (entries and facts) the pass last read.
+const KNOWLEDGE_SEEN = "docpass.knowledgeSeen";
 
 // The docs a pass may propose to.
 const EDITABLE = [
@@ -155,23 +165,72 @@ function docSection(config: RikerConfig, name: Editable): string {
   ].join("\n");
 }
 
+export interface DocPassRun {
+  proposed: number;
+  ideas: number;
+  archived: number;
+  // 1 when a Knowledge plan was proposed (or the open one revised).
+  knowledge: number;
+  skipped?: string;
+}
+
+// Knowledge in the pass: every live entry with what Riker can check about
+// it, read by the model only when that changed since the last pass. Its plan
+// (merge near-duplicates, retire what no longer holds) is a proposal on a
+// System task; nothing changes until the owner accepts.
+async function curateKnowledge(
+  config: RikerConfig,
+  section: { text: string; entries: KnowledgeRow[] },
+): Promise<number> {
+  const result = await think({
+    prompt: `## Knowledge (${section.entries.length} entries)\n\n${section.text}`,
+    system: KNOWLEDGE_SYSTEM,
+    schema: KNOWLEDGE_SCHEMA,
+    model: config.brain.assistantModel,
+    spend: { role: SpendRole.docPass },
+  });
+  store.kvSet(KNOWLEDGE_SEEN, docHash(section.text));
+  const plan = checkPlan(result.structured, section.entries);
+  if (planEmpty(plan)) return 0;
+  proposeKnowledge(plan);
+  return 1;
+}
+
 export async function runDocPass(
   config: RikerConfig,
   at = new Date(),
   force = false,
-): Promise<{ proposed: number; ideas: number; archived: number; skipped?: string }> {
+  files?: RepoFiles,
+): Promise<DocPassRun> {
   const archived = archiveStale(at);
-  if (!force && !docPassDue(at))
-    return { proposed: 0, ideas: 0, archived, skipped: "not due" };
+  const none = { proposed: 0, ideas: 0, archived, knowledge: 0 };
+  if (!force && !docPassDue(at)) return { ...none, skipped: "not due" };
   const over = EDITABLE.filter((name) => overBudget(config, name));
-  const sig = signature();
-  if (!force && sig === store.kvGet(SEEN) && over.length === 0) {
+  const docsDue = force || over.length > 0 || signature() !== store.kvGet(SEEN);
+  const section = knowledgeSection(config, files);
+  const knowledgeDue =
+    section.entries.length > 0 &&
+    (force || docHash(section.text) !== store.kvGet(KNOWLEDGE_SEEN));
+  if (!docsDue && !knowledgeDue) {
     store.kvSet(LAST_RUN, at.toISOString());
-    return { proposed: 0, ideas: 0, archived, skipped: "nothing new" };
+    return { ...none, skipped: "nothing new" };
   }
   // Left due, so it runs on the first tick after the cap lifts.
   if (!force && capReached(config, at))
-    return { proposed: 0, ideas: 0, archived, skipped: "daily spend cap reached" };
+    return { ...none, skipped: "daily spend cap reached" };
+  const docs = docsDue ? await passDocs(config, at) : { proposed: 0, ideas: 0 };
+  const knowledge = knowledgeDue ? await curateKnowledge(config, section) : 0;
+  store.kvSet(LAST_RUN, at.toISOString());
+  const run = { ...none, ...docs, knowledge };
+  log.info("doc pass", run);
+  return run;
+}
+
+// The docs part: lessons into the owner's docs, a doc over budget shrunk.
+async function passDocs(
+  config: RikerConfig,
+  at: Date,
+): Promise<{ proposed: number; ideas: number }> {
   const result = await think({
     prompt: [
       ...EDITABLE.map((name) => docSection(config, name)),
@@ -230,7 +289,5 @@ export async function runDocPass(
     ideas++;
   }
   store.kvSet(SEEN, signature());
-  store.kvSet(LAST_RUN, at.toISOString());
-  log.info("doc pass", { proposed, ideas, archived });
-  return { proposed, ideas, archived };
+  return { proposed, ideas };
 }

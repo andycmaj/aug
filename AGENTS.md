@@ -292,7 +292,11 @@ Tests live beside their package (`packages/<name>/test/`).
   drafted against `base`; review and accept lay only its own changes over
   the doc as it is now (`rebased`, git merge-file), so lines written since
   are kept, and one whose lines changed since stays open. A shipped version
-  replaces yours. No history.
+  replaces yours. No history. The pass also reads Knowledge (`core/knowledge.ts`,
+  with facts it checks: an entry's task gone, files it cites gone from the
+  repo) and may propose merging and retiring entries, on a System task of
+  their own (`doc: Knowledge`); accept retires the old rows (`hub.retired_at`,
+  `superseded_by`), which `listKnowledge` then leaves out.
   The interview is interactive claude in its System task's own window
   (`inTmux` in `core/driver.ts`), shown in that task's Canvas; it writes
   drafts to `drafts/docs` and hands them in with `propose_doc --file`.

@@ -501,6 +501,11 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "messages", column: "state", ddl: "TEXT NOT NULL DEFAULT 'new'" },
   { table: "messages", column: "attempts", ddl: "INTEGER NOT NULL DEFAULT 0" },
   { table: "messages", column: "next_at", ddl: "TEXT" },
+  // A Knowledge entry the owner retired or merged into another (the doc
+  // pass proposes it): kept, but out of what agents read.
+  { table: "hub", column: "retired_at", ddl: "TEXT" },
+  { table: "hub", column: "retired_why", ddl: "TEXT" },
+  { table: "hub", column: "superseded_by", ddl: "INTEGER REFERENCES hub(id)" },
 ];
 
 // Agent states renamed or merged (docs/rail-status-design.md): blocked is
