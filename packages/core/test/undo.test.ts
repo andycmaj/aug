@@ -15,7 +15,7 @@ let engine: Engine;
 let fake: FakeMux;
 
 beforeEach(() => {
-  freshHome({ github: { ...DEFAULT_CONFIG.github, repos: {} } });
+  freshHome({ repos: {} });
   fakeBrain(() => null);
   fake = new FakeMux();
   setMux(fake);

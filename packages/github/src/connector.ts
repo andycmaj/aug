@@ -19,6 +19,7 @@ import {
   type GhRateLimit,
   type Pause,
 } from "./gate";
+import { githubConfig } from "./config";
 import { ghApi, pollGithub, type GhApi } from "./ingest";
 import { ghPrBatch, refreshPrStatuses, type PrFetch, type PrRefresh } from "./pr-status";
 
@@ -61,12 +62,13 @@ export class GithubConnector implements Connector {
 
   start(): void {
     const config = this.ctx.config.get();
-    if (!config.github.enabled) {
+    const github = githubConfig.of(config);
+    if (!github.enabled) {
       this.ctx.setStatus({ state: "off", detail: "disabled in config", at: null });
       return;
     }
     void this.poll();
-    this.ctx.every(config.github.pollSeconds * 1000, () => void this.poll());
+    this.ctx.every(github.pollSeconds * 1000, () => void this.poll());
   }
 
   pollNow(): Promise<void> {
@@ -78,7 +80,7 @@ export class GithubConnector implements Connector {
   private githubGate(): GithubGate {
     if (this.gate) return this.gate;
     const gate = new GithubGate(
-      () => this.ctx.config.get().github.pollSeconds * 1000,
+      () => githubConfig.of(this.ctx.config.get()).pollSeconds * 1000,
       this.opts.clock,
     );
     for (const budget of Object.values(GhBudget)) {

@@ -10,6 +10,7 @@
 
 import { CMD, LEGACY, SELF } from "@riker/core/brand";
 import type { ConfigSource } from "@riker/core/config";
+import { remoteConfig } from "./config";
 import {
   answerKind,
   bindToThread,
@@ -157,7 +158,7 @@ function saveState(state: RemoteState): void {
 
 // The conversation the triage poller must skip: Riker's own talk with the owner.
 export function remoteChannel(config: ConfigSource): string | undefined {
-  const c = config.get().remote;
+  const c = remoteConfig.of(config.get());
   if (!c.enabled) return undefined;
   return c.channel ?? loadState().channel;
 }
@@ -290,7 +291,7 @@ export class Remote {
         saveState(state);
       }
       const read = await this.deps.link.read({
-        channel: this.deps.config.get().remote.channel ?? state.channel,
+        channel: remoteConfig.of(this.deps.config.get()).channel ?? state.channel,
         since: state.since,
         threads: this.liveThreads(state),
       });
@@ -433,7 +434,7 @@ export class Remote {
   // Tasks whose agent moved to finished or waiting since the last look,
   // as top-level posts. The first look only takes stock.
   private notice(state: RemoteState): void {
-    const when = this.deps.config.get().remote.notify ?? [];
+    const when = remoteConfig.of(this.deps.config.get()).notify;
     if (!when.length) {
       state.seen = undefined;
       return;

@@ -22,7 +22,7 @@ let fake: FakeMux;
 
 beforeEach(() => {
   freshHome({
-    github: { ...DEFAULT_CONFIG.github, repos: { "acme/api": "/src/api" } },
+    repos: { "acme/api": "/src/api" },
   });
   fakeBrain(() => null);
   fake = new FakeMux();
@@ -65,7 +65,7 @@ describe("checking a mapped path", () => {
   test("a path that is not a checkout is never saved", () => {
     fake.gone.add("/nowhere");
     expect(() => mapRepo(testConfig(), "acme/web", "/nowhere")).toThrow("/nowhere is gone");
-    expect(config().github.repos["acme/web"]).toBeUndefined();
+    expect(config().repos["acme/web"]).toBeUndefined();
     fake.checkouts.set("/src/web.fix", { kind: "worktree", main: "/src/web" });
     expect(() => mapRepo(testConfig(), "acme/web", "/src/web.fix")).toThrow("worktree of /src/web");
   });
@@ -108,7 +108,7 @@ describe("rename", () => {
     const closed = codingTask("acme/api");
     store.updateTask(closed.id, { status: TaskStatus.done });
     renameRepo(testConfig(), "acme/api", "acme/api-v2");
-    expect(config().github.repos).toEqual({ "acme/api-v2": "/src/api" });
+    expect(config().repos).toEqual({ "acme/api-v2": "/src/api" });
     expect(store.projectRepos(store.getProject(p.id)!)).toEqual(["acme/api-v2", "acme/web"]);
     expect(store.getTask(open.id)!.repo).toBe("acme/api-v2");
     expect(store.getTask(closed.id)!.repo).toBe("acme/api");
@@ -169,7 +169,7 @@ describe("a coding start", () => {
     });
     expect(out.ok).toBe(true);
     expect(fake.cloned).toEqual([{ repo: "acme/web", dest: cloneDest(config(), "acme/web") }]);
-    expect(config().github.repos["acme/web"]).toBe(cloneDest(config(), "acme/web"));
+    expect(config().repos["acme/web"]).toBe(cloneDest(config(), "acme/web"));
     expect(fake.worktrees[0].repoPath).toBe(cloneDest(config(), "acme/web"));
   });
 
@@ -203,7 +203,7 @@ describe("the repo move", () => {
     expect((await engine.runMove("repo", { repo: "acme/web", remove: "yes" })).result).toBe(
       "acme/web: path forgotten",
     );
-    expect(config().github.repos["acme/web"]).toBeUndefined();
+    expect(config().repos["acme/web"]).toBeUndefined();
   });
 
   test("project_repo names an unmapped repo's checkouts, and --remove takes it out", async () => {
@@ -239,7 +239,7 @@ describe("the project file's Repos", () => {
     );
     expect(said).toBe("api: repos updated, acme/web at /w/web, acme/new path not saved: /nowhere is gone");
     expect(store.projectRepos(store.getProject(p.id)!)).toEqual(["acme/web", "acme/api", "acme/new"]);
-    expect(config().github.repos).toEqual({ "acme/api": "/src/api", "acme/web": "/w/web" });
+    expect(config().repos).toEqual({ "acme/api": "/src/api", "acme/web": "/w/web" });
   });
 
   test("a file with no Repos heading leaves them alone", () => {
@@ -250,5 +250,5 @@ describe("the project file's Repos", () => {
 });
 
 function mapRepoUnchecked(repo: string, path: string) {
-  testConfig().update((c) => ({ ...c, github: { ...c.github, repos: { ...c.github.repos, [repo]: path } } }));
+  testConfig().update((c) => ({ ...c, repos: { ...c.repos, [repo]: path } }));
 }

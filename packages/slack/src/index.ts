@@ -7,9 +7,11 @@ import { CONFIRM_MOVES, holdForYes, SLACK_ASKER } from "./confirm";
 import { RemoteConnector, SlackConnector } from "./connector";
 import type { RemoteLink } from "./remote";
 import type { SlackTransport } from "./shared";
+import { remoteConfig, slackConfig } from "./config";
 import { slackReply, type SlackReply } from "./draft";
 
 export { RemoteConnector, SlackConnector, slackReply, type SlackReply };
+export { remoteConfig, slackConfig, slackToken, type RemoteConfig, type SlackConfig } from "./config";
 
 export interface SlackOptions {
   // Replace what config picks (tests).
@@ -33,5 +35,6 @@ export function slackPlugin(
     connectors: [poller, remote],
     drafts: [slackReply((action) => poller.send(action))],
     guards: [confirmGuard],
+    config: [slackConfig, remoteConfig],
   };
 }

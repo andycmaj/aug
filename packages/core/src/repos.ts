@@ -1,4 +1,4 @@
-// Which repos Riker knows and where they are checked out (github.repos in
+// Which repos Riker knows and where they are checked out (repos in
 // config), and the repo a task works in. The answers a coding start needs
 // before it can make a worktree live here: a path is checked (is it there, a
 // checkout, its own top, of this repo) before wt ever sees it, and what is
@@ -38,7 +38,7 @@ export function tildePath(path: string): string {
 
 export function repoPath(config: RikerConfig, repo: string | null): string | null {
   if (!repo) return null;
-  return config.github.repos[repo] ?? null;
+  return config.repos[repo] ?? null;
 }
 
 // Written through the source, so a start that asked for the path and runs
@@ -47,7 +47,7 @@ function saveRepos(
   config: ConfigSource,
   change: (repos: Record<string, string>) => Record<string, string>,
 ): void {
-  config.update((c) => ({ ...c, github: { ...c.github, repos: change(c.github.repos) } }));
+  config.update((c) => ({ ...c, repos: change(c.repos) }));
 }
 
 // ── what is wrong with a path ─────────────────────────────────────────────
@@ -259,7 +259,7 @@ export async function cloneRepo(
 export function repoChoices(config: RikerConfig, task: TaskRow): string[] {
   const project = task.project_id ? store.getProject(task.project_id) : null;
   const ours = project ? store.projectRepos(project) : [];
-  const mapped = Object.keys(config.github.repos);
+  const mapped = Object.keys(config.repos);
   return [...new Set([...ours, ...mapped])];
 }
 
@@ -286,7 +286,7 @@ export interface RepoReport {
 }
 
 export async function repoReport(config: RikerConfig, fresh = false): Promise<RepoReport> {
-  const mapped = config.github.repos;
+  const mapped = config.repos;
   const projectsOf = new Map<string, string[]>();
   for (const p of store.listProjects())
     for (const r of store.projectRepos(p))

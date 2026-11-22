@@ -17,6 +17,7 @@ import {
 } from "../src/remote";
 import { remoteLink, TokenRemoteLink } from "../src/remote-links";
 import { confirmGuard } from "../src/index";
+import { remoteConfig } from "../src/config";
 import * as store from "@riker/core/store";
 import { AgentState, Kind, SLACK_AUTHOR, TaskStatus, TurnRole, TurnStatus } from "@riker/core/types";
 import { freshHome, testConfig } from "@riker/core/test/support/helpers";
@@ -236,10 +237,10 @@ describe("the answer as Slack shows it", () => {
 
 describe("config and links", () => {
   test("off by default, and slower under claude-mcp", () => {
-    expect(mergeConfig({}).remote).toEqual({ enabled: false, pollSeconds: 15, notify: [] });
+    expect(remoteConfig.of(mergeConfig({}))).toEqual({ enabled: false, pollSeconds: 15, notify: [] });
     expect(
-      mergeConfig({ slack: { transport: "claude-mcp" }, remote: { enabled: true } })
-        .remote.pollSeconds,
+      remoteConfig.of(mergeConfig({ slack: { transport: "claude-mcp" }, remote: { enabled: true } }))
+        .pollSeconds,
     ).toBe(60);
   });
 
@@ -427,7 +428,7 @@ describe("held moves from Slack", () => {
 
 describe("notifications", () => {
   async function on(when: NotifyWhen[]) {
-    testConfig().update((c) => ({ ...c, remote: { ...c.remote, notify: when } }));
+    testConfig().update((c) => ({ ...c, remote: { ...remoteConfig.of(c), notify: when } }));
     await remote.tick();
   }
 

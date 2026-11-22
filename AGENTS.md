@@ -90,7 +90,7 @@ Tests live beside their package (`packages/<name>/test/`).
   `libtmux` (alpha, pinned exactly). Identity is the `@riker_project` /
   `@riker_task` user options, never names. Tests use `packages/core/test/support/fake-mux.ts`; real
   tmux checks use a private server (`-L`), never the default one.
-- **Where a repo is checked out is `core/repos.ts`**: `github.repos` in
+- **Where a repo is checked out is `core/repos.ts`**: `repos` in
   config is the owner's one path per repo; `core/checkouts.ts` (behind the
   Mux) inspects a path and scans `repoRoots` for checkouts. Every coding
   start checks the path first, and `needs: path` carries what is wrong and
@@ -197,7 +197,7 @@ Tests live beside their package (`packages/<name>/test/`).
   one project, else the one the model named). A pull request review is
   coding, on the PR's repo and `pr:N`, with a guided Plannotator review as
   its brief: the `review ask` rule always makes one when a PR requests a
-  review of, or tags, the owner or a team in `github.reviewTeams` (who was
+  review of, or tags, the owner or a team in `triage.reviewTeams` (who was
   asked is read at ingest, a tagged team from the comment), and a review
   the model finds elsewhere becomes one too. An
   unmapped repo is said on the task, never guessed; Start asks.

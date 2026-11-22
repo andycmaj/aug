@@ -683,7 +683,7 @@ export function hookSettings(): Record<string, unknown> {
 export function codingCwd(config: RikerConfig, task: TaskRow): string {
   // The interview writes its drafts there, so Write needs no other folder.
   if (task.kind === Kind.system) return docDraftsDir();
-  const mapped = task.repo ? config.github.repos[task.repo] : undefined;
+  const mapped = task.repo ? config.repos[task.repo] : undefined;
   if (mapped) return mapped;
   if (config.scratchRepo) return config.scratchRepo;
   const dir = paths.work(task.id);

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { configSection } from "../src/config";
 import { Engine } from "../src/engine";
 import { setMux } from "../src/mux";
 import type { Connector, ConnectorContext, DraftKind, RikerPlugin } from "../src/plugins";
@@ -189,5 +190,26 @@ describe("a plugin's drafts and guards", () => {
     expect(store.getTask(t.id)!.status).toBe("open");
     expect((await engine.runMove("done", { task: ref }, "you")).ok).toBe(true);
     expect(store.getTask(t.id)!.status).toBe("done");
+  });
+});
+
+describe("a plugin's config", () => {
+  test("a section may not take a core key, or one another plugin has", () => {
+    const repos = configSection("repos", {});
+    const mine = configSection("mine", {});
+    expect(() => new Engine({ config: testConfig(), offline: true, plugins: [{ name: "a", config: [repos] }] })).toThrow(
+      "config key repos is taken",
+    );
+    expect(
+      () =>
+        new Engine({
+          config: testConfig(),
+          offline: true,
+          plugins: [
+            { name: "a", config: [mine] },
+            { name: "b", config: [mine] },
+          ],
+        }),
+    ).toThrow("config key mine is taken");
   });
 });

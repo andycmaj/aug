@@ -10,6 +10,7 @@ import type { Connector, ConnectorContext } from "@riker/core/plugins";
 import * as store from "@riker/core/store";
 import { TaskStatus } from "@riker/core/types";
 import { SendError } from "@riker/core/outbound";
+import { remoteConfig, slackConfig } from "./config";
 import { Remote, remoteChannel, type RemoteLink } from "./remote";
 import { remoteLink } from "./remote-links";
 import { EMPTY_CURSOR, type SlackCursor, type SlackReply, type SlackTransport } from "./shared";
@@ -43,10 +44,11 @@ export class SlackConnector implements Connector {
     const config = this.ctx.config.get();
     const slack = (this.transport ??= slackTransport(config));
     const can = slack.available();
-    if (config.slack.enabled && can.ok) {
+    const settings = slackConfig.of(config);
+    if (settings.enabled && can.ok) {
       void this.poll();
-      this.ctx.every(config.slack.pollSeconds * 1000, () => void this.poll());
-    } else if (!config.slack.enabled) this.ctx.setStatus(off("disabled in config"));
+      this.ctx.every(settings.pollSeconds * 1000, () => void this.poll());
+    } else if (!settings.enabled) this.ctx.setStatus(off("disabled in config"));
     else
       this.ctx.setStatus(
         slack.kind === "mcp"
@@ -94,7 +96,7 @@ export class SlackConnector implements Connector {
       const own = remoteChannel(this.ctx.config);
       const polled = await slack.poll({
         cursor,
-        watchChannels: config.slack.channels,
+        watchChannels: slackConfig.of(config).channels,
         trackedThreads,
         firstLookSeconds: 86400,
       });
@@ -143,7 +145,7 @@ export class RemoteConnector implements Connector {
   private ready(): Remote | null {
     if (this.remote) return this.remote;
     const config = this.ctx.config.get();
-    if (!config.remote.enabled) {
+    if (!remoteConfig.of(config).enabled) {
       this.ctx.setStatus(off("disabled in config"));
       return null;
     }
@@ -167,7 +169,7 @@ export class RemoteConnector implements Connector {
   start(): void {
     if (!this.ready()) return;
     void this.poll();
-    this.ctx.every(this.ctx.config.get().remote.pollSeconds * 1000, () => void this.poll());
+    this.ctx.every(remoteConfig.of(this.ctx.config.get()).pollSeconds * 1000, () => void this.poll());
   }
 
   stop(): void {
@@ -176,7 +178,7 @@ export class RemoteConnector implements Connector {
   }
 
   async poll(): Promise<void> {
-    if (!this.ctx.config.get().remote.enabled) return;
+    if (!remoteConfig.of(this.ctx.config.get()).enabled) return;
     const remote = this.ready();
     if (!remote) return;
     if (this.ctx.status().state !== "error")

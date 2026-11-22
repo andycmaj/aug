@@ -145,7 +145,7 @@ export function useActions(dialogs: Dialogs) {
   }
 
   function newProject(then?: (projectId: number) => void) {
-    const repos = Object.keys(desk.config().github.repos);
+    const repos = Object.keys(desk.config().repos);
     const create = (name: string, repo: string | null) =>
       void desk.createProject(name, repo).then(
         (p) => {

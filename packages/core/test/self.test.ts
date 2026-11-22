@@ -122,7 +122,7 @@ describe("a riker-tools that is gone", () => {
   });
 
   test("a coding start refuses with words, not an agent whose every call fails", async () => {
-    freshHome({ github: { ...DEFAULT_CONFIG.github, repos: { "acme/api": "/src/api" } } });
+    freshHome({ repos: { "acme/api": "/src/api" } });
     const fake = new FakeMux();
     setMux(fake);
     const task = store.createTask({

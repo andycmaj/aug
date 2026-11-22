@@ -5,8 +5,8 @@
 // call: the api, the PR batch and Send are all the sim's.
 
 import { triagePlugin } from "@riker/triage";
-import { githubPlugin, type GithubComment } from "@riker/github";
-import { slackPlugin } from "@riker/slack";
+import { githubConfig, githubPlugin, type GithubComment } from "@riker/github";
+import { slackConfig, slackPlugin } from "@riker/slack";
 import { watch, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,20 +119,11 @@ export function installSim(opts: SimOptions): {
   const haiku = opts.brain === SimBrain.haiku;
   const config = fixedConfig({
     ...DEFAULT_CONFIG,
-    github: {
-      ...DEFAULT_CONFIG.github,
-      enabled: true,
-      pollSeconds: 10,
-      repos: { [SIM_REPO]: state.checkout ?? "" },
-    },
-    slack: { ...DEFAULT_CONFIG.slack, enabled: false },
+    repos: { [SIM_REPO]: state.checkout ?? "" },
+    github: { ...githubConfig.defaults, enabled: true, pollSeconds: 10 },
+    slack: { ...slackConfig.defaults, enabled: false },
     brain: haiku
-      ? {
-          triageModel: "haiku",
-          agentModel: "haiku",
-          assistantModel: "haiku",
-          slackModel: "haiku",
-        }
+      ? { triageModel: "haiku", agentModel: "haiku", assistantModel: "haiku" }
       : DEFAULT_CONFIG.brain,
     spend: haiku ? { capEnabled: true, dailyUsd: 2 } : DEFAULT_CONFIG.spend,
     autostart: false,

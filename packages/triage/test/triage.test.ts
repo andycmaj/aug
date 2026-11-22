@@ -662,7 +662,7 @@ describe("review requests become coding tasks", () => {
   test.each([["acme/payments"], ["payments"], ["ACME/Payments"]])(
     "asked of a watched team (%s)",
     async (watched) => {
-      testConfig().update((c) => ({ ...c, github: { ...c.github, reviewTeams: [watched] } }));
+      testConfig().update((c) => ({ ...c, triage: { ...c.triage, reviewTeams: [watched] } }));
       fakeBrain(() => verdict("fyi"));
       const out = await triage(reviewAsk({ me: false, teams: ["acme/payments"] }), {
         config: config(),
@@ -673,7 +673,7 @@ describe("review requests become coding tasks", () => {
   );
 
   test("asked of a team you do not watch: the model judges it", async () => {
-    testConfig().update((c) => ({ ...c, github: { ...c.github, reviewTeams: ["acme/payments"] } }));
+    testConfig().update((c) => ({ ...c, triage: { ...c.triage, reviewTeams: ["acme/payments"] } }));
     fakeBrain(() => verdict("fyi", { reason: "a big team; someone else has it" }));
     const m = reviewAsk({ me: false, teams: ["acme/everyone"] });
     const out = await triage(m, { config: config() });
@@ -690,10 +690,10 @@ describe("review requests become coding tasks", () => {
     const said = store.turnsForTask(unmapped.taskId!).filter((t) => t.role === TurnRole.trigger);
     expect(said.map((t) => t.body).join("\n")).toContain("acme/api has no checkout mapped");
     // Nothing is guessed into config.
-    expect(config().github.repos["acme/api"]).toBeUndefined();
+    expect(config().repos["acme/api"]).toBeUndefined();
 
     taskClosed(unmapped.taskId!, "reviewed");
-    testConfig().update((c) => ({ ...c, github: { ...c.github, repos: { "acme/api": "/src/api" } } }));
+    testConfig().update((c) => ({ ...c, repos: { "acme/api": "/src/api" } }));
     const m = store.insertMessage({
       ...{
         channel: "github" as const,
@@ -772,7 +772,7 @@ describe("review requests become coding tasks", () => {
   test.each([["acme/payments"], ["payments"]])(
     "a watched team (%s) tagged on a PR: always a review task",
     async (watched) => {
-      testConfig().update((c) => ({ ...c, github: { ...c.github, reviewTeams: [watched] } }));
+      testConfig().update((c) => ({ ...c, triage: { ...c.triage, reviewTeams: [watched] } }));
       fakeBrain(() => verdict("fyi"));
       const out = await triage(
         prComment("team_mention", "cc @acme/Payments, does this touch payouts?"),
@@ -786,7 +786,7 @@ describe("review requests become coding tasks", () => {
   );
 
   test("a team you do not watch tagged on a PR: the model judges it", async () => {
-    testConfig().update((c) => ({ ...c, github: { ...c.github, reviewTeams: ["acme/payments"] } }));
+    testConfig().update((c) => ({ ...c, triage: { ...c.triage, reviewTeams: ["acme/payments"] } }));
     fakeBrain(() => verdict("fyi"));
     const m = prComment("team_mention", "@acme/everyone heads up, mail me at ops@acme.com/x");
     const out = await triage(m, { config: config() });

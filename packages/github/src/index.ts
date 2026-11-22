@@ -3,9 +3,10 @@
 
 import type { RikerPlugin } from "@riker/core/plugins";
 import { GithubConnector, type GithubOptions } from "./connector";
+import { githubConfig, type GithubConfig } from "./config";
 import { githubComment, type GithubComment } from "./draft";
 
-export { GithubConnector, githubComment, type GithubComment, type GithubOptions };
+export { GithubConnector, githubConfig, type GithubConfig, githubComment, type GithubComment, type GithubOptions };
 
 export function githubPlugin(options: GithubOptions = {}): RikerPlugin & { connector: GithubConnector } {
   const connector = new GithubConnector(options);
@@ -14,5 +15,6 @@ export function githubPlugin(options: GithubOptions = {}): RikerPlugin & { conne
     connector,
     connectors: [connector],
     drafts: [githubComment],
+    config: [githubConfig],
   };
 }

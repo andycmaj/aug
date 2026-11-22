@@ -3,6 +3,7 @@
 
 import type { RikerConfig } from "@riker/core/config";
 import { SendError } from "@riker/core/outbound";
+import { githubConfig } from "./config";
 import type { GithubComment } from "./draft";
 
 export async function gh(args: string[]): Promise<string> {
@@ -41,7 +42,7 @@ export async function githubSend(
         "-f",
         `body=${action.body}`,
       ]);
-      const method = config.github.mergeMethod;
+      const method = githubConfig.of(config).mergeMethod;
       await gh([
         "pr",
         "merge",

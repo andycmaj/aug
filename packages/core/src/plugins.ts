@@ -8,7 +8,7 @@
 // reverse, and plugins never import each other.
 
 import type { TurnAnswer } from "./agents";
-import type { ConfigSource, RikerConfig } from "./config";
+import type { ConfigSection, ConfigSource, RikerConfig } from "./config";
 import type { NewMessage } from "./store";
 import type {
   DraftAction,
@@ -145,6 +145,8 @@ export type MoveGuard = (
 
 export interface RikerPlugin {
   name: string;
+  // Its parts of config.json, each under its own key (core/config.ts).
+  config?: ConfigSection<object>[];
   triage?: Triage;
   connectors?: Connector[];
   drafts?: DraftKind[];

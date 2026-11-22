@@ -40,7 +40,7 @@ const source: StraySource = {
 };
 
 beforeEach(() => {
-  freshHome({ github: { ...DEFAULT_CONFIG.github, repos: {} } });
+  freshHome({ repos: {} });
   fakeBrain(() => null);
   fake = new FakeMux();
   setMux(fake);

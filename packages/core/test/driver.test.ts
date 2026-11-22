@@ -13,7 +13,7 @@ let fake: FakeMux;
 
 beforeEach(() => {
   freshHome({
-    github: { ...DEFAULT_CONFIG.github, repos: { "acme/api": "/src/api" } },
+    repos: { "acme/api": "/src/api" },
   });
   fakeBrain(() => ({ about: "a", did: "b", next: "c", state: "done" }));
   fake = new FakeMux();
@@ -150,7 +150,7 @@ describe("Agents at once (maxActiveAgents)", () => {
 
   beforeEach(() => {
     freshHome({
-      github: { ...DEFAULT_CONFIG.github, repos: { "acme/api": "/src/api" } },
+      repos: { "acme/api": "/src/api" },
       maxActiveAgents: 2,
     });
     fake = new FakeMux();

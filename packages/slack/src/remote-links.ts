@@ -1,7 +1,8 @@
 // The two ways the remote reads and posts its one conversation, picked by
 // slack.transport like the triage poller.
 
-import { slackToken, type RikerConfig } from "@riker/core/config";
+import type { RikerConfig } from "@riker/core/config";
+import { slackConfig, slackToken } from "./config";
 import { logger } from "@riker/core/log";
 import { ClaudeMcpTransport, PersistentClaude, type SpawnFn } from "./claude-mcp";
 import type { RemoteLink, RemoteMessage, RemoteQuery, RemoteRead } from "./remote";
@@ -254,14 +255,14 @@ export class ClaudeMcpRemoteLink implements RemoteLink {
 }
 
 export function remoteLink(config: RikerConfig): RemoteLink | { error: string } {
-  if (config.slack.transport === "claude-mcp")
+  if (slackConfig.of(config).transport === "claude-mcp")
     return new ClaudeMcpRemoteLink(
       new ClaudeMcpTransport({
-        model: config.brain.slackModel,
-        server: config.slack.mcpServer,
+        model: slackConfig.of(config).model,
+        server: slackConfig.of(config).mcpServer,
       }),
     );
-  if (config.slack.transport === "mcp")
+  if (slackConfig.of(config).transport === "mcp")
     return { error: "the mcp transport is not built: use token or claude-mcp" };
   const token = slackToken(config);
   if (!token) {

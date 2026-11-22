@@ -13,7 +13,7 @@ import { fakeBrain, freshHome, testConfig } from "./support/helpers";
 let engine: Engine;
 
 beforeEach(() => {
-  freshHome({ github: { ...DEFAULT_CONFIG.github, repos: {} } });
+  freshHome({ repos: {} });
   fakeBrain(() => null);
   setMux(new FakeMux());
   engine = new Engine({ config: testConfig() });
