@@ -1,4 +1,4 @@
-# Session digests: the project journal and the living brief
+# Session digests: the project journal and the story
 
 Status: draft spec, waiting on the owner's OK.
 
@@ -6,7 +6,7 @@ One record per finished agent session, made once, read twice:
 
 - the **project journal**: a plain text file per project, newest first,
   one entry per finished session and one line per other task event;
-- the **living brief**: a task's current state (goals, now, decisions,
+- the **story**: a task's current state (goals, now, decisions,
   blocked, next steps, open questions), kept beside the owner's brief.
 
 Both are off by default.
@@ -18,15 +18,18 @@ Both are off by default.
   watcher (haiku) writes one only for a session that changed something
   and ended without `done`, reading only the transcript since the last
   digest.
-- The journal and the living brief are one piece of work: one digest
+- The journal and the story are one piece of work: one digest
   feeds both, nothing is summarized twice.
 - The journal lives under Riker's home, not in a repo.
 - The journal records every task event.
-- The living brief refreshes at the same moments as the journal (done and
+- The story refreshes at the same moments as the journal (done and
   session end), not every turn.
-- The living brief is versioned rows; the owner's brief is never rewritten.
+- The story is versioned rows; the owner's brief is never rewritten.
 - The journal rolls up by month, with a short status block at the top.
 - A learning the agent marks general also goes to Knowledge, once.
+- Config holds the defaults only. Turning either feature on or off for
+  one project or task is data on that row, flipped from its Canvas or
+  info view.
 
 
 ## The digest
@@ -113,9 +116,9 @@ On first write the journal is attached to its project as a doc
 in the project names it and the Documents view lists it.
 
 
-## The living brief
+## The story
 
-A new `living_briefs` table: one row per version (`task_id`, `digest_id`,
+A new `stories` table: one row per version (`task_id`, `digest_id`,
 `at`, `by`, `goals`, `now`, `decisions`, `blocked`, `next`, `questions`,
 `pinned`). `tasks.brief` stays the owner's text. A digest makes a new
 version; goals carry forward from the last version unless the digest
@@ -151,11 +154,21 @@ private key blocks, and `password=`, `token=`, `secret=` values.
 
 ## Switches
 
-    "journal":     { "enabled": false, "projects": { "<name>": true } },
-    "livingBrief": { "enabled": false, "tasks": { "RIKER-0178": true } },
-    "digests":     { "watcherModel": "haiku" }
+Config holds only the defaults:
 
-A project's entry beats `enabled`; so does a task's. A digest is made when
+    "journal": { "enabled": false },
+    "story":   { "enabled": false },
+    "digests": { "watcherModel": "haiku" }
+
+The overrides are data, beside the rows they switch: `projects.journal`,
+`projects.story` (the default for the project's tasks) and `tasks.story`,
+each on, off or unset (follow the level above). A task's story follows the
+task, then its project, then config; a journal follows its project, then
+config. The owner flips them where the row is shown: a key on a project's
+or a task's Canvas and its info view, which says whether each is on and
+where that comes from ("story: on (project)"). The same switch is a move
+(`riker-tools move story RIKER-0178 --on|--off|--default`, `move journal
+<project> ...`), so the Assistant can flip it too. A digest is made when
 either feature is on for the task.
 
 
@@ -166,7 +179,7 @@ either feature is on for the task.
    roll-up, `project_links` row, the `ended` task event; tests on a fresh
    home.
 3. Knowledge lines.
-4. Living brief rows, pins, the coding brief and `riker-tools task`
+4. Story rows, pins, the coding brief and `riker-tools task`
    showing them; the Canvas section.
 5. The watcher, with a fake brain in tests and one real haiku check in a
    scratch home.
