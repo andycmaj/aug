@@ -393,12 +393,24 @@ Offered on a review that just arrived:
 - The task arrives with a line saying so (`guideOffer`,
   `core/guide-turn.ts`, written by the `review ask` path in triage): the
   picker entry (and the key, when `actions.guide.key` sets one), what
-  running it does, and that nothing goes to GitHub. No key ships by
+  running it does, and where the review goes. No key ships by
   default: `g`, `G` and `q` are taken.
-- The review is `plannotator review` on the worktree, local; `--pr` on
-  `guide import` only labels the saved guide. Notes sent from it with no
-  agent running wait on the task as the owner's message, and Start hands
-  them over.
+- A PR the owner was asked to review is marked when triage files it (a
+  task link added by `REVIEW_LINK_BY`, read by `reviewedPr` in
+  `core/pr.ts`: a task's URL, thread or `pr:N` branch can be the owner's
+  own PR too). Its guide's review, after a run or from Open the guide's
+  review, is Plannotator's PR mode (`plannotator review <PR URL>`): the
+  saved guide is listed there (`guide import --pr`), Riker's findings are
+  posted into it as before, and Plannotator's own Post to GitHub submits
+  the owner's review (approve, comment or request changes, with line
+  comments). On exit nothing goes to the agent; the toast says
+  Plannotator's status line, or that nothing was posted (`reviewExit`,
+  `core/guide-turn.ts`). The sim turns PR mode off (`setGuidePrReviews`),
+  since its PRs are not on GitHub.
+- The owner's own work (no mark) is reviewed on the worktree against its
+  base, and what they send goes to its agent, never GitHub; with no agent
+  running it waits on the task as the owner's message, and Start hands it
+  over.
 
 ## Decisions (owner, 2026-11-20)
 

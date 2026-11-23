@@ -263,6 +263,9 @@ Tests live beside their package (`packages/<name>/test/`).
   trigger) needs it on disk. `desk.prepareAction` makes it in between, on
   the task's branch with no agent (`projects.ensureCheckout`), so a review
   triage files offers its guide on arrival and never runs it by itself.
+  Triage marks that PR as one to review (`reviewedPr`, `core/pr.ts`): its
+  guide's review opens in Plannotator's PR mode, whose Post to GitHub
+  sends the owner's review, and nothing goes to the agent (`reviewExit`).
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `riker-tools move <verb>`, the Assistant's
   prompt and the engine's dispatch, which runs each on the desk. riker-tools

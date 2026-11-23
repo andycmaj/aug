@@ -16,6 +16,7 @@ import { parsePrUrl } from "@riker/core/feedback";
 import { messageMeta, type GithubMeta } from "@riker/core/meta";
 import { docsBlock } from "@riker/core/prompts";
 import { guideOffer } from "@riker/core/guide-turn";
+import { REVIEW_LINK_BY, REVIEW_LINK_TITLE } from "@riker/core/pr";
 import { finishSuperseded, holdForStart } from "@riker/core/lifecycle";
 import { err, ok, type Result } from "@riker/core/result";
 import { projectRepos } from "@riker/core/rows";
@@ -986,6 +987,9 @@ function createReview(
       triageReason: reason,
       createdAt: message.received_at,
     });
+    // Marked as a review of someone else's PR: the guide opens it in
+    // Plannotator's PR mode, where the owner posts their review to GitHub.
+    store.addTaskLink(created.id, pr.url, REVIEW_LINK_TITLE, REVIEW_LINK_BY);
     // Asked for in Slack: the PR's own thread is the task's too, so its
     // reviews and CI come back here, and the ask stays a link.
     if (message.thread_key !== prThread) {

@@ -8,9 +8,10 @@ import { setGuideTool } from "@riker/code-review-plannotator/guide";
 import { ANSWER, repo } from "@riker/code-review-plannotator/test/support/repo";
 import { setBrain, type BrainResult } from "../src/brain";
 import { Engine } from "../src/engine";
-import { guideOffer } from "../src/guide-turn";
+import { guideOffer, reviewExit } from "../src/guide-turn";
+import { REVIEW_LINK_BY, REVIEW_LINK_TITLE } from "../src/pr";
 import { runMove } from "../src/moves";
-import { isRunning } from "../src/run-action";
+import { isRunning, setGuidePrReviews } from "../src/run-action";
 import { setMux, type MadeWorktree, type Worktree } from "../src/mux";
 import * as store from "../src/store";
 import {
@@ -107,7 +108,7 @@ describe("the guide on a review with no worktree", () => {
     expect(mux.worktrees).toHaveLength(0);
   });
 
-  test("the owner's run makes the pr worktree with no agent, then the guide runs there", async () => {
+  test("the owner's run makes the pr worktree with no agent, then the guide runs there (their own PR: reviewed locally)", async () => {
     const { engine, task } = review();
     const ready = await engine.desk.prepareAction(task.id, "guide");
     expect(ready).toEqual({ type: "ready" });
@@ -130,13 +131,56 @@ describe("the guide on a review with no worktree", () => {
     const result = await started.done;
     expect(result.ok).toBe(true);
     expect(calls).toBe(1);
-    // A local review of the worktree, never the PR on GitHub.
+    // Not marked as a PR to review: a local review of the worktree, whose
+    // notes go to the agent, never the PR on GitHub.
     const argv = result.terminal!.argv.join(" ");
     expect(argv).toContain("plannotator review --base");
     expect(argv).not.toContain("github.com");
+    expect(result.terminal!.posts).toBeUndefined();
     expect(result.terminal!.cwd).toBe(checkout);
     // The PR only labels the saved guide.
     expect(saved).toEqual([{ pr: "https://github.com/acme/api/pull/40" }]);
+  });
+
+  test("a PR the owner was asked to review opens in Plannotator's PR mode, which posts to GitHub", async () => {
+    const { engine, task } = review();
+    store.addTaskLink(task.id, "https://github.com/acme/api/pull/40", REVIEW_LINK_TITLE, REVIEW_LINK_BY);
+    await engine.desk.prepareAction(task.id, "guide");
+    const started = engine.desk.runAction(task.id, "guide");
+    if ("error" in started) throw new Error(started.error);
+    const result = await started.done;
+    const run = result.terminal!;
+    expect(run.argv.slice(3)).toEqual([
+      "plannotator",
+      "https://github.com/acme/api/pull/40",
+      run.feedback!,
+    ]);
+    expect(run.argv[2]).not.toContain("--base");
+    expect(run.posts).toBe("github");
+    // Riker's findings still go into the review it opens.
+    expect(run.comments!.list.length).toBeGreaterThan(0);
+
+    // Opened again with no run: the same PR mode.
+    const again = engine.desk.guideReview(task.id);
+    if ("error" in again) throw new Error(again.error);
+    expect(again.terminal!.argv).toContain("https://github.com/acme/api/pull/40");
+    expect(again.terminal!.posts).toBe("github");
+  });
+
+  test("where PRs are not on GitHub (the sim), a review opens on the worktree", async () => {
+    setGuidePrReviews(false);
+    try {
+      const { engine, task } = review();
+      store.addTaskLink(task.id, "https://github.com/acme/api/pull/40", REVIEW_LINK_TITLE, REVIEW_LINK_BY);
+      await engine.desk.prepareAction(task.id, "guide");
+      const started = engine.desk.runAction(task.id, "guide");
+      if ("error" in started) throw new Error(started.error);
+      const run = (await started.done).terminal!;
+      expect(run.argv.join(" ")).toContain("plannotator review --base");
+      expect(run.posts).toBeUndefined();
+    } finally {
+      setGuidePrReviews(true);
+    }
   });
 
   test("a second run reuses the worktree", async () => {
@@ -194,6 +238,9 @@ describe("the guide on a review with no worktree", () => {
     const line = guideOffer(config(), task)!;
     expect(line).toContain('`.` then "Guided review, with review notes"');
     expect(line).toContain("makes the worktree on pr:40 (no agent starts)");
+    expect(line).toContain("goes to the agent, not GitHub");
+    store.addTaskLink(task.id, "https://github.com/acme/api/pull/40", REVIEW_LINK_TITLE, REVIEW_LINK_BY);
+    expect(guideOffer(config(), task)).toContain("Post to GitHub there sends your review");
     freshHome({ actions: { guide: { key: "shift+v" } } });
     expect(guideOffer(config(), task)).toContain("`shift+v`, or `.`");
     freshHome({ actions: { guide: false } });
@@ -210,4 +257,27 @@ test("Start after the guide made the worktree starts in it, and its project gets
   expect(mux.windows[0]!.cwd).toBe(checkout);
   const project = store.getProject(store.getTask(task.id)!.project_id!)!;
   expect(project.repos).toContain("acme/api");
+});
+
+describe("when the review closes", () => {
+  const notes = "# Code Review Feedback\n\n## a.ts\n\n### Line 3 (new)\nrename this\n";
+
+  test("the owner's own work: what they sent goes to the agent", () => {
+    expect(reviewExit(undefined, notes)).toEqual({ notes: notes.trim(), status: null });
+    expect(reviewExit(undefined, "The user approved.")).toEqual({ notes: null, status: null });
+  });
+
+  test("a PR they were asked to review: Plannotator posted it, nothing goes to the agent", () => {
+    expect(reviewExit("github", "Pull request reviewed on GitHub: https://github.com/acme/api/pull/40\n")).toEqual({
+      notes: null,
+      status: "Pull request reviewed on GitHub: https://github.com/acme/api/pull/40",
+    });
+    expect(reviewExit("github", "Review session closed without feedback.")).toEqual({
+      notes: null,
+      status: "Nothing was posted to GitHub",
+    });
+    const sent = reviewExit("github", notes);
+    expect(sent.notes).toBeNull();
+    expect(sent.status).toContain("Not posted to GitHub");
+  });
 });

@@ -19,6 +19,7 @@ import { configureLog, logger } from "@riker/core/log";
 import { setMux, TmuxMux, type MadeWorktree, type Worktree } from "@riker/core/mux";
 import { setSender } from "@riker/core/outbound";
 import { taskPr } from "@riker/core/pr";
+import { setGuidePrReviews } from "@riker/core/run-action";
 import { paths } from "@riker/core/paths";
 import * as store from "@riker/core/store";
 import { Kind, type TaskRow } from "@riker/core/types";
@@ -151,6 +152,8 @@ export function installSim(opts: SimOptions): {
   });
   configureLog(() => config.get().log);
   setMux(new SimMux(config.get().tmuxSocket, file));
+  // Its PRs are not on GitHub: a review opens on the worktree, not the PR.
+  setGuidePrReviews(false);
   if (!haiku) setBrain(simBrain);
   // Send lands on the sim's GitHub as the owner's own doing.
   setSender(async (draft) => {

@@ -289,8 +289,13 @@ nothing to install):
   diff is read. A review that just arrived offers it before any agent
   starts (its task says so): running it makes the `pr:N` worktree first
   (asking where the repo is when it is unmapped, as Start does), with no
-  agent, and reviews it locally; nothing goes to GitHub. A branch that
-  does not exist yet has nothing to review: start the agent first.
+  agent. Its review opens on the pull request itself (`plannotator review
+  <PR URL>`, with the findings as comments), and Plannotator's Post to
+  GitHub sends your review there (approve, comment or request changes, on
+  the lines); nothing goes to the agent. Your own work's review opens on
+  its worktree, and what you send goes to its agent, never GitHub. A
+  branch that does not exist yet has nothing to review: start the agent
+  first.
 - `quiz` (coding, with a checkout): quizzes you on the change, one question
   at a time, in interactive claude beside the agent (or on the Canvas when
   it has no window).
