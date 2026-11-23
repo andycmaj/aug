@@ -25,6 +25,7 @@ import {
 } from "../src/rail";
 import { railProjects } from "../src/lookup";
 import { taskClosed } from "../src/lifecycle";
+import { fireDue, routeTimer } from "../src/timers";
 import * as store from "../src/store";
 import { AgentState, Kind, TaskStatus, TurnRole } from "../src/types";
 import { freshHome } from "./support/helpers";
@@ -272,9 +273,13 @@ describe("rail", () => {
       channel: "owner",
     });
     store.remindAt(t.id, at(1));
-    expect(store.wakeReminders(at(2))).toBe(1);
+    const fired = fireDue(new Date(at(2)));
+    expect(fired).toHaveLength(1);
+    routeTimer(fired[0]!);
     expect(store.getTask(t.id)!.status).toBe("open");
-    expect(store.turnsForTask(t.id).at(-1)!.role).toBe(TurnRole.trigger);
+    expect(store.getTask(t.id)!.remind_at).toBeNull();
+    expect(store.turnsForTask(t.id).at(-1)!.body).toBe("You asked to be reminded about this today");
+    expect(fireDue(new Date(at(3)))).toEqual([]);
   });
 });
 

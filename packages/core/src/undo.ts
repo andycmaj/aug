@@ -19,9 +19,11 @@ import {
   Kind,
   SessionKind,
   TaskStatus,
+  TimerState,
   TurnRole,
   type MessageRow,
   type TaskRow,
+  type TimerRow,
 } from "./types";
 
 const FIELDS = [
@@ -50,6 +52,9 @@ interface Link {
 // A message filed under the task, as triage left it (ignore refiles them).
 type Filed = Pick<MessageRow, "id" | "verdict" | "reason" | "task_id">;
 
+// A timer still to fire (core/timers.ts): a follow-up, schedule, reminder.
+type Pending = Pick<TimerRow, "id" | "kind" | "due_at" | "rule" | "note">;
+
 // What a move can change about a task, all of it.
 export interface TaskSnap {
   fields: Pick<TaskRow, Field>;
@@ -61,6 +66,7 @@ export interface TaskSnap {
   win: boolean;
   links: Link[];
   messages: Filed[];
+  timers: Pending[];
 }
 
 type Part = Field | Exclude<keyof TaskSnap, "fields">;
@@ -76,6 +82,7 @@ const PART_WORDS: Partial<Record<Part, string>> = {
   waiting_on: "waiting",
   watching: "watching",
   held: "start hold",
+  timers: "timers",
   dependents: "blocked tasks",
 };
 
@@ -95,6 +102,9 @@ export function snapshot(taskId: number, day: string): TaskSnap | null {
     messages: store
       .messagesForTask(taskId)
       .map((m) => ({ id: m.id, verdict: m.verdict, reason: m.reason, task_id: m.task_id })),
+    timers: store
+      .timersForTask(taskId)
+      .map((t) => ({ id: t.id, kind: t.kind, due_at: t.due_at, rule: t.rule, note: t.note })),
   };
 }
 
@@ -106,7 +116,16 @@ function same(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-const PARTS: Part[] = [...FIELDS, "held", "blockers", "dependents", "win", "links", "messages"];
+const PARTS: Part[] = [
+  ...FIELDS,
+  "held",
+  "blockers",
+  "dependents",
+  "win",
+  "links",
+  "messages",
+  "timers",
+];
 
 function changed(before: TaskSnap, after: TaskSnap): Part[] {
   return PARTS.filter((p) => !same(partOf(before, p), partOf(after, p)));
@@ -320,6 +339,15 @@ export async function revert(config: RikerConfig, entry: UndoEntry): Promise<Und
         const row = store.getMessage(m.id);
         if (row && row.task_id === null) store.fileMessage(m.id, m.verdict, m.reason, m.task_id);
       }
+    }
+    // A timer the move set is cancelled; one it cancelled is pending again.
+    if (has("timers")) {
+      const kept = new Set(before.timers.map((t) => t.id));
+      for (const t of now.timers)
+        if (!kept.has(t.id)) store.setTimerState(t.id, TimerState.cancelled);
+      const had = new Set(now.timers.map((t) => t.id));
+      for (const t of before.timers)
+        if (!had.has(t.id)) store.setTimerState(t.id, TimerState.pending);
     }
     store.addTurn({ taskId: task.id, role: TurnRole.trigger, body: `Undone: ${entry.what}` });
   });

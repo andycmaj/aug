@@ -18,6 +18,7 @@ import { docsBlock } from "@riker/core/prompts";
 import { finishSuperseded, holdForStart } from "@riker/core/lifecycle";
 import { err, ok, type Result } from "@riker/core/result";
 import { projectRepos } from "@riker/core/rows";
+import { isTimerMessage, routeTimer } from "@riker/core/timers";
 import * as store from "@riker/core/store";
 import {
   AgentState,
@@ -314,6 +315,14 @@ export interface TriageRule {
   handle(item: Inbound): RuleResult | Promise<RuleResult>;
 }
 
+// A timer came due (core/timers.ts): it names its own task, so no model
+// and no thread is asked.
+const timer: TriageRule = {
+  name: "timer",
+  handle: ({ message }) =>
+    isTimerMessage(message) ? ok(routeTimer(message)) : pass("not a timer"),
+};
+
 const ownMessage: TriageRule = {
   name: "own message",
   handle: (i) =>
@@ -501,6 +510,7 @@ const newTask: TriageRule = {
 
 // The order is the routing: a message goes to the first rule that claims it.
 export const TRIAGE_RULES: readonly TriageRule[] = [
+  timer,
   ownMessage,
   greeting,
   noise,

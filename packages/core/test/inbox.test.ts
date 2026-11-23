@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
   BODY_CHARS,
+  INBOX_FILTERS,
   inboxCount,
   inboxRows,
   InboxFilter,
@@ -145,12 +146,12 @@ describe("filters", () => {
   test("f cycles every filter and comes back", () => {
     let f: InboxFilter = InboxFilter.actionable;
     const seen = new Set<InboxFilter>();
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < INBOX_FILTERS.length; i++) {
       seen.add(f);
       f = nextFilter(f);
     }
     expect(f).toBe(InboxFilter.actionable);
-    expect(seen.size).toBe(5);
+    expect(seen.size).toBe(Object.keys(InboxFilter).length);
   });
 
   test("search reads subject, sender and source", () => {

@@ -22,6 +22,7 @@ import * as projects from "./projects";
 import * as store from "./store";
 import { ActionEvent } from "./task-actions";
 import { settleStaleTurns } from "./turn-check";
+import { fireDue } from "./timers";
 import {
   offStatus,
   type Connector,
@@ -201,9 +202,8 @@ export class Engine {
       }, 30_000),
     );
     this.watchTmux();
-    const wakeReminders = () => measure("engine.reminders", () => store.wakeReminders());
-    wakeReminders();
-    this.timers.push(setInterval(wakeReminders, 60_000));
+    this.fireTimers();
+    this.timers.push(setInterval(() => this.fireTimers(), 30_000));
     this.watchMoves();
     this.timers.push(setInterval(() => this.fireEventActions(), 2_000));
     if (this.options.offline) {
@@ -225,6 +225,23 @@ export class Engine {
     // A local merge needs no network, so it has its own clock.
     void this.checkMerges();
     this.timers.push(setInterval(() => void this.checkMerges(), 2 * 60_000));
+  }
+
+  // Due timers become messages on the inbox (core/timers.ts); the worker
+  // routes them to their tasks like any other. One missed while Riker was
+  // closed fires once, here at start.
+  fireTimers(at = new Date()): number {
+    let fired = 0;
+    try {
+      fired = measure("engine.timers", () => fireDue(at).length);
+    } catch (err) {
+      log.error("timers failed", { err: errorMessage(err) });
+    }
+    if (fired) {
+      log.info("timers fired", { fired });
+      if (!this.options.offline) void this.triageInbox();
+    }
+    return fired;
   }
 
   private merging = false;

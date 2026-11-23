@@ -475,6 +475,7 @@ describe("triage chain", () => {
 
   test("the routing order, in one place", () => {
     expect(TRIAGE_RULES.map((r) => r.name)).toEqual([
+      "timer",
       "own message",
       "greeting",
       "noise",

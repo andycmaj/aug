@@ -504,7 +504,127 @@ describe("what an agent may ask for", () => {
     expect((await engine.runMove("new", { title: "follow-up", from: store.taskRef(mine.id) }, by)).ok).toBe(true);
     expect((await engine.runMove("wait_on", { task: store.taskRef(mine.id), who: "Sam" }, by)).ok).toBe(true);
     const theirs = await engine.runMove("priority", { task: store.taskRef(other.id), level: "urgent" }, by);
-    expect(theirs).toEqual({ ok: false, result: `an agent changes only its own task (${store.taskRef(mine.id)})` });
+    expect(theirs).toEqual({
+      ok: false,
+      result: `an agent changes only its own task (${store.taskRef(mine.id)}) and tasks it made`,
+    });
+  });
+
+  test("it edits and reminds a task it made, never one it did not", async () => {
+    const mine = engine.desk.newTask("mine", Kind.general);
+    const other = engine.desk.newTask("other", Kind.general);
+    const by = `agent ${store.taskRef(mine.id)}`;
+    // No --from: an agent's task is made from its own.
+    const made = await engine.runMove("new", { title: "check back on the rollout" }, by);
+    expect(made.ok).toBe(true);
+    const child = store.listTasks().find((t) => t.title === "check back on the rollout")!;
+    expect(child.from_task_id).toBe(mine.id);
+    const ref = store.taskRef(child.id);
+    expect((await engine.runMove("remind", { task: ref, days: "3" }, by)).ok).toBe(true);
+    expect(store.getTask(child.id)!.status).toBe(TaskStatus.later);
+    expect((await engine.runMove("priority", { task: ref, level: "urgent" }, by)).ok).toBe(true);
+    expect((await engine.runMove("followup", { task: ref, in: "1d", note: "is it out?" }, by)).ok).toBe(true);
+    const refused = await engine.runMove("remind", { task: store.taskRef(other.id), days: "3" }, by);
+    expect(refused).toEqual({
+      ok: false,
+      result: `an agent changes only its own task (${store.taskRef(mine.id)}) and tasks it made`,
+    });
+    // Starting and closing what it made stay the owner's.
+    expect((await engine.runMove("done", { task: ref }, by)).ok).toBe(false);
+  });
+
+  test("new --remind puts the task away in the same move", async () => {
+    const mine = engine.desk.newTask("mine", Kind.general);
+    const by = `agent ${store.taskRef(mine.id)}`;
+    const made = await engine.runMove("new", { title: "nudge Sam", remind: "3" }, by);
+    expect(made.ok).toBe(true);
+    expect(made.result).toContain("put away until");
+    const child = store.listTasks().find((t) => t.title === "nudge Sam")!;
+    expect(child.status).toBe(TaskStatus.later);
+    expect(store.timersForTask(child.id).map((t) => t.kind)).toEqual(["remind"]);
+    expect((await engine.runMove("new", { title: "x", remind: "0" }, by)).ok).toBe(false);
+  });
+
+  test("it sets a follow-up on its own task, but not a schedule", async () => {
+    const mine = engine.desk.newTask("mine", Kind.general);
+    const by = `agent ${store.taskRef(mine.id)}`;
+    const set = await engine.runMove(
+      "followup",
+      { task: store.taskRef(mine.id), in: "1d", note: "check the PR again and report" },
+      by,
+    );
+    expect(set.ok).toBe(true);
+    expect(set.result).toMatch(/^T\d+: RIKER-\d+ follow-up in (23h|1d): check the PR again and report$/);
+    const schedule = await engine.runMove(
+      "schedule",
+      { rule: "weekdays 09:00", task: store.taskRef(mine.id) },
+      by,
+    );
+    expect(schedule.ok).toBe(false);
+    expect(schedule.result).toContain("the owner's move");
+  });
+
+  test("followup needs one of --in and --at, and words it understands", async () => {
+    const task = engine.desk.newTask("t", Kind.general);
+    const ref = store.taskRef(task.id);
+    const neither = await engine.runMove("followup", { task: ref, note: "x" });
+    expect(neither.result).toBe("followup needs --in or --at, not both");
+    const bad = await engine.runMove("followup", { task: ref, in: "soon", note: "x" });
+    expect(bad.ok).toBe(false);
+    expect(bad.result).toContain("30m, 3h, 1d or 2w");
+    const past = await engine.runMove("followup", { task: ref, at: "2001-01-01T09:00", note: "x" });
+    expect(past.result).toContain("in the past");
+    expect(store.timersForTask(task.id)).toEqual([]);
+  });
+
+  test("schedule --brief makes a task to run on the rule", async () => {
+    const out = await engine.runMove(
+      "schedule",
+      { rule: "every weekday at 9am", brief: "Summarize my open PRs", title: "PR summary" },
+      "assistant",
+    );
+    expect(out.ok).toBe(true);
+    const task = store.listTasks().find((t) => t.title === "PR summary")!;
+    expect(task.kind).toBe(Kind.general);
+    const [timer] = store.timersForTask(task.id);
+    expect(timer!.kind).toBe("schedule");
+    expect(timer!.rule).toBe("weekdays 09:00");
+    expect(timer!.note).toBe("Summarize my open PRs");
+    expect(timer!.by).toBe("assistant");
+    expect(out.result).toContain("every weekday at 09:00");
+  });
+
+  test("schedule refuses a rule it cannot read, and makes nothing", async () => {
+    const out = await engine.runMove("schedule", { rule: "fortnightly", brief: "x" });
+    expect(out.ok).toBe(false);
+    expect(store.listTasks()).toEqual([]);
+  });
+
+  test("unschedule cancels follow-ups and schedules, not the reminder", async () => {
+    const task = engine.desk.newTask("t", Kind.general);
+    const ref = store.taskRef(task.id);
+    await engine.runMove("followup", { task: ref, in: "2h", note: "a" });
+    await engine.runMove("schedule", { rule: "daily 07:00", task: ref });
+    await engine.runMove("remind", { task: ref, days: "2" });
+    const out = await engine.runMove("unschedule", { task: ref });
+    expect(out.ok).toBe(true);
+    expect(store.timersForTask(task.id).map((t) => t.kind)).toEqual(["remind"]);
+    expect((await engine.runMove("unschedule", { task: ref })).ok).toBe(false);
+  });
+
+  test("ctrl+z takes back a follow-up", async () => {
+    const task = engine.desk.newTask("t", Kind.general);
+    await engine.runMove("followup", { task: store.taskRef(task.id), in: "1h", note: "a" }, "assistant");
+    expect(store.timersForTask(task.id)).toHaveLength(1);
+    const undone = await engine.desk.undo();
+    expect(undone.ok).toBe(true);
+    expect(store.timersForTask(task.id)).toEqual([]);
+  });
+
+  test("a task's timers show in what riker-tools task prints", async () => {
+    const task = engine.desk.newTask("t", Kind.general);
+    await engine.runMove("followup", { task: store.taskRef(task.id), in: "3h", note: "look again" });
+    expect(taskDetail(store.getTask(task.id)!)).toMatch(/Timer T\d+: follow-up in [23]h: look again/);
   });
 
   test("it makes a project and a task in it", async () => {

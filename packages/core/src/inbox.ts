@@ -4,6 +4,7 @@
 
 import * as store from "./store";
 import {
+  Channel,
   HELD,
   IdeaStatus,
   MessageState,
@@ -29,6 +30,8 @@ export const InboxResult = {
   untriaged: "untriaged",
   greeting: "greeting",
   own: "own",
+  // A timer came due (core/timers.ts)
+  timer: "timer",
   // An Advisor idea
   idea: "idea",
   tasked: "tasked",
@@ -45,6 +48,7 @@ export const RESULT_WORDS: Record<InboxResult, string> = {
   untriaged: "awaiting triage",
   greeting: "greeting",
   own: "your message",
+  timer: "timer fired",
   idea: "idea",
   tasked: "made a task",
   dismissed: "dismissed",
@@ -55,6 +59,7 @@ export const InboxFilter = {
   attention: "attention",
   task: "task",
   fyi: "fyi",
+  timers: "timers",
   all: "all",
 } as const;
 export type InboxFilter = (typeof InboxFilter)[keyof typeof InboxFilter];
@@ -64,6 +69,7 @@ export const INBOX_FILTERS: { filter: InboxFilter; word: string }[] = [
   { filter: "attention", word: "needs you" },
   { filter: "task", word: "made a task" },
   { filter: "fyi", word: "FYI" },
+  { filter: "timers", word: "timers" },
   { filter: "all", word: "all" },
 ];
 
@@ -101,6 +107,7 @@ export type InboxRow =
 // Where a message went, from what the message says now: an owner's move
 // after triage (ignore, make it a task) changes it, and the row follows.
 export function messageResult(m: MessageRow): InboxResult {
+  if (m.channel === Channel.timer) return InboxResult.timer;
   if (m.from_me) return InboxResult.own;
   if (m.task_id !== null)
     return m.verdict && m.verdict !== Verdict.fyi
@@ -189,6 +196,8 @@ export function inFilter(row: InboxRow, filter: InboxFilter): boolean {
       return row.result === InboxResult.task || row.result === InboxResult.tasked;
     case InboxFilter.fyi:
       return row.result === InboxResult.fyi;
+    case InboxFilter.timers:
+      return row.result === InboxResult.timer;
     case InboxFilter.actionable:
       // Your own messages, greetings, handled ideas and whatever you have
       // dismissed (x marks it read) are kept for "all": none asks anything

@@ -12,6 +12,7 @@ import * as store from "./store";
 import {
   AgentState,
   TaskStatus,
+  TimerKind,
   TurnRole,
   type SessionKind,
   type SessionRow,
@@ -254,6 +255,9 @@ export function taskClosed(taskId: number, by = "you"): void {
       remind_at: null,
       ...(agentLive ? { agent_state: AgentState.stopped } : {}),
     });
+    // The work is over: what it was waiting to do goes with it. A schedule
+    // stays, and opens it again on its next time.
+    store.cancelTimers(taskId, [TimerKind.followup, TimerKind.remind]);
     for (const session of store
       .liveSessions()
       .filter((s) => s.task_id === taskId))
@@ -275,6 +279,7 @@ export function taskDropped(taskId: number, by = "you", why = ""): void {
       closed_at: now(),
       closed_by: by,
     });
+    store.cancelTimers(taskId, [TimerKind.followup, TimerKind.schedule, TimerKind.remind]);
     store.addTurn({
       taskId,
       role: TurnRole.trigger,

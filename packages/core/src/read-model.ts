@@ -92,6 +92,8 @@ function reads(desk: LiveCheck) {
     messages: [[T.messages], store.messagesForTask],
     message: [[T.messages], store.getMessage],
     taskLinks: [[T.taskLinks], store.linksForTask],
+    timers: [[T.timers], store.timersForTask],
+    pendingTimers: [[T.timers], store.pendingTimers],
     latestSession: [[T.sessions], store.latestSession],
     isLive: [[T.sessions, T.tasks], (task: TaskRow) => desk.isLive(task)],
     prStatus: [[T.prStatus], store.prStatus],

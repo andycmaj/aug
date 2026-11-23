@@ -47,6 +47,7 @@ import {
 import type { RailItem } from "@riker/core/rail";
 import { isClosed, taskRef } from "@riker/core/rows";
 import {
+  Channel,
   AgentState,
   Kind,
   ProposalSource,
@@ -55,6 +56,7 @@ import {
   type TaskRow,
 } from "@riker/core/types";
 import { inTmux } from "@riker/core/driver";
+import { timerLine } from "@riker/core/timers";
 import { TerminalHost } from "./agent-terminal";
 import { ActionCard, ChatTurn } from "./chat-turn";
 import { actionTermId, unlessTyping, type TaskActions } from "./task-actions";
@@ -252,7 +254,8 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   const metaOf = useLaneMeta();
   const meta = () => (lane() ? metaOf(lane()!) : null);
   const came = createMemo(() => {
-    const first = riker.messages(props.task.id)[0];
+    // A timer is Riker's own line, not where the task came from.
+    const first = riker.messages(props.task.id).find((m) => m.channel !== Channel.timer);
     const from = first
       ? `${CHANNEL_WORD[first.channel]} · ${first.author_name} · ${first.title}`
       : "typed by you";
@@ -265,6 +268,13 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
       .map((l) => l.title ?? l.url.replace(/^https?:\/\//, ""));
     return names.length
       ? truncate(`links · ${names.join(" · ")}  (o opens)`, Math.max(20, props.width - 4))
+      : null;
+  });
+  // What is due on it: follow-ups, schedules, the reminder.
+  const timers = createMemo(() => {
+    const lines = riker.timers(props.task.id).map((t) => timerLine(t, riker.now()));
+    return lines.length
+      ? truncate(`timers · ${lines.join(" · ")}`, Math.max(20, props.width - 4))
       : null;
   });
   // The task's PR as of the last read; P opens it in ghdash.
@@ -362,6 +372,9 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
         </Show>
         <Show when={links()}>
           <text fg={theme.info}>{links() ?? ""}</text>
+        </Show>
+        <Show when={timers()}>
+          <text fg={theme.accent}>{timers() ?? ""}</text>
         </Show>
         <Show when={props.task.triage_reason}>
           <text

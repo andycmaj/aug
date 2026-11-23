@@ -8,9 +8,18 @@ import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import type { NoiseRule } from "./config";
 import type { Desk } from "./desk";
-import { DocName } from "./docs";
+import { DocName, head } from "./docs";
 import { docNamed, propose } from "./proposals";
 import { logger } from "./log";
+import {
+  describeRule,
+  parseAt,
+  parseIn,
+  parseTimerRef,
+  TimerError,
+  timerLine,
+  timerRef,
+} from "./timers";
 import { findProject, projectLine } from "./lookup";
 import { actionNamed, actionsFor, ActionVia } from "./task-actions";
 import { mux } from "./mux";
@@ -69,6 +78,23 @@ function taskArg(value: string): number {
   const id = store.parseTaskRef(value);
   if (!id || !store.getTask(id)) throw new MoveError(`no task ${value}`);
   return id;
+}
+
+function remindDays(value: string): number {
+  const days = Number(value);
+  if (!Number.isFinite(days) || days < 1)
+    throw new MoveError(`days must be a number from 1: got ${value}`);
+  return days;
+}
+
+// A timer's words (a rule, a time) that do not parse are the caller's to fix.
+function timerArg<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (err) {
+    if (err instanceof TimerError) throw new MoveError(err.message);
+    throw err;
+  }
 }
 
 // Kinds a move may make or set; anything else is Riker's own.
@@ -281,11 +307,76 @@ export const MOVES: Record<string, MoveSpec> = {
     task: true,
     args: { days: { help: "days from now", required: true } },
     run(desk, task, args) {
-      const days = Number(args.days);
-      if (!Number.isFinite(days) || days < 1)
-        throw new MoveError(`days must be a number from 1: got ${args.days}`);
-      const at = desk.remind(task!.id, days);
+      const at = desk.remind(task!.id, remindDays(args.days));
       return `${ref(task)} back on ${at.slice(0, 10)}`;
+    },
+  },
+  followup: {
+    help: "Wake the task's agent at a time, once, with what to do then (check a PR again tomorrow and report)",
+    task: true,
+    args: {
+      in: { help: "how long from now: 30m, 3h, 1d, 2w" },
+      at: { help: "or when: an ISO date and time (2026-11-24T09:00)" },
+      note: { help: "what to do when it comes due", required: true },
+    },
+    run(desk, task, args) {
+      if (!args.in?.trim() === !args.at?.trim())
+        throw new MoveError("followup needs --in or --at, not both");
+      const at = timerArg(() =>
+        args.in?.trim() ? parseIn(args.in, new Date()) : parseAt(args.at!, new Date()),
+      );
+      const timer = desk.followup(task!.id, at, args.note);
+      return `${timerRef(timer.id)}: ${ref(task)} ${timerLine(timer, new Date())}`;
+    },
+  },
+  schedule: {
+    help: "Wake a task on a rule, every time it comes round: daily, weekdays or day names, and a time (\"weekdays 09:00\", \"mon,thu 14:30\"). --task puts it on a task; --brief makes a task for it",
+    task: false,
+    positional: "rule",
+    args: {
+      rule: { help: "days and a local time: daily 7am, weekdays 09:00, mon,thu 14:30", required: true },
+      task: { help: "the task it wakes (RIKER-0012)" },
+      brief: { help: "or what to do each time: a new task is made for it" },
+      title: { help: "with --brief: the new task's title" },
+      project: { help: "with --brief: the project it belongs to" },
+      note: { help: "what to do each time (default: the brief)" },
+    },
+    run(desk, _task, args, by) {
+      if (!args.task?.trim() === !args.brief?.trim())
+        throw new MoveError("schedule needs --task or --brief, not both");
+      const rule = timerArg(() => describeRule(args.rule));
+      let task = args.task?.trim() ? store.getTask(taskArg(args.task)) : null;
+      if (task?.kind === Kind.home) throw new MoveError(`${args.task} is Home, not a task`);
+      if (!task) {
+        const brief = args.brief.trim();
+        const project = args.project ? projectNamed(args.project) : null;
+        task = store.batch(() => {
+          const made = desk.newTask(args.title?.trim() || head(brief, 60), Kind.general, brief, {
+            projectId: project?.id ?? null,
+          });
+          store.addTurn({ taskId: made.id, role: TurnRole.trigger, body: `Made by ${by} to run ${rule}` });
+          return made;
+        });
+      }
+      const timer = timerArg(() =>
+        desk.schedule(task.id, args.rule, args.note?.trim() || (args.brief?.trim() ?? "")),
+      );
+      return `${timerRef(timer.id)}: ${ref(task)} ${timerLine(timer, new Date())}`;
+    },
+  },
+  unschedule: {
+    help: "Cancel the task's follow-ups and schedules, or one (--timer T3)",
+    task: true,
+    args: { timer: { help: "the one to cancel (T3); default all of them" } },
+    run(desk, task, args) {
+      const id = args.timer?.trim() ? parseTimerRef(args.timer) : undefined;
+      if (id === null) throw new MoveError(`no timer ${args.timer}: timers are T3`);
+      const gone = desk.unschedule(task!.id, id);
+      if (gone.length === 0)
+        throw new MoveError(
+          `${ref(task)} has no ${id ? `timer ${timerRef(id)}` : "follow-ups or schedules"}`,
+        );
+      return `cancelled ${gone.map((t) => timerRef(t.id)).join(", ")} on ${ref(task)}`;
     },
   },
   watch: {
@@ -423,9 +514,13 @@ export const MOVES: Record<string, MoveSpec> = {
       project: { help: "the project it belongs to" },
       repo: { help: "coding: owner/repo (default: the project's first repo)" },
       goal: { help: "the project goal it works toward (G3); puts it in that project" },
-      from: { help: "the task this comes out of (RIKER-0012); it hears back" },
+      from: {
+        help: "the task this comes out of (RIKER-0012); it hears back. An agent's defaults to its own",
+      },
+      remind: { help: "put it away until then: days from now (1 = tomorrow)" },
     },
     run(desk, _task, args, by) {
+      const remind = args.remind?.trim() ? remindDays(args.remind) : null;
       const kind = args.kind ? kindNamed(args.kind) : Kind.general;
       const named = args.project ? projectNamed(args.project) : null;
       const goal = args.goal?.trim() ? goalNamed(args.goal, named) : null;
@@ -435,7 +530,7 @@ export const MOVES: Record<string, MoveSpec> = {
         : kind === Kind.coding && project
           ? (store.projectRepos(project)[0] ?? null)
           : null;
-      const fromId = args.from ? store.parseTaskRef(args.from) : null;
+      const fromId = args.from ? store.parseTaskRef(args.from) : agentTask(by);
       const from = fromId ? store.getTask(fromId) : null;
       if (args.from && !from) throw new MoveError(`no task ${args.from}`);
       const task = store.batch(() => {
@@ -445,6 +540,7 @@ export const MOVES: Record<string, MoveSpec> = {
           fromTaskId: from?.id ?? null,
           goalId: goal?.id ?? null,
         });
+        if (remind !== null) desk.remind(made.id, remind, by);
         store.addTurn({
           taskId: made.id,
           role: TurnRole.trigger,
@@ -466,7 +562,7 @@ export const MOVES: Record<string, MoveSpec> = {
         ? store.goalsForProject(project.id).filter((g) => g.status === GoalStatus.open)
         : [];
       return [
-        `${ref(task)} made (${kind}${project ? ` in project ${project.name}` : ""}${goal ? ` for ${store.goalRef(goal.id)}` : ""}${repo ? `, repo ${repo}` : ""})`,
+        `${ref(task)} made (${kind}${project ? ` in project ${project.name}` : ""}${goal ? ` for ${store.goalRef(goal.id)}` : ""}${repo ? `, repo ${repo}` : ""})${remind !== null ? `, put away until ${store.getTask(task.id)?.remind_at?.slice(0, 10)}` : ""}`,
         open.length
           ? `It serves no goal; ${project!.name}'s are ${open.map((g) => `${store.goalRef(g.id)} ${g.title}`).join("; ")}. Set one with: goal ${ref(task)} <G>`
           : "",
@@ -893,8 +989,9 @@ export const MOVES: Record<string, MoveSpec> = {
 };
 
 // What a task's own agent may ask for: new tasks and projects, small edits
-// (and links) to its own task, and docs on a project. Starting, stopping and
-// closing work, archiving a project and setting its brief and goals stay the
+// (and links, follow-ups) to its own task and to tasks it made (new --from
+// its task), and docs on a project. Starting, stopping and closing work,
+// schedules, archiving a project and setting its brief and goals stay the
 // owner's and the Assistant's.
 export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "new",
@@ -906,6 +1003,8 @@ export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "unblock",
   "priority",
   "remind",
+  "followup",
+  "unschedule",
   "link",
   "unlink",
   "goal",
@@ -954,8 +1053,11 @@ export async function runMove(
       store.getTask(own)?.kind === Kind.system ? INTERVIEW_MOVES : AGENT_MOVES;
     if (!allowed.has(verb))
       return { ok: false, result: `${verb} is the owner's move: say what you need under Next steps` };
-    if (task && task.id !== own)
-      return { ok: false, result: `an agent changes only its own task (${store.taskRef(own)})` };
+    if (task && task.id !== own && task.from_task_id !== own)
+      return {
+        ok: false,
+        result: `an agent changes only its own task (${store.taskRef(own)}) and tasks it made`,
+      };
   }
   const missing = Object.entries(spec.args)
     .filter(([name, arg]) => arg.required && !args[name]?.trim())
