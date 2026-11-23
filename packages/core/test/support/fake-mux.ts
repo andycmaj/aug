@@ -1,5 +1,6 @@
 import type { CheckoutState, FoundCheckout } from "../../src/checkouts";
 import type {
+  HostServer,
   Mux,
   MuxSession,
   MuxState,
@@ -164,6 +165,13 @@ export class FakeMux implements Mux {
 
   async hostWindow(): Promise<string | null> {
     return this.host;
+  }
+
+  // Where Riker runs when it is not in a window here (host is null).
+  elsewhere: HostServer = { at: "none" };
+
+  async hostServer(): Promise<HostServer> {
+    return this.host ? { at: "here", windowId: this.host } : this.elsewhere;
   }
 
   watchers: (() => void)[] = [];

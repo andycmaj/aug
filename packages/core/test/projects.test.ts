@@ -392,8 +392,14 @@ describe("closing, moving, reconciling", () => {
     expect(await jump(t.id)).toBe("gone");
     await startTask(config(), t.id);
     const w = fake.windows[0];
-    // No host window: Riker is not in a client of this server.
-    expect(await jump(t.id)).toEqual({ attach: `tmux attach -t ${w.sessionId}:${w.id}` });
+    // No host window: Riker is not in a client of this server, and says why.
+    const attach = `tmux attach -t ${w.sessionId}:${w.id}`;
+    expect(await jump(t.id)).toEqual({ attach, why: "outside" });
+    fake.elsewhere = { at: "other", socket: "/tmp/tmux-501/mine", lost: false };
+    expect(await jump(t.id)).toEqual({ attach, why: "elsewhere", socket: "/tmp/tmux-501/mine" });
+    // Riker's server lost its socket file to a newer server at that path.
+    fake.elsewhere = { at: "other", socket: "/tmp/tmux-501/default", lost: true };
+    expect(await jump(t.id)).toEqual({ attach, why: "lost", socket: "/tmp/tmux-501/default" });
     expect(fake.switched).toEqual([]);
     fake.host = "@riker";
     expect(await jump(t.id)).toBe("jumped");
