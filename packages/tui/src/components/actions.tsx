@@ -35,7 +35,8 @@ import { isClosed, taskRef } from "@riker/core/rows";
 import { postComments, reviewNotes } from "@riker/code-review-plannotator/guide";
 import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
 import type { ActionResult } from "@riker/core/run-action";
-import { actionsFor, keyedActions } from "@riker/core/task-actions";
+import { actionNamed, actionsFor, keyedActions, makesCheckout } from "@riker/core/task-actions";
+import { describeProblem } from "@riker/core/repos";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
 import type { NoiseRule } from "@riker/core/config";
 import type { Jump } from "@riker/core/desk";
@@ -91,7 +92,7 @@ export function useActions(dialogs: Dialogs) {
   const { togglePrDash } = usePrDash();
   const { reviewDocs } = useDocReview();
   const { startAgent } = useAgentStart(dialogs, attachViewer);
-  const { showRepos } = useRepos(dialogs);
+  const { showRepos, pathChoices } = useRepos(dialogs);
 
   // A task's rows are about to leave the rail. Selected: the selection
   // walks on. Only under the cursor: the cursor steps to a neighbor (not
@@ -441,8 +442,39 @@ export function useActions(dialogs: Dialogs) {
   }
 
   // A task action: started now, its answer a turn on the task; the toast
-  // says when it is back.
-  function runAction(task: TaskRow, name: string) {
+  // says when it is back. One that reads the change on a task with no
+  // worktree yet (a review that just arrived) has it made first, with no
+  // agent started; an unmapped repo asks where it is, as Start does.
+  function runAction(task: TaskRow, name: string): void {
+    void launchAction(task, name);
+  }
+
+  async function launchAction(task: TaskRow, name: string) {
+    const spec = actionNamed(desk.config(), name);
+    if (spec && makesCheckout(spec, task))
+      showToast(`${taskRef(task.id)}: making its worktree${task.branch ? ` on ${task.branch}` : ""}...`);
+    const ready = await desk.prepareAction(task.id, name);
+    if (ready.type === "failed") {
+      showToast(ready.error, 5000, "error");
+      return;
+    }
+    if (ready.type === "needs") {
+      const retry = () => runAction(riker.task(task.id) ?? task, name);
+      dialogs.show(() => (
+        <ChoiceModal
+          title={
+            ready.need.problem.kind === "unmapped"
+              ? `Where is ${ready.need.repo} checked out?`
+              : `${ready.need.repo}: ${describeProblem(ready.need.repo, ready.need.problem)}`
+          }
+          hint={`${spec?.title ?? name} reads the change in a worktree made from this checkout.`}
+          choices={pathChoices({ ...ready.need, mapped: false }, retry)}
+          wide
+          onClose={dialogs.close}
+        />
+      ));
+      return;
+    }
     const started = desk.runAction(task.id, name);
     if ("error" in started) {
       showToast(started.error, 5000, "error");
@@ -509,10 +541,17 @@ export function useActions(dialogs: Dialogs) {
   function sendReviewNotes(task: TaskRow, file: string) {
     const notes = reviewNotes(existsSync(file) ? readFileSync(file, "utf8") : "");
     if (!notes) return;
+    // With no agent running they wait on the task: Start hands them over.
     desk
       .say(task.id, `My notes from the guided review in Plannotator (with the review findings riker posted there that I kept):\n\n${notes}`)
       .then(
-        () => showToast(`Your review notes went to ${taskRef(task.id)}'s agent`, 4000),
+        (heard) =>
+          showToast(
+            heard
+              ? `Your review notes went to ${taskRef(task.id)}'s agent`
+              : `Your review notes are on ${taskRef(task.id)}: its agent gets them when it starts`,
+            4000,
+          ),
         (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),
       );
   }

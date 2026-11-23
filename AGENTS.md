@@ -257,7 +257,12 @@ Tests live beside their package (`packages/<name>/test/`).
   of the agent's window. `guide` saves its answer into Plannotator
   (`@riker/code-review-plannotator`; Riker's words for its turn are
   `core/guide-turn.ts`). `.` opens the picker; the palette lists each one;
-  `actions.<name>.key` binds one at start.
+  `actions.<name>.key` binds one at start, in the footer on the rows it
+  applies to. What is offered (`actionsFor`, `whyNotOffered`) counts a
+  worktree the task's repo can make; what runs (`whyNot`, and every
+  trigger) needs it on disk. `desk.prepareAction` makes it in between, on
+  the task's branch with no agent (`projects.ensureCheckout`), so a review
+  triage files offers its guide on arrival and never runs it by itself.
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `riker-tools move <verb>`, the Assistant's
   prompt and the engine's dispatch, which runs each on the desk. riker-tools

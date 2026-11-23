@@ -315,6 +315,12 @@ describe("triage routing", () => {
     expect(task.summary).toContain("linked ticket");
     expect(task.agent_state).toBe(AgentState.queued);
     expect(out.effects).toEqual([]);
+    // The guided review is offered on arrival, never run: no action turn.
+    const turns = store.turnsForTask(task.id);
+    expect(turns.some((t) => t.role === "action")).toBe(false);
+    const offer = turns.find((t) => t.role === "trigger" && t.body?.includes("guided review is ready"));
+    expect(offer?.body).toContain("makes the worktree on pr:40 (no agent starts)");
+    expect(offer?.body).toContain("nothing goes to GitHub");
   });
   test("a Slack mention in a channel thread is judged once, then the thread attaches", async () => {
     writeDoc(DocName.job, "# JOB\n\nHigh priority:\n- Slack mentions of me.\n");

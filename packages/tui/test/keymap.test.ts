@@ -412,3 +412,15 @@ test("an action with a key gets it on the rail and the Canvas, never over a move
   expect(refused.map((r) => r.name)).toEqual(["clash"]);
   expect(refused[0]!.why).toContain("d is taken");
 });
+
+test("an action's own key is listed only on the rows it is offered on", () => {
+  const table = buildKeymap({}, [{ name: "guide", key: "shift+v", title: "Guided review" }]);
+  const listed = (ctx: HelpCtx) =>
+    new Map(helpBindings(getScopeBindings(table, "rail"), ctx).map((b) => [b.keys, b.cmd]));
+  const review: HelpCtx = { ...base(), item: "task", kind: "coding", coding: true };
+  expect(listed({ ...review, actions: ["guide", "summarize"] }).get("V")).toBe(actionCommand("guide"));
+  expect(listed({ ...review, actions: ["summarize"] }).has("V")).toBe(false);
+  // A view that does not say which actions apply lists it on every work row.
+  expect(listed(review).get("V")).toBe(actionCommand("guide"));
+  expect(listed({ ...review, kind: "home", actions: ["guide"] }).has("V")).toBe(false);
+});

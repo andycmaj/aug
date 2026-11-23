@@ -15,6 +15,7 @@ import { DocName, forPrompt, head } from "@riker/core/docs";
 import { parsePrUrl } from "@riker/core/feedback";
 import { messageMeta, type GithubMeta } from "@riker/core/meta";
 import { docsBlock } from "@riker/core/prompts";
+import { guideOffer } from "@riker/core/guide-turn";
 import { finishSuperseded, holdForStart } from "@riker/core/lifecycle";
 import { err, ok, type Result } from "@riker/core/result";
 import { projectRepos } from "@riker/core/rows";
@@ -280,7 +281,7 @@ export function linkByBranch(message: MessageRow): number | null {
 // for the global itself.
 export type TriageConfig = Pick<
   RikerConfig,
-  "autostart" | "brain" | "triage" | "docBudgets" | "repos"
+  "autostart" | "brain" | "triage" | "docBudgets" | "repos" | "actions"
 >;
 
 // The model's verdict, or why there is none.
@@ -1006,6 +1007,15 @@ function createReview(
         taskId: created.id,
         role: TurnRole.trigger,
         body: `${pr.repo} has no checkout mapped. Start asks where it is (one found on disk, or a fresh clone); or map it first with \`move repo ${pr.repo} --path <dir>\` or \`--clone yes\`.`,
+        startedAt: message.received_at,
+      });
+    // Offered, never run: a guide spends money, so it waits for the owner.
+    const offer = guideOffer(config, created);
+    if (offer)
+      store.addTurn({
+        taskId: created.id,
+        role: TurnRole.trigger,
+        body: offer,
         startedAt: message.received_at,
       });
     holdForStart(created.id);

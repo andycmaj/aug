@@ -3,6 +3,27 @@
 
 import type { SavedGuide } from "@riker/code-review-plannotator/guide";
 import { GuideStage, type GuideProgress } from "@riker/code-review-plannotator/progress";
+import type { RikerConfig } from "./config";
+import { ActionOutput, makesCheckout, registeredActions, whyNotOffered } from "./task-actions";
+import type { TaskRow } from "./types";
+
+// The line a review task gets when it arrives: the guide is there to run,
+// on the owner's word only (it spends money), and what running it does.
+// Null when no guide action is offered on the task (turned off in config).
+export function guideOffer(
+  config: Pick<RikerConfig, "actions">,
+  task: TaskRow,
+): string | null {
+  const spec = registeredActions(config).find(
+    (a) => a.output === ActionOutput.guide && whyNotOffered(a, task) === null,
+  );
+  if (!spec) return null;
+  const key = spec.key ? `\`${spec.key}\`, or ` : "";
+  const checkout = makesCheckout(spec, task)
+    ? `it makes the worktree on ${task.branch ?? "its branch"} (no agent starts), then `
+    : "it ";
+  return `A guided review is ready to run: ${key}\`.\` then "${spec.title}". ${checkout[0]!.toUpperCase()}${checkout.slice(1)}reviews the change headless and opens it in Plannotator with its findings; nothing goes to GitHub. Start runs the review agent instead.`;
+}
 
 // What the action's turn says: the chapters, then the findings by file.
 // `opened`: Riker opens the review now; else (a trigger ran it) the owner

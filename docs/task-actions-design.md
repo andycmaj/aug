@@ -373,6 +373,33 @@ Done (step 7), triggers:
 
 All eight steps are built.
 
+Offered on a review that just arrived:
+
+- A review triage files is coding on `pr:N` with a repo and no worktree,
+  so the guide's `needs: [worktree]` hid it until Start, which runs a paid
+  agent. What is offered and what runs are now two checks:
+  `whyNotOffered` (the picker, the palette, `move action` with no name,
+  an action key's footer word) counts a worktree the task's repo can make
+  (`makesCheckout`); `whyNot` (`runAction`, every trigger) needs it on disk.
+  So a trigger never makes a worktree, and never runs the guide on arrival.
+- `desk.prepareAction(task, name)` makes the worktree when the action needs
+  one: `projects.ensureCheckout`, the same wt call Start makes, on the
+  task's branch, with no agent, session or window. An unmapped repo answers
+  `needs` (the TUI asks where it is, as Start does; the move says how to
+  map it). A branch that does not exist yet is refused before anything is
+  made: there is no change to read. The TUI's picker, palette and keys and
+  `move action` all go through it, so the trigger is the task-action seam,
+  not the guide by name.
+- The task arrives with a line saying so (`guideOffer`,
+  `core/guide-turn.ts`, written by the `review ask` path in triage): the
+  picker entry (and the key, when `actions.guide.key` sets one), what
+  running it does, and that nothing goes to GitHub. No key ships by
+  default: `g`, `G` and `q` are taken.
+- The review is `plannotator review` on the worktree, local; `--pr` on
+  `guide import` only labels the saved guide. Notes sent from it with no
+  agent running wait on the task as the owner's message, and Start hands
+  them over.
+
 ## Decisions (owner, 2026-11-20)
 
 1. quiz: Riker ships `riker:quiz`; a registration can point at another skill.

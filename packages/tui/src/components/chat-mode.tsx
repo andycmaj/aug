@@ -125,6 +125,7 @@ export function ChatMode() {
       started: !riker.briefEditable(t.id),
       pr: riker.taskPr(t) !== null,
       closed: isClosed(t),
+      actions: actionsFor(riker.desk.config(), riker.task(t.id) ?? t).map((a) => a.name),
     };
   });
 

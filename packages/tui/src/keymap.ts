@@ -31,6 +31,9 @@ export interface HelpCtx {
   closed?: boolean;
   // The task has a pull request ghdash can show.
   pr: boolean;
+  // The task actions offered on this row (actionsFor), so an action's own
+  // key shows only where it runs. Unset: every work row.
+  actions?: string[];
   // A text box has focus: only its own keys are worth showing.
   typing?: boolean;
   // The rail's status filter hides some rows.
@@ -788,9 +791,11 @@ export function buildKeymap(
   const specs: BindingSpec<HelpCtx>[] = bound.map((a) => ({
     key: a.key,
     cmd: actionCommand(a.name),
-    // No footer word: the footer stays the row's own keys; ? help lists it.
     desc: `action: ${a.title}`,
-    relevant: isWork,
+    // In the footer too, on the rows it is offered on (a review that just
+    // arrived offers its guide).
+    help: a.name,
+    relevant: (c: HelpCtx) => isWork(c) && (c.actions?.includes(a.name) ?? true),
   }));
   return {
     ...nav,

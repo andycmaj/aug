@@ -413,7 +413,7 @@ $ riker-tools move action RIKER-0031 summarize</pre>
   <section id="guide">
     <div class="sec-head">
       <h2>Guided review</h2>
-      <p class="lede">The <code>guide</code> action writes a guided code review of a coding task's change: chapters that walk the diff in a sensible order, with review findings pinned to their lines, saved into Plannotator and opened there on the Canvas. The work is <code>@riker/code-review-plannotator</code>, a library that knows nothing of Riker; Riker's glue is <code>core/run-action.ts</code> and <code>core/guide-turn.ts</code>. A pull request review that triage files is a coding task whose brief is this review. Step through a run on the map with the <b>Guide action</b> flow; the stages are below.</p>
+      <p class="lede">The <code>guide</code> action writes a guided code review of a coding task's change: chapters that walk the diff in a sensible order, with review findings pinned to their lines, saved into Plannotator and opened there on the Canvas. The work is <code>@riker/code-review-plannotator</code>, a library that knows nothing of Riker; Riker's glue is <code>core/run-action.ts</code> and <code>core/guide-turn.ts</code>. A pull request review that triage files is a coding task whose brief is this review, and it offers the guide on arrival: running it makes the PR's worktree with no agent. Step through a run on the map with the <b>Guide action</b> flow; the stages are below.</p>
     </div>
     <ol class="gates static" id="guideSteps"></ol>
 
@@ -447,7 +447,7 @@ $ bun packages/code-review-plannotator/src/cli.ts review \
           <li><code>core/task-actions.ts</code> embeds <code>@riker/code-review-plannotator/SKILL.md</code> as <code>riker:guide</code>, registers <code>guide</code> as a built-in and has an output kind for it (<code>ActionOutput.guide</code>).</li>
           <li><code>core/run-action.ts</code> runs it: <code>patchFor</code>, <code>planBatches</code>, <code>reviewInBatches</code>, <code>saveGuide</code>, <code>runGuide</code>/<code>finishGuide</code>, <code>guideReview</code>, and points <code>setGuideLog</code> at riker.log.</li>
           <li><code>core/guide-turn.ts</code> holds Riker's words for it: <code>guideMarkdown</code>, <code>guideProgressLine</code>, <code>OPEN_REVIEW_TITLE</code>.</li>
-          <li><code>core/desk.ts</code> has <code>hasGuideReview</code>/<code>guideReview</code>; the TUI imports <code>postComments</code> and <code>reviewNotes</code> and adds "Open the guide's review" to the picker and palette.</li>
+          <li><code>core/desk.ts</code> has <code>hasGuideReview</code>/<code>guideReview</code> and <code>prepareAction</code> (the worktree an offered action needs, through the task-action seam, not the guide by name); <code>guideOffer</code> is the line a review task arrives with; the TUI imports <code>postComments</code> and <code>reviewNotes</code> and adds "Open the guide's review" to the picker and palette.</li>
         </ul>
       </div>
       <div>
@@ -489,7 +489,7 @@ $ bun packages/code-review-plannotator/src/cli.ts review \
     <div class="tbl ftree"><table><tbody id="ftree"></tbody></table></div>
   </section>
 
-  <footer class="stamp">Checked against andycmaj/riker main at bfef526 with RIKER-0201 merged (2026-11-22). Plans named here (RIKER-0188, RIKER-0190, RIKER-0208) were open then.</footer>
+  <footer class="stamp">Checked against andycmaj/riker main at a574047 with the guide offered on review tasks (2026-11-23). Plans named here (RIKER-0188, RIKER-0190, RIKER-0208) were open then.</footer>
 </div>
 
 <script>
@@ -1149,6 +1149,8 @@ $("#viasEl").innerHTML = VIAS.map(([n, p]) => `<div class="via"><span class="vn"
 
 // ── guided review ───────────────────────────────────────────────
 const GUIDE = [
+  { nm:"Offer", ds:"A review triage files (coding, pr:N, no worktree yet) offers the guide on arrival: actionsFor counts a worktree its repo can make (whyNotOffered), so it is in the . picker, the palette and a configured key's footer, and the task gets a line saying so (guideOffer). Never run by itself: triggers use the strict whyNot.", out:"task-actions.ts" },
+  { nm:"Checkout", ds:"desk.prepareAction makes the worktree on the task's branch with wt (projects.ensureCheckout), no agent started; an unmapped repo comes back as needs path, which the TUI asks as Start does. A branch that does not exist yet is refused: nothing to review.", out:"projects.ts" },
   { nm:"Start", ds:"desk.runAction(task, 'guide'): whyNot checks it is coding and its worktree is still on disk, before anything is spent. A running action turn appears.", out:"run-action.ts" },
   { nm:"Patch", ds:"patchFor: git diff <merge base>, plus untracked files diffed against /dev/null (the agent's index is never touched). The base is origin/<base> when the remote has moved past the local branch, so an unpulled main does not put others' work in the change. No change: refused.", out:"guide.ts" },
   { nm:"Batches", ds:"planBatches groups related files and fills batches of about 100k characters (25k tokens). Lock files are left out of every prompt; a file past 400k characters is named on the turn, not reviewed.", out:"batches.ts" },
@@ -1158,7 +1160,7 @@ const GUIDE = [
   { nm:"Save", ds:"saveGuide writes guide.json (Plannotator snapshot v4, the one that carries notes) and guide-findings.json under What it made, then plannotator guide import --snapshot (--pr when the task has one).", out:"guide.ts" },
   { nm:"Report", ds:"The turn lists the chapters and every finding. What no call answered for, chapters that did not parse, files too large and denied calls are said on the turn and in the toast, never 'nothing stood out'.", out:"guide-turn.ts" },
   { nm:"Review", ds:"Run by you: the TUI opens plannotator review --base <base> on the Canvas on a port Riker picked, clears comments from source riker-guide and posts every finding (on its lines when one hunk shows them, else on its file; Bug and Risk as concerns). Run by a trigger: saved; it waits for Open the guide's review.", out:"actions.tsx" },
-  { nm:"Feedback", ds:"What you send lands in guide-feedback.md, and goes to the agent when the review exits (reviewNotes). An approval, or closing with no feedback, sends nothing.", out:"actions.tsx" },
+  { nm:"Feedback", ds:"What you send lands in guide-feedback.md, and goes to the agent when the review exits (reviewNotes); with no agent running it waits on the task for Start. An approval, or closing with no feedback, sends nothing. The review is local: nothing goes to GitHub.", out:"actions.tsx" },
 ];
 $("#guideSteps").innerHTML = GUIDE.map((g, i) => `<li class="gate"><span class="num">${i + 1}</span><div><div class="nm">${esc(g.nm)}</div><div class="ds">${esc(g.ds)}</div></div><span class="out">${esc(g.out)}</span></li>`).join("");
 const BATCH_RULES = [
