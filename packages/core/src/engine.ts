@@ -209,7 +209,7 @@ export class Engine {
     this.timers.push(
       setInterval(() => {
         this.fireEventActions();
-        // void this.writeJournals();
+        void this.writeJournals();
       }, 2_000),
     );
     if (this.options.offline) {
