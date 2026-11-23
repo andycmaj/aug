@@ -116,6 +116,17 @@ function outcome(i: IdeaRow): string {
   }
 }
 
+// What the prompt lists: ideas on no task or on a task still open. One about
+// a closed task is not in the work the model reads, so it costs tokens for
+// nothing; the refusal (repeatsPastIdea) still reads every idea.
+export function promptIdeas(past: IdeaRow[]): IdeaRow[] {
+  return past.filter((i) => {
+    if (!i.task_id) return true;
+    const status = store.getTask(i.task_id)?.status;
+    return status === TaskStatus.open || status === TaskStatus.later;
+  });
+}
+
 export function pastIdeasBlock(past: IdeaRow[]): string {
   if (past.length === 0) return "(none)";
   return past
@@ -177,7 +188,7 @@ export async function runAdvisor(
   }
   const past = pastIdeas(at);
   const result = await think({
-    prompt: `${picture}\n\nIdeas from the last ${PAST_IDEAS_DAYS} days (and any still open), with what the owner did with each:\n${pastIdeasBlock(past)}\n\nToday is ${at.toISOString().slice(0, 10)}.`,
+    prompt: `${picture}\n\nIdeas from the last ${PAST_IDEAS_DAYS} days (and any still open) about open work, with what the owner did with each:\n${pastIdeasBlock(promptIdeas(past))}\n\nToday is ${at.toISOString().slice(0, 10)}.`,
     system: [
       `You are the Advisor in Riker, the owner's work manager. Look at the work and say what is late, slipped, not followed up, or worth bringing up - at most three ideas. Never repeat an idea listed as already said, under any words: one still open is already in the Inbox, one approved is already a task, and one dismissed means the owner does not want it (leave its task alone unless something new happened to it). Fewer is better; zero is fine.`,
       docsBlock(config, { persona: true, job: true, learned: true }),

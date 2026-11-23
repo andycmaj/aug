@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { pastIdeas, PAST_IDEAS_DAYS, runAdvisor } from "../src/advisor";
 import { db } from "../src/db";
 import * as store from "../src/store";
-import { IdeaStatus, Kind } from "../src/types";
+import { IdeaStatus, Kind, TaskStatus } from "../src/types";
 import { config, fakeBrain, freshHome } from "./support/helpers";
 
 const AT = new Date("2026-11-21T12:00:00Z");
@@ -45,6 +45,19 @@ describe("the Advisor remembers what it already said", () => {
     expect(prompt).toContain("[open in the Inbox, 2026-10-17] Old but still open");
     expect(prompt).not.toContain("Old and gone");
     expect(calls[0].system).toContain("dismissed means the owner does not want it");
+  });
+
+  test("ideas about closed tasks stay out of the prompt but still hold a repeat back", async () => {
+    const shipped = task("Ship the ledger");
+    store.updateTask(shipped, { status: TaskStatus.done });
+    ideaAt("Follow up on the ledger", shipped, IdeaStatus.dismissed, 4);
+    ideaAt("Plan the offsite", null, IdeaStatus.dismissed, 4);
+    const calls = fakeBrain(() => ({
+      ideas: [{ title: "Follow up on the ledger", body: "b" }],
+    }));
+    expect((await runAdvisor(config(), AT, true)).added).toBe(0);
+    expect(calls[0].prompt).not.toContain("Follow up on the ledger");
+    expect(calls[0].prompt).toContain("[dismissed, 2026-11-17] Plan the offsite");
   });
 
   test("an idea about a task whose idea was dismissed is refused, under any title", async () => {
