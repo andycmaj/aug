@@ -412,6 +412,9 @@ describe("the watcher", () => {
     sessionEnded(ref, EndReason.exited);
     await journalTick(config());
     expect(calls).toHaveLength(0);
+    expect(readFileSync(journalFile(store.getProject(task.project_id!)!), "utf8")).toContain(
+      "session ended; not written up: the daily spend cap is reached",
+    );
   });
 
   test("the slice is words and tool names, never tool output; a commit counts as a change", () => {

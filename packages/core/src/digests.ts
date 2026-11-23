@@ -41,11 +41,20 @@ export function journalSwitch(config: RikerConfig, project: ProjectRow | null): 
   return { on: config.journal.enabled, from: SwitchFrom.config };
 }
 
-export function storySwitch(config: RikerConfig, task: TaskRow): Switch {
+// Pure, for a view that read the project through the read model.
+export function storySwitchOf(config: RikerConfig, task: TaskRow, project: ProjectRow | null): Switch {
   if (set(task.story)) return { on: task.story === 1, from: SwitchFrom.task };
-  const project = task.project_id ? store.getProject(task.project_id) : null;
+  return projectStoryDefault(config, project);
+}
+
+// What a project's tasks' stories follow when a task says nothing.
+export function projectStoryDefault(config: RikerConfig, project: ProjectRow | null): Switch {
   if (project && set(project.story)) return { on: project.story === 1, from: SwitchFrom.project };
   return { on: config.story.enabled, from: SwitchFrom.config };
+}
+
+export function storySwitch(config: RikerConfig, task: TaskRow): Switch {
+  return storySwitchOf(config, task, task.project_id ? store.getProject(task.project_id) : null);
 }
 
 export function journalOn(config: RikerConfig, task: TaskRow): boolean {

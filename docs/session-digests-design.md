@@ -1,6 +1,8 @@
 # Session digests: the project journal and the story
 
-Status: draft spec, waiting on the owner's OK.
+Code: `core/digests.ts` (the digest, switches, redaction),
+`core/journal.ts` (the file and the engine's tick), `core/story.ts`,
+`core/digest-watcher.ts`. Tests: `packages/core/test/session-digests.test.ts`.
 
 One record per finished agent session, made once, read twice:
 
@@ -12,7 +14,7 @@ One record per finished agent session, made once, read twice:
 Both are off by default.
 
 
-## Decisions (owner, 2026-11-22)
+## Decisions
 
 - Who writes a digest: the agent, as part of `riker-tools done`. A cheap
   watcher (haiku) writes one only for a session that changed something
@@ -34,11 +36,12 @@ Both are off by default.
 
 ## The digest
 
-A row in a new `digests` table:
+A row in `digests`:
 
     id, task_id, session_id, at
     by            agent | watcher
     outcome       ready | blocked | waiting | stopped
+    goals         the task's goals as the agent left them (empty: unchanged)
     did           what changed, result first
     decisions     choices made and why
     learned       lines: surprises, gotchas, what to do differently
@@ -47,25 +50,29 @@ A row in a new `digests` table:
     questions     open questions for the owner
     links         JSON: pr, branch, docs made (task links added this session)
     knowledge     JSON: hub ids made from learned lines
-    covers_to     byte offset in the session's transcript it read up to
+    covers_to     how far into the session's transcript it reaches (bytes)
 
 Made by:
 
-- `riker-tools done` with new optional flags, all repeatable where a list:
-  `--did`, `--decision`, `--learned`, `--next`, `--blocked`, `--question`,
-  `--outcome`. `--summary` stays required and is `did` when `--did` is
-  left out. With both features off, the flags are accepted and ignored
-  past the turn, so a brief can name them either way.
-- the watcher, on a session that ended (SessionEnd, not a Riker restart)
-  with no digest since its last one, when its transcript since then has an
-  Edit, Write, NotebookEdit or `git commit` call. It sends haiku the
-  slice as text (assistant words, tool names and short inputs, no tool
-  output), with no tools, asks for the fields above as JSON, and records
-  spend under a new role `digest`. Over the daily cap it skips and the
-  journal gets a plain "session ended" line instead.
+- `riker-tools done`, with optional flags, each given once per item:
+  `--goal`, `--did`, `--decision`, `--learned`, `--next`, `--blocked`,
+  `--question`, and `--outcome`. `--summary` stays required and is `did`
+  when `--did` is left out. With both features off for the task, no
+  digest is kept. The digest records how long the transcript was (from
+  the Stop hook's `transcript_path`, kept on `sessions`).
+- the watcher, when a coding session ends (SessionEnd; not a Riker
+  restart) and `done` did not write up this run of it. A resumed session
+  keeps its id, so "this run" is since its previous end. It reads the
+  transcript past the furthest digest of the session, and goes on only
+  when that part has an Edit, MultiEdit, Write, NotebookEdit or
+  `git commit` call. It sends `digests.watcherModel` (haiku) the part as
+  text (the owner's and the agent's words, one line per tool call with
+  its file or command, never tool output), with no tools, gets the fields
+  above as JSON, and records spend under the role `digest`. Past the
+  daily spend cap it asks nothing.
 
-The coding brief's "When finished" line names the new flags when either
-feature is on for the task.
+The coding brief asks for the flags when either feature is on for the
+task.
 
 
 ## The journal
@@ -78,13 +85,16 @@ Written by the engine only (one process, no races), from `task_events`
 behind its own cursor, the way action triggers are heard:
 
 - `finished` (the agent's `done`): the full entry from its digest;
-- `ended` (a new task event, on `sessions.ended_at`): the watcher's digest
-  as a full entry, or one line when the session changed nothing;
-- `created`, `merged`, `done`, `dropped`, `reopened`: one line each.
+- `ended` (a coding session's end, on `sessions.ended_at`; the Wins
+  history leaves it out): the watcher's digest as a full entry, or one
+  line saying why there is none ("nothing changed", "the daily spend cap
+  is reached");
+- `created`, `merged`, `unmerged`, `done`, `dropped`, `later`, `reopened`:
+  one line each.
 
 A full entry, plain text, blank lines between parts:
 
-    2026-11-22 14:05  RIKER-0178  Project journal: ...  (agent)
+    2026-11-22 14:05  RIKER-0042  Fix the CSV import  (agent)
     Outcome: ready for review
 
     Did: ...
@@ -96,7 +106,7 @@ A full entry, plain text, blank lines between parts:
     Next:
     - ...
 
-    Links: PR https://github.com/..., branch project-journal-..., doc ...
+    Links: PR https://github.com/..., branch fix-csv-import, doc ...
 
 The file is the owner's as much as Riker's. Riker owns only what lies
 between its markers and writes only there:
@@ -107,9 +117,12 @@ between its markers and writes only there:
     ...                     entries already written are never rewritten
     <!-- /riker:journal -->
 
-Text outside the markers is never touched. Markers gone: Riker puts a new
-pair at the top and logs it. On the first write of a month, entries of
-earlier months move out of the block into `journal/<YYYY-MM>.md`.
+Each entry starts with `<!-- riker:entry YYYY-MM -->`. Text outside the
+markers is never touched, nor is an entry's text once written. Markers
+gone: Riker puts a new pair at the top and logs it. On the first write of
+a month, entries of earlier months move out of the block, as written, into
+`journal/<YYYY-MM>.md`. Files are written whole (a temp file, then a
+rename), readable by the owner only.
 
 On first write the journal is attached to its project as a doc
 (`project_links`, a `file://` URL titled "Journal"), so every task brief
@@ -118,22 +131,22 @@ in the project names it and the Documents view lists it.
 
 ## The story
 
-A new `stories` table: one row per version (`task_id`, `digest_id`,
-`at`, `by`, `goals`, `now`, `decisions`, `blocked`, `next`, `questions`,
-`pinned`). `tasks.brief` stays the owner's text. A digest makes a new
-version; goals carry forward from the last version unless the digest
-changes them.
+`stories`: one row per version (`task_id`, `digest_id`, `at`, `by`,
+`goals`, `now`, `decisions`, `blocked`, `next`, `questions`, `pinned`);
+the newest is current. The task's brief (`tasks.summary`) stays the
+owner's text. A digest makes a new version; goals carry forward unless
+the digest sets them.
 
 `pinned` is the owner's lines (a goal or a next step). Every new version
 copies them forward and shows them first; nothing drops them. The owner
-pins and unpins with a move (`riker-tools move pin RIKER-0178 "..."`,
-`--off`), which is also how the Assistant does it.
+pins and unpins with `riker-tools move pin <ref> "<line>" [--off yes]`,
+which is also how the Assistant does it. `move story_undo <ref>` makes the
+version before current again, as a new row, keeping the pins as they are.
 
 Read by: the coding brief of a started, resumed or restarted agent (the
-latest version, before the history it already gets); `riker-tools task`;
-the Canvas, above the turns. Undo of a bad version is a move that makes
-the previous version current again. The rail line, the Wins and Inbox
-boards and a per-turn refresh come later.
+current version, before the turns); `riker-tools task` (and so the
+Assistant, for a task the owner names); the Canvas, one line under the
+task's header (pins, the next step, what blocks it); `I`, all of it.
 
 
 ## Knowledge
@@ -164,26 +177,19 @@ The overrides are data, beside the rows they switch: `projects.journal`,
 `projects.story` (the default for the project's tasks) and `tasks.story`,
 each on, off or unset (follow the level above). A task's story follows the
 task, then its project, then config; a journal follows its project, then
-config. The owner flips them where the row is shown: a key on a project's
-or a task's Canvas and its info view, which says whether each is on and
-where that comes from ("story: on (project)"). The same switch is a move
-(`riker-tools move story RIKER-0178 --on|--off|--default`, `move journal
-<project> ...`), so the Assistant can flip it too. A digest is made when
-either feature is on for the task.
+config. `J` on a task's row or Canvas flips its story; on a project's,
+its journal: an unset switch takes the opposite of what it follows. `I`
+and `riker-tools task|project` say whether each is on and where that
+comes from ("story: on (project)"). The moves set all three, `default`
+clearing one: `riker-tools move story <ref> on|off|default` (ctrl+z
+undoes it), `move journal <project> on|off|default`, and `--stories yes`
+for the project's story default. A digest is made when either feature is
+on for the task.
 
 
-## First build (this task)
+## Not built
 
-1. `digests` table, `done` flags, redaction; tests.
-2. Journal writer in the engine: markers, entries, status block, month
-   roll-up, `project_links` row, the `ended` task event; tests on a fresh
-   home.
-3. Knowledge lines.
-4. Story rows, pins, the coding brief and `riker-tools task`
-   showing them; the Canvas section.
-5. The watcher, with a fake brain in tests and one real haiku check in a
-   scratch home.
-
-Left for later: per-turn refresh, rail line, Wins and Inbox boards,
-publishing a copy as a claude.ai doc, the per-task doc library, the
-`move brief` rule while an agent runs.
+A per-turn refresh of the story, the story on the rail line and in the
+Wins and Inbox boards, publishing a copy of a journal as a claude.ai doc,
+the per-task doc library (`tasks/<REF>/`), and re-reading the brief when
+`move brief` changes it under a running agent.

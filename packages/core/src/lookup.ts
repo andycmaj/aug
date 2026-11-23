@@ -3,7 +3,7 @@
 // move anything.
 
 import type { RikerConfig } from "./config";
-import { journalSwitch, storySwitch, SwitchFrom, switchWords } from "./digests";
+import { journalSwitch, projectStoryDefault, storySwitch, switchWords } from "./digests";
 import { storyBlock } from "./story";
 import { transcript } from "./transcript";
 import * as store from "./store";
@@ -207,11 +207,7 @@ export function projectDetail(p: ProjectRow, config?: RikerConfig): string {
 
 // What the project's journal and its tasks' stories default to, and why.
 export function projectSwitches(config: RikerConfig, p: ProjectRow): string {
-  const story =
-    p.story === 0 || p.story === 1
-      ? { on: p.story === 1, from: SwitchFrom.project }
-      : { on: config.story.enabled, from: SwitchFrom.config };
-  return `Switches: ${switchWords("journal", journalSwitch(config, p))}, ${switchWords("stories", story)}`;
+  return `Switches: ${switchWords("journal", journalSwitch(config, p))}, ${switchWords("stories", projectStoryDefault(config, p))}`;
 }
 
 // A project as the Assistant gets it when the owner names it: the brief,

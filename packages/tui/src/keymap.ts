@@ -285,6 +285,21 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     help: "ignore",
     relevant: isWork,
   },
+  // J flips a row's session write-up: a task's story, a project's journal.
+  {
+    key: "shift+j",
+    cmd: Commands.STORY_SWITCH,
+    desc: "story on/off: the task's state of play, kept from each finished session",
+    help: "story",
+    relevant: isWork,
+  },
+  {
+    key: "shift+j",
+    cmd: Commands.JOURNAL_SWITCH,
+    desc: "journal on/off: the project's file of finished sessions and task events",
+    help: "journal",
+    relevant: (c) => c.item === "project",
+  },
   {
     key: "x",
     cmd: Commands.PROJECT_ARCHIVE,

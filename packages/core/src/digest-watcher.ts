@@ -143,29 +143,31 @@ function prompt(task: TaskRow, slice: string): string {
 
 // Why a session gets no watcher digest, or null when it should get one.
 export function watchSkip(session: SessionRow, slice: TranscriptSlice | null): string | null {
-  if (!session.transcript_path) return "no transcript";
-  if (!slice) return "transcript unreadable";
+  if (!session.transcript_path) return "no transcript to read";
+  if (!slice) return "its transcript could not be read";
   if (!slice.changed) return "nothing changed";
   return null;
 }
 
-// The watcher's digest for a session, or null (said why in the log; never
-// its text).
+// The watcher's digest for a session, or why there is none, in words the
+// journal's line can carry. The log says ids, never the text.
+export type Watched = { digest: DigestRow; why?: undefined } | { digest: null; why: string };
+
 export async function watchSession(
   config: RikerConfig,
   task: TaskRow,
   session: SessionRow,
-): Promise<DigestRow | null> {
+): Promise<Watched> {
   const from = Math.max(0, ...store.digestsForSession(session.id).map((d) => d.covers_to ?? 0));
   const slice = session.transcript_path ? readSlice(session.transcript_path, from) : null;
   const skip = watchSkip(session, slice);
   if (skip || !slice) {
     log.debug("no watcher digest", { task: task.id, session: session.id, why: skip });
-    return null;
+    return { digest: null, why: skip ?? "nothing changed" };
   }
   if (capReached(config)) {
     log.info("no watcher digest: daily spend cap", { task: task.id, session: session.id });
-    return null;
+    return { digest: null, why: "not written up: the daily spend cap is reached" };
   }
   try {
     const result = await think({
@@ -178,11 +180,11 @@ export async function watchSession(
     const a = (result.structured ?? {}) as Answer;
     if (result.isError || !a.did) {
       log.warn("watcher digest failed", { task: task.id, session: session.id });
-      return null;
+      return { digest: null, why: "the write-up failed" };
     }
     const clean = (v: string[] | undefined) => toLines(v).map(redact).join("\n");
     const outcomes = Object.values(DigestOutcome) as string[];
-    return store.addDigest({
+    const digest = store.addDigest({
       task_id: task.id,
       session_id: session.id,
       by: DigestBy.watcher,
@@ -198,8 +200,9 @@ export async function watchSession(
       knowledge: "[]",
       covers_to: slice.end,
     });
+    return { digest };
   } catch (err) {
     log.warn("watcher digest failed", { task: task.id, session: session.id, err: err instanceof Error ? err.name : "error" });
-    return null;
+    return { digest: null, why: "the write-up failed" };
   }
 }

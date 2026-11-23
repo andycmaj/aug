@@ -131,7 +131,7 @@ const EVENT_WORDS: Partial<Record<TaskEventKind, (e: TaskEventRow) => string>> =
   [TaskEventKind.merged]: () => "merged",
   [TaskEventKind.unmerged]: () => "merge undone",
   [TaskEventKind.finished]: (e) => `agent finished${e.detail ? `: ${e.detail}` : ""}`,
-  [TaskEventKind.ended]: () => "session ended; nothing changed",
+  [TaskEventKind.ended]: () => "session ended",
 };
 
 export function renderLine(task: TaskRow, e: TaskEventRow, words?: string): string {
@@ -323,10 +323,16 @@ async function heard(config: RikerConfig, e: TaskEventRow): Promise<void> {
     if (!session || session.end_reason === EndReason.restart) return;
     if (doneSince(session.id, e)) return;
     if (!digestWanted(config, task)) return;
-    const d = await watchSession(config, task, session);
-    if (d && storySwitch(config, task).on) storyFromDigest(d);
+    const watched = await watchSession(config, task, session);
+    if (watched.digest && storySwitch(config, task).on) storyFromDigest(watched.digest);
     if (!journal || !project) return;
-    writeJournal(project, d ? renderEntry(task, d) : renderLine(task, e), e.at);
+    writeJournal(
+      project,
+      watched.digest
+        ? renderEntry(task, watched.digest)
+        : renderLine(task, e, `session ended; ${watched.why}`),
+      e.at,
+    );
     return;
   }
   if (!journal || !project) return;
