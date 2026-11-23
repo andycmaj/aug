@@ -32,6 +32,7 @@ import {
   foldRail,
   nextKey,
   rowFor,
+  Section,
   walkableKeys,
   type RailFilter,
   type RailItem,
@@ -357,6 +358,17 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   // Every way to change the selection or the view (open, walk, search, Home, v)
   // is a visit. Recorded after the handler that moved it is done, so a
   // switch to Chat and a select in one key make one visit, not two.
+  // A task open on the Canvas while a timer on it rings (the rail's Due):
+  // you have seen it, so it stops, whether you went to it or it fired while
+  // you were there.
+  createEffect(() => {
+    const key = selectedKey();
+    if (mode() !== ViewMode.chat || !key) return;
+    const due = rail().find((s) => s.section === Section.due);
+    if (due?.items.some((i) => baseKey(i.key) === key))
+      engine.desk.seenTimers(Number(key.slice(1)));
+  });
+
   const trail = new NavHistory();
   const [trailMoved, setTrailMoved] = createSignal(0);
   let recordQueued = false;

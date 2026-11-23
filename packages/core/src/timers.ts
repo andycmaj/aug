@@ -302,9 +302,16 @@ function timerMeta(message: MessageRow): TimerMeta | null {
   }
 }
 
-function settled(message: MessageRow, task: TaskRow | null, reason: string): TriageOutcome {
+// A timer that did something rings (unread: the rail's Due section) until
+// the owner opens its task; one that found nothing to do is read at once.
+function settled(
+  message: MessageRow,
+  task: TaskRow | null,
+  reason: string,
+  ring = false,
+): TriageOutcome {
   store.fileMessage(message.id, null, reason, task?.id ?? null);
-  store.markMessageRead(message.id);
+  if (!ring) store.markMessageRead(message.id);
   return { verdict: "timer", taskId: task?.id ?? null, reason, effects: [] };
 }
 
@@ -327,7 +334,7 @@ export function routeTimer(message: MessageRow): TriageOutcome {
         body: "You asked to be reminded about this today",
         messageId: message.id,
       });
-      return settled(message, task, `reminded you of ${ref}`);
+      return settled(message, task, `reminded you of ${ref}`, true);
     }
     const what =
       meta.kind === TimerKind.followup
@@ -341,7 +348,12 @@ export function routeTimer(message: MessageRow): TriageOutcome {
       messageId: message.id,
     });
     if (task.status !== TaskStatus.open) store.reopen(task.id);
-    const outcome = settled(message, task, `${meta.kind === TimerKind.followup ? "follow-up" : "schedule"} on ${ref}`);
+    const outcome = settled(
+      message,
+      task,
+      `${meta.kind === TimerKind.followup ? "follow-up" : "schedule"} on ${ref}`,
+      true,
+    );
     return { ...outcome, effects: [{ type: "timer", taskId: task.id, turnId: turn.id, reason: body }] };
   });
 }

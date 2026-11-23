@@ -57,6 +57,11 @@ describe("a follow-up", () => {
     expect(await tick(local(22, 9))).toBe(0);
     expect(woke).toHaveLength(1);
 
+    // It rings on the rail's Due until you open the task.
+    expect(store.ringingTimers().has(task.id)).toBe(true);
+    engine.desk.seenTimers(task.id);
+    expect(store.ringingTimers().size).toBe(0);
+
     // On the Inbox, under its task, with the chain that routed it.
     const row = inboxRows().find((r) => r.type === "message" && r.message.channel === "timer")!;
     expect(row.result).toBe(InboxResult.timer);
@@ -144,6 +149,7 @@ describe("a reminder", () => {
     expect(store.getTask(task.id)!.status).toBe(TaskStatus.open);
     expect(store.turnsForTask(task.id).at(-1)!.body).toBe("You asked to be reminded about this today");
     expect(woke).toEqual([]);
+    expect(store.ringingTimers().has(task.id)).toBe(true);
   });
 
   test("for a task already back, it does nothing", async () => {
@@ -154,6 +160,8 @@ describe("a reminder", () => {
     const turns = store.turnsForTask(task.id).length;
     await tick(local(21, 7));
     expect(store.turnsForTask(task.id)).toHaveLength(turns);
+    // Nothing happened, so nothing rings.
+    expect(store.ringingTimers().size).toBe(0);
   });
 });
 

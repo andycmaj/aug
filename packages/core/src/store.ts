@@ -1661,6 +1661,27 @@ export function setTimerState(id: number, state: TimerState): void {
   run("UPDATE timers SET state = ? WHERE id = ?", state, id);
 }
 
+// Tasks a timer fired on that the owner has not opened since (its message
+// unread): the rail's Due section. Task id -> when the latest fired.
+export function ringingTimers(): Map<number, string> {
+  const rows = all<{ task_id: number; at: string }>(
+    `SELECT task_id, MAX(received_at) AS at FROM messages
+     WHERE channel = 'timer' AND read_at IS NULL AND task_id IS NOT NULL
+     GROUP BY task_id`,
+  );
+  return new Map(rows.map((r) => [r.task_id, r.at]));
+}
+
+// The owner opened the task: its fired timers stop ringing.
+export function silenceTimers(taskId: number): number {
+  const ids = all<{ id: number }>(
+    "SELECT id FROM messages WHERE channel = 'timer' AND task_id = ? AND read_at IS NULL",
+    taskId,
+  );
+  for (const { id } of ids) markMessageRead(id);
+  return ids.length;
+}
+
 // Cancels a task's pending timers of these kinds; returns how many.
 export function cancelTimers(taskId: number, kinds: readonly TimerKind[]): number {
   const ids = all<{ id: number }>(

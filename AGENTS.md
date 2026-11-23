@@ -277,8 +277,10 @@ Tests live beside their package (`packages/<name>/test/`).
   missed one fires once at start). The `timer` triage rule, first in the
   chain, files it on its task and returns a `timer` effect; the desk wakes
   the agent (a chat turn, a line in a live coding window, or a resume). A
-  timer message is `from_me`, so it is never a reply target. The Canvas
-  header and the Inbox's `timers` filter show them.
+  timer message is `from_me`, so it is never a reply target. One that did
+  something stays unread, which lists its task under the rail's **Due**
+  (first under Home) until the owner opens it. The Canvas header and the
+  Inbox's `timers` filter show them.
 - **ctrl+z is `core/undo.ts`**: the desk keeps this session's moves (the
   owner's keys and the Assistant's verbs, never a task's own agent's),
   newest first, 50 deep, in memory. A desk method that changes a task wraps

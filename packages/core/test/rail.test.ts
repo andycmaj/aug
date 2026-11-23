@@ -14,6 +14,7 @@ import {
   isSlipped,
   ageLabel,
   WALKED,
+  SECTION_TITLES,
   RAIL_FILTERS,
   filterOf,
   filterRail,
@@ -532,7 +533,38 @@ describe("status model (docs/rail-status-design.md)", () => {
     expect(wins.done).toBe(1);
     const tasks = rail.find((s) => s.section === "tasks")!;
     expect(tasks.items.map((i) => i.key)).toEqual([`t${a.id}`, `t${c.id}`]);
-    expect(WALKED[0]).toBe("wins");
+    expect(WALKED.slice(0, 2)).toEqual(["due", "wins"]);
+  });
+
+  test("Due sits above everything but Home: a task a timer fired on, until you open it", () => {
+    const a = coding("a");
+    const b = coding("b");
+    const gone = coding("gone");
+    taskClosed(gone.id);
+    store.addWin(localDay(new Date()), a.id);
+    const rail = buildRail({
+      home: store.homeTask(),
+      tasks: store.listTasks(),
+      pendingActions: new Set(),
+      lastHeard: new Map(),
+      now: new Date(),
+      wins: [a.id],
+      due: new Map([
+        [b.id, at(9)],
+        [a.id, at(8)],
+        [gone.id, at(7)],
+      ]),
+    });
+    expect(rail.map((s) => s.section).slice(0, 3)).toEqual(["home", "due", "wins"]);
+    const due = rail.find((s) => s.section === "due")!;
+    // Oldest first, like every heading; a closed task does not ring.
+    expect(due.items.map((i) => i.key)).toEqual([`t${a.id}@due`, `t${b.id}@due`]);
+    expect(due.items.every((i) => i.type === "task" && i.copy)).toBe(true);
+    expect(due.count).toBe(2);
+    // It stays where it sits too.
+    const tasks = rail.find((s) => s.section === "tasks")!;
+    expect(tasks.items.map((i) => i.key)).toContain(`t${b.id}`);
+    expect(SECTION_TITLES.due).toBe("Due");
   });
 
   test("local day is the owner's date", () => {

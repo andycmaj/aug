@@ -827,6 +827,11 @@ export class Desk {
     });
   }
 
+  // The owner opened the task: a timer that fired on it stops ringing.
+  seenTimers(taskId: number): void {
+    store.silenceTimers(taskId);
+  }
+
   readResult(taskId: number): void {
     const task = store.getTask(taskId);
     if (task?.unread_result) store.updateTask(taskId, { unread_result: 0 });

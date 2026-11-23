@@ -42,6 +42,7 @@ function rail(now: Date, pending: Set<number>): RailSection[] {
     prStates: store.prStates(),
     blockers: store.allBlockers(),
     wins: store.winsOn(localDay(now)),
+    due: store.ringingTimers(),
   });
 }
 
