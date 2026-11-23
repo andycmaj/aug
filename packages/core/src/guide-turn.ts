@@ -1,8 +1,33 @@
 // Riker's words for a guide run (@riker/code-review-plannotator does the run):
 // the action's turn, and how the task's actions name reopening its review.
 
-import type { SavedGuide } from "@riker/code-review-plannotator/guide";
+import { reviewNotes, type SavedGuide } from "@riker/code-review-plannotator/guide";
 import { GuideStage, type GuideProgress } from "@riker/code-review-plannotator/progress";
+import type { RikerConfig } from "./config";
+import { reviewedPr } from "./pr";
+import { ActionOutput, makesCheckout, registeredActions, whyNotOffered } from "./task-actions";
+import type { TaskRow } from "./types";
+
+// The line a review task gets when it arrives: the guide is there to run,
+// on the owner's word only (it spends money), and what running it does.
+// Null when no guide action is offered on the task (turned off in config).
+export function guideOffer(
+  config: Pick<RikerConfig, "actions">,
+  task: TaskRow,
+): string | null {
+  const spec = registeredActions(config).find(
+    (a) => a.output === ActionOutput.guide && whyNotOffered(a, task) === null,
+  );
+  if (!spec) return null;
+  const key = spec.key ? `\`${spec.key}\`, or ` : "";
+  const checkout = makesCheckout(spec, task)
+    ? `it makes the worktree on ${task.branch ?? "its branch"} (no agent starts), then `
+    : "it ";
+  const opens = reviewedPr(task)
+    ? "opens the pull request in Plannotator with its findings; Post to GitHub there sends your review"
+    : "opens it in Plannotator with its findings; what you send goes to the agent, not GitHub";
+  return `A guided review is ready to run: ${key}\`.\` then "${spec.title}". ${checkout[0]!.toUpperCase()}${checkout.slice(1)}reviews the change headless and ${opens}. Start runs the review agent instead.`;
+}
 
 // What the action's turn says: the chapters, then the findings by file.
 // `opened`: Riker opens the review now; else (a trigger ran it) the owner
@@ -69,4 +94,26 @@ export function guideProgressLine(p: GuideProgress): string {
     case GuideStage.saving:
       return "saving to Plannotator";
   }
+}
+
+// What a guide's review leaves when it closes: notes for the agent, and a
+// line for the toast. A PR the owner was asked to review opens in
+// Plannotator's PR mode, where Post to GitHub sends the review and leaves
+// one status line ("Pull request reviewed on GitHub: ..."); there nothing
+// goes to the agent, and feedback sent the agent's way instead stays in
+// the feedback file, unposted. Otherwise what was sent goes to the agent
+// (reviewNotes).
+export function reviewExit(
+  posts: "github" | undefined,
+  output: string,
+): { notes: string | null; status: string | null } {
+  if (posts !== "github") return { notes: reviewNotes(output), status: null };
+  const said = reviewNotes(output);
+  if (!said) return { notes: null, status: "Nothing was posted to GitHub" };
+  const lines = said.split("\n").filter((l) => l.trim());
+  if (lines.length === 1) return { notes: null, status: lines[0]!.trim().slice(0, 200) };
+  return {
+    notes: null,
+    status: "Not posted to GitHub: Plannotator's Post to GitHub sends a review (your notes are in guide-feedback.md)",
+  };
 }

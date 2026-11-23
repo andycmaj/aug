@@ -70,6 +70,21 @@ export function taskPr(task: TaskRow): PrRef | null {
   return null;
 }
 
+// Someone else's PR the owner was asked to review: triage marks it with a
+// link of its own when it files the review, since a task's URL, thread or
+// pr:N branch can be a PR it was asked to work on (the owner's own) instead.
+export const REVIEW_LINK_BY = "triage review";
+export const REVIEW_LINK_TITLE = "the pull request to review";
+
+export function reviewedPr(task: TaskRow): PrRef | null {
+  for (const link of store.linksForTask(task.id))
+    if (link.added_by === REVIEW_LINK_BY) {
+      const pr = fromUrl(link.url);
+      if (pr) return pr;
+    }
+  return null;
+}
+
 // The merge queue's mark: past review, on its way to merged.
 export const QUEUE_MARK = "↠";
 

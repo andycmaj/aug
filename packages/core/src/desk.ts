@@ -31,6 +31,7 @@ import * as projects from "./projects";
 import { applyProjectDoc, renderProjectDoc } from "./project-doc";
 import { Drafts, editPending, sendPending } from "./outbound";
 import * as repos from "./repos";
+import type { PathNeed } from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
@@ -41,9 +42,11 @@ import {
   ActionVia,
   actionNamed,
   invocation,
+  makesCheckout,
   registeredActions,
   triggeredBy,
   whyNot,
+  whyNotOffered,
   type ActionSpec,
 } from "./task-actions";
 import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
@@ -328,6 +331,32 @@ export class Desk {
     const why = whyNot(spec, task);
     if (why) return { error: why };
     return this.startAction(config, task, spec);
+  }
+
+  // What an action offered on a task still needs before runAction: its
+  // worktree, made on the task's branch with no agent started (a review that
+  // just arrived has none). `needs` asks the owner where the repo is checked
+  // out, as Start does; the caller asks and calls again. Never run by itself:
+  // the owner's key, the picker or a move asks for it.
+  async prepareAction(
+    taskId: number,
+    name: string,
+  ): Promise<{ type: "ready" } | { type: "needs"; need: PathNeed } | { type: "failed"; error: string }> {
+    const task = store.getTask(taskId);
+    if (!task) return { type: "failed", error: `no task ${store.taskRef(taskId)}` };
+    const spec = actionNamed(this.config(), name);
+    if (!spec) return { type: "failed", error: `no action ${name}` };
+    const why = whyNotOffered(spec, task);
+    if (why) return { type: "failed", error: why };
+    if (!makesCheckout(spec, task)) return { type: "ready" };
+    const made = await this.cannotAsync(
+      `checkout ${store.taskRef(taskId)}`,
+      "it made a worktree",
+      () => projects.ensureCheckout(this.config(), taskId),
+    );
+    if (made.type === "needs-path") return { type: "needs", need: made.need };
+    if (made.type === "failed") return made;
+    return { type: "ready" };
   }
 
   // The task's last guide, reopened in Plannotator with its findings and no

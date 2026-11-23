@@ -200,7 +200,7 @@ function writeIfChanged(file: string, text: string): void {
 
 // Built-ins, then config's changes and additions. An entry without a skill
 // or a via is left out (and logged), never guessed.
-export function registeredActions(config: RikerConfig): ActionSpec[] {
+export function registeredActions(config: Pick<RikerConfig, "actions">): ActionSpec[] {
   const out: ActionSpec[] = [];
   const names = new Set([
     ...Object.keys(BUILTIN_ACTIONS),
@@ -254,12 +254,42 @@ export function actionNamed(
   return registeredActions(config).find((a) => a.name === name);
 }
 
-// Why an action cannot run on this task, or null when it can.
+// Why an action cannot run on this task now, or null when it can.
 export function whyNot(spec: ActionSpec, task: TaskRow): string | null {
+  return why(spec, task, false);
+}
+
+// Why an action is not offered on this task, or null when it is: as whyNot,
+// except that a worktree it lacks counts as met when the task has a repo to
+// make one in (makesCheckout), so a review that arrived from GitHub offers
+// its guide before any agent has started.
+export function whyNotOffered(spec: ActionSpec, task: TaskRow): string | null {
+  return why(spec, task, true);
+}
+
+// The action needs a worktree the task has not got (or has lost), and its
+// repo can make one: the owner's run makes it first (desk.prepareAction),
+// with no agent started.
+export function makesCheckout(spec: ActionSpec, task: TaskRow): boolean {
+  return (
+    (spec.needs ?? []).includes(ActionNeed.worktree) &&
+    task.kind === Kind.coding &&
+    !!task.repo &&
+    !hasWorktree(task)
+  );
+}
+
+function hasWorktree(task: TaskRow): boolean {
+  return !!task.worktree && existsSync(task.worktree);
+}
+
+function why(spec: ActionSpec, task: TaskRow, offered: boolean): string | null {
   const kinds = spec.kinds ?? WORK_KINDS;
   if (!kinds.includes(task.kind))
     return `${spec.name} is for ${kinds.join(" or ")} tasks`;
+  const making = offered && makesCheckout(spec, task);
   for (const need of spec.needs ?? []) {
+    if (need === ActionNeed.worktree && making) continue;
     if (need === ActionNeed.worktree && !task.worktree)
       return `${spec.name} needs a worktree (start the agent first)`;
     // Checked before the run, not after it has spent its tokens.
@@ -327,9 +357,10 @@ export function keyedActions(
   );
 }
 
-// The actions the picker offers for a task.
+// The actions the picker offers for a task: the ones it can run now, and
+// the ones it can once their worktree is made.
 export function actionsFor(config: RikerConfig, task: TaskRow): ActionSpec[] {
-  return registeredActions(config).filter((a) => whyNot(a, task) === null);
+  return registeredActions(config).filter((a) => whyNotOffered(a, task) === null);
 }
 
 // A task does not record what it branched from; the skills fall back to

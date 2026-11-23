@@ -274,8 +274,9 @@ nothing to install):
 
 - `summarize`: the work so far (goal, done, decisions, left, blocked), on a
   copy of the agent's session, so the agent is not disturbed.
-- `guide` (coding, with a checkout): a guided review of the branch in
-  chapters, with review findings, saved into Plannotator and opened in
+- `guide` (coding, with a checkout or a repo to make one): a guided review
+  of the branch in chapters, with review findings, saved into Plannotator
+  and opened in
   `plannotator review` with each finding as a comment on its lines (from
   "Riker guide"). The comments you keep, and yours, go to the agent when you
   send feedback. Needs `plannotator` on your PATH. The findings are kept
@@ -285,7 +286,16 @@ nothing to install):
   `origin/main` when it is ahead of your `main`; lock files are left out,
   and a big change is reviewed in batches of related files (same commit,
   a test and its code, one naming what another defines), so every file's
-  diff is read.
+  diff is read. A review that just arrived offers it before any agent
+  starts (its task says so): running it makes the `pr:N` worktree first
+  (asking where the repo is when it is unmapped, as Start does), with no
+  agent. Its review opens on the pull request itself (`plannotator review
+  <PR URL>`, with the findings as comments), and Plannotator's Post to
+  GitHub sends your review there (approve, comment or request changes, on
+  the lines); nothing goes to the agent. Your own work's review opens on
+  its worktree, and what you send goes to its agent, never GitHub. A
+  branch that does not exist yet has nothing to review: start the agent
+  first.
 - `quiz` (coding, with a checkout): quizzes you on the change, one question
   at a time, in interactive claude beside the agent (or on the Canvas when
   it has no window).
@@ -309,7 +319,7 @@ nothing to install):
 | `output`     | `turn`, `file` (also under What it made), `none`, or `guide`                                     |
 | `kinds`, `needs` | the rows it applies to: kinds of task, and `worktree`, `session` or `pr`                     |
 | `capability` | a capability loaded for this run only, e.g. a plugin that holds the skill                       |
-| `key`        | a key of its own on the rail and the Canvas, read at start; one Riker already uses is refused     |
+| `key`        | a key of its own on the rail and the Canvas, read at start and listed in the footer on rows it applies to; one Riker already uses is refused |
 | `model`, `title` | the model (default `brain.agentModel`) and the picker's label                                |
 | `on`         | events that run it by itself, once per task (below)                                             |
 
@@ -319,10 +329,11 @@ work is done), `merged`, `done`; rules `kind`, `channel`, `githubReason`,
 `author`, `title`, `body` (case-blind regexes, as in `triage.noise`) and
 `project`. Runs it starts wait for each other, stop at the day's spend cap,
 and never open anything: a guide is saved for you to open with **Open the
-guide's review**, and its turn says so.
+guide's review**, and its turn says so. Nor do they make a worktree: a
+review that just arrived has none, so its guide waits for you.
 
 ```json
-"guide": { "on": [{ "event": "triaged", "kind": "coding", "githubReason": ["review_requested"] }] },
+"guide": { "on": [{ "event": "ready" }] },
 "summarize": { "on": [{ "event": "ready" }] }
 ```
 

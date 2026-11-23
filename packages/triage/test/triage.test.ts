@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { reviewedPr } from "@riker/core/pr";
 import { taskClosed } from "@riker/core/lifecycle";
 import * as store from "@riker/core/store";
 import { DEFAULT_CONFIG } from "@riker/core/config";
@@ -315,6 +316,14 @@ describe("triage routing", () => {
     expect(task.summary).toContain("linked ticket");
     expect(task.agent_state).toBe(AgentState.queued);
     expect(out.effects).toEqual([]);
+    // The guided review is offered on arrival, never run: no action turn.
+    const turns = store.turnsForTask(task.id);
+    expect(turns.some((t) => t.role === "action")).toBe(false);
+    const offer = turns.find((t) => t.role === "trigger" && t.body?.includes("guided review is ready"));
+    expect(offer?.body).toContain("makes the worktree on pr:40 (no agent starts)");
+    expect(offer?.body).toContain("Post to GitHub there sends your review");
+    // Marked as someone else's PR to review: the guide opens it in PR mode.
+    expect(reviewedPr(task)?.url).toBe("https://github.com/acme/api/pull/40");
   });
   test("a Slack mention in a channel thread is judged once, then the thread attaches", async () => {
     writeDoc(DocName.job, "# JOB\n\nHigh priority:\n- Slack mentions of me.\n");
@@ -737,6 +746,7 @@ describe("review requests become coding tasks", () => {
     expect(task.url).toBe("https://github.com/acme/api/pull/40");
     expect(store.threadsForTask(task.id)).toContain("github:acme/api#40");
     expect(store.linksForTask(task.id).map((l) => l.url)).toEqual([
+      "https://github.com/acme/api/pull/40",
       "https://acme.slack.com/archives/C9/p100",
     ]);
   });

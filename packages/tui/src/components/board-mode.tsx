@@ -34,6 +34,7 @@ import { boardTab, setBoardTab } from "./board-tab";
 import { CostTab } from "./cost-tab";
 import { useInboxTab } from "./inbox-tab";
 import { useWinsTab } from "./wins-tab";
+import { actionsFor } from "@riker/core/task-actions";
 import { PromptModal } from "./modals";
 import { useShell } from "./shell";
 import { duration, toneColor } from "./ui";
@@ -238,6 +239,7 @@ export function BoardMode() {
       started: false,
       pr: Boolean(t && riker.taskPr(t)),
       closed: Boolean(t && isClosed(t)),
+      ...(t ? { actions: actionsFor(riker.desk.config(), t).map((a) => a.name) } : {}),
       board: tab(),
       ...(tab() === Tab.inbox ? inbox.ctx() : {}),
       ...(tab() === Tab.wins ? wins.ctx() : {}),
