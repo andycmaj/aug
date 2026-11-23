@@ -2,6 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { TmuxMux, viewerMayHang } from "@riker/core/mux";
+import { codingLaunch } from "@riker/core/agents";
+import * as store from "@riker/core/store";
+import { config, freshHome } from "@riker/core/test/support/helpers";
 import { PtySession } from "../src/terminal/pty-session";
 import { terminalReplies } from "../src/terminal/replies";
 
@@ -354,4 +357,52 @@ describe.skipIf(!hasTmux)("viewer beside a terminal of another size", () => {
       if (answered === null) process.kill(serverPid, "SIGKILL");
     }
   }, 20_000);
+});
+
+// tmux refuses a command over about 16KB ("command too long"); a review's
+// brief (PR body, diff, threads) is easily more.
+describe.skipIf(!hasTmux)("long text", () => {
+  test("a start whose brief is past tmux's limit still opens its window", async () => {
+    freshHome();
+    const s = server("big");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const sessionId = tmux(s, "display", "-p", "-t", "proj:", "#{session_id}");
+    const task = store.createTask({
+      title: "Review #12",
+      kind: "coding",
+      channel: "github",
+      summary: "+ a changed line of the pull request under review\n".repeat(2000),
+    });
+    const launch = codingLaunch(config(), task, { note: "look at the parser first ".repeat(400) });
+    const mux = new TmuxMux(s);
+    // Same command line, with a program that exits instead of claude.
+    const window = await mux.newWindow({
+      sessionId,
+      name: "review",
+      cwd: tmpdir(),
+      env: launch.env,
+      argv: ["true", ...launch.argv.slice(1)],
+    });
+    expect(windows(s)).toContain(`proj ${window.id}`);
+  });
+
+  test("a line past tmux's limit reaches the pane whole", async () => {
+    const s = server("paste");
+    const out = `${tmpdir()}/riker-paste-${process.pid}`;
+    rmSync(out, { force: true });
+    // Raw, so the line is not cut at the terminal's canonical limit.
+    tmux(s, "new-session", "-d", "-s", "proj", `stty raw -echo; head -c 60001 > ${out}`);
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const text = "b".repeat(60000);
+    await new TmuxMux(s).sendLine(windowId, text);
+    await until(() => {
+      try {
+        return readFileSync(out, "utf8").length === 60001;
+      } catch {
+        return false;
+      }
+    });
+    expect(readFileSync(out, "utf8")).toBe(`${text}\r`);
+    rmSync(out, { force: true });
+  });
 });

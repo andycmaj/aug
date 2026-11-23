@@ -98,7 +98,10 @@ Tests live beside their package (`packages/<name>/test/`).
 - **`core/mux.ts` is the only door to tmux and wt**, and the only importer of
   `libtmux` (alpha, pinned exactly). Identity is the `@riker_project` /
   `@riker_task` user options, never names. Tests use `packages/core/test/support/fake-mux.ts`; real
-  tmux checks use a private server (`-L`), never the default one.
+  tmux checks use a private server (`-L`), never the default one. tmux
+  refuses a command past about 16KB, so long text never rides one: a coding
+  start's brief is a file (`--append-system-prompt-file`, under
+  `paths.launch`), and `sendLine` pastes a long line through `load-buffer -`.
 - **Where a repo is checked out is `core/repos.ts`**: `repos` in
   config is the owner's one path per repo; `core/checkouts.ts` (behind the
   Mux) inspects a path and scans `repoRoots` for checkouts. Every coding

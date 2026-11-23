@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { AgentPool, codingLaunch, hookSettings } from "../src/agents";
 import { Drafts } from "../src/outbound";
 import type { DraftKind } from "../src/plugins";
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
   ARTIFACT_TOOLS,
   artifactLink,
@@ -156,6 +156,8 @@ describe("coding agent", () => {
     expect(launch.argv[0]).toBe("claude");
     expect(launch.argv).toContain("--settings");
     expect(launch.env.RIKER_TASK_ID).toBe(String(t.id));
+    const brief = launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1]!;
+    expect(readFileSync(brief, "utf8")).toContain(`## The task\n${store.taskRef(t.id)}: Fix export`);
     const hooks = hookSettings().hooks as Record<string, unknown>;
     expect(Object.keys(hooks)).toEqual([
       "UserPromptSubmit",
@@ -165,6 +167,35 @@ describe("coding agent", () => {
       "Stop",
       "SessionEnd",
     ]);
+  });
+
+  // tmux takes a command of about 16KB at most (RIKER-0228: a review's
+  // brief is often more), so the brief and a long note go in files.
+  test("a brief or note of any size leaves the command line short", () => {
+    const t = store.createTask({
+      title: "Review #12",
+      kind: Kind.coding,
+      channel: "github",
+      summary: "+ a changed line\n".repeat(10000),
+    });
+    const note = "look at the parser first ".repeat(400);
+    const launch = codingLaunch(config(), t, { note });
+    expect(launch.argv.join(" ").length).toBeLessThan(4000);
+    const brief = launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1]!;
+    expect(readFileSync(brief, "utf8")).toContain("+ a changed line\n".repeat(10000));
+    // Only the owner reads them: the brief carries the task's private context.
+    expect(statSync(brief).mode & 0o777).toBe(0o600);
+    expect(statSync(dirname(brief)).mode & 0o777).toBe(0o700);
+    const first = launch.argv.at(-1)!;
+    const file = /read (\S+) first/.exec(first)?.[1];
+    expect(file && readFileSync(file, "utf8")).toBe(note);
+    expect(first.startsWith(`Work ${store.taskRef(t.id)}: Review #12.`)).toBe(true);
+
+    // A short note is typed as it is; a resume says only the note.
+    const short = codingLaunch(config(), t, { note: "parser first" });
+    expect(short.argv.at(-1)).toContain("Note from the owner: parser first");
+    const resumed = codingLaunch(config(), t, { resume: "s-1", note });
+    expect(resumed.argv.at(-1)).toMatch(/^The owner left you a note too long to type here: read \S+ first\.$/);
   });
 
   test("hooks move the agent through its states; done writes it up", () => {

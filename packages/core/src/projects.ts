@@ -5,7 +5,7 @@
 import { ENV_FLAG, envName, NAME, TOOLS_NAME } from "./brand";
 import { toolsMissing } from "./self";
 import { homedir } from "node:os";
-import { codingCwd, codingLaunch, type CodingLaunch } from "./agents";
+import { codingCwd, codingLaunch, dropLaunchFiles, type CodingLaunch } from "./agents";
 import type { RikerConfig } from "./config";
 import { EndReason, sessionEnded, sessionStarted } from "./lifecycle";
 import { logger } from "./log";
@@ -399,6 +399,7 @@ export async function stopTask(taskId: number): Promise<void> {
   for (const w of state.windows.filter((w) => w.taskId === taskId))
     await mux().killWindow(w.id);
   endTmuxSessions(taskId, EndReason.stop);
+  dropLaunchFiles(taskId);
 }
 
 export interface CloseResult {
@@ -425,6 +426,7 @@ export async function closeTask(
     }
   }
   endTmuxSessions(taskId, EndReason.closed);
+  dropLaunchFiles(taskId);
   const path = repoPath(config, task.repo);
   if (task.worktree && task.branch && path) {
     try {

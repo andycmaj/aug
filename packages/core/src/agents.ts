@@ -6,7 +6,8 @@
 // fires (riker-tools hook) keep its state.
 
 import { envName, SELF } from "./brand";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { assistantCall, rememberWhere, whereThingsStand } from "./assistant";
 import { think, BrainError, type BrainCall } from "./brain";
@@ -668,6 +669,32 @@ export interface CodingLaunch {
   sessionId: string;
 }
 
+// tmux takes a command of at most about 16KB (new-window's argv, every -e
+// included), and a review's brief (PR body, diff, threads) is often more:
+// it goes in a file claude reads, only the path on the line. Owner-only, in
+// the task's own work folder, gone when its window is (dropLaunchFiles).
+const NOTE_INLINE_MAX = 2000;
+
+function launchFile(taskId: number, name: string, text: string): string {
+  const dir = paths.launch(taskId);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  chmodSync(dir, 0o700);
+  const file = join(dir, name);
+  writeFileSync(file, text, { mode: 0o600 });
+  chmodSync(file, 0o600);
+  return file;
+}
+
+function ownerNote(taskId: number, note: string): { text: string; inFile?: string } {
+  if (note.length <= NOTE_INLINE_MAX) return { text: note };
+  const file = launchFile(taskId, "note.md", note);
+  return { text: note, inFile: `The owner left you a note too long to type here: read ${file} first.` };
+}
+
+export function dropLaunchFiles(taskId: number): void {
+  rmSync(paths.launch(taskId), { recursive: true, force: true });
+}
+
 export function hookSettings(): Record<string, unknown> {
   const hook = (event: string) => [
     { hooks: [{ type: "command", command: toolsCommand("hook", event) }] },
@@ -765,13 +792,15 @@ export function codingLaunch(
   else argv.push("--session-id", sessionId);
   argv.push("--settings", JSON.stringify(hookSettings()));
   const interview = task.kind === Kind.system;
-  argv.push("--append-system-prompt", interview ? onboardBrief(config, task) : codingBrief(config, task));
+  const brief = interview ? onboardBrief(config, task) : codingBrief(config, task);
+  argv.push("--append-system-prompt-file", launchFile(task.id, "brief.md", brief));
   argv.push("-n", store.taskRef(task.id));
+  const note = opts.note ? ownerNote(task.id, opts.note) : null;
   const first = opts.resume
-    ? (opts.note ?? "")
+    ? (note?.inFile ?? note?.text ?? "")
     : interview
       ? ONBOARD_START
-      : `Work ${store.taskRef(task.id)}: ${task.title}.${opts.note ? ` Note from the owner: ${opts.note}` : ""} Start by reading the notes board, then the task brief in your system prompt.`;
+      : `Work ${store.taskRef(task.id)}: ${task.title}.${note ? ` ${note.inFile ?? `Note from the owner: ${note.text}`}` : ""} Start by reading the notes board, then the task brief in your system prompt.`;
   if (first) argv.push(first);
   return {
     argv,
