@@ -24,13 +24,13 @@ test("the places list the keys that work there", () => {
     return new Map(p.rows.map((r) => [r.cmd, r.keys]));
   };
   const attached = place("attached");
-  expect(attached.get(Commands.GO_BACK)).toBe("^[");
+  expect(attached.get(Commands.TERMINAL_BACK)).toBe("^o / ^[");
   expect(attached.get(Commands.GO_HOME)).toBe("^a");
   expect(attached.has(Commands.WALK_NEXT)).toBe(false);
   const typing = place("typing");
   expect(typing.get(Commands.INPUT_LEAVE)).toBe("esc");
   expect(typing.has(Commands.DONE)).toBe(false);
   expect(place("home").has(Commands.GO_HOME)).toBe(false);
-  expect(place("dialog").get(Commands.GO_BACK)).toBe("^[");
+  expect(place("dialog").get(Commands.GO_BACK)).toBe("^o / ^[");
   expect(place("rail-task").get(Commands.SEND)).toBe("y");
 });

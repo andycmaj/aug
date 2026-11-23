@@ -400,7 +400,11 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   },
 ];
 
-export const BACK_CHORD = "ctrl+[";
+// Back has two chords. ctrl+o (vim's jump back) gets through tmux and a
+// legacy terminal; ctrl+[ only where the terminal speaks the kitty protocol
+// to Riker (elsewhere it is the Esc byte).
+export const BACK_CHORD = "ctrl+o";
+export const KITTY_BACK_CHORD = "ctrl+[";
 export const HOME_CHORD = "ctrl+a";
 
 // The navigation keys and the config field that moves each.
@@ -469,12 +473,18 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     // attached agent. ctrl+[ is the Esc byte in a legacy terminal and inside
     // tmux, which folds it into Esc whatever extended-keys says: only a
     // terminal speaking the kitty protocol to Riker sends it apart. There
-    // Esc keeps its own meaning (and still reaches the agent).
+    // Esc keeps its own meaning (and still reaches the agent). ctrl+o works
+    // in both, so it is the one the footer names.
     {
       key: BACK_CHORD,
       cmd: Commands.GO_BACK,
       desc: "back from anywhere: closes the dialog, leaves the box or the agent, then goes back",
       help: "back",
+    },
+    {
+      key: KITTY_BACK_CHORD,
+      cmd: Commands.GO_BACK,
+      desc: "back from anywhere: closes the dialog, leaves the box or the agent, then goes back",
       relevant: (c) => c.kittyKeys !== false,
     },
     // The chat box loses ctrl+a (start of line); home still does it.
@@ -574,13 +584,21 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     },
     // Reserved on an agent (a terminal with no agent, the editor, is sent
     // the key as typed): detach, then back or Home as anywhere else. The
-    // agent loses ctrl+[ (Esc still reaches it) and ctrl+a (start of line
-    // in claude's prompt, and tmux's prefix where that is C-a).
+    // agent loses ctrl+o (claude's transcript toggle; the owner's call,
+    // RIKER-0223), ctrl+[ (Esc still reaches it) and ctrl+a (start of line
+    // in claude's prompt, and tmux's prefix where that is C-a). Each back
+    // chord has a command of its own here, so a terminal with no agent is
+    // sent the byte of the key pressed.
     {
       key: BACK_CHORD,
-      cmd: Commands.GO_BACK,
+      cmd: Commands.TERMINAL_BACK,
       desc: "detach and go back",
       help: "back",
+    },
+    {
+      key: KITTY_BACK_CHORD,
+      cmd: Commands.TERMINAL_KITTY_BACK,
+      desc: "detach and go back",
       relevant: (c) => c.kittyKeys !== false,
     },
     {
