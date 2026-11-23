@@ -12,6 +12,7 @@ import {
   markFeedbackRead,
   unreadFeedback,
 } from "@riker/core/feedback";
+import { repeated } from "@riker/core/digests";
 import { handleDone, handleHook, type HookEnv, type HookPayload } from "@riker/core/hooks";
 import { loadConfig } from "@riker/core/config";
 import { Drafts } from "@riker/core/outbound";
@@ -178,19 +179,48 @@ const done = defineCommand({
       description:
         "issue | merge | approve: the close-out riding with the reply",
     },
+    // The session's digest (the project journal, the task's story). Each
+    // may be given more than once, one item each.
+    goal: { type: "string", description: "a goal of the task, as it stands now" },
+    did: { type: "string", description: "what changed, result first (default: --summary)" },
+    decision: { type: "string", description: "a choice made, and why" },
+    learned: {
+      type: "string",
+      description: "a surprise, gotcha or thing to do differently; 'knowledge:<topic>: ...' also files it in Knowledge",
+    },
+    next: { type: "string", description: "a next step" },
+    blocked: { type: "string", description: "what waits on whom" },
+    question: { type: "string", description: "an open question for the owner" },
+    outcome: { type: "string", description: "ready | blocked | waiting | stopped (default ready)" },
   },
-  async run({ args }) {
+  async run({ args, rawArgs }) {
     const close =
       args.close === "issue" ||
       args.close === "merge" ||
       args.close === "approve"
         ? args.close
         : undefined;
+    const many = (name: string) => repeated(rawArgs, name);
     console.log(
       handleDone(
         await env(),
-        { summary: args.summary, reply: args.reply, close },
+        {
+          summary: args.summary,
+          reply: args.reply,
+          close,
+          digest: {
+            goal: many("goal"),
+            did: many("did"),
+            decision: many("decision"),
+            learned: many("learned"),
+            next: many("next"),
+            blocked: many("blocked"),
+            question: many("question"),
+            outcome: typeof args.outcome === "string" ? args.outcome : undefined,
+          },
+        },
         Drafts.of(rikerPlugins()),
+        loadConfig(),
       ),
     );
   },
@@ -345,7 +375,7 @@ const task = defineCommand({
       console.error(`no task ${args.ref}`);
       process.exit(1);
     }
-    console.log(taskDetail(row));
+    console.log(taskDetail(row, 12, loadConfig()));
   },
 });
 
@@ -404,7 +434,7 @@ const projectShow = defineCommand({
       console.error(`no project ${args.name}`);
       process.exit(1);
     }
-    console.log(projectDetail(row));
+    console.log(projectDetail(row, loadConfig()));
   },
 });
 

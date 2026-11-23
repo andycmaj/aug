@@ -26,6 +26,7 @@ import {
   parseFiles,
   type MadeFile,
 } from "@riker/core/files";
+import { journalSwitch, storySwitchOf, SwitchValue } from "@riker/core/digests";
 import { infoTitle, itemInfo } from "@riker/core/info";
 import { errorMessage, logger } from "@riker/core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "@riker/core/adopt";
@@ -404,6 +405,20 @@ export function useActions(dialogs: Dialogs) {
     showToast(
       task.watching ? "Back in Tasks" : "Watching: not yours, kept open",
     );
+  }
+
+  // J flips what the row says now: an unset switch takes the opposite of
+  // what it follows. `move story|journal ... default` clears it.
+  function flipStory(task: TaskRow) {
+    const now = storySwitchOf(desk.config(), task, task.project_id ? riker.project(task.project_id) : null);
+    showToast(desk.setStory(task.id, now.on ? SwitchValue.off : SwitchValue.on), 3000);
+  }
+
+  function flipJournal(projectId: number) {
+    const project = riker.project(projectId);
+    if (!project) return;
+    const now = journalSwitch(desk.config(), project);
+    showToast(desk.setProjectSwitch(projectId, "journal", now.on ? SwitchValue.off : SwitchValue.on), 3000);
   }
 
   function win(task: TaskRow) {
@@ -956,7 +971,7 @@ export function useActions(dialogs: Dialogs) {
     dialogs.show(() => (
       <InfoModal
         title={infoTitle(item)}
-        sections={itemInfo(item)}
+        sections={itemInfo(item, new Date(), desk.config())}
         onCopied={(label, ok) =>
           ok
             ? showToast(`Copied the ${label}`)
@@ -1045,6 +1060,17 @@ export function useActions(dialogs: Dialogs) {
       [Commands.OPEN_URL]: () => {
         const item = get();
         if (item) openLink(item);
+      },
+      [Commands.STORY_SWITCH]: () => {
+        const item = get();
+        if (item?.type !== "task" || item.task.kind === Kind.home || item.task.kind === Kind.system)
+          return false;
+        flipStory(item.task);
+      },
+      [Commands.JOURNAL_SWITCH]: () => {
+        const item = get();
+        if (item?.type !== "project") return false;
+        flipJournal(item.project.id);
       },
       [Commands.INFO]: () => {
         const item = get();

@@ -137,6 +137,7 @@ describe("read model", () => {
       messages: (r) => r.messages(withPr.id),
       message: (r) => r.message(message.id),
       taskLinks: (r) => r.taskLinks(plain.id),
+      story: (r) => r.story(plain.id),
       latestSession: (r) => r.latestSession(plain.id),
       isLive: (r) => r.isLive(plain),
       prStatus: (r) => r.prStatus(withPr.id),

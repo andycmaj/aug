@@ -289,6 +289,16 @@ Tests live beside their package (`packages/<name>/test/`).
   puts them in every brief of a task in the project, so a task's own brief
   need not repeat them; `core/project-doc.ts` is the one file the owner edits
   them in. A goal is met only by the owner's say, never by its tasks closing.
+- **A finished session is written up once** (`core/digests.ts`,
+  docs/session-digests-design.md): a `digests` row from `riker-tools done`'s
+  flags, or from the haiku watcher (`core/digest-watcher.ts`) for a coding
+  session that ended without `done` but changed something. Two readers,
+  both off by default: the project journal (`core/journal.ts`, a file
+  under `RIKER_HOME/projects/<slug>/`; the engine is its only writer, from
+  `task_events`, and writes only between its markers) and the task's story
+  (`core/story.ts`, versioned rows beside the brief, owner pins). Config
+  holds the defaults; `projects.journal|story` and `tasks.story` override
+  them (`J`, `move story|journal`). Digests are redacted and never logged.
 - **The brain docs are `core/docs.ts`** (files under `~/.riker/docs`, budgets,
   the trash, LEARNED.md's header and sections), kept at start by
   `core/doc-sync.ts` (the SOUL rename, notify-only shipped updates by one

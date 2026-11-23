@@ -67,6 +67,8 @@ import {
   type NoteLabel,
   type TaskRow,
 } from "./types";
+import { journalSwitch, storySwitch, switchColumn, switchWords, SwitchValue } from "./digests";
+import { pin, undoStory } from "./story";
 import { logger } from "./log";
 
 export type { Jump } from "./projects";
@@ -765,6 +767,46 @@ export class Desk {
       store.addWin(day, taskId);
       return { ok: true, text: `${ref} is a Win today (${wins.length + 1}/${MAX_WINS})` };
     }, at);
+  }
+
+  // A task's story on, off, or back to its project's and config's say.
+  setStory(taskId: number, value: SwitchValue): string {
+    return this.onTask("story", taskId, () => {
+      store.updateTask(taskId, { story: switchColumn(value) });
+      const task = store.getTask(taskId)!;
+      return `${store.taskRef(taskId)} ${switchWords("story", storySwitch(this.config(), task))}`;
+    });
+  }
+
+  // A project's journal, or the default for its tasks' stories.
+  setProjectSwitch(projectId: number, which: "journal" | "story", value: SwitchValue): string {
+    return this.cannot(which, "a project's switches are not kept for undo; set it back", () => {
+      store.updateProject(projectId, { [which]: switchColumn(value) });
+      const project = store.getProject(projectId)!;
+      if (which === "journal")
+        return `${project.name} ${switchWords("journal", journalSwitch(this.config(), project))}`;
+      const said = value === SwitchValue.default ? "follows config" : value;
+      return `${project.name}: its tasks' stories ${said} unless a task says otherwise`;
+    });
+  }
+
+  // The owner's line on a task's story, or one taken off. Each is a new
+  // version; story_undo steps back.
+  pinStory(taskId: number, line: string, off: boolean): string {
+    return this.cannot(off ? "unpin" : "pin", "a story keeps every version; story_undo steps back one", () => {
+      const v = pin(taskId, line, off);
+      const ref = store.taskRef(taskId);
+      if (!v) return off ? `${ref}: no such pinned line` : `${ref}: pinned already`;
+      return off ? `${ref}: unpinned` : `${ref}: pinned`;
+    });
+  }
+
+  undoStory(taskId: number): string {
+    return this.cannot("story undo", "the version undone stays in the history", () => {
+      const v = undoStory(taskId);
+      const ref = store.taskRef(taskId);
+      return v ? `${ref}: story back to the version before` : `${ref}: no earlier story version`;
+    });
   }
 
   toggleWin(taskId: number, at = new Date()): { ok: boolean; text: string } {
