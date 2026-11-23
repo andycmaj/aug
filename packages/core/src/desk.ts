@@ -413,7 +413,9 @@ export class Desk {
   // triggers. Not for the owner's own message on a thread.
   afterTriage(outcome: TriageOutcome, message: MessageRow | null): void {
     this.runEffects(outcome.effects);
-    if (outcome.taskId === null || outcome.verdict === "own") return;
+    // Your own line and a timer are not something that came in.
+    if (outcome.taskId === null || outcome.verdict === "own" || outcome.verdict === "timer")
+      return;
     this.fireActions(ActionEvent.triaged, outcome.taskId, message);
   }
 

@@ -435,6 +435,18 @@ describe("triggers", () => {
     expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(false);
   });
 
+  test("a timer coming due triggers nothing: it is not something that came in", async () => {
+    const e = engineWith({ summarize: { on: [{ event: "triaged" }] } });
+    const t = task(Kind.general);
+    e.pool.request = () => null;
+    e.desk.afterTriage(
+      { verdict: "timer", taskId: t.id, reason: "", effects: [] },
+      { ...reviewAsk, channel: "timer" },
+    );
+    await e.desk.actionsSettled();
+    expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(false);
+  });
+
   test("lifecycle: task events since the last look, history left alone", async () => {
     const e = engineWith({ summarize: { on: [{ event: "done" }] } });
     const before = task(Kind.general);
