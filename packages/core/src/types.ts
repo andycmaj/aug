@@ -106,6 +106,9 @@ export interface TaskRow {
   // Its branch landed (a merged PR, or merged into the base by hand): ready
   // to clean up, not done.
   merged_at: string | null;
+  // Its story on (1) or off (0); null follows its project, then config
+  // (core/digests.ts).
+  story: number | null;
 }
 
 export const ProjectStatus = {
@@ -154,6 +157,10 @@ export interface ProjectRow {
   solo: number;
   // What the project is for, in the owner's words; every task in it reads it.
   brief: string;
+  // Its journal, and its tasks' stories, on (1) or off (0); null follows
+  // config (core/digests.ts).
+  journal: number | null;
+  story: number | null;
   created_at: string;
   updated_at: string;
   archived_at: string | null;
@@ -316,6 +323,8 @@ export interface SessionRow {
   // Tokens the session's last request carried (a chat session's context),
   // so a turn can leave a session grown too dear to resume.
   context_tokens: number | null;
+  // Claude's transcript of it, as its hooks last said (the watcher reads it).
+  transcript_path: string | null;
 }
 
 export const NoteLabel = {
@@ -557,6 +566,8 @@ export const SpendRole = {
   general: "general",
   slack: "slack",
   action: "action",
+  // A session's digest the watcher wrote (core/digest-watcher.ts).
+  digest: "digest",
   other: "other",
 } as const;
 export type SpendRole = (typeof SpendRole)[keyof typeof SpendRole];
@@ -590,6 +601,8 @@ export const TaskEventKind = {
   unmerged: "unmerged",
   // Its agent said it was done (riker-tools done); detail is the summary.
   finished: "finished",
+  // A session of its agent ended; detail is the session id.
+  ended: "ended",
 } as const;
 export type TaskEventKind = (typeof TaskEventKind)[keyof typeof TaskEventKind];
 
@@ -597,8 +610,74 @@ export interface TaskEventRow {
   id: number;
   task_id: number;
   kind: TaskEventKind;
-  // done/dropped: who closed it; finished: the agent's summary; created: kind.
+  // done/dropped: who closed it; finished: the agent's summary; created:
+  // kind; ended: the session id.
   detail: string | null;
   at: string;
 }
 
+
+// A finished session written up once (docs/session-digests-design.md): the
+// project journal and the task's story both read it.
+export const DigestBy = {
+  agent: "agent",
+  watcher: "watcher",
+} as const;
+export type DigestBy = (typeof DigestBy)[keyof typeof DigestBy];
+
+export const DigestOutcome = {
+  ready: "ready",
+  blocked: "blocked",
+  waiting: "waiting",
+  stopped: "stopped",
+} as const;
+export type DigestOutcome = (typeof DigestOutcome)[keyof typeof DigestOutcome];
+
+export interface DigestRow {
+  id: number;
+  task_id: number;
+  session_id: string | null;
+  at: string;
+  by: DigestBy;
+  outcome: DigestOutcome;
+  // Goals the agent set; empty keeps the story's.
+  goals: string;
+  did: string;
+  decisions: string;
+  // One per line, each list field.
+  learned: string;
+  next: string;
+  blocked: string;
+  questions: string;
+  // JSON DigestLinks.
+  links: string;
+  // JSON array of hub ids made from its learned lines.
+  knowledge: string;
+  // Byte offset in the session's transcript it covers up to (the watcher's).
+  covers_to: number | null;
+}
+
+export interface DigestLinks {
+  pr?: string;
+  branch?: string;
+  docs?: { url: string; title: string | null }[];
+}
+
+// One version of a task's story: its state of play, beside the owner's
+// brief (tasks.summary), which it never rewrites.
+export interface StoryRow {
+  id: number;
+  task_id: number;
+  digest_id: number | null;
+  at: string;
+  // agent, watcher, owner (a pin), or "undo".
+  by: string;
+  goals: string;
+  now: string;
+  decisions: string;
+  blocked: string;
+  next: string;
+  questions: string;
+  // The owner's lines, carried into every later version.
+  pinned: string;
+}

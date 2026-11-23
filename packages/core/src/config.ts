@@ -150,6 +150,11 @@ export interface RikerConfig {
   // Task actions by name (core/task-actions.ts): a built-in changed field by
   // field, turned off with false, or a new one registered.
   actions?: Record<string, ActionConfig>;
+  // Session digests (docs/session-digests-design.md): the defaults only. A
+  // project or task turns its own on or off on its row (core/digests.ts).
+  journal: { enabled: boolean };
+  story: { enabled: boolean };
+  digests: { watcherModel: string };
   // A plugin's section, by its key (ConfigSection): kept as written.
   [section: string]: unknown;
 }
@@ -195,6 +200,9 @@ export const DEFAULT_CONFIG: RikerConfig = {
     commands: {},
     grants: {},
   },
+  journal: { enabled: false },
+  story: { enabled: false },
+  digests: { watcherModel: "haiku" },
 };
 
 type DeepPartial<T> = {
@@ -240,6 +248,9 @@ export function mergeConfig(
       grants: { ...raw.capabilities?.grants },
     },
     actions: { ...raw.actions },
+    journal: { ...DEFAULT_CONFIG.journal, ...raw.journal },
+    story: { ...DEFAULT_CONFIG.story, ...raw.story },
+    digests: { ...DEFAULT_CONFIG.digests, ...raw.digests },
   } as RikerConfig;
 }
 

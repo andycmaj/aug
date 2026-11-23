@@ -45,6 +45,8 @@ import { ONBOARD_START, onboardBrief } from "./onboard";
 import { TOOLS_NAME, toolsCommand, toolsEnv, toolsRules } from "./self";
 import { capReached, capReason } from "./spend";
 import { transcript } from "./transcript";
+import { digestWanted, storySwitch } from "./digests";
+import { storyBlock } from "./story";
 import * as store from "./store";
 import {
   AgentState,
@@ -693,6 +695,15 @@ export function codingCwd(config: RikerConfig, task: TaskRow): string {
   return dir;
 }
 
+// What done also takes when this task's session is written up (the project
+// journal, the task's story: core/digests.ts). Each flag once per item.
+const DIGEST_LINES = [
+  "  This session is written up from what you pass done, so also give, each flag once per item and leaving out any that are empty:",
+  "  --did (what changed, result first), --decision (a choice and why), --learned (a surprise, gotcha, or thing to do differently; 'knowledge:<topic>: ...' also files it in Knowledge),",
+  "  --next (a next step), --blocked (what waits on whom), --question (for the owner), --goal (the task's goals as they stand), --outcome ready|blocked|waiting|stopped.",
+  "  Never put a token, password or key in them.",
+];
+
 // The brief rides in every request the coding session makes, so its
 // transcript keeps only the latest turns.
 export const CODING_BRIEF_TURNS = 20;
@@ -705,11 +716,13 @@ export function codingBrief(config: RikerConfig, task: TaskRow): string {
   const left = said.length - turns.length;
   const ref = store.taskRef(task.id);
   const project = projectContext(task);
+  const story = storySwitch(config, task).on ? storyBlock(task.id) : null;
   return [
     forPrompt(config, DocName.coding),
     "",
     `You are working Riker task ${ref}. When the work is finished, run:`,
     `  ${toolsCommand("done", "--summary", "<one line: what you did>")} [--reply "<words to the person who asked>"]`,
+    ...(digestWanted(config, task) ? DIGEST_LINES : []),
     "Leave the live handoff board a note when you start, get blocked, or have something ready:",
     `  ${toolsCommand("note", "--label", "working on", "<what, which files>")}`,
     `Read what other agents left before you start: ${toolsCommand("notes")}`,
@@ -730,6 +743,7 @@ export function codingBrief(config: RikerConfig, task: TaskRow): string {
     task.url ? `Link: ${task.url}` : "",
     ...store.linksForTask(task.id).map((l) => `Link: ${linkLine(l)}`),
     "",
+    ...(story ? [story, ""] : []),
     ...(left > 0
       ? [
           `(${left} earlier ${left === 1 ? "turn" : "turns"} left out; ${toolsCommand("task", ref)} shows its recent chat.)`,
