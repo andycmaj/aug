@@ -202,9 +202,10 @@ export function parseTimerRef(text: string): number | null {
 }
 
 function dueIn(iso: string, now: Date): string {
-  const min = Math.floor((Date.parse(iso) - now.getTime()) / 60_000);
-  if (min < 1) return "due now";
-  if (min < 60) return `in ${min}m`;
+  const ms = Date.parse(iso) - now.getTime();
+  if (ms <= 0) return "due now";
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `in ${Math.max(1, Math.ceil(ms / 60_000))}m`;
   if (min < 60 * 24) return `in ${Math.floor(min / 60)}h`;
   return `in ${Math.floor(min / (60 * 24))}d`;
 }
