@@ -967,10 +967,38 @@ export function addNote(
   return one<NoteRow>("SELECT * FROM notes WHERE id = ?", id)!;
 }
 
+// The board keeps only the latest few notes per task: the rest were what
+// later notes corrected or moved past.
+export const NOTES_PER_TASK = 3;
+
+const NOTE_COLUMNS = "id, author, label, body, task_id, read_by, created_at";
+
+// The board, newest first: a task's notes leave it when the task is done or
+// dropped (they stay on the task: notesForTask), and an open task shows its
+// latest NOTES_PER_TASK. A note on no task stays until it falls off the
+// limit.
 export function listNotes(limit = 100): NoteRow[] {
   return all<NoteRow>(
-    "SELECT * FROM notes ORDER BY created_at DESC, id DESC LIMIT ?",
+    `SELECT ${NOTE_COLUMNS} FROM (
+       SELECT n.*, ROW_NUMBER() OVER (
+         PARTITION BY COALESCE(n.task_id, -n.id)
+         ORDER BY n.created_at DESC, n.id DESC
+       ) AS nth
+       FROM notes n LEFT JOIN tasks t ON t.id = n.task_id
+       WHERE t.id IS NULL OR t.status NOT IN ('done', 'dropped')
+     )
+     WHERE nth <= ?
+     ORDER BY created_at DESC, id DESC LIMIT ?`,
+    NOTES_PER_TASK,
     limit,
+  );
+}
+
+// Every note an agent left on the task, oldest first.
+export function notesForTask(taskId: number): NoteRow[] {
+  return all<NoteRow>(
+    "SELECT * FROM notes WHERE task_id = ? ORDER BY created_at, id",
+    taskId,
   );
 }
 
@@ -1009,8 +1037,30 @@ export function addKnowledge(
   return one<KnowledgeRow>("SELECT * FROM hub WHERE id = ?", id)!;
 }
 
+// What agents read: entries the owner has not retired or merged away.
 export function listKnowledge(): KnowledgeRow[] {
-  return all<KnowledgeRow>("SELECT * FROM hub ORDER BY topic, created_at, id");
+  return all<KnowledgeRow>(
+    "SELECT * FROM hub WHERE retired_at IS NULL ORDER BY topic, created_at, id",
+  );
+}
+
+export function getKnowledge(id: number): KnowledgeRow | null {
+  return one<KnowledgeRow>("SELECT * FROM hub WHERE id = ?", id);
+}
+
+// Out of what agents read, kept with why (and the entry it was merged into).
+export function retireKnowledge(
+  id: number,
+  why: string,
+  supersededBy: number | null = null,
+): void {
+  run(
+    "UPDATE hub SET retired_at = ?, retired_why = ?, superseded_by = ? WHERE id = ? AND retired_at IS NULL",
+    now(),
+    why,
+    supersededBy,
+    id,
+  );
 }
 
 export function addIdea(
@@ -1035,6 +1085,15 @@ export function allIdeas(): IdeaRow[] {
 export function openIdeas(): IdeaRow[] {
   return all<IdeaRow>(
     "SELECT * FROM ideas WHERE status = 'open' ORDER BY created_at, id",
+  );
+}
+
+// Ideas made since `since` (an ISO time), whatever the owner did with them:
+// the Advisor's record of what it already said.
+export function ideasSince(since: string): IdeaRow[] {
+  return all<IdeaRow>(
+    "SELECT * FROM ideas WHERE created_at >= ? ORDER BY created_at, id",
+    since,
   );
 }
 

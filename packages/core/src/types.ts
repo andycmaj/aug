@@ -415,6 +415,10 @@ export interface KnowledgeRow {
   author: string;
   parent_id: number | null;
   created_at: string;
+  retired_at: string | null;
+  retired_why: string | null;
+  // The entry a merge put in its place.
+  superseded_by: number | null;
 }
 
 export const IdeaStatus = {

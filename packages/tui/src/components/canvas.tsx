@@ -35,6 +35,7 @@ import { Commands } from "../commands";
 import { useRiker } from "../context/riker";
 import { useTerminals, type TermState } from "../context/terminals";
 import type { Lane, LaneMeta } from "@riker/core/lanes";
+import { proposalHeadline } from "@riker/core/knowledge";
 import { prChip, prLine } from "@riker/core/pr";
 import { usd } from "@riker/core/spend";
 import {
@@ -475,7 +476,7 @@ function TaskChat(props: {
       <For each={proposals()}>
         {(p) => (
           <box flexDirection="column" marginBottom={1}>
-            <text fg={theme.primary}>{`${p.doc} · ${p.source} · ${p.base.length} -> ${p.proposed.length} characters`}</text>
+            <text fg={theme.primary}>{proposalHeadline(p)}</text>
             <Show when={p.reason}>
               <text wrapMode="word" fg={theme.textMuted}>
                 {p.reason}

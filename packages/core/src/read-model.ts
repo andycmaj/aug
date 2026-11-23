@@ -105,7 +105,7 @@ function reads(desk: LiveCheck) {
     projectSummary: [[T.tasks, T.goals], projectSummary],
     projectProgress: [[T.tasks, T.goals], projectProgress],
     knowledge: [[T.knowledge], store.listKnowledge],
-    notes: [[T.notes], store.listNotes],
+    notes: [[T.notes, T.tasks], store.listNotes],
     searchSources: [[T.messages, T.turns], searchSources],
     closedTasks: [[T.tasks], store.closedTasks],
     rail: [
