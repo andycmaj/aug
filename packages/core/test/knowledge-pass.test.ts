@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { DEFAULT_CONFIG } from "../src/config";
 import type { BrainCall } from "../src/brain";
 import { runDocPass } from "../src/doc-pass";
 import {
@@ -33,7 +32,7 @@ const knowledgeTasks = () =>
 
 describe("what the pass can check about an entry", () => {
   beforeEach(() =>
-    freshHome({ github: { ...DEFAULT_CONFIG.github, repos: { [REPO]: "/src/acme-app" } } }),
+    freshHome({ repos: { [REPO]: "/src/acme-app" } }),
   );
 
   test("cited paths are repo paths, not URLs or absolute paths", () => {
@@ -66,7 +65,7 @@ describe("Knowledge in the daily doc pass", () => {
   let keep: number;
 
   beforeEach(() => {
-    freshHome({ github: { ...DEFAULT_CONFIG.github, repos: { [REPO]: "/src/acme-app" } } });
+    freshHome({ repos: { [REPO]: "/src/acme-app" } });
     const t = codingTask("Poller rewrite");
     const by = `agent ${store.taskRef(t)}`;
     a = store.addKnowledge("tmux", "Use a private server", "Real tmux checks use -L.", by).id;
