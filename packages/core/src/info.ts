@@ -7,8 +7,11 @@ import { LANE_META, type Lane } from "./lanes";
 import { paths } from "./paths";
 import { ageLabel, type RailItem } from "./rail";
 import { projectProgress } from "./lookup";
+import type { RikerConfig } from "./config";
+import { journalSwitch, lines, projectStoryDefault, storySwitch, switchWords } from "./digests";
+import { journalExists, journalFile } from "./journal";
 import * as store from "./store";
-import { GoalStatus, type TaskRow } from "./types";
+import { GoalStatus, type ProjectRow, type StoryRow, type TaskRow } from "./types";
 
 export interface InfoRow {
   label: string;
@@ -49,6 +52,39 @@ function section(
           : { label, value: String(v) },
       ),
   };
+}
+
+// The task's story switch (J flips it) and its current version.
+function storySection(config: RikerConfig, task: TaskRow, now: Date): InfoSection {
+  const v = store.currentStory(task.id);
+  const part = (key: keyof StoryRow, label: string): [string, string | null] => {
+    const items = v ? lines(String(v[key] ?? "")) : [];
+    return [label, items.length ? items.join("; ") : null];
+  };
+  return section("Story", [
+    ["switch", `${switchWords("story", storySwitch(config, task))}; J flips it`],
+    ["as of", v ? `${when(v.at, now)} by ${v.by}` : null],
+    part("pinned", "pinned"),
+    part("goals", "goals"),
+    part("now", "now"),
+    part("decisions", "decisions"),
+    part("blocked", "blocked"),
+    part("next", "next"),
+    part("questions", "questions"),
+    ["versions", v ? store.storiesFor(task.id).length : null],
+  ]);
+}
+
+// The project's journal switch (J flips it), its file and its tasks'
+// story default.
+function journalSection(config: RikerConfig, project: ProjectRow): InfoSection {
+  const file = journalFile(project);
+  const s = section("Journal", [
+    ["switch", `${switchWords("journal", journalSwitch(config, project))}; J flips it`],
+    ["stories", switchWords("stories", projectStoryDefault(config, project))],
+  ]);
+  if (journalExists(project)) s.rows.push({ label: "file", value: file, open: `file://${file}` });
+  return s;
 }
 
 function taskSections(
@@ -115,11 +151,12 @@ function taskSections(
   ].filter((s) => s.rows.length > 0);
 }
 
-export function itemInfo(item: RailItem, now = new Date()): InfoSection[] {
+export function itemInfo(item: RailItem, now = new Date(), config?: RikerConfig): InfoSection[] {
   switch (item.type) {
     case "task": {
       const fresh = store.getTask(item.task.id) ?? item.task;
-      return taskSections(fresh, item.lane, now);
+      const sections = taskSections(fresh, item.lane, now);
+      return config ? [...sections, storySection(config, fresh, now)] : sections;
     }
     case "project": {
       const fresh = store.getProject(item.project.id) ?? item.project;
@@ -152,6 +189,7 @@ export function itemInfo(item: RailItem, now = new Date()): InfoSection[] {
             .linksForProject(fresh.id)
             .map((l) => ({ label: l.title ?? "link", value: l.url, open: l.url })),
         },
+        ...(config ? [journalSection(config, fresh)] : []),
       ].filter((s) => s.rows.length > 0);
     }
   }

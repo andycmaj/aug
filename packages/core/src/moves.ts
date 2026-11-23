@@ -8,6 +8,7 @@ import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import type { NoiseRule } from "./config";
 import type { Desk } from "./desk";
+import { SwitchValue } from "./digests";
 import { DocName } from "./docs";
 import { docNamed, propose } from "./proposals";
 import { logger } from "./log";
@@ -133,6 +134,13 @@ function docDraftFile(given: string): string {
 
 // A name that matches no project says which ones there are, so the caller
 // can pick one or ask the owner whether to make it.
+function switchValue(v: string | undefined): SwitchValue {
+  const known = Object.values(SwitchValue) as string[];
+  const to = v?.trim().toLowerCase() ?? "";
+  if (!known.includes(to)) throw new MoveError(`say on, off or default, not ${v ?? "nothing"}`);
+  return to as SwitchValue;
+}
+
 function projectNamed(name: string): ProjectRow {
   const project = findProject(name);
   if (project?.status === ProjectStatus.active) return project;
@@ -584,6 +592,35 @@ export const MOVES: Record<string, MoveSpec> = {
       return said.text;
     },
   },
+  story: {
+    help: "Turn the task's story (its state of play, kept from each finished session) on, off, or back to its project's default",
+    task: true,
+    positional: "to",
+    args: { to: { help: "on | off | default", required: true } },
+    run(desk, task, args) {
+      return desk.setStory(task!.id, switchValue(args.to));
+    },
+  },
+  pin: {
+    help: "Pin a line (a goal, a next step) to the task's story: every later version keeps it; --off yes takes it off",
+    task: true,
+    positional: "line",
+    args: {
+      line: { help: "the line, as it should read", required: true },
+      off: { help: "yes: take that line off" },
+    },
+    run(desk, task, args) {
+      return desk.pinStory(task!.id, args.line, args.off?.trim() === "yes");
+    },
+  },
+  story_undo: {
+    help: "Make the story's version before the current one current again (a bad write-up); pins stay",
+    task: true,
+    args: {},
+    run(desk, task) {
+      return desk.undoStory(task!.id);
+    },
+  },
   link: {
     help: "Attach a URL to the task (a doc, a Slack thread, a ticket elsewhere)",
     task: true,
@@ -764,6 +801,21 @@ export const MOVES: Record<string, MoveSpec> = {
       const project = projectNamed(args.project);
       store.updateProject(project.id, { brief: args.text.trim() });
       return `${project.name}'s brief rewritten`;
+    },
+  },
+  journal: {
+    help: "Turn a project's journal (a file of its finished sessions and task events) on, off, or back to config's default; --stories sets its tasks' story default instead",
+    task: false,
+    positional: "project",
+    args: {
+      project: { help: "the project's name", required: true },
+      to: { help: "on | off | default", required: true },
+      stories: { help: "yes: set the default for its tasks' stories, not its journal" },
+    },
+    run(desk, _task, args) {
+      const project = projectNamed(args.project);
+      const which = args.stories?.trim() === "yes" ? "story" : "journal";
+      return desk.setProjectSwitch(project.id, which, switchValue(args.to));
     },
   },
   project_link: {

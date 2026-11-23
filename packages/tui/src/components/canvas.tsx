@@ -38,6 +38,7 @@ import type { Lane, LaneMeta } from "@riker/core/lanes";
 import { proposalHeadline } from "@riker/core/knowledge";
 import { prChip, prLine } from "@riker/core/pr";
 import { usd } from "@riker/core/spend";
+import { journalSwitch, lines, storySwitchOf, switchWords } from "@riker/core/digests";
 import {
   type Mention,
   mentionAt,
@@ -280,6 +281,26 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
       tone: status ? prChip(status).tone : ("muted" as const),
     };
   });
+  // Its story, when on: the owner's pins, the next step, what blocks it.
+  // I shows all of it; J turns it off.
+  const story = createMemo(() => {
+    const t = props.task;
+    const project = t.project_id ? riker.project(t.project_id) : null;
+    if (!storySwitchOf(riker.desk.config(), t, project).on) return null;
+    const v = riker.story(t.id);
+    const width = Math.max(20, props.width - 4);
+    if (!v) return truncate("story · written up when a session finishes  (J off)", width);
+    const first = (field: string, label: string) => {
+      const item = lines(field)[0];
+      return item ? `${label}: ${item}` : null;
+    };
+    const parts = [
+      ...lines(v.pinned).map((p) => `pinned: ${p}`),
+      first(v.next, "next"),
+      first(v.blocked, "blocked"),
+    ].filter(Boolean);
+    return truncate(`story · ${parts.join(" · ") || "nothing left to do"}  (I all, J off)`, width);
+  });
   // What its headless turns have cost (riker-tools spend, the Board's Cost).
   const spent = () => {
     const s = riker.taskSpend(props.task.id);
@@ -362,6 +383,9 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
         </Show>
         <Show when={links()}>
           <text fg={theme.info}>{links() ?? ""}</text>
+        </Show>
+        <Show when={story()}>
+          <text fg={theme.secondary}>{story() ?? ""}</text>
         </Show>
         <Show when={props.task.triage_reason}>
           <text
@@ -752,6 +776,7 @@ function ProjectView(props: {
           props.item.repos.join(", ") || "no repo",
           `${props.item.open} open`,
           props.item.working ? `${props.item.working} working` : "",
+          switchWords("journal", journalSwitch(riker.desk.config(), riker.project(p().id) ?? p())),
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -789,6 +814,7 @@ function ProjectView(props: {
           ["space", "rail: fold / unfold its tasks"],
           ["T", "jump to its tmux session"],
           ["x", "archive"],
+          ["J", "journal on/off"],
           ["I", "info"],
         ]}
       />
