@@ -67,6 +67,7 @@ describe("the triage chain is recorded", () => {
     expect(JSON.parse(run.verdict!).verdict).toBe("general");
     expect(JSON.parse(run.input)).toMatchObject({ dm: true, openOnThread: null });
     expect(steps.map((s) => [s.rule, s.decision])).toEqual([
+      ["timer", "pass"],
       ["own message", "pass"],
       ["greeting", "pass"],
       ["noise", "pass"],
@@ -91,7 +92,7 @@ describe("the triage chain is recorded", () => {
     expect(calls).toHaveLength(0);
     expect(run.verdict).toBeNull();
     expect(run.outcome).toBe("opener");
-    expect(steps.map((s) => s.rule)).toEqual(["own message", "greeting"]);
+    expect(steps.map((s) => s.rule)).toEqual(["timer", "own message", "greeting"]);
   });
 
   test("a failed model call keeps the error as the run's verdict", async () => {

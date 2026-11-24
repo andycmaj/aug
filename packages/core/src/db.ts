@@ -326,6 +326,24 @@ CREATE TABLE IF NOT EXISTS task_events (
 CREATE INDEX IF NOT EXISTS task_events_at ON task_events(at);
 CREATE INDEX IF NOT EXISTS task_events_task ON task_events(task_id);
 
+-- When something is due on a task (core/timers.ts): a follow-up, a schedule
+-- or a reminder. The engine's tick turns each due one into a message on the
+-- inbox and marks it done or moves it to its next time, in one write.
+CREATE TABLE IF NOT EXISTS timers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  kind TEXT NOT NULL,
+  due_at TEXT NOT NULL,
+  rule TEXT,
+  note TEXT NOT NULL DEFAULT '',
+  by TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  fired_at TEXT
+);
+CREATE INDEX IF NOT EXISTS timers_due ON timers(state, due_at);
+CREATE INDEX IF NOT EXISTS timers_task ON timers(task_id);
+
 -- A task action an event ran by itself, once per task, action and event,
 -- so a re-triaged message or a reopen-and-close does not run it again.
 CREATE TABLE IF NOT EXISTS action_runs (
@@ -418,6 +436,7 @@ export const Table = {
   spend: "spend",
   taskEvents: "task_events",
   actionRuns: "action_runs",
+  timers: "timers",
   digests: "digests",
   stories: "stories",
 } as const;
@@ -597,6 +616,20 @@ export function migrate(db: Database): void {
       db.query("UPDATE sessions SET state = ? WHERE state = ?").run(to, from);
   }
   backfillTriage(db);
+  remindersToTimers(db);
+}
+
+// A task put away before reminders were timers keeps its day: one remind
+// timer for each, unless one was ever made for that day.
+function remindersToTimers(db: Database): void {
+  if (columns(db, "timers").length === 0 || columns(db, "tasks").length === 0) return;
+  db.exec(`
+    INSERT INTO timers (task_id, kind, due_at, note, by, created_at)
+    SELECT t.id, 'remind', t.remind_at, '', 'you', t.updated_at FROM tasks t
+    WHERE t.status = 'later' AND t.remind_at IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM timers r WHERE r.task_id = t.id AND r.kind = 'remind' AND r.due_at = t.remind_at
+      )`);
 }
 
 // A file from before the inbox kept state: what its columns say. A message

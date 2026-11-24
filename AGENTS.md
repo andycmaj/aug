@@ -275,8 +275,24 @@ Tests live beside their package (`packages/<name>/test/`).
   inserts a `moves` row and waits; the engine claims it on `data_version`,
   runs it, and writes one line back. A new verb goes in the registry, nowhere
   else. A move that would open a dialog answers `needs ...` in words instead.
-  `AGENT_MOVES` is what a task's agent may ask for. "Move" means this bus; the
+  `AGENT_MOVES` is what a task's agent may ask for, on its own task and the
+  tasks it made (`from_task_id`; its `new` defaults `--from` to its own). "Move" means this bus; the
   owner's keys are task actions.
+- **Timers are `core/timers.ts`** (the `timers` table): a follow-up
+  (once; `followup`, an agent's too), a schedule (a tiny rule: daily,
+  weekdays or day names at a local time; `schedule`, the owner's and the
+  Assistant's) and the owner's reminder (`remind`, mirrored in
+  `tasks.remind_at` for the rail). A timer never wakes anyone itself: the
+  engine's tick turns a due one into a `timer`-channel message and marks it
+  done, or moves a schedule to its first slot after now, in one write (a
+  missed one fires once at start). The `timer` triage rule, first in the
+  chain, files it on its task and returns a `timer` effect; the desk wakes
+  the agent (a chat turn, a line in a live coding window, or a resume). A
+  timer message is `from_me`, so it is never a reply target. A reminder, or
+  a follow-up or schedule the owner or the Assistant set, stays unread,
+  which lists its task under the rail's **Due** (first under Home) until
+  the owner opens it; an agent's own follow-up only wakes the agent. The Canvas header and the
+  Inbox's `timers` filter show them.
 - **ctrl+z is `core/undo.ts`**: the desk keeps this session's moves (the
   owner's keys and the Assistant's verbs, never a task's own agent's),
   newest first, 50 deep, in memory. A desk method that changes a task wraps

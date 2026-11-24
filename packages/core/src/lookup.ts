@@ -7,6 +7,7 @@ import { journalSwitch, projectStoryDefault, storySwitch, switchWords } from "./
 import { storyBlock } from "./story";
 import { transcript } from "./transcript";
 import * as store from "./store";
+import { timerLine, timerRef } from "./timers";
 import type { RailProject } from "./rail";
 import {
   AgentState,
@@ -94,6 +95,9 @@ export function taskDetail(t: TaskRow, turns = 12, config?: RikerConfig): string
     ...store.linksForTask(t.id).map((l) => `Link: ${linkLine(l)}`),
     t.waiting_on ? `Waiting on: ${t.waiting_on}` : "",
     t.agent_says ? `Agent says: ${t.agent_says}` : "",
+    ...store
+      .timersForTask(t.id)
+      .map((timer) => `Timer ${timerRef(timer.id)}: ${timerLine(timer, new Date())}`),
     config ? `Switches: ${switchWords("story", storySwitch(config, t))}` : "",
     story ? `\n${story}\n` : "",
   ].filter(Boolean);

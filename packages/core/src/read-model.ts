@@ -42,6 +42,7 @@ function rail(now: Date, pending: Set<number>): RailSection[] {
     prStates: store.prStates(),
     blockers: store.allBlockers(),
     wins: store.winsOn(localDay(now)),
+    due: store.ringingTimers(),
   });
 }
 
@@ -92,6 +93,8 @@ function reads(desk: LiveCheck) {
     messages: [[T.messages], store.messagesForTask],
     message: [[T.messages], store.getMessage],
     taskLinks: [[T.taskLinks], store.linksForTask],
+    timers: [[T.timers], store.timersForTask],
+    pendingTimers: [[T.timers], store.pendingTimers],
     story: [[T.stories], store.currentStory],
     latestSession: [[T.sessions], store.latestSession],
     isLive: [[T.sessions, T.tasks], (task: TaskRow) => desk.isLive(task)],

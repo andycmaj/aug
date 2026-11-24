@@ -55,6 +55,7 @@ export const CHANNEL_WORD: Record<Channel, string> = {
   github: "github",
   slack: "slack",
   owner: "you",
+  timer: "timer",
 };
 
 export function clock(iso: string): string {

@@ -20,7 +20,9 @@ import type {
 
 export type TriageEffect =
   | { type: "agent-turn"; taskId: number; reason: string }
-  | { type: "agent-message"; taskId: number; messageId: number };
+  | { type: "agent-message"; taskId: number; messageId: number }
+  // A follow-up or schedule came due: its agent picks the work up again.
+  | { type: "timer"; taskId: number; turnId: number; reason: string };
 
 export interface ProjectPick {
   projectId: number | null;

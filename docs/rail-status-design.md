@@ -256,8 +256,15 @@ whenever the task stays open.
 
 ### Sections
 
-Home, **Wins**, System, Tasks, Code Reviews, Watching, For later. Wins
-is walked first (`WALKED`). The rail holds tasks and projects only:
+Home, **Due**, **Wins**, System, Tasks, Code Reviews, Watching, For
+later. Due lists each open task a timer fired on that the owner has not
+opened since (`core/timers.ts`; its timer message is unread,
+`store.ringingTimers`): a follow-up or schedule the owner or the Assistant
+set, and every reminder. An agent's own follow-up wakes the agent and does
+not ring (`ringsForOwner`). Opening the task on the Canvas
+(or `x` on its Inbox row) reads it, and the row goes. Due sits right under
+Home so a timer coming due is never below the fold. Due, then Wins, are
+walked first (`WALKED`). The rail holds tasks and projects only:
 messages and Advisor ideas are on the Board's Inbox tab (4), and the
 `inbox N` at the end of the pills row (open ideas plus messages triage
 could not place) says when one needs you. There is no other header: the
@@ -336,14 +343,14 @@ Marks that change neither lifecycle nor agent state:
 
 ### Listed twice (AUG-0175)
 
-A Win, and an open task you watch, show in two places: where the task
-sits (its project's group in Tasks, Code Reviews, For later) and under the
-Wins or Watching heading; one that is both shows in all three. The rows
-are one task:
+A Win, an open task you watch, and a task a timer fired on show in two
+places: where the task sits (its project's group in Tasks, Code Reviews,
+For later) and under the Due, Wins or Watching heading; one that is more
+than one shows in each. The rows are one task:
 
 - **Keys.** The task's own row keeps `t<id>`; a row under a heading is a
   copy (`copy: true`), keyed `t<id>@wins` or `t<id>@watching`, so the
-  cursor tells them apart. A task with no row of its own (a done Win) has
+  cursor tells them apart (`t<id>@due` under Due). A task with no row of its own (a done Win) has
   its Wins row as its own, keyed `t<id>`. `baseKey` strips the `@`;
   `rowFor` finds a key's row (exact, else the task's own, else a copy).
 - **Selection.** `selectedKey` is always the task's key, so the Canvas

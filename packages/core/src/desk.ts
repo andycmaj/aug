@@ -61,15 +61,19 @@ import {
   ProjectStatus,
   SessionKind,
   TaskStatus,
+  TimerKind,
+  TimerState,
   TurnRole,
   Verdict,
   type MessageRow,
   type NoteLabel,
   type TaskRow,
+  type TimerRow,
 } from "./types";
+import { addFollowup, addSchedule } from "./timers";
 import { journalSwitch, storySwitch, switchColumn, switchWords, SwitchValue } from "./digests";
 import { pin, undoStory } from "./story";
-import { logger } from "./log";
+import { errorMessage, logger } from "./log";
 
 export { NoJump, type Jump } from "./projects";
 
@@ -440,7 +444,9 @@ export class Desk {
   // triggers. Not for the owner's own message on a thread.
   afterTriage(outcome: TriageOutcome, message: MessageRow | null): void {
     this.runEffects(outcome.effects);
-    if (outcome.taskId === null || outcome.verdict === "own") return;
+    // Your own line and a timer are not something that came in.
+    if (outcome.taskId === null || outcome.verdict === "own" || outcome.verdict === "timer")
+      return;
     this.fireActions(ActionEvent.triaged, outcome.taskId, message);
   }
 
@@ -647,13 +653,37 @@ export class Desk {
 
   // ── the task's place on the rail ──────────────────────────────────────
 
-  remind(taskId: number, days: number): string {
+  remind(taskId: number, days: number, by = this.undos.by()): string {
     return this.onTask("remind", taskId, () => {
       const at = new Date();
       at.setDate(at.getDate() + Math.max(1, Math.round(days)));
       at.setHours(7, 0, 0, 0);
-      store.remindAt(taskId, at.toISOString());
+      store.remindAt(taskId, at.toISOString(), by);
       return at.toISOString();
+    });
+  }
+
+  // ── timers (core/timers.ts) ───────────────────────────────────────────
+
+  // Wake the task's agent at a time, once, with what to do then.
+  followup(taskId: number, at: Date, note: string, by = this.undos.by()): TimerRow {
+    return this.onTask("follow-up", taskId, () => addFollowup(taskId, at, note, by));
+  }
+
+  // Wake it on a rule ("weekdays 09:00"), every time.
+  schedule(taskId: number, rule: string, note: string, by = this.undos.by()): TimerRow {
+    return this.onTask("schedule", taskId, () => addSchedule(taskId, rule, note, by));
+  }
+
+  // Its follow-ups and schedules, or one of them, cancelled. A reminder is
+  // the owner's put-away: d brings the task back instead.
+  unschedule(taskId: number, timerId?: number): TimerRow[] {
+    return this.onTask("unschedule", taskId, () => {
+      const gone = store
+        .timersForTask(taskId)
+        .filter((t) => t.kind !== TimerKind.remind && (timerId === undefined || t.id === timerId));
+      for (const t of gone) store.setTimerState(t.id, TimerState.cancelled);
+      return gone;
     });
   }
 
@@ -868,6 +898,11 @@ export class Desk {
     });
   }
 
+  // The owner opened the task: a timer that fired on it stops ringing.
+  seenTimers(taskId: number): void {
+    store.silenceTimers(taskId);
+  }
+
   readResult(taskId: number): void {
     const task = store.getTask(taskId);
     if (task?.unread_result) store.updateTask(taskId, { unread_result: 0 });
@@ -880,6 +915,10 @@ export class Desk {
     for (const effect of effects) {
       const task = store.getTask(effect.taskId);
       if (!task) continue;
+      if (effect.type === "timer") {
+        this.timerFired(task, effect.turnId, effect.reason);
+        continue;
+      }
       void this.drivers
         .for(task)
         .wake(
@@ -889,6 +928,24 @@ export class Desk {
             : "a new message joined the thread",
         );
     }
+  }
+
+  // A follow-up or schedule came due (core/timers.ts): a chat agent runs a
+  // turn on it; a coding agent hears its line in its window, or resumes
+  // with it when it has a session to resume. One that never started keeps
+  // the line for the owner's Start. A plain task has no agent to wake.
+  private timerFired(task: TaskRow, turnId: number, reason: string): void {
+    const driver = this.drivers.for(task);
+    if (!inTmux(task)) {
+      if (task.kind === Kind.general || task.kind === Kind.reply) driver.wake(task, reason);
+      return;
+    }
+    store.setPending([turnId], true);
+    if (driver.isLive(task)) void driver.deliver(task);
+    else if (driver.resumes(task))
+      void driver.start(task).catch((err: unknown) =>
+        log.warn("timer resume failed", { task: task.id, err: errorMessage(err) }),
+      );
   }
 
   // Triage again, as a new run. A message on a task is refused: a second

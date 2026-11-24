@@ -27,6 +27,7 @@ import {
   type InboxRun,
 } from "@riker/core/inbox";
 import { taskRef } from "@riker/core/rows";
+import { timerLine, timerRef } from "@riker/core/timers";
 import { StepDecision } from "@riker/core/types";
 import type { HelpCtx } from "../keymap";
 import type { Actions, Dialogs } from "./actions";
@@ -205,10 +206,40 @@ function resultTone(result: InboxResult): Tone {
     case InboxResult.tasked:
       return "success";
     case InboxResult.attached:
+    case InboxResult.timer:
       return "info";
     default:
       return "muted";
   }
+}
+
+// The timers still to fire, soonest first: what will land here next.
+const UPCOMING = 5;
+
+function Upcoming(props: { width: number }) {
+  const theme = useTheme();
+  const riker = useRiker();
+  const timers = () => riker.pendingTimers(UPCOMING + 1);
+  return (
+    <box flexDirection="column" flexShrink={0} paddingBottom={1}>
+      <text fg={theme.textMuted}>
+        {timers().length ? "Coming up" : "Nothing coming up: move followup or schedule sets one."}
+      </text>
+      <For each={timers().slice(0, UPCOMING)}>
+        {(t) => (
+          <text fg={theme.text}>
+            {truncate(
+              `  ${timerRef(t.id)} ${taskRef(t.task_id)}  ${timerLine(t, riker.now())}`,
+              Math.max(20, props.width - 2),
+            )}
+          </text>
+        )}
+      </For>
+      <Show when={timers().length > UPCOMING}>
+        <text fg={theme.textMuted}>{"  … more on each task's header"}</text>
+      </Show>
+    </box>
+  );
 }
 
 function InboxView(props: {
@@ -267,6 +298,9 @@ function InboxView(props: {
           <text fg={theme.accent}>{`/ "${props.query}"`}</text>
         </Show>
       </box>
+      <Show when={props.filter === InboxFilter.timers}>
+        <Upcoming width={props.width} />
+      </Show>
       <Show
         when={props.rows.length > 0}
         fallback={
@@ -275,7 +309,9 @@ function InboxView(props: {
               ? "Nothing matches. / clears the search."
               : props.filter === InboxFilter.actionable
                 ? "Nothing needs you here. f shows the rest; GitHub and Slack messages and Advisor ideas land here."
-                : "Nothing under this filter. f shows the next."}
+                : props.filter === InboxFilter.timers
+                  ? "No timer has fired yet. A follow-up or schedule lands here when it comes due."
+                  : "Nothing under this filter. f shows the next."}
           </text>
         }
       >
