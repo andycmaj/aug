@@ -5,7 +5,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { keysDoc } from "../src/keys-doc";
-import { buildSite, DOCS_DIR, SITE_PAGES } from "../src/site";
+import { buildSite, DOCS_DIR, SITE_PAGES, TAGLINE } from "../src/site";
 
 const site = buildSite();
 
@@ -38,6 +38,19 @@ test("the pages differ from docs/ only by the nav", () => {
     const out = site[p.file] ?? "";
     expect(out.replace(/\n<style>\n\.site-nav[\s\S]*?<\/nav>/, "")).toBe(src);
   }
+});
+
+test("the index, the README and the architecture page share one tagline", () => {
+  const flat = (s: string) => s.replace(/\s+/g, " ");
+  const readme = readFileSync(join(DOCS_DIR, "../README.md"), "utf8");
+  expect(site["index.html"]).toContain(`<p>${TAGLINE}</p>`);
+  expect(site["architecture.html"]).toContain(
+    `<p class="tagline">${TAGLINE}</p>`,
+  );
+  expect(flat(readme)).toContain(TAGLINE);
+  expect(readme).toContain(
+    "https://andycmaj.github.io/riker/architecture.html",
+  );
 });
 
 // Anything that reads like a credential, a home path, an email or a Slack
