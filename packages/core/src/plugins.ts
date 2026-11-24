@@ -13,6 +13,7 @@ import type { NewMessage } from "./store";
 import type {
   DraftAction,
   MessageRow,
+  TaskRow,
   TriageVerdict,
 } from "./types";
 
@@ -112,6 +113,10 @@ export interface Connector {
   stop?(): void;
   // The owner's "check now": skips a backoff, never a rate limit.
   pollNow?(): Promise<void>;
+  // One task's own state read now, off the clock: its agent's turn just
+  // ended, and that turn may have merged its PR. Within the same limits as
+  // the clock's reads.
+  refreshTask?(task: TaskRow): Promise<void>;
 }
 
 // ── drafts: the one road out ───────────────────────────────────────────

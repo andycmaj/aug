@@ -199,6 +199,14 @@ export function listTasks(): TaskRow[] {
   );
 }
 
+// Each open task's agent state, for the engine's turn-end watch: one narrow
+// read whenever tasks changed, not every row.
+export function agentStates(): { id: number; agent_state: AgentState }[] {
+  return all<{ id: number; agent_state: AgentState }>(
+    "SELECT id, agent_state FROM tasks WHERE status IN ('open', 'later') AND kind != 'home'",
+  );
+}
+
 // Done and dropped work, last closed first: the go-to list finds them by
 // name, since the rail no longer lists them.
 export function closedTasks(limit = 500): TaskRow[] {

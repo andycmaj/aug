@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../src/config";
 import { Lane, laneOf } from "../src/lanes";
+import { Engine } from "../src/engine";
 import { checkMerges } from "../src/merge";
 import { setMux, TmuxMux } from "../src/mux";
+import type { Connector } from "../src/plugins";
 import * as store from "../src/store";
-import { Kind, TaskStatus, TurnRole } from "../src/types";
+import { AgentState, Kind, TaskStatus, TurnRole, type TaskRow } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
-import { config, freshHome } from "./support/helpers";
+import { config, freshHome, testConfig } from "./support/helpers";
 
 let fake: FakeMux;
 
@@ -78,6 +80,69 @@ describe("merged", () => {
   });
 });
 
+// The turn that merges a PR is the one to look after: the clocks are minutes
+// away, and GitHub's may be paused by a rate limit (RIKER-0223's merge sat
+// unmarked behind one).
+describe("a turn's end", () => {
+  class Refresher implements Connector {
+    readonly name = "refresher";
+    readonly label = "Refresher";
+    asked: number[] = [];
+    attach() {}
+    start() {}
+    async refreshTask(task: TaskRow) {
+      this.asked.push(task.id);
+    }
+  }
+
+  function engineWith(c: Connector) {
+    return new Engine({ config: testConfig(), offline: true, plugins: [{ name: "p", connectors: [c] }] });
+  }
+
+  test("an agent leaving working is a turn end; the first look and staying put are not", () => {
+    const id = branchTask();
+    const other = branchTask("other");
+    store.updateTask(id, { agent_state: AgentState.working });
+    store.updateTask(other, { agent_state: AgentState.working });
+    const e = engineWith(new Refresher());
+    expect(e.turnEnds()).toEqual([]);
+    expect(e.turnEnds()).toEqual([]);
+    store.updateTask(id, { agent_state: AgentState.idle });
+    expect(e.turnEnds()).toEqual([id]);
+    expect(e.turnEnds()).toEqual([]);
+    store.updateTask(other, { agent_state: AgentState.ready });
+    store.updateTask(id, { agent_state: AgentState.working });
+    expect(e.turnEnds()).toEqual([other]);
+    store.updateTask(id, { agent_state: AgentState.waiting });
+    expect(e.turnEnds()).toEqual([id]);
+  });
+
+  test("marks it merged right away: its PR read first, then its branch", async () => {
+    const id = branchTask();
+    const refresher = new Refresher();
+    const e = engineWith(refresher);
+    store.updateTask(id, { agent_state: AgentState.working });
+    e.turnEnds();
+    fake.merged.set("fix-export", "origin/main");
+    store.updateTask(id, { agent_state: AgentState.ready });
+    const [ended] = e.turnEnds();
+    expect(await e.recheckMerge(ended)).toBe(true);
+    expect(refresher.asked).toEqual([id]);
+    expect(store.getTask(id)!.merged_at).not.toBeNull();
+    expect(triggers(id).at(-1)).toContain("Merged into origin/main");
+    // Once: the clock's sweep after it finds nothing new.
+    expect(await checkMerges(config())).toBe(0);
+  });
+
+  test("a task with neither branch nor PR costs no git call", async () => {
+    const t = store.createTask({ title: "Chat", kind: Kind.general, channel: "owner" });
+    const e = engineWith(new Refresher());
+    fake.merged.set("fix-export", "main");
+    expect(await e.recheckMerge(t.id)).toBe(false);
+    expect(store.getTask(t.id)!.merged_at).toBeNull();
+  });
+});
+
 describe("branchMerged (real git)", () => {
   async function sh(cwd: string, ...argv: string[]) {
     const proc = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
@@ -111,5 +176,53 @@ describe("branchMerged (real git)", () => {
     await git("commit", "-qm", "squashed");
     expect(await mux.branchMerged(repo, "sq")).toBe("main");
     expect(await mux.branchMerged(repo, "nope")).toBeNull();
+  });
+
+  // A PR merged on GitHub reaches origin/main with any fetch; the checkout's
+  // own main waits for the owner's pull (RIKER-0223: main not pulled).
+  test("merged on origin while the local main is behind", async () => {
+    const repo = mkdtempSync(join(tmpdir(), "riker-merge-"));
+    const git = (...a: string[]) => sh(repo, "git", ...a);
+    const commit = async (file: string) => {
+      await Bun.write(join(repo, file), file);
+      await git("add", file);
+      await git("commit", "-qm", file);
+    };
+    await git("init", "-q", "-b", "main");
+    await commit("a");
+    await git("update-ref", "refs/remotes/origin/main", "main");
+    const mux = new TmuxMux();
+    await git("checkout", "-qb", "pr");
+    await commit("b");
+    await git("checkout", "-qb", "squashed", "main");
+    await commit("c");
+    await commit("d");
+    expect(await mux.branchMerged(repo, "pr")).toBe(false);
+    // GitHub merges pr with a merge commit, then squashes the other.
+    await git("checkout", "-qb", "github", "main");
+    await git("merge", "-q", "--no-ff", "-m", "Merge pr", "pr");
+    await git("merge", "-q", "--squash", "squashed");
+    await git("commit", "-qm", "squashed (#2)");
+    await git("update-ref", "refs/remotes/origin/main", "github");
+    await git("checkout", "-q", "main");
+    expect(await mux.branchMerged(repo, "pr")).toBe("origin/main");
+    expect(await mux.branchMerged(repo, "squashed")).toBe("origin/main");
+    // Pulled: the local main says so, as it always did.
+    await git("merge", "-q", "--ff-only", "github");
+    expect(await mux.branchMerged(repo, "pr")).toBe("main");
+    // Local work past origin: the local main is the one to read.
+    await commit("e");
+    expect(await mux.branchMerged(repo, "pr")).toBe("main");
+  });
+
+  test("a branch named like a ref under main is not main", async () => {
+    const repo = mkdtempSync(join(tmpdir(), "riker-merge-"));
+    const git = (...a: string[]) => sh(repo, "git", ...a);
+    await Bun.write(join(repo, "a"), "a");
+    await git("init", "-q", "-b", "trunk");
+    await git("add", "a");
+    await git("commit", "-qm", "a");
+    await git("branch", "main/x");
+    expect(await new TmuxMux().branchMerged(repo, "main/x")).toBeNull();
   });
 });

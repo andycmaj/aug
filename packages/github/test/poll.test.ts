@@ -31,12 +31,14 @@ const reset = 2_000_000;
 function fakeGithub(options: {
   notifications?: () => unknown;
   prs: PrFetch;
+  pulls?: Record<string, unknown>;
 }) {
   const clock = { t: 1_000_000_000, now: () => clock.t, random: () => 1 };
   const calls: string[] = [];
   const api = async (path: string) => {
     calls.push(path.split("?")[0]);
     if (path === "user") return { login: "me" };
+    if (options.pulls && path in options.pulls) return options.pulls[path];
     if (path === "rate_limit")
       return {
         resources: {
@@ -168,5 +170,69 @@ describe("the GitHub status line", () => {
     calls.length = 0;
     await github.poll();
     expect(calls).not.toContain("graphql");
+  });
+});
+
+// The turn that merged a PR should not wait for the clock, nor for a
+// GraphQL rate limit (RIKER-0223's merge sat unmarked behind one).
+describe("a task's PR at its turn's end", () => {
+  const merged: PrFetch = async (refs) => ({
+    views: new Map(refs.map((r) => [r.url, { state: "MERGED" }])),
+    budget: { remaining: 4000, resetAt: new Date(reset * 1000).toISOString() },
+  });
+
+  test("is read now, once: a merged PR is not read again", async () => {
+    const t = prTask(7);
+    const { github, calls } = fakeGithub({ prs: merged });
+    await github.refreshTask(store.getTask(t.id)!);
+    expect(calls).toEqual(["graphql"]);
+    expect(store.prStatus(t.id)?.state).toBe("merged");
+    await github.refreshTask(store.getTask(t.id)!);
+    expect(calls).toEqual(["graphql"]);
+  });
+
+  test("a task with no PR asks nothing", async () => {
+    const t = store.createTask({ title: "no PR", kind: Kind.coding, channel: "owner" });
+    const { github, calls } = fakeGithub({ prs: merged });
+    await github.refreshTask(t);
+    expect(calls).toEqual([]);
+  });
+
+  test("rate limited on GraphQL, REST says it merged", async () => {
+    const t = prTask(8);
+    const { github, calls } = fakeGithub({
+      prs: async () => {
+        throw new Error("gh: API rate limit already exceeded for user ID 1.");
+      },
+      pulls: { "repos/acme/ledger/pulls/8": { state: "closed", merged: true } },
+    });
+    await github.refreshTask(store.getTask(t.id)!);
+    expect(calls).toEqual(["graphql", "rate_limit", "repos/acme/ledger/pulls/8"]);
+    expect(store.prStatus(t.id)).toMatchObject({ state: "merged", number: 8, error: null });
+    // Paused now: the next turn goes straight to REST.
+    const u = prTask(9);
+    calls.length = 0;
+    await github.refreshTask(store.getTask(u.id)!);
+    expect(calls).toEqual(["repos/acme/ledger/pulls/9"]);
+  });
+
+  test("REST saying open keeps the last full read", async () => {
+    const t = prTask(10);
+    let limited = false;
+    const { github, calls } = fakeGithub({
+      prs: async (refs) => {
+        if (limited) throw new Error("API rate limit exceeded");
+        return open(refs);
+      },
+      pulls: { "repos/acme/ledger/pulls/10": { state: "open", merged: false } },
+    });
+    await github.poll();
+    const before = store.prStatus(t.id);
+    expect(before?.state).toBe("open");
+    limited = true;
+    calls.length = 0;
+    await github.refreshTask(store.getTask(t.id)!);
+    expect(calls).toEqual(["graphql", "rate_limit", "repos/acme/ledger/pulls/10"]);
+    expect(store.prStatus(t.id)).toEqual(before);
   });
 });

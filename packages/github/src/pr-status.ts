@@ -404,3 +404,43 @@ export async function refreshPrStatuses(
   }
   return out;
 }
+
+// A PR as REST answers it: enough to say open, merged or closed, and no
+// more (its checks and reviews are GraphQL's).
+export interface GhRestPull {
+  state?: string;
+  merged?: boolean;
+  draft?: boolean;
+}
+
+// Where it ended, read through REST, for when a task's agent finishes a
+// turn while the GraphQL budget is paused: a merge should not wait out a
+// rate limit. Writes only an end (merged, closed), over what was last read;
+// an open PR keeps its last full read. True when it wrote.
+export async function refreshPrEndRest(
+  task: TaskRow,
+  pr: PrRef,
+  api: (path: string) => Promise<unknown>,
+): Promise<boolean> {
+  const pull = (await api(`repos/${pr.repo}/pulls/${pr.number}`)) as GhRestPull;
+  const state = pull.merged
+    ? PrState.merged
+    : pull.state === "closed"
+      ? PrState.closed
+      : null;
+  if (!state) return false;
+  const last = store.prStatus(task.id);
+  const kept = last?.url === pr.url ? last : null;
+  store.setPrStatus({
+    task_id: task.id,
+    ...pr,
+    state,
+    checks: kept?.checks ?? PrChecks.none,
+    review: kept?.review ?? PrReview.none,
+    mergeable: kept?.mergeable ?? PrMergeable.unknown,
+    ...NOT_QUEUED,
+    fetched_at: new Date().toISOString(),
+    error: null,
+  });
+  return true;
+}
