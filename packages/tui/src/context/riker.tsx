@@ -98,6 +98,9 @@ interface RikerContextValue extends ReadModel {
   // The palette's mode, kept for the session and shared by Chat and Board.
   paletteMode: Accessor<PaletteMode>;
   setPaletteMode: (mode: PaletteMode) => void;
+  // Whether the go-to list shows done and dropped work, kept for the session.
+  searchShowsDone: Accessor<boolean>;
+  setSearchShowsDone: (on: boolean) => void;
   // The rail's status filter; empty shows every status.
   railFilter: Accessor<Set<RailFilter>>;
   filterCounts: Accessor<Record<RailFilter, number>>;
@@ -212,6 +215,7 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   const [paletteMode, setPaletteMode] = createSignal<PaletteMode>(
     PaletteMode.CONTEXT,
   );
+  const [searchShowsDone, setSearchShowsDone] = createSignal(false);
   const filtered = createMemo(() => filterRail(rail(), railFilter()));
   const counts = createMemo(() => filterCounts(rail()));
   const shownRail = createMemo(() => foldRail(filtered(), folded()));
@@ -452,6 +456,8 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
         toggleFold,
         paletteMode,
         setPaletteMode,
+        searchShowsDone,
+        setSearchShowsDone,
         railFilter,
         filterCounts: counts,
         toggleFilter,

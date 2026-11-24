@@ -1,6 +1,7 @@
 // Small shared pieces: tone -> theme color, channel words, the inline key hint.
 
 import { For, Show } from "solid-js";
+import { TextAttributes } from "@opentui/core";
 import {
   contrastingForeground,
   useTheme,
@@ -110,5 +111,49 @@ export function Badge(props: { text: string; color: ThemeColor }) {
     <text bg={bg()} fg={contrastingForeground(bg())}>
       {` ${props.text} `}
     </text>
+  );
+}
+
+// A modal's mode switch, drawn like the palette's Context | All footer: the
+// segments with the active one on the accent, then the key that switches.
+export function ModeToggle<M extends string>(props: {
+  modes: readonly { mode: M; label: string }[];
+  active: M;
+  keyName: string;
+}) {
+  const theme = useTheme();
+  return (
+    <box
+      flexDirection="row"
+      justifyContent="space-between"
+      paddingTop={1}
+      paddingLeft={2}
+      paddingRight={2}
+    >
+      <box flexDirection="row">
+        <For each={props.modes}>
+          {(m) => {
+            const on = () => props.active === m.mode;
+            return (
+              <box flexDirection="row">
+                <text fg={theme.accent}>{on() ? "▌" : " "}</text>
+                <text
+                  fg={on() ? contrastingForeground(theme.accent) : theme.textMuted}
+                  bg={on() ? theme.accent : undefined}
+                  attributes={on() ? TextAttributes.BOLD : 0}
+                >
+                  {` ${m.label} `}
+                </text>
+                <text fg={theme.accent}>{on() ? "▐" : " "}</text>
+              </box>
+            );
+          }}
+        </For>
+      </box>
+      <box flexDirection="row">
+        <text fg={theme.text}>{props.keyName}</text>
+        <text fg={theme.textMuted}>{"  switch"}</text>
+      </box>
+    </box>
   );
 }
