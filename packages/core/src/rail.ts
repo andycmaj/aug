@@ -78,8 +78,6 @@ export type RailItem =
       copy: boolean;
       // Tags the row's place does not already say (no ★ under Wins).
       tags: Tag[];
-      // A review: since when the ask has waited on you.
-      asked?: string;
     }
   | ({ type: "project"; key: string; at: string } & RailProject);
 
@@ -230,8 +228,9 @@ export function buildRail(input: RailInput): RailSection[] {
       prState: reviews.has(task.id) ? null : (input.prStates?.get(task.id) ?? null),
       blockers,
     });
+    // The rail's clock ticks by the minute: an ask newer than it is now.
     const asked = reviews.has(task.id)
-      ? (input.asked?.get(task.id) ?? task.created_at)
+      ? [input.asked?.get(task.id) ?? task.created_at, input.now.toISOString()].sort()[0]
       : undefined;
     const item: TaskItem = {
       type: "task",
@@ -245,11 +244,11 @@ export function buildRail(input: RailInput): RailSection[] {
         input.now,
         blockers > 0,
       ),
+      // A review's age is how long the ask has waited on you.
       at: asked ?? task.created_at,
       group: null,
       copy: false,
       tags: [],
-      ...(asked ? { asked } : {}),
     };
     // A Win is listed under Wins for the day, done ones too (the box shows
     // how the day went), as well as where it sits.

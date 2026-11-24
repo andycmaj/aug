@@ -264,11 +264,21 @@ describe("rail", () => {
       now: new Date(at(12)),
     });
     const section = rail.find((s) => s.section === "reviews")!;
-    const rows = section.items.flatMap((x) => (x.type === "task" ? [[x.task.title, x.asked]] : []));
+    const rows = section.items.flatMap((x) => (x.type === "task" ? [[x.task.title, x.at]] : []));
     expect(rows).toEqual([
       ["tagged on web#91", at(5)],
       ["asked on web#92", at(9)],
     ]);
+    // Asked a moment after the rail's clock last ticked: waiting since now.
+    const ahead = buildRail({
+      tasks: store.listTasks(),
+      pendingActions: new Set(),
+      reviews,
+      asked: new Map([[early.id, at(13)]]),
+      lastHeard: new Map(),
+      now: new Date(at(12)),
+    }).find((s) => s.section === "reviews")!;
+    expect(ahead.items.map((x) => x.at)).toEqual([at(5), at(12)]);
   });
 
   test("Next walks in order and skips sections the walk does not offer", () => {
