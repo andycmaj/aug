@@ -6,7 +6,7 @@
 
 import { createSignal, type Accessor, type JSX } from "solid-js";
 import { existsSync, readFileSync } from "node:fs";
-import { useFocus, useToast } from "@andycmaj/opentui-app";
+import { copyToClipboard, useFocus, useToast } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
@@ -40,7 +40,7 @@ import { actionNamed, actionsFor, keyedActions, makesCheckout } from "@riker/cor
 import { describeProblem } from "@riker/core/repos";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
 import type { NoiseRule } from "@riker/core/config";
-import type { Jump } from "@riker/core/desk";
+import { NoJump, type Jump } from "@riker/core/desk";
 import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "@riker/core/inbox";
 import { messageMeta } from "@riker/core/meta";
 import { Kind, Priority, type MessageRow, type TaskRow } from "@riker/core/types";
@@ -304,11 +304,22 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
-  // Riker outside tmux has no client to move: the line to run instead.
-  function jumped(outcome: Jump, gone: string) {
-    if (outcome === "gone") showToast(gone);
-    else if (outcome !== "jumped")
-      showToast(`Riker is not in tmux; in a terminal run: ${outcome.attach}`, 10000);
+  // Riker with no client of the agents' server has none to move: why, where
+  // else it shows, and the line that opens it (copied, to paste).
+  function jumped(outcome: Jump, gone: string, here?: string) {
+    if (outcome === "gone") return showToast(gone);
+    if (outcome === "jumped") return;
+    void copyToClipboard(outcome.attach).then((ok) => {
+      const run = `In a terminal run${ok ? " (copied)" : ""}: ${outcome.attach}`;
+      const also = here ? ` ${here}.` : "";
+      const why =
+        outcome.why === NoJump.outside
+          ? "Riker is not in tmux, so it has no client to jump."
+          : outcome.why === NoJump.lost
+            ? `Riker's tmux server lost its socket (${outcome.socket}) to a newer server, where its agents run, so it cannot jump. To jump again, run Riker in a client of that server (tmux attach).`
+            : `Riker runs in another tmux server (${outcome.socket}) than its agents, so it cannot jump.`;
+      showToast(`${why}${also} ${run}`, 15000);
+    });
   }
 
   async function jumpToProject(projectId: number) {
@@ -333,7 +344,11 @@ export function useActions(dialogs: Dialogs) {
 
   async function jumpTo(taskId: number) {
     try {
-      jumped(await desk.jumpToTask(taskId), "Its window is gone; s starts it again");
+      jumped(
+        await desk.jumpToTask(taskId),
+        "Its window is gone; s starts it again",
+        "The Canvas shows the agent here",
+      );
     } catch (err) {
       showToast(`Could not jump: ${errorMessage(err)}`, 4000, "error");
     }

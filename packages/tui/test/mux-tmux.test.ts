@@ -296,6 +296,84 @@ describe.skipIf(!hasTmux)("host window", () => {
   });
 });
 
+// A live server's socket file deleted under it: the server runs on, and the
+// next new-session starts a second one at the same path. Riker's own pane is
+// on the first, its agents on the second, and a jump said "not in tmux"
+// (RIKER-0232).
+describe.skipIf(!hasTmux)("a server that lost its socket", () => {
+  const orphans: number[] = [];
+  afterEach(() => {
+    for (const pid of orphans.splice(0)) {
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {
+        // Already gone.
+      }
+    }
+  });
+
+  // Riker's pane on a fresh server whose socket file is then removed.
+  function rikerOnLostServer(s: string) {
+    tmux(s, "new-session", "-d", "-s", "riker", "cat");
+    tmux(s, "new-session", "-d", "-s", "proj", "cat");
+    const pane = tmux(s, "display", "-p", "-t", "riker:", "#{pane_id}");
+    const pid = Number(tmux(s, "display", "-p", "#{pid}"));
+    const path = tmux(s, "display", "-p", "#{socket_path}");
+    orphans.push(pid);
+    rmSync(path);
+    return { env: { TMUX: `${path},${pid},0`, TMUX_PANE: pane }, pid, path };
+  }
+
+  async function withEnv<T>(env: Record<string, string>, run: () => Promise<T>): Promise<T> {
+    const saved = { TMUX: process.env.TMUX, TMUX_PANE: process.env.TMUX_PANE };
+    Object.assign(process.env, env);
+    try {
+      return await run();
+    } finally {
+      for (const [k, v] of Object.entries(saved))
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+    }
+  }
+
+  test("a jump says Riker's server lost its socket when a newer server holds the path", async () => {
+    const s = server("lost");
+    const host = rikerOnLostServer(s);
+    // The second server, as the engine's new-session made it.
+    Bun.spawnSync(["tmux", "-L", s, "-f", "/dev/null", "new-session", "-d", "-s", "agents", "cat"], {
+      env: { ...process.env, TMUX: "" },
+    });
+    expect(Number(tmux(s, "display", "-p", "#{pid}"))).not.toBe(host.pid);
+    const mux = new TmuxMux(s);
+    const seen = await withEnv(host.env, async () => ({
+      window: await mux.hostWindow(),
+      server: await mux.hostServer(),
+    }));
+    expect(seen.window).toBeNull();
+    expect(seen.server).toEqual({ at: "other", socket: host.path, lost: true });
+  });
+
+  test("Riker's own server remakes its socket instead of a second server starting", async () => {
+    const s = server("lost");
+    const host = rikerOnLostServer(s);
+    const mux = new TmuxMux(s);
+    const state = await withEnv(host.env, () => mux.state());
+    expect(state.sessions.map((x) => x.name).sort()).toEqual(["proj", "riker"]);
+    expect(Number(tmux(s, "display", "-p", "#{pid}"))).toBe(host.pid);
+    expect(await withEnv(host.env, () => mux.hostServer())).toMatchObject({ at: "here" });
+  });
+
+  test("a server not Riker's own is left alone", async () => {
+    const s = server("lost");
+    const host = rikerOnLostServer(s);
+    const mux = new TmuxMux(s);
+    const state = await withEnv({ TMUX: "", TMUX_PANE: "" }, () => mux.state());
+    expect(state.sessions).toEqual([]);
+    expect(await withEnv({ TMUX: "", TMUX_PANE: "" }, () => mux.hostServer())).toEqual({ at: "none" });
+    expect(host.pid).toBeGreaterThan(0);
+  });
+});
+
 describe.skipIf(!hasTmux)("paneInfo", () => {
   test("names the pane's session and process, and nothing for a pane that is gone", async () => {
     const s = server("s");

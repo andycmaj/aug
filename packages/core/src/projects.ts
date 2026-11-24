@@ -518,15 +518,29 @@ export async function moveTask(
     await archive(from, await mux().state());
 }
 
+// Why Riker has no client of the agents' server to move: it is not in tmux,
+// it is in another server, or its server lost its socket to a newer one
+// (HostServer in mux.ts).
+export const NoJump = {
+  outside: "outside",
+  elsewhere: "elsewhere",
+  lost: "lost",
+} as const;
+export type NoJump = (typeof NoJump)[keyof typeof NoJump];
+
 // What a jump did: moved your client, found no window, or (Riker not in a
-// client of this server) the line to run in a terminal of your own.
-export type Jump = "jumped" | "gone" | { attach: string };
+// client of this server) why, and the line to run in a terminal of your own.
+export type Jump = "jumped" | "gone" | { attach: string; why: NoJump; socket?: string };
 
 // switch-client moves the client Riker runs in. Outside tmux (or on another
 // server) there is none, and tmux would move whichever client it likes.
 async function jumpTo(sessionId: string, windowId?: string): Promise<Jump> {
-  if (!(await mux().hostWindow()))
-    return { attach: mux().attachCommand(sessionId, windowId) };
+  const host = await mux().hostServer();
+  if (host.at !== "here") {
+    const attach = mux().attachCommand(sessionId, windowId);
+    if (host.at === "none") return { attach, why: NoJump.outside };
+    return { attach, why: host.lost ? NoJump.lost : NoJump.elsewhere, socket: host.socket };
+  }
   await mux().switchClient(sessionId, windowId);
   return "jumped";
 }

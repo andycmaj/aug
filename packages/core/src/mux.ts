@@ -6,6 +6,8 @@
 // any macOS trouble stay here. Tests swap in a fake with setMux.
 
 import { randomUUID } from "node:crypto";
+import { existsSync, realpathSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { Server, TmuxServerRestartedError } from "libtmux";
 import { perfOn, perfStart } from "./perf";
 import { inspect, scan, type CheckoutState, type FoundCheckout } from "./checkouts";
@@ -130,6 +132,8 @@ export interface Mux {
   // The window Riker itself runs in, when that is on this server: a viewer of
   // it would show Riker showing the viewer, nested without end.
   hostWindow(): Promise<string | null>;
+  // Where Riker's own terminal is, which says whether a jump can move it.
+  hostServer(): Promise<HostServer>;
   // The running server's version (not the tmux on PATH: an upgrade leaves the
   // old server up until it is killed), or null with no server.
   version(): Promise<string | null>;
@@ -276,6 +280,45 @@ function idOf(raw: string | undefined): number | null {
 // Shown on your client after a jump. #{prefix} is your prefix key.
 export const BACK_TO_RIKER = `${CMD}: #{prefix} L goes back to ${NAME}`;
 
+// "none": Riker is not in tmux. "other": it is in a client of another
+// server than its agents'. lost: that server is alive at this very socket
+// path but no longer owns it (its socket file was deleted and a second
+// server started there), so nothing can reach it by path.
+export type HostServer =
+  | { at: "here"; windowId: string }
+  | { at: "none" }
+  | { at: "other"; socket: string; lost: boolean };
+
+// $TMUX is "socket path,server pid,session".
+function hostFromEnv(tmux = process.env.TMUX): { path: string; pid: number } | null {
+  const [path, raw] = (tmux ?? "").split(",");
+  const pid = Number(raw);
+  return path && Number.isInteger(pid) && pid > 0 ? { path, pid } : null;
+}
+
+// /tmp is /private/tmp on macOS. The socket file itself may be gone, so
+// only its directory is resolved.
+function samePath(a: string, b: string): boolean {
+  const real = (p: string) => {
+    try {
+      return join(realpathSync(dirname(p)), basename(p));
+    } catch {
+      return p;
+    }
+  };
+  return real(a) === real(b);
+}
+
+function isTmux(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  const run = Bun.spawnSync(["ps", "-o", "comm=", "-p", String(pid)], { stderr: "ignore" });
+  return run.exitCode === 0 && /tmux/.test(run.stdout.toString());
+}
+
 export interface TmuxSocket {
   socketName?: string;
   socketPath?: string;
@@ -304,9 +347,39 @@ export class TmuxMux implements Mux {
     );
   }
 
+  // Where tmux puts this server's socket: -S as given, else
+  // $TMUX_TMPDIR (or /tmp)/tmux-<uid>/<-L name or default>.
+  private socketFile(): string {
+    const { socketName, socketPath } = this.socket;
+    if (socketPath) return socketPath;
+    const dir = process.env.TMUX_TMPDIR || "/tmp";
+    return join(dir, `tmux-${process.getuid?.() ?? 0}`, socketName ?? "default");
+  }
+
+  // A live server's socket file can be deleted under it (macOS cleans /tmp,
+  // a stray rm): the server runs on, unreachable, and the next new-session
+  // starts a second server at the same path. Riker's own client is then on
+  // one server and its agents on the other, and no jump can cross. When the
+  // server Riker runs in is the one missing from this path, SIGUSR1 makes
+  // tmux remake its socket (tmux(1)), so Riker reaches it again instead.
+  private async reviveHost(): Promise<void> {
+    const host = hostFromEnv();
+    const path = this.socketFile();
+    if (!host || existsSync(path) || !samePath(host.path, path) || !isTmux(host.pid)) return;
+    log.info("tmux socket gone; asking Riker's own server to remake it", { pid: host.pid, path });
+    try {
+      process.kill(host.pid, "SIGUSR1");
+    } catch (err) {
+      log.warn("could not signal tmux", { pid: host.pid, err: String(err) });
+      return;
+    }
+    for (let i = 0; i < 40 && !existsSync(path); i++) await Bun.sleep(25);
+  }
+
   // libtmux pins ids to the daemon it first met and refuses (before running
   // anything) once that tmux server has restarted; meet the new one.
   private async retry<T>(run: (server: Server) => Promise<T>): Promise<T> {
+    await this.reviveHost();
     try {
       return await run(this.server);
     } catch (err) {
@@ -389,6 +462,16 @@ export class TmuxMux implements Mux {
     } catch {
       return null;
     }
+  }
+
+  async hostServer(): Promise<HostServer> {
+    const host = hostFromEnv();
+    if (!host || !process.env.TMUX_PANE) return { at: "none" };
+    const windowId = await this.hostWindow();
+    if (windowId) return { at: "here", windowId };
+    // Its pid answered for no server here, though the path is this one's.
+    const lost = samePath(host.path, this.socketFile()) && isTmux(host.pid);
+    return { at: "other", socket: host.path, lost };
   }
 
   async state(opts: { strict?: boolean } = {}): Promise<MuxState> {

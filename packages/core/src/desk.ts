@@ -71,7 +71,7 @@ import { journalSwitch, storySwitch, switchColumn, switchWords, SwitchValue } fr
 import { pin, undoStory } from "./story";
 import { logger } from "./log";
 
-export type { Jump } from "./projects";
+export { NoJump, type Jump } from "./projects";
 
 const log = logger("desk");
 
