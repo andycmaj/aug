@@ -257,9 +257,11 @@ whenever the task stays open.
 ### Sections
 
 Home, **Due**, **Wins**, System, Tasks, Code Reviews, Watching, For
-later. Due lists each open task a timer fired on (a follow-up, schedule or
-reminder, `core/timers.ts`) that the owner has not opened since: its timer
-message is unread (`store.ringingTimers`). Opening the task on the Canvas
+later. Due lists each open task a timer fired on that the owner has not
+opened since (`core/timers.ts`; its timer message is unread,
+`store.ringingTimers`): a follow-up or schedule the owner or the Assistant
+set, and every reminder. An agent's own follow-up wakes the agent and does
+not ring (`ringsForOwner`). Opening the task on the Canvas
 (or `x` on its Inbox row) reads it, and the row goes. Due sits right under
 Home so a timer coming due is never below the fold. Due, then Wins, are
 walked first (`WALKED`). The rail holds tasks and projects only:

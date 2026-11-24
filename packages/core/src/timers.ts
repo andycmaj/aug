@@ -302,6 +302,13 @@ function timerMeta(message: MessageRow): TimerMeta | null {
   }
 }
 
+// One the owner or the Assistant set rings for the owner; an agent's own
+// follow-up is its business, so it wakes the agent and nothing more.
+// Reminders always ring.
+export function ringsForOwner(by: string): boolean {
+  return !by.startsWith("agent ");
+}
+
 // A timer that did something rings (unread: the rail's Due section) until
 // the owner opens its task; one that found nothing to do is read at once.
 function settled(
@@ -352,7 +359,7 @@ export function routeTimer(message: MessageRow): TriageOutcome {
       message,
       task,
       `${meta.kind === TimerKind.followup ? "follow-up" : "schedule"} on ${ref}`,
-      true,
+      ringsForOwner(message.author),
     );
     return { ...outcome, effects: [{ type: "timer", taskId: task.id, turnId: turn.id, reason: body }] };
   });

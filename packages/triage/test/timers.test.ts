@@ -57,9 +57,7 @@ describe("a follow-up", () => {
     expect(await tick(local(22, 9))).toBe(0);
     expect(woke).toHaveLength(1);
 
-    // It rings on the rail's Due until you open the task.
-    expect(store.ringingTimers().has(task.id)).toBe(true);
-    engine.desk.seenTimers(task.id);
+    // An agent's own follow-up wakes it and does not ring for you.
     expect(store.ringingTimers().size).toBe(0);
 
     // On the Inbox, under its task, with the chain that routed it.
@@ -68,6 +66,20 @@ describe("a follow-up", () => {
     expect(row.taskId).toBe(task.id);
     const [run] = store.triageRunsFor(row.type === "message" ? row.message.id : 0);
     expect(run!.rule).toBe("timer");
+  });
+
+  test("one you or the Assistant set rings on the rail's Due until you open the task", async () => {
+    const mine = engine.desk.newTask("Mine", Kind.general);
+    const theirs = engine.desk.newTask("The Assistant's", Kind.general);
+    const slack = engine.desk.newTask("From Slack", Kind.general);
+    addFollowup(mine.id, local(21, 9), "a", "you");
+    addFollowup(theirs.id, local(21, 9), "b", "assistant");
+    addFollowup(slack.id, local(21, 9), "c", "assistant via Slack");
+    await tick(local(21, 9));
+    expect([...store.ringingTimers().keys()].sort()).toEqual([mine.id, theirs.id, slack.id].sort());
+    engine.desk.seenTimers(mine.id);
+    expect(store.ringingTimers().has(mine.id)).toBe(false);
+    expect(store.ringingTimers().size).toBe(2);
   });
 
   test("brings a task put away back to the rail", async () => {
@@ -149,6 +161,13 @@ describe("a reminder", () => {
     expect(store.getTask(task.id)!.status).toBe(TaskStatus.open);
     expect(store.turnsForTask(task.id).at(-1)!.body).toBe("You asked to be reminded about this today");
     expect(woke).toEqual([]);
+    expect(store.ringingTimers().has(task.id)).toBe(true);
+  });
+
+  test("rings even when an agent set it: a reminder is always for you", async () => {
+    const task = engine.desk.newTask("Made by an agent", Kind.general);
+    store.remindAt(task.id, local(21, 7).toISOString(), "agent RIKER-0001");
+    await tick(local(21, 7));
     expect(store.ringingTimers().has(task.id)).toBe(true);
   });
 
