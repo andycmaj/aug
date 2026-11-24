@@ -554,20 +554,18 @@ If one of your hooks opens a tmux window for every new worktree, guard it with
 
 ## What changed for a terminal
 
-These Taskuary features were rethought for a TUI:
+What a web app would do, and what Riker does instead:
 
-| Taskuary (web)                                 | Riker (TUI)                                                                                                                                                                                              |
+| On the web                                     | Riker (TUI)                                                                                                                                                                                              |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Chat / Board / Game switch                     | `v` toggles Chat and Board. Game is not built.                                                                                                                                                         |
+| Chat / Board switch                            | `v` toggles Chat and Board.                                                                                                                                                                             |
 | One-press **Send** button                      | `y` opens a confirm that shows the exact words; a stray key never sends.                                                                                                                               |
 | Draft edited in place                          | `e` opens the draft in `$EDITOR` inside an embedded terminal. Saving updates it and teaches voice.                                                                                                     |
 | Live terminal on the task page                 | The agent runs in tmux; Riker embeds a view of its window ([ghostty-opentui](https://www.npmjs.com/package/ghostty-opentui)): attach by focusing it, `^]` to detach, `T` (or `^t` while attached) to jump there in your own tmux; `prefix L` comes back. Outside tmux it toasts the `tmux attach` line instead. |
 | Docs page with an editor                       | `D` picks a doc, which opens in `$EDITOR`.                                                                                                                                                             |
-| Rail click opens the task                      | Same as Taskuary: the cursor moves freely, `enter` selects the row (marked `▸`), `n`/`b` walk the selection.                                                                                     |
+| Rail click opens the task                      | The cursor moves freely, `enter` selects the row (marked `▸`), `n`/`b` walk the selection.                                                                                     |
 | Chat pill in the corner                        | `a` opens the Assistant as a modal. Its conversation survives the view switch.                                                                                                                         |
 | File previews (workbooks, images)              | **What it made** renders markdown and CSV/TSV inline. `o` opens any file with your opener (`open`, `wslview`, ...), and `O` opens it in `$EDITOR`. No Slack attachments yet.                           |
-| Browser hand-over, voice, attachments          | Not built.                                                                                                                                                                                             |
-| Morning digest, reports, dashboards, routines  | Not built.                                                                                                                                                                                             |
 
 ## Develop
 

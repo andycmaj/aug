@@ -1,7 +1,7 @@
 # Agents
 
-A TUI clone of Taskuary's Chat and Board views, with GitHub and Slack as the
-only connections. The app shell is
+A terminal work manager with Chat and Board views, and GitHub and Slack as
+the only connections. The app shell is
 [`@andycmaj/opentui-app`](https://github.com/andycmaj/opentui-app) (boot,
 focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 `tilt-tui` and `kube-tui`, and the embedded terminal is copied from
