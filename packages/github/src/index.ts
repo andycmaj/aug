@@ -2,12 +2,13 @@
 // way out (comments, approvals, merges). Core knows neither.
 
 import type { RikerPlugin } from "@riker/core/plugins";
+import { GithubClient, type GhRun } from "./client";
 import { GithubConnector, type GithubOptions } from "./connector";
 import { githubConfig, type GithubConfig } from "./config";
 import { githubComment, type GithubComment } from "./draft";
 import { githubReviews, type GraphqlRun } from "./review-context";
 
-export { GithubConnector, githubConfig, type GithubConfig, githubComment, type GithubComment, type GithubOptions };
+export { GithubClient, GithubConnector, githubConfig, type GithubConfig, githubComment, type GithubComment, type GithubOptions };
 
 // The Assistant's gh reads (core grants them on its shell: GH_READS).
 const GITHUB_LINES = [
@@ -16,16 +17,20 @@ const GITHUB_LINES = [
 ];
 
 export function githubPlugin(
-  options: GithubOptions & { graphql?: GraphqlRun } = {},
-): RikerPlugin & { connector: GithubConnector } {
-  const connector = new GithubConnector(options);
+  options: GithubOptions & { graphql?: GraphqlRun; run?: GhRun } = {},
+): RikerPlugin & { connector: GithubConnector; client: GithubClient } {
+  // One client, so one gate: the poll, a Send and the guide's reads all
+  // wait out the same rate limit.
+  const client = new GithubClient({ run: options.run, clock: options.clock });
+  const connector = new GithubConnector(options, client);
   return {
     name: "github",
     connector,
+    client,
     connectors: [connector],
-    drafts: [githubComment],
+    drafts: [githubComment(client)],
     config: [githubConfig],
-    reviews: githubReviews(options.graphql),
+    reviews: githubReviews(options.graphql ?? ((query, vars) => client.graphql(query, vars, { owner: true }))),
     assistant: () => GITHUB_LINES,
   };
 }

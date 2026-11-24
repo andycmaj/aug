@@ -65,21 +65,6 @@ export function reviewRequested(
 
 export type GhApi = (path: string) => Promise<unknown>;
 
-export async function ghApi(path: string): Promise<unknown> {
-  const proc = Bun.spawn(["gh", "api", path], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (code !== 0)
-    throw new Error(err.trim() || `gh api ${path} exited ${code}`);
-  return JSON.parse(out) as unknown;
-}
-
 export function numberFromUrl(url: string | null): number | null {
   const m = url?.match(/\/(\d+)$/);
   return m ? Number(m[1]) : null;
@@ -143,7 +128,7 @@ export function toMessage(
 // some task has a worktree branch a PR could come from.
 export async function pollGithub(
   sinceIso: string | null,
-  api: GhApi = ghApi,
+  api: GhApi,
   wantsHead: (repo: string) => boolean = () => false,
 ): Promise<NewMessage[]> {
   const me = ((await api("user")) as { login: string }).login;
