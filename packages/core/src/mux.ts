@@ -746,6 +746,9 @@ export class TmuxMux implements Mux {
   // A branch with work on it (its tip is not where it was created) whose
   // tip is in base, or whose squash is: the commit-tree of its tree on the
   // merge base, which git cherry finds already applied (git-delete-squashed).
+  // The base is the local one or origin's, whichever is ahead: a PR merged
+  // on GitHub reaches origin/<base> with any fetch, while the checkout's own
+  // <base> waits for the owner's pull. Nothing here fetches.
   async branchMerged(repoPath: string, branch: string): Promise<string | false | null> {
     const git = async (...args: string[]) => {
       const proc = Bun.spawn(["git", "-C", repoPath, ...args], {
@@ -759,23 +762,49 @@ export class TmuxMux implements Mux {
     };
     const head = await git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD");
     const base = head?.replace(/^origin\//, "") || "main";
-    const baseTip = await git("rev-parse", "--verify", "--quiet", `refs/heads/${base}^{commit}`);
-    const tip = await git("rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`);
-    if (!baseTip || !tip) return null;
+    const localRef = `refs/heads/${base}`;
+    const remoteRef = `refs/remotes/origin/${base}`;
+    const branchRef = `refs/heads/${branch}`;
+    // One call for the three tips; a pattern also matches refs under it
+    // (refs/heads/main/x), so only exact names count.
+    const tips = new Map<string, string>();
+    const listed = await git(
+      "for-each-ref",
+      "--format=%(refname) %(objectname)",
+      localRef,
+      remoteRef,
+      branchRef,
+    );
+    for (const line of listed?.split("\n") ?? []) {
+      const [ref, sha] = line.split(" ");
+      if (ref && sha) tips.set(ref, sha);
+    }
+    const tip = tips.get(branchRef);
+    const local = tips.get(localRef);
+    const remote = tips.get(remoteRef);
+    if (!tip || (!local && !remote)) return null;
+    let baseTip = (local ?? remote)!;
+    let into = local ? base : `origin/${base}`;
+    if (local && remote && local !== remote) {
+      if ((await git("merge-base", "--is-ancestor", local, remote)) !== null) {
+        baseTip = remote;
+        into = `origin/${base}`;
+      }
+    }
     const created = (await git("reflog", "show", "--format=%H", `refs/heads/${branch}`))
       ?.split("\n")
       .filter(Boolean)
       .at(-1);
     if (!created) return null;
     if (created === tip) return false;
-    if ((await git("merge-base", "--is-ancestor", tip, baseTip)) !== null) return base;
+    if ((await git("merge-base", "--is-ancestor", tip, baseTip)) !== null) return into;
     const forkPoint = await git("merge-base", baseTip, tip);
     const tree = await git("rev-parse", `${tip}^{tree}`);
     if (!forkPoint || !tree) return false;
     const squash = await git("commit-tree", tree, "-p", forkPoint, "-m", "riker: squash check");
     if (!squash) return false;
     const cherry = await git("cherry", baseTip, squash);
-    return cherry?.startsWith("-") ? base : false;
+    return cherry?.startsWith("-") ? into : false;
   }
 
   inspectCheckout(path: string): CheckoutState {
