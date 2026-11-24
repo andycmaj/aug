@@ -353,6 +353,26 @@ export function buildRail(input: RailInput): RailSection[] {
     .filter((s) => s.items.length > 0);
 }
 
+// The folded projects as kept in kv, read back against the projects that
+// are still active: one archived or deleted since drops out, and a new one
+// is not in the list, so it opens unfolded. Ids survive a rename.
+export function readFolds(saved: string | null, active: number[]): Set<number> {
+  if (!saved) return new Set();
+  let ids: unknown;
+  try {
+    ids = JSON.parse(saved);
+  } catch {
+    return new Set();
+  }
+  if (!Array.isArray(ids)) return new Set();
+  const live = new Set(active);
+  return new Set(ids.filter((id): id is number => live.has(id)));
+}
+
+export function writeFolds(folded: Iterable<number>): string {
+  return JSON.stringify([...folded].sort((a, b) => a - b));
+}
+
 // What the rail shows: a folded project keeps its row and hides its tasks.
 export function foldRail(
   sections: RailSection[],
