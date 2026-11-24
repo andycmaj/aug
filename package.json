@@ -16,6 +16,7 @@
     "compile": "bun run packages/cli/script/compile.ts",
     "typecheck": "tsc --noEmit",
     "docs:keys": "bun run packages/tui/script/keys-doc.ts",
+    "docs:screenshots": "bun run packages/tui/script/screenshots.ts",
     "test": "bun test",
     "format": "prettier --write packages"
   },
