@@ -1,7 +1,7 @@
 // GitHub as a plugin: its connector (notifications and PR status) and its
 // way out (comments, approvals, merges). Core knows neither.
 
-import type { RikerPlugin } from "@riker/core/plugins";
+import type { ReviewSource, RikerPlugin } from "@riker/core/plugins";
 import { GithubConnector, type GithubOptions } from "./connector";
 import { githubConfig, type GithubConfig } from "./config";
 import { githubComment, type GithubComment } from "./draft";
@@ -16,7 +16,8 @@ const GITHUB_LINES = [
 ];
 
 export function githubPlugin(
-  options: GithubOptions & { graphql?: GraphqlRun } = {},
+  // `reviews` stands in for the GitHub read (the sim's PRs are not there).
+  options: GithubOptions & { graphql?: GraphqlRun; reviews?: ReviewSource } = {},
 ): RikerPlugin & { connector: GithubConnector } {
   const connector = new GithubConnector(options);
   return {
@@ -25,7 +26,7 @@ export function githubPlugin(
     connectors: [connector],
     drafts: [githubComment],
     config: [githubConfig],
-    reviews: githubReviews(options.graphql),
+    reviews: options.reviews ?? githubReviews(options.graphql),
     assistant: () => GITHUB_LINES,
   };
 }
