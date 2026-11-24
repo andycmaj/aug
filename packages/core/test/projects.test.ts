@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { paths } from "../src/paths";
 import { DEFAULT_CONFIG, mergeConfig } from "../src/config";
 import {
   fillTemplate,
@@ -286,6 +289,7 @@ describe("closing, moving, reconciling", () => {
   test("close kills the window, removes the worktree, archives a project-of-one", async () => {
     const t = codingTask();
     await startTask(config(), t.id);
+    expect(existsSync(join(paths.launch(t.id), "brief.md"))).toBe(true);
     const projectId = store.getTask(t.id)!.project_id!;
     const r = await closeTask(config(), t.id);
     expect(r).toEqual({ warnings: [], archived: true });
@@ -294,6 +298,8 @@ describe("closing, moving, reconciling", () => {
     expect(fake.removed).toEqual([{ repoPath: "/src/api", branch: "fix-login-redirect" }]);
     expect(store.getProject(projectId)!.status).toBe("archived");
     expect(store.latestSession(t.id)!.ended_at).not.toBeNull();
+    // The brief the start wrote for claude goes with its window.
+    expect(existsSync(paths.launch(t.id))).toBe(false);
   });
 
   test("a dirty worktree is kept and reported", async () => {

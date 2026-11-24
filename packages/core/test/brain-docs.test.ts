@@ -479,7 +479,7 @@ describe("onboarding", () => {
     expect(window!.taskId).toBe(offer.id);
     expect(window!.cwd).toBe(docDraftsDir());
     expect(window!.argv[0]).toBe("claude");
-    const system = window!.argv[window!.argv.indexOf("--append-system-prompt") + 1]!;
+    const system = readFileSync(window!.argv[window!.argv.indexOf("--append-system-prompt-file") + 1]!, "utf8");
     expect(system).toContain("onboarding interview");
     expect(system).toContain(`--file ${join(docDraftsDir(), "PERSONA.md")}`);
     expect(window!.argv.at(-1)).toBe(ONBOARD_START);

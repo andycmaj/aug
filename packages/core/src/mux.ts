@@ -5,6 +5,7 @@
 // Only this file imports libtmux (alpha, pinned exactly): its API churn and
 // any macOS trouble stay here. Tests swap in a fake with setMux.
 
+import { randomUUID } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { Server, TmuxServerRestartedError } from "libtmux";
@@ -159,6 +160,9 @@ export interface Mux {
 export class MuxError extends Error {}
 
 // ── shell helpers ────────────────────────────────────────────────────────
+
+// Well under tmux's ~16KB command, with the target and flags beside it.
+const SEND_KEYS_MAX = 8000;
 
 // The window runs claude, then a login shell, so it stays open when claude
 // exits and you can resume or look around.
@@ -585,8 +589,25 @@ export class TmuxMux implements Mux {
     // one is split off; {top-left} is too, while that split is zoomed.
     const [first] = await this.cmd("list-panes", ["-t", windowId, "-F", "#{pane_id}"]);
     const target = first?.trim() || windowId;
-    await this.cmd("send-keys", ["-t", target, "-l", text]);
+    if (Buffer.byteLength(text) <= SEND_KEYS_MAX) await this.cmd("send-keys", ["-t", target, "-l", text]);
+    else await this.paste(target, text);
     await this.cmd("send-keys", ["-t", target, "Enter"]);
+  }
+
+  // tmux refuses a command past about 16KB, send-keys' text included, but
+  // load-buffer reads stdin in pieces: no file, and no limit. -p pastes as a
+  // paste (bracketed, when the program asked for that), so claude takes it
+  // whole; -d drops the buffer after.
+  private async paste(target: string, text: string): Promise<void> {
+    const buffer = `riker-${randomUUID()}`;
+    const proc = Bun.spawn([...this.tmuxArgs(), "load-buffer", "-b", buffer, "-"], {
+      stdin: new TextEncoder().encode(text),
+      stdout: "ignore",
+      stderr: "pipe",
+    });
+    const [code, err] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+    if (code !== 0) throw new MuxError(`tmux load-buffer failed: ${err.trim() || `exit ${code}`}`);
+    await this.cmd("paste-buffer", ["-d", "-p", "-b", buffer, "-t", target]);
   }
 
   async splitPane(s: SplitPane): Promise<string> {
