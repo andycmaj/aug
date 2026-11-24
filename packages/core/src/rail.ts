@@ -78,6 +78,8 @@ export type RailItem =
       copy: boolean;
       // Tags the row's place does not already say (no ★ under Wins).
       tags: Tag[];
+      // A review: since when the ask has waited on you.
+      asked?: string;
     }
   | ({ type: "project"; key: string; at: string } & RailProject);
 
@@ -138,6 +140,9 @@ export interface RailInput {
   pendingActions: Set<number>;
   // Tasks a review request filed; they sit under Code Reviews, not Tasks.
   reviews?: Set<number>;
+  // Review task id -> when someone last asked or wrote on it: the oldest
+  // ask leads Code Reviews.
+  asked?: Map<number, string>;
   // Task id -> when the last message from somebody else arrived, for slipped.
   lastHeard: Map<number, string>;
   now: Date;
@@ -225,6 +230,9 @@ export function buildRail(input: RailInput): RailSection[] {
       prState: reviews.has(task.id) ? null : (input.prStates?.get(task.id) ?? null),
       blockers,
     });
+    const asked = reviews.has(task.id)
+      ? (input.asked?.get(task.id) ?? task.created_at)
+      : undefined;
     const item: TaskItem = {
       type: "task",
       key: taskKey(task.id),
@@ -237,10 +245,11 @@ export function buildRail(input: RailInput): RailSection[] {
         input.now,
         blockers > 0,
       ),
-      at: task.created_at,
+      at: asked ?? task.created_at,
       group: null,
       copy: false,
       tags: [],
+      ...(asked ? { asked } : {}),
     };
     // A Win is listed under Wins for the day, done ones too (the box shows
     // how the day went), as well as where it sits.

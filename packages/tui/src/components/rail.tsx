@@ -410,7 +410,13 @@ function RailRow(props: {
           sub: acting
             ? [word, taskRef(item.task.id)].join(" · ")
             : chip
-            ? [taskRef(item.task.id), item.copy ? project : null, word]
+            ? [
+                // A review says how long the ask has waited, chip or not.
+                item.asked ? age : null,
+                taskRef(item.task.id),
+                item.copy ? project : null,
+                word,
+              ]
                 .filter(Boolean)
                 .join(" · ")
             : [

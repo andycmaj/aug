@@ -846,10 +846,15 @@ export function pendingAction(
 }
 
 // Tasks a GitHub review request filed: the rail keeps them under Code Reviews.
-export function tasksFromReviewRequests(): Set<number> {
+// Tasks a review ask filed: GitHub's review request, or the PR link triage
+// marks a review with (`markedBy`, core/pr.ts), so a tag or a Slack ask
+// counts too.
+export function tasksFromReviewRequests(markedBy?: string): Set<number> {
   return new Set(
     all<{ task_id: number }>(
-      "SELECT DISTINCT task_id FROM messages WHERE task_id IS NOT NULL AND channel = 'github' AND json_extract(meta, '$.reason') = 'review_requested'",
+      `SELECT DISTINCT task_id FROM messages WHERE task_id IS NOT NULL AND channel = 'github' AND json_extract(meta, '$.reason') = 'review_requested'
+       UNION SELECT task_id FROM task_links WHERE added_by = ?`,
+      markedBy ?? "",
     ).map((r) => r.task_id),
   );
 }

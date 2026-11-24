@@ -8,7 +8,7 @@ import { inboxCount, inboxRows, inboxRuns } from "./inbox";
 import { boardColumnOf, type BoardColumn } from "./lanes";
 import { projectProgress, projectSummary, railProjects } from "./lookup";
 import { perfOn, timing } from "./perf";
-import { taskPr, taskPrStatus } from "./pr";
+import { REVIEW_LINK_BY, taskPr, taskPrStatus } from "./pr";
 import { buildRail, localDay, type RailSection } from "./rail";
 import { spendReport } from "./spend";
 import * as store from "./store";
@@ -31,12 +31,20 @@ function rail(now: Date, pending: Set<number>): RailSection[] {
     const heard = [...store.messagesForTask(t.id)].reverse().find((m) => !m.from_me);
     if (heard) lastHeard.set(t.id, heard.received_at);
   }
+  const reviews = store.tasksFromReviewRequests(REVIEW_LINK_BY);
+  // A review has waited since someone last asked or wrote on it.
+  const asked = new Map<number, string>();
+  for (const id of reviews) {
+    const last = [...store.messagesForTask(id)].reverse().find((m) => !m.from_me);
+    if (last) asked.set(id, last.received_at);
+  }
   return buildRail({
     home: store.homeTask(),
     projects: railProjects(),
     tasks,
     pendingActions: pending,
-    reviews: store.tasksFromReviewRequests(),
+    reviews,
+    asked,
     lastHeard,
     now,
     prStates: store.prStates(),
@@ -110,7 +118,7 @@ function reads(desk: LiveCheck) {
     searchSources: [[T.messages, T.turns], searchSources],
     closedTasks: [[T.tasks], store.closedTasks],
     rail: [
-      [T.tasks, T.messages, T.projects, T.goals, T.prStatus, T.taskBlockers, T.wins],
+      [T.tasks, T.messages, T.projects, T.goals, T.prStatus, T.taskBlockers, T.wins, T.taskLinks],
       rail,
     ],
     blockers: [[T.taskBlockers], store.blockersOf],

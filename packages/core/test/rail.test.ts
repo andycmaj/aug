@@ -24,6 +24,7 @@ import {
   type RailFilter,
 } from "../src/rail";
 import { railProjects } from "../src/lookup";
+import { REVIEW_LINK_BY } from "../src/pr";
 import { taskClosed } from "../src/lifecycle";
 import * as store from "../src/store";
 import { AgentState, Kind, TaskStatus, TurnRole } from "../src/types";
@@ -234,6 +235,40 @@ describe("rail", () => {
     expect(titles(1)).toEqual(["review web#88"]);
     expect(WALKED).toContain("reviews");
     void mine;
+  });
+
+  test("Code Reviews holds every review triage marked, oldest ask first, each with when it was asked", () => {
+    const tagged = store.createTask({
+      title: "tagged on web#91",
+      kind: Kind.coding,
+      channel: "slack",
+      createdAt: at(5),
+    });
+    const early = store.createTask({
+      title: "asked on web#92",
+      kind: Kind.coding,
+      channel: "github",
+      createdAt: at(4),
+    });
+    store.addTaskLink(tagged.id, "https://github.com/northwind/web/pull/91", "the pull request to review", REVIEW_LINK_BY);
+    store.addTaskLink(early.id, "https://github.com/northwind/web/pull/92", "the pull request to review", REVIEW_LINK_BY);
+    const reviews = store.tasksFromReviewRequests(REVIEW_LINK_BY);
+    expect([...reviews].sort()).toEqual([tagged.id, early.id].sort());
+    // Asked again later: it has waited since then, so it goes last.
+    const rail = buildRail({
+      tasks: store.listTasks(),
+      pendingActions: new Set(),
+      reviews,
+      asked: new Map([[early.id, at(9)]]),
+      lastHeard: new Map(),
+      now: new Date(at(12)),
+    });
+    const section = rail.find((s) => s.section === "reviews")!;
+    const rows = section.items.flatMap((x) => (x.type === "task" ? [[x.task.title, x.asked]] : []));
+    expect(rows).toEqual([
+      ["tagged on web#91", at(5)],
+      ["asked on web#92", at(9)],
+    ]);
   });
 
   test("Next walks in order and skips sections the walk does not offer", () => {
