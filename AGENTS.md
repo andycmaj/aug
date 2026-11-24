@@ -1,7 +1,7 @@
 # Agents
 
-A TUI clone of Taskuary's Chat and Board views, with GitHub and Slack as the
-only connections. The app shell is
+A terminal work manager with Chat and Board views, and GitHub and Slack as
+the only connections. The app shell is
 [`@andycmaj/opentui-app`](https://github.com/andycmaj/opentui-app) (boot,
 focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 `tilt-tui` and `kube-tui`, and the embedded terminal is copied from
@@ -259,7 +259,8 @@ Tests live beside their package (`packages/<name>/test/`).
   written under `RIKER_HOME/plugin`); config `actions` changes, turns off or
   adds one. `desk.runAction` runs it headless or on a fork of the agent's
   session (`core/run-action.ts`), and its answer is a `TurnRole.action` turn,
-  never the agent's; `pane` (the quiz) runs interactive claude in a split
+  never the agent's; where a live agent hides the chat (`chatHidden`), it
+  opens over the Canvas and `.` reads it again (`ActionAnswerModal`); `pane` (the quiz) runs interactive claude in a split
   of the agent's window. `guide` saves its answer into Plannotator
   (`@riker/code-review-plannotator`; Riker's words for its turn are
   `core/guide-turn.ts`). `.` opens the picker; the palette lists each one;
@@ -281,8 +282,24 @@ Tests live beside their package (`packages/<name>/test/`).
   inserts a `moves` row and waits; the engine claims it on `data_version`,
   runs it, and writes one line back. A new verb goes in the registry, nowhere
   else. A move that would open a dialog answers `needs ...` in words instead.
-  `AGENT_MOVES` is what a task's agent may ask for. "Move" means this bus; the
+  `AGENT_MOVES` is what a task's agent may ask for, on its own task and the
+  tasks it made (`from_task_id`; its `new` defaults `--from` to its own). "Move" means this bus; the
   owner's keys are task actions.
+- **Timers are `core/timers.ts`** (the `timers` table): a follow-up
+  (once; `followup`, an agent's too), a schedule (a tiny rule: daily,
+  weekdays or day names at a local time; `schedule`, the owner's and the
+  Assistant's) and the owner's reminder (`remind`, mirrored in
+  `tasks.remind_at` for the rail). A timer never wakes anyone itself: the
+  engine's tick turns a due one into a `timer`-channel message and marks it
+  done, or moves a schedule to its first slot after now, in one write (a
+  missed one fires once at start). The `timer` triage rule, first in the
+  chain, files it on its task and returns a `timer` effect; the desk wakes
+  the agent (a chat turn, a line in a live coding window, or a resume). A
+  timer message is `from_me`, so it is never a reply target. A reminder, or
+  a follow-up or schedule the owner or the Assistant set, stays unread,
+  which lists its task under the rail's **Due** (first under Home) until
+  the owner opens it; an agent's own follow-up only wakes the agent. The Canvas header and the
+  Inbox's `timers` filter show them.
 - **ctrl+z is `core/undo.ts`**: the desk keeps this session's moves (the
   owner's keys and the Assistant's verbs, never a task's own agent's),
   newest first, 50 deep, in memory. A desk method that changes a task wraps
@@ -399,13 +416,17 @@ Tests live beside their package (`packages/<name>/test/`).
   shows or hides the rail and stays attached (the agent loses them; a
   terminal with no agent gets them). `buildKeymap` swaps config's navigation
   keys in at start.
-- `ctrl+[` goes back and `ctrl+a` goes Home from anywhere: a modal, the
-  chat box, the Board, an attached agent (detach first). Both are a layer
-  with no target under every other (`shell.tsx`), which the terminal's own
-  layer detaches and declines to. `ctrl+[` is the Esc byte unless the
-  terminal speaks the kitty keyboard protocol to Riker, and tmux folds it
-  into Esc whatever `extended-keys` says, so there it is Esc and its hint
-  hides (`HelpCtx.kittyKeys`).
+- `ctrl+o` (and `ctrl+[`) goes back and `ctrl+a` goes Home from anywhere:
+  a modal, the chat box, the Board, an attached agent (detach first). They
+  are a layer with no target under every other (`shell.tsx`), which the
+  terminal's own layer detaches and declines to. `ctrl+[` is the Esc byte
+  unless the terminal speaks the kitty keyboard protocol to Riker, and tmux
+  folds it into Esc whatever `extended-keys` says, so there it is Esc and
+  its hint hides (`HelpCtx.kittyKeys`); `ctrl+o` works in both.
+- A default ctrl chord must reach Riker inside tmux with `extended-keys`
+  off: never `ctrl+j/m/i/h` (the newline, Enter, Tab and Backspace bytes),
+  `ctrl+b` (tmux's prefix) or `ctrl+h/j/k/l` (vim-tmux-navigator).
+  `packages/tui/test/keymap.test.ts` fails on one.
 - Navigation history is `core/nav-history.ts`, held by the Riker context:
   every change of the selected row or the view is a visit (recorded once per
   handler, so a switch plus a select is one), `[`/`]` go back and forward,
@@ -424,6 +445,14 @@ Tests live beside their package (`packages/<name>/test/`).
   `helpBindings`. A key change runs `bun run docs:keys`;
   `packages/tui/test/keys-doc.test.ts` fails until it does. A new place to
   stand (a pane, a Board tab) is one entry in its `PLACES`.
+- **Both pages are published to GitHub Pages**
+  (https://andycmaj.github.io/riker/) by `.github/workflows/pages.yml` on
+  every push to main. `bun run docs:site` (`packages/tui/src/site.ts`)
+  builds `_site/`: the two pages with a shared nav, the keyboard data
+  rebuilt from the keymap, and an index. Nothing else under `docs/` is
+  published; a new public page is one entry in `SITE_PAGES`.
+  `packages/tui/test/site.test.ts` fails on anything that reads like a
+  token, a home path, an email or a Slack id.
 
 ## TypeScript
 

@@ -32,6 +32,7 @@ import {
   foldRail,
   nextKey,
   rowFor,
+  Section,
   walkableKeys,
   type RailFilter,
   type RailItem,
@@ -97,6 +98,9 @@ interface RikerContextValue extends ReadModel {
   // The palette's mode, kept for the session and shared by Chat and Board.
   paletteMode: Accessor<PaletteMode>;
   setPaletteMode: (mode: PaletteMode) => void;
+  // Whether the go-to list shows done and dropped work, kept for the session.
+  searchShowsDone: Accessor<boolean>;
+  setSearchShowsDone: (on: boolean) => void;
   // The rail's status filter; empty shows every status.
   railFilter: Accessor<Set<RailFilter>>;
   filterCounts: Accessor<Record<RailFilter, number>>;
@@ -192,13 +196,17 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
 
   const pending = createMemo(() => reads.tasksWithPendingAction());
 
-  const [folded, setFolded] = createSignal<Set<number>>(new Set());
+  // Kept in kv by the desk, so a restart opens the rail folded as it was.
+  const [folded, setFolded] = createSignal<Set<number>>(
+    engine.desk.foldedProjects(),
+  );
   const setFold = (projectId: number, on: boolean) => {
     if (folded().has(projectId) === on) return;
     const next = new Set(folded());
     if (on) next.add(projectId);
     else next.delete(projectId);
     setFolded(next);
+    engine.desk.setFoldedProjects(next);
   };
 
   const homeId = reads.home().id;
@@ -211,6 +219,7 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   const [paletteMode, setPaletteMode] = createSignal<PaletteMode>(
     PaletteMode.CONTEXT,
   );
+  const [searchShowsDone, setSearchShowsDone] = createSignal(false);
   const filtered = createMemo(() => filterRail(rail(), railFilter()));
   const counts = createMemo(() => filterCounts(rail()));
   const shownRail = createMemo(() => foldRail(filtered(), folded()));
@@ -357,6 +366,17 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   // Every way to change the selection or the view (open, walk, search, Home, v)
   // is a visit. Recorded after the handler that moved it is done, so a
   // switch to Chat and a select in one key make one visit, not two.
+  // A task open on the Canvas while a timer on it rings (the rail's Due):
+  // you have seen it, so it stops, whether you went to it or it fired while
+  // you were there.
+  createEffect(() => {
+    const key = selectedKey();
+    if (mode() !== ViewMode.chat || !key) return;
+    const due = rail().find((s) => s.section === Section.due);
+    if (due?.items.some((i) => baseKey(i.key) === key))
+      engine.desk.seenTimers(Number(key.slice(1)));
+  });
+
   const trail = new NavHistory();
   const [trailMoved, setTrailMoved] = createSignal(0);
   let recordQueued = false;
@@ -440,6 +460,8 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
         toggleFold,
         paletteMode,
         setPaletteMode,
+        searchShowsDone,
+        setSearchShowsDone,
         railFilter,
         filterCounts: counts,
         toggleFilter,

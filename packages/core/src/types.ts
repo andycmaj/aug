@@ -8,6 +8,8 @@ import { SELF } from "./brand";
 export const Channel = {
   // Typed by the owner (a new task, a line in a chat).
   owner: "owner",
+  // A timer came due (core/timers.ts): Riker's own word, never a reply target.
+  timer: "timer",
 } as const;
 export type Channel = string;
 
@@ -345,6 +347,39 @@ export interface NoteRow {
   created_at: string;
 }
 
+// A time something is due on a task (core/timers.ts). A follow-up fires once
+// and wakes the task's agent; a schedule fires on its rule and moves to its
+// next time; a reminder brings a put-away task back.
+export const TimerKind = {
+  followup: "followup",
+  schedule: "schedule",
+  remind: "remind",
+} as const;
+export type TimerKind = (typeof TimerKind)[keyof typeof TimerKind];
+
+export const TimerState = {
+  pending: "pending",
+  done: "done",
+  cancelled: "cancelled",
+} as const;
+export type TimerState = (typeof TimerState)[keyof typeof TimerState];
+
+export interface TimerRow {
+  id: number;
+  task_id: number;
+  kind: TimerKind;
+  due_at: string;
+  // A schedule's rule ("weekdays 09:00"); null for the others.
+  rule: string | null;
+  // What to do when it fires, in the setter's words.
+  note: string;
+  // "you", "assistant", or "agent RIKER-0012".
+  by: string;
+  state: TimerState;
+  created_at: string;
+  fired_at: string | null;
+}
+
 export interface TaskLinkRow {
   id: number;
   task_id: number;
@@ -506,7 +541,7 @@ export type StepDecision = (typeof StepDecision)[keyof typeof StepDecision];
 // escalation rule named it); the Inbox reads it back.
 export const HELD = "held: ";
 
-export type TriageVerdict = Verdict | "attached" | "own" | "opener" | "failed" | "held";
+export type TriageVerdict = Verdict | "attached" | "own" | "opener" | "failed" | "held" | "timer";
 
 export interface TriageRunRow {
   id: number;

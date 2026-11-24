@@ -257,7 +257,7 @@ const PREVIEW_LINES = 40;
 // shown as a small table. o opens one in your viewer, O in $EDITOR.
 // A task action's answer (core/task-actions.ts): its title, then the result
 // whole, on a rule of its own so it never reads as the agent's turn.
-function ActionTurn(props: { turn: TurnRow; width: number }) {
+export function ActionTurn(props: { turn: TurnRow; width: number }) {
   const theme = useTheme();
   const riker = useRiker();
   const steps = createMemo(() => turnSteps(props.turn));

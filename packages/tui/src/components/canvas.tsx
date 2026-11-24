@@ -48,6 +48,7 @@ import {
 import type { RailItem } from "@riker/core/rail";
 import { isClosed, taskRef } from "@riker/core/rows";
 import {
+  Channel,
   AgentState,
   Kind,
   ProposalSource,
@@ -56,6 +57,7 @@ import {
   type TaskRow,
 } from "@riker/core/types";
 import { inTmux } from "@riker/core/driver";
+import { timerLine } from "@riker/core/timers";
 import { TerminalHost } from "./agent-terminal";
 import { ActionCard, ChatTurn } from "./chat-turn";
 import { actionTermId, unlessTyping, type TaskActions } from "./task-actions";
@@ -71,6 +73,32 @@ import {
   toneColor,
   useLaneMeta,
 } from "./ui";
+
+type Terminals = ReturnType<typeof useTerminals>;
+
+// A coding agent's terminal, live, takes the Canvas; once it stops, its
+// Result in the chat does.
+function agentTerminal(terminals: Terminals, task: TaskRow): TermState | undefined {
+  const tm = inTmux(task) ? terminals.forTask(task.id) : undefined;
+  return tm?.running ? tm : undefined;
+}
+
+// ghdash (P), a System task's diff in revdiff (e) or a task action's
+// terminal (the guide's review, a quiz) takes the Canvas over the chat
+// and the agent.
+function overTerminal(terminals: Terminals, taskId: number): TermState | undefined {
+  for (const id of [prDashId(taskId), docReviewId(taskId), actionTermId(taskId)]) {
+    const t = terminals.get(id);
+    if (t?.running) return t;
+  }
+  return undefined;
+}
+
+// Whether the task's Canvas shows a terminal instead of its chat: a turn
+// that lands there now (a task action's answer) is out of sight.
+export function chatHidden(terminals: Terminals, task: TaskRow): boolean {
+  return Boolean(overTerminal(terminals, task.id) ?? agentTerminal(terminals, task));
+}
 
 type Compose = (initial: string, keep: (text: string) => void) => void;
 
@@ -96,23 +124,11 @@ export function Canvas(props: {
   });
   const term = createMemo(() => {
     const t = task();
-    // Live, it takes the Canvas; once it stops, its Result in the chat does.
-    const tm =
-      t && inTmux(t) ? terminals.forTask(t.id) : undefined;
-    return tm?.running ? tm : undefined;
+    return t ? agentTerminal(terminals, t) : undefined;
   });
-  // ghdash (P), a System task's diff in revdiff (e) or a task action's
-  // terminal (the guide's review, a quiz) takes the Canvas over the chat
-  // and the agent.
   const dash = createMemo(() => {
     const t = task();
-    if (!t) return undefined;
-    const d = terminals.get(prDashId(t.id));
-    if (d?.running) return d;
-    const r = terminals.get(docReviewId(t.id));
-    if (r?.running) return r;
-    const a = terminals.get(actionTermId(t.id));
-    return a?.running ? a : undefined;
+    return t ? overTerminal(terminals, t.id) : undefined;
   });
   const attached = () =>
     isPaneFocused("canvas") && Boolean(dash() ?? term()?.running);
@@ -253,7 +269,8 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   const metaOf = useLaneMeta();
   const meta = () => (lane() ? metaOf(lane()!) : null);
   const came = createMemo(() => {
-    const first = riker.messages(props.task.id)[0];
+    // A timer is Riker's own line, not where the task came from.
+    const first = riker.messages(props.task.id).find((m) => m.channel !== Channel.timer);
     const from = first
       ? `${CHANNEL_WORD[first.channel]} · ${first.author_name} · ${first.title}`
       : "typed by you";
@@ -266,6 +283,13 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
       .map((l) => l.title ?? l.url.replace(/^https?:\/\//, ""));
     return names.length
       ? truncate(`links · ${names.join(" · ")}  (o opens)`, Math.max(20, props.width - 4))
+      : null;
+  });
+  // What is due on it: follow-ups, schedules, the reminder.
+  const timers = createMemo(() => {
+    const lines = riker.timers(props.task.id).map((t) => timerLine(t, riker.now()));
+    return lines.length
+      ? truncate(`timers · ${lines.join(" · ")}`, Math.max(20, props.width - 4))
       : null;
   });
   // The task's PR as of the last read; P opens it in ghdash.
@@ -383,6 +407,9 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
         </Show>
         <Show when={links()}>
           <text fg={theme.info}>{links() ?? ""}</text>
+        </Show>
+        <Show when={timers()}>
+          <text fg={theme.accent}>{timers() ?? ""}</text>
         </Show>
         <Show when={story()}>
           <text fg={theme.secondary}>{story() ?? ""}</text>

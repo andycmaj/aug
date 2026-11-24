@@ -2,7 +2,7 @@
 // and the connections status. All on the framework's Modal, so they own the
 // keyboard while open and hand focus back on close.
 
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show, type Accessor } from "solid-js";
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import {
@@ -24,9 +24,10 @@ import type { RailItem } from "@riker/core/rail";
 import { goToList, searchIndex, type SearchHit } from "@riker/core/search";
 import { INBOX_KEY } from "./board-tab";
 import { taskRef } from "@riker/core/rows";
-import { Kind, type DraftAction } from "@riker/core/types";
+import { Kind, type DraftAction, type TurnRow } from "@riker/core/types";
+import { ActionTurn } from "./chat-turn";
 import { stateColor, stateGlyph } from "./connector-line";
-import { dayClock } from "./ui";
+import { dayClock, ModeToggle } from "./ui";
 
 export function PromptModal(props: {
   title: string;
@@ -417,12 +418,81 @@ export function InfoModal(props: {
   );
 }
 
+// A task action's answer, read over the Canvas: a coding task with a live
+// agent shows the agent there, not the chat its answer is a turn in. Read
+// from the turn as it is now, so one still running fills in.
+export function ActionAnswerModal(props: {
+  taskId: number;
+  turnId: number;
+  onCopied: (ok: boolean) => void;
+  onClose: () => void;
+}) {
+  const riker = useRiker();
+  const dims = useTerminalDimensions();
+  const turn = createMemo(() => riker.turns(props.taskId).find((t) => t.id === props.turnId));
+  const width = () => Math.min(100, dims().width - 8);
+  const height = () => Math.max(6, dims().height - 12);
+  let scrollRef: ScrollBoxRenderable | undefined;
+  const scroll = (by: number) => scrollRef?.scrollBy(by);
+  return (
+    <Modal
+      size="lg"
+      onClose={props.onClose}
+      bindings={[
+        ...modalNavBindings,
+        { key: "j", cmd: ModalCommands.MODAL_DOWN, desc: "down" },
+        { key: "k", cmd: ModalCommands.MODAL_UP, desc: "up" },
+        { key: "space", cmd: "answer.page", desc: "page down" },
+        { key: "c", cmd: "answer.copy", desc: "copy the answer" },
+        { key: "y", cmd: "answer.copy", desc: "copy the answer" },
+      ]}
+      commands={{
+        [ModalCommands.MODAL_DOWN]: () => scroll(2),
+        [ModalCommands.MODAL_UP]: () => scroll(-2),
+        [ModalCommands.MODAL_SELECT]: () => props.onClose(),
+        "answer.page": () => scrollRef?.scrollBy(0.8, "viewport"),
+        "answer.copy": () => {
+          const body = turn()?.body;
+          if (body) void copyToClipboard(body).then(props.onCopied);
+        },
+      }}
+    >
+      <ModalHeader
+        title={`${taskRef(props.taskId)} ${riker.task(props.taskId)?.title ?? ""}`.trim()}
+        hint="j/k scroll · space page · c copy · esc"
+      />
+      <scrollbox
+        ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
+        height={height()}
+        paddingLeft={2}
+        paddingRight={2}
+        paddingTop={1}
+        stickyScroll={false}
+      >
+        <Show
+          when={turn()}
+          fallback={<text fg={useTheme().textMuted}>That answer is gone.</text>}
+        >
+          {(t: Accessor<TurnRow>) => <ActionTurn turn={t()} width={width()} />}
+        </Show>
+      </scrollbox>
+    </Modal>
+  );
+}
+
 const SEARCH_ROWS = 14;
 // Rows the go-to modal takes above and below its list (offset, frame, header,
-// filter), so a short terminal shrinks the list instead of the frame running
-// off the bottom.
-const SEARCH_CHROME_ROWS = 10;
+// filter, the Open | All toggle), so a short terminal shrinks the list instead
+// of the frame running off the bottom.
+const SEARCH_CHROME_ROWS = 11;
 const SEARCH_HINT_MAX = 48;
+const SEARCH_TOGGLE_DONE = "search.toggleDone";
+const SEARCH_MODES = [
+  { mode: "open", label: "Open" },
+  { mode: "all", label: "All" },
+] as const;
+// Fits a task ref (RIKER-0023) whole.
+const SEARCH_TAG_WIDTH = 10;
 
 function searchTag(item: RailItem): string {
   switch (item.type) {
@@ -434,8 +504,9 @@ function searchTag(item: RailItem): string {
 }
 
 // / and the go-to chord: every row on the rail, folded and For later ones
-// too, the ones seen lately first, then done and dropped work that matches
-// what is typed. Picking one selects it.
+// too, the ones seen lately first. Done and dropped work joins it while tab
+// has it shown (typing is the filter's, so the toggle is a key that types
+// nothing). Picking one selects it.
 export function SearchModal(props: {
   onPick: (key: string) => void;
   onClose: () => void;
@@ -460,8 +531,7 @@ export function SearchModal(props: {
   const nav = useListNavigation({
     itemCount: () => hits().length,
     scrollRef: () => scrollRef,
-    // The scrollbox's bottom padding takes one of its rows.
-    visibleItems: listRows - 1,
+    visibleItems: listRows,
   });
   // Read once: what was recent when the list opened.
   const recentKeys = riker.recent().map((i) => i.key);
@@ -470,7 +540,7 @@ export function SearchModal(props: {
   const showInbox = () => "inbox".startsWith(nav.filter().trim().toLowerCase());
   const hits = createMemo((): (SearchHit | null)[] => [
     ...(showInbox() ? [null] : []),
-    ...goToList(docs(), nav.filter(), recentKeys),
+    ...goToList(docs(), nav.filter(), recentKeys, riker.searchShowsDone()),
   ]);
   const pick = (hit: SearchHit | null | undefined) => {
     if (hit === undefined) return false;
@@ -481,12 +551,19 @@ export function SearchModal(props: {
     <Modal
       size="lg"
       onClose={props.onClose}
-      bindings={modalNavBindings}
+      bindings={[
+        ...modalNavBindings,
+        { key: "tab", cmd: SEARCH_TOGGLE_DONE, desc: "show or hide done" },
+      ]}
       commands={{
         [ModalCommands.MODAL_DOWN]: () => nav.move(1),
         [ModalCommands.MODAL_UP]: () => nav.move(-1),
         [ModalCommands.MODAL_SELECT]: () => {
           pick(hits()[nav.selected()]);
+        },
+        [SEARCH_TOGGLE_DONE]: () => {
+          riker.setSearchShowsDone(!riker.searchShowsDone());
+          nav.setSelected(0);
         },
       }}
     >
@@ -500,7 +577,6 @@ export function SearchModal(props: {
         maxHeight={listRows}
         paddingLeft={2}
         paddingRight={2}
-        paddingBottom={1}
       >
         <Show
           when={hits().length > 0}
@@ -522,7 +598,7 @@ export function SearchModal(props: {
                     paddingRight={1}
                     backgroundColor={on() ? theme.primary : undefined}
                   >
-                    <text width={8} flexShrink={0} fg={fg() ?? theme.accent}>
+                    <text width={SEARCH_TAG_WIDTH} flexShrink={0} fg={fg() ?? theme.accent}>
                       board
                     </text>
                     <box flexGrow={1} flexShrink={1} overflow="hidden">
@@ -543,7 +619,7 @@ export function SearchModal(props: {
                   paddingRight={1}
                   backgroundColor={on() ? theme.primary : undefined}
                 >
-                  <text width={8} flexShrink={0} fg={fg() ?? theme.accent}>
+                  <text width={SEARCH_TAG_WIDTH} flexShrink={0} fg={fg() ?? theme.accent}>
                     {searchTag(hit.item)}
                   </text>
                   {/* A long title is cut here, not over the hint. */}
@@ -572,6 +648,11 @@ export function SearchModal(props: {
           </For>
         </Show>
       </scrollbox>
+      <ModeToggle
+        modes={SEARCH_MODES}
+        active={riker.searchShowsDone() ? "all" : "open"}
+        keyName="tab"
+      />
     </Modal>
   );
 }

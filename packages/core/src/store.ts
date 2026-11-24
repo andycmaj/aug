@@ -47,6 +47,9 @@ import {
   type SessionKind,
   type SessionRow,
   type TaskLinkRow,
+  TimerKind,
+  TimerState,
+  type TimerRow,
   type StepDecision,
   type TaskRow,
   type TriageRunRow,
@@ -196,8 +199,16 @@ export function listTasks(): TaskRow[] {
   );
 }
 
-// Done and dropped work, last closed first: the go-to list finds them by
-// name, since the rail no longer lists them.
+// Each open task's agent state, for the engine's turn-end watch: one narrow
+// read whenever tasks changed, not every row.
+export function agentStates(): { id: number; agent_state: AgentState }[] {
+  return all<{ id: number; agent_state: AgentState }>(
+    "SELECT id, agent_state FROM tasks WHERE status IN ('open', 'later') AND kind != 'home'",
+  );
+}
+
+// Done and dropped work, last closed first: the go-to list shows them when
+// asked, since the rail no longer lists them.
 export function closedTasks(limit = 500): TaskRow[] {
   return all<TaskRow>(
     "SELECT * FROM tasks WHERE status IN ('done', 'dropped') AND kind != 'home' ORDER BY closed_at DESC, id DESC LIMIT ?",
@@ -1576,40 +1587,127 @@ export function tellFromTask(
 }
 
 export function reopen(taskId: number): void {
-  updateTask(taskId, {
-    status: TaskStatus.open,
-    closed_at: null,
-    closed_by: null,
-    remind_at: null,
+  batch(() => {
+    updateTask(taskId, {
+      status: TaskStatus.open,
+      closed_at: null,
+      closed_by: null,
+      remind_at: null,
+    });
+    cancelTimers(taskId, [TimerKind.remind]);
   });
 }
 
-export function remindAt(taskId: number, at: string): void {
-  updateTask(taskId, { status: TaskStatus.later, remind_at: at });
+// Put away until a day: the task's one reminder is a timer (core/timers.ts),
+// and remind_at says the day on the task for the rail.
+export function remindAt(taskId: number, at: string, by = "you"): void {
+  batch(() => {
+    updateTask(taskId, { status: TaskStatus.later, remind_at: at });
+    cancelTimers(taskId, [TimerKind.remind]);
+    addTimer({ taskId, kind: TimerKind.remind, dueAt: at, by });
+  });
 }
 
 export function setWatching(taskId: number, on: boolean): void {
   updateTask(taskId, { watching: on ? 1 : 0 });
 }
 
-// Tasks whose reminder day came: back on the rail with a line saying why.
-export function wakeReminders(at = now()): number {
-  const due = all<TaskRow>(
-    "SELECT * FROM tasks WHERE status = 'later' AND remind_at IS NOT NULL AND remind_at <= ?",
+// ── timers ───────────────────────────────────────────────────────────────
+
+export interface NewTimer {
+  taskId: number;
+  kind: TimerKind;
+  dueAt: string;
+  rule?: string | null;
+  note?: string;
+  by: string;
+}
+
+export function addTimer(t: NewTimer): TimerRow {
+  const id = run(
+    `INSERT INTO timers (task_id, kind, due_at, rule, note, by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    t.taskId,
+    t.kind,
+    t.dueAt,
+    t.rule ?? null,
+    t.note ?? "",
+    t.by,
+    now(),
+  );
+  return getTimer(id)!;
+}
+
+export function getTimer(id: number): TimerRow | null {
+  return one<TimerRow>("SELECT * FROM timers WHERE id = ?", id);
+}
+
+// A task's timers still to fire, soonest first.
+export function timersForTask(taskId: number): TimerRow[] {
+  return all<TimerRow>(
+    "SELECT * FROM timers WHERE task_id = ? AND state = 'pending' ORDER BY due_at, id",
+    taskId,
+  );
+}
+
+// Every timer still to fire, soonest first.
+export function pendingTimers(limit = 100): TimerRow[] {
+  return all<TimerRow>(
+    "SELECT * FROM timers WHERE state = 'pending' ORDER BY due_at, id LIMIT ?",
+    limit,
+  );
+}
+
+export function dueTimers(at: string): TimerRow[] {
+  return all<TimerRow>(
+    "SELECT * FROM timers WHERE state = 'pending' AND due_at <= ? ORDER BY due_at, id",
     at,
   );
-  if (due.length === 0) return 0;
-  batch(() => {
-    for (const task of due) {
-      updateTask(task.id, { status: TaskStatus.open, remind_at: null });
-      addTurn({
-        taskId: task.id,
-        role: TurnRole.trigger,
-        body: "You asked to be reminded about this today",
-      });
-    }
-  });
-  return due.length;
+}
+
+// A fired timer: done, or (a schedule) due again at its next time.
+export function firedTimer(id: number, at: string, next: string | null): void {
+  if (next)
+    run("UPDATE timers SET due_at = ?, fired_at = ? WHERE id = ?", next, at, id);
+  else
+    run("UPDATE timers SET state = 'done', fired_at = ? WHERE id = ?", at, id);
+}
+
+export function setTimerState(id: number, state: TimerState): void {
+  run("UPDATE timers SET state = ? WHERE id = ?", state, id);
+}
+
+// Tasks a timer fired on that the owner has not opened since (its message
+// unread): the rail's Due section. Task id -> when the latest fired.
+export function ringingTimers(): Map<number, string> {
+  const rows = all<{ task_id: number; at: string }>(
+    `SELECT task_id, MAX(received_at) AS at FROM messages
+     WHERE channel = 'timer' AND read_at IS NULL AND task_id IS NOT NULL
+     GROUP BY task_id`,
+  );
+  return new Map(rows.map((r) => [r.task_id, r.at]));
+}
+
+// The owner opened the task: its fired timers stop ringing.
+export function silenceTimers(taskId: number): number {
+  const ids = all<{ id: number }>(
+    "SELECT id FROM messages WHERE channel = 'timer' AND task_id = ? AND read_at IS NULL",
+    taskId,
+  );
+  for (const { id } of ids) markMessageRead(id);
+  return ids.length;
+}
+
+// Cancels a task's pending timers of these kinds; returns how many.
+export function cancelTimers(taskId: number, kinds: readonly TimerKind[]): number {
+  const ids = all<{ id: number }>(
+    `SELECT id FROM timers WHERE task_id = ? AND state = 'pending'
+     AND kind IN (SELECT value FROM json_each(?))`,
+    taskId,
+    JSON.stringify(kinds),
+  );
+  for (const { id } of ids) setTimerState(id, TimerState.cancelled);
+  return ids.length;
 }
 
 // ── moves ────────────────────────────────────────────────────────────────

@@ -42,7 +42,7 @@ export interface SearchDoc {
   numbers: { n: number; where: string }[];
   people: Person[];
   content: Content[];
-  // Done or dropped: listed only when what is typed matches it.
+  // Done or dropped: in the go-to list only while it shows done work.
   closed?: boolean;
 }
 
@@ -137,7 +137,7 @@ export interface SearchSources {
 export function searchIndex(
   sections: RailSection[],
   sources: SearchSources,
-  // Done and dropped work, off the rail: found only by what is typed.
+  // Done and dropped work, off the rail: the go-to list's done toggle.
   closed: TaskRow[] = [],
 ): SearchDoc[] {
   const docs: SearchDoc[] = [];
@@ -378,27 +378,42 @@ export function search(
 
 // How many recent rows head the go-to list.
 export const RECENT_SHOWN = 9;
+// How many done and dropped rows the go-to list shows with nothing typed.
+export const CLOSED_SHOWN = 50;
+
+function hitOf(doc: SearchDoc, recent?: boolean): SearchHit {
+  return {
+    item: doc.item,
+    section: doc.section,
+    title: doc.title,
+    why: null,
+    ...(recent ? { recent } : {}),
+  };
+}
 
 // The go-to list: with nothing typed, the rows seen lately come first, then
-// the rail as it stands without them; typing searches.
+// the rail as it stands without them; typing searches. Done and dropped work
+// is left out unless showDone, since what you jump to is mostly open; with it,
+// typing finds them too and a bare list ends with them, last closed first.
 export function goToList(
   docs: SearchDoc[],
   query: string,
   recentKeys: string[],
+  showDone = false,
 ): SearchHit[] {
-  const hits = search(docs, query);
-  if (query.trim()) return hits;
-  const byKey = new Map(docs.map((d) => [d.item.key, d]));
-  const recent: SearchHit[] = recentKeys
+  const shown = showDone ? docs : docs.filter((d) => !d.closed);
+  if (query.trim()) return search(shown, query);
+  const byKey = new Map(shown.map((d) => [d.item.key, d]));
+  const recent = recentKeys
     .flatMap((k) => byKey.get(k) ?? [])
     .slice(0, RECENT_SHOWN)
-    .map((doc) => ({
-      item: doc.item,
-      section: doc.section,
-      title: doc.title,
-      why: null,
-      recent: true,
-    }));
-  const shown = new Set(recent.map((h) => h.item.key));
-  return [...recent, ...hits.filter((h) => !shown.has(h.item.key))];
+    .map((doc) => hitOf(doc, true));
+  const seen = new Set(recent.map((h) => h.item.key));
+  const closed = shown
+    .filter((d) => d.closed)
+    .slice(0, CLOSED_SHOWN)
+    .map((doc) => hitOf(doc));
+  return [...recent, ...search(shown, ""), ...closed].filter(
+    (h) => h.recent || !seen.has(h.item.key),
+  );
 }

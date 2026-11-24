@@ -8,7 +8,7 @@ import { inboxCount, inboxRows, inboxRuns } from "./inbox";
 import { boardColumnOf, type BoardColumn } from "./lanes";
 import { projectProgress, projectSummary, railProjects } from "./lookup";
 import { perfOn, timing } from "./perf";
-import { REVIEW_LINK_BY, taskPr, taskPrStatus } from "./pr";
+import { REVIEW_LINK_BY, taskPr, taskPrStatus, unmergedPr } from "./pr";
 import { buildRail, localDay, type RailSection } from "./rail";
 import { spendReport } from "./spend";
 import * as store from "./store";
@@ -50,6 +50,7 @@ function rail(now: Date, pending: Set<number>): RailSection[] {
     prStates: store.prStates(),
     blockers: store.allBlockers(),
     wins: store.winsOn(localDay(now)),
+    due: store.ringingTimers(),
   });
 }
 
@@ -100,12 +101,15 @@ function reads(desk: LiveCheck) {
     messages: [[T.messages], store.messagesForTask],
     message: [[T.messages], store.getMessage],
     taskLinks: [[T.taskLinks], store.linksForTask],
+    timers: [[T.timers], store.timersForTask],
+    pendingTimers: [[T.timers], store.pendingTimers],
     story: [[T.stories], store.currentStory],
     latestSession: [[T.sessions], store.latestSession],
     isLive: [[T.sessions, T.tasks], (task: TaskRow) => desk.isLive(task)],
     prStatus: [[T.prStatus], store.prStatus],
     taskPr: [[T.tasks, T.taskThreads, T.messages, T.taskLinks], taskPr],
     taskPrStatus: [[T.tasks, T.taskThreads, T.messages, T.taskLinks, T.prStatus], taskPrStatus],
+    unmergedPr: [[T.tasks, T.taskThreads, T.messages, T.taskLinks, T.prStatus], unmergedPr],
     briefEditable: [[T.tasks, T.sessions], briefEditable],
     proposals: [[T.proposals], store.proposalsForTask],
     project: [[T.projects], store.getProject],

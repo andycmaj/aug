@@ -249,3 +249,65 @@ test("legacy: ctrl+[ is Esc, so the chat box is left but nothing goes back", asy
   await s.press("[", { ctrl: true });
   expect(s.shows(BADGE)).toBe(true);
 });
+
+// RIKER-0223: ctrl+o is back from anywhere as well, and unlike ctrl+[ it
+// gets through tmux and a legacy terminal, so it works in both.
+for (const kitty of [true, false]) {
+  const t = kitty ? "kitty" : "legacy";
+
+  test(`${t}: ctrl+o from the rail goes back`, async () => {
+    const s = await boot(kitty);
+    await s.goTo("Badge printer");
+    expect(s.shows(BADGE)).toBe(true);
+    await s.press("o", { ctrl: true });
+    expect(s.onHome()).toBe(true);
+    expect(s.onRail()).toBe(true);
+  });
+
+  test(`${t}: ctrl+o from the chat box leaves it (draft kept) and goes back`, async () => {
+    const s = await boot(kitty);
+    await s.goTo("Badge printer");
+    await s.press("i");
+    await s.type("half a thought");
+    await s.press("o", { ctrl: true });
+    expect(s.onHome()).toBe(true);
+    expect(s.onRail()).toBe(true);
+    expect(s.frame()).not.toContain("half a thought");
+    await s.press("]");
+    expect(s.shows(BADGE)).toBe(true);
+    expect(s.frame()).toContain("half a thought");
+    expect(s.frame()).not.toContain("half a thoughto");
+  });
+
+  test(`${t}: ctrl+o from a dialog closes it and goes back`, async () => {
+    const s = await boot(kitty);
+    await s.goTo("Badge printer");
+    await s.press(":");
+    expect(s.frame()).toContain("Commands ·");
+    await s.press("o", { ctrl: true });
+    expect(s.frame()).not.toContain("Commands ·");
+    expect(s.onHome()).toBe(true);
+  });
+
+  test(`${t}: ctrl+o from the Board goes back to Chat`, async () => {
+    const s = await boot(kitty);
+    await s.goTo("Badge printer");
+    await s.press("v");
+    expect(s.frame()).not.toContain("Tell the agent");
+    await s.press("o", { ctrl: true });
+    expect(s.shows(BADGE)).toBe(true);
+  });
+
+  test(`${t}: ctrl+o on an attached agent detaches and goes back; the agent never sees it`, async () => {
+    const s = await boot(kitty);
+    await s.attach();
+    await s.type("z");
+    expect(await s.until(() => s.bytes().includes("z"))).toBe(true);
+    await s.press("o", { ctrl: true });
+    expect(s.frame()).not.toContain("[attached]");
+    expect(s.onHome()).toBe(true);
+    expect(s.onRail()).toBe(true);
+    await Bun.sleep(100);
+    expect(s.bytes()).toEqual(["z"]);
+  });
+}

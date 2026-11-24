@@ -27,6 +27,9 @@ export interface RailProject {
 
 export const Section = {
   home: "home",
+  // Tasks a timer fired on that you have not opened since: first, so a
+  // follow-up or schedule coming due is never below the fold.
+  due: "due",
   wins: "wins",
   system: "system",
   tasks: "tasks",
@@ -38,6 +41,7 @@ export type Section = (typeof Section)[keyof typeof Section];
 
 export const SECTION_TITLES: Record<Section, string> = {
   home: "Home",
+  due: "Due",
   wins: "Wins",
   system: "System",
   tasks: "Tasks",
@@ -49,6 +53,7 @@ export const SECTION_TITLES: Record<Section, string> = {
 // The walk visits these in order; For later is never offered by Next, nor is
 // a project row.
 export const WALKED: Section[] = [
+  "due",
   "wins",
   "system",
   "tasks",
@@ -150,6 +155,8 @@ export interface RailInput {
   blockers?: Map<number, number[]>;
   // Today's Wins, in the order they were pinned.
   wins?: number[];
+  // Task id -> when a timer fired on it that you have not opened since.
+  due?: Map<number, string>;
 }
 
 // A thread waiting on somebody else goes quiet past this, and it is slipped.
@@ -192,6 +199,7 @@ function placeOf(
 export function buildRail(input: RailInput): RailSection[] {
   const sections: Record<Section, RailItem[]> = {
     home: [],
+    due: [],
     wins: [],
     system: [],
     tasks: [],
@@ -288,6 +296,10 @@ export function buildRail(input: RailInput): RailSection[] {
     });
     if (win) winItems[wins.get(task.id)!] = copy(Section.wins);
     if (watched) sections.watching.push(copy(Section.watching));
+    // Due lists an open task a timer fired on; it stays where it sits too.
+    const fired = input.due?.get(task.id);
+    if (fired && place && task.status === TaskStatus.open)
+      sections.due.push({ ...copy(Section.due), at: fired });
   }
 
   const byAt = (a: RailItem, b: RailItem) =>
@@ -347,6 +359,26 @@ export function buildRail(input: RailInput): RailSection[] {
       };
     })
     .filter((s) => s.items.length > 0);
+}
+
+// The folded projects as kept in kv, read back against the projects that
+// are still active: one archived or deleted since drops out, and a new one
+// is not in the list, so it opens unfolded. Ids survive a rename.
+export function readFolds(saved: string | null, active: number[]): Set<number> {
+  if (!saved) return new Set();
+  let ids: unknown;
+  try {
+    ids = JSON.parse(saved);
+  } catch {
+    return new Set();
+  }
+  if (!Array.isArray(ids)) return new Set();
+  const live = new Set(active);
+  return new Set(ids.filter((id): id is number => live.has(id)));
+}
+
+export function writeFolds(folded: Iterable<number>): string {
+  return JSON.stringify([...folded].sort((a, b) => a - b));
 }
 
 // What the rail shows: a folded project keeps its row and hides its tasks.

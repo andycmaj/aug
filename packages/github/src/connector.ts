@@ -5,7 +5,9 @@
 import type { Connector, ConnectorContext, ConnectorState } from "@riker/core/plugins";
 import { now } from "@riker/core/db";
 import { errorMessage, logger } from "@riker/core/log";
+import { taskPr } from "@riker/core/pr";
 import * as store from "@riker/core/store";
+import { PrState, type TaskRow } from "@riker/core/types";
 import {
   clockTime,
   GhBudget,
@@ -21,7 +23,14 @@ import {
 } from "./gate";
 import { githubConfig } from "./config";
 import { ghApi, pollGithub, type GhApi } from "./ingest";
-import { ghPrBatch, refreshPrStatuses, type PrFetch, type PrRefresh } from "./pr-status";
+import {
+  ghPrBatch,
+  refreshPrEndRest,
+  refreshPrStatus,
+  refreshPrStatuses,
+  type PrFetch,
+  type PrRefresh,
+} from "./pr-status";
 
 export interface GithubOptions {
   // Replace gh (tests, the sim).
@@ -73,6 +82,38 @@ export class GithubConnector implements Connector {
 
   pollNow(): Promise<void> {
     return this.poll(true);
+  }
+
+  // Its agent's turn just ended: its PR is read now, through the same gate
+  // as the clock (a PR backing off waits). One GraphQL point; while GraphQL
+  // is paused, REST says whether it merged, since a merge should not wait
+  // out a rate limit. A PR already read as merged is not read again.
+  async refreshTask(task: TaskRow): Promise<void> {
+    if (!githubConfig.of(this.ctx.config.get()).enabled) return;
+    const pr = taskPr(task);
+    if (!pr) return;
+    const last = store.prStatus(task.id);
+    if (last?.url === pr.url && last.state === PrState.merged) return;
+    const gate = this.githubGate();
+    if (!gate.prAllowed(pr.url)) return;
+    const rest = async () => {
+      if (gate.pause(GhBudget.rest)) return;
+      await refreshPrEndRest(task, pr, this.opts.api ?? ghApi);
+    };
+    if (gate.pause(GhBudget.graphql)) return rest();
+    try {
+      await refreshPrStatus(task, this.opts.prs ?? ghPrBatch);
+      gate.prSucceeded(pr.url);
+    } catch (err) {
+      const message = errorMessage(err);
+      if (ghTrouble(message) === GhTrouble.rateLimit) {
+        await this.githubLimited(GhBudget.graphql);
+        return rest();
+      }
+      gate.prFailed(pr.url);
+      store.markPrStale(task.id, message);
+      log.warn("pr status at turn end failed", { task: task.id, error: message });
+    }
   }
 
   // The gate outlives a restart only for a rate limit: GitHub's reset time

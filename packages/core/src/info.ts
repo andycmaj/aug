@@ -11,7 +11,8 @@ import type { RikerConfig } from "./config";
 import { journalSwitch, lines, projectStoryDefault, storySwitch, switchWords } from "./digests";
 import { journalExists, journalFile } from "./journal";
 import * as store from "./store";
-import { GoalStatus, type ProjectRow, type StoryRow, type TaskRow } from "./types";
+import { timerLine, timerRef } from "./timers";
+import { GoalStatus, TimerKind, type ProjectRow, type StoryRow, type TaskRow } from "./types";
 
 export interface InfoRow {
   label: string;
@@ -114,6 +115,10 @@ function taskSections(
       ["watching", task.watching ? "yes" : null],
       ["waiting on", task.waiting_on],
       ["remind", when(task.remind_at, now)],
+      ...store
+        .timersForTask(task.id)
+        .filter((t) => t.kind !== TimerKind.remind)
+        .map((t): [string, string] => [timerRef(t.id), timerLine(t, now)]),
       ["created", when(task.created_at, now)],
       ["updated", when(task.updated_at, now)],
       ["closed", task.closed_at ? `${when(task.closed_at, now)} by ${task.closed_by ?? "?"}` : null],

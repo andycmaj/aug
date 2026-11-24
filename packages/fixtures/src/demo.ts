@@ -24,6 +24,7 @@ import { setSender } from "@riker/core/outbound";
 import { defaultHome, paths } from "@riker/core/paths";
 import { recordSpend } from "@riker/core/spend";
 import * as store from "@riker/core/store";
+import { addFollowup } from "@riker/core/timers";
 import {
   AgentState,
   Kind,
@@ -494,6 +495,14 @@ export function seedDemo(): void {
       createdAt: ago(60 * 24 * 3),
     });
     store.remindAt(later.id, inDays(2));
+
+    // A follow-up the export fix's agent set for itself: its header says when.
+    addFollowup(
+      exp,
+      new Date(Date.now() + 20 * 3_600_000),
+      "check the export PR's CI again and report",
+      `agent ${store.taskRef(exp)}`,
+    );
 
     // 10. Blocked on the export fix: release notes wait for it.
     const notes = store.createTask({

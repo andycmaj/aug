@@ -139,8 +139,10 @@ test("ctrl+e in a terminal with no window of its own goes to it as typed", async
 // ctrl+a detach an agent and decline, so the shell's layer goes back or Home
 // (go-back-anywhere.test.tsx); a terminal with no agent (the editor, where
 // ctrl+[ is how many type Esc) gets them as typed.
+// RIKER-0223: ctrl+o is back too (it gets through tmux), the same way.
 for (const [name, key, octal] of [
   ["ctrl+[", "[", "033"],
+  ["ctrl+o", "o", "017"],
   ["ctrl+a", "a", "001"],
 ] as const) {
   test(`${name} on an agent detaches, and the agent never sees it`, async () => {

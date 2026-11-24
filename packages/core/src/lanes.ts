@@ -1,6 +1,6 @@
 // THE vocabulary, once: what a piece of live work is called and how it is
-// marked, on the rail, the task view and the Board alike. Taskuary's
-// lanes.json, cut to what GitHub and Slack work produces. A lane reads two
+// marked, on the rail, the task view and the Board alike: only
+// the lanes GitHub and Slack work produces. A lane reads two
 // axes, the task's lifecycle (its phase) and its agent's state; the order in
 // laneOf is the rule (docs/rail-status-design.md).
 

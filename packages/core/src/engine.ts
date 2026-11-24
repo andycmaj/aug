@@ -7,13 +7,13 @@ import { advisorDue, runAdvisor } from "./advisor";
 import { runDocPass } from "./doc-pass";
 import { AgentPool, type CodingLaunch } from "./agents";
 import { CORE_KEYS, type ConfigSource } from "./config";
-import { dataVersion, now } from "./db";
+import { dataVersion, now, tableVersions } from "./db";
 import { Desk } from "./desk";
 import { Drafts } from "./outbound";
 import { syncDocs } from "./doc-sync";
 import { refreshInstalls } from "./install";
 import { Drivers } from "./driver";
-import { checkMerges } from "./merge";
+import { checkMerge, checkMerges } from "./merge";
 import { journalTick } from "./journal";
 import { errorMessage, logger } from "./log";
 import { count, measure, perfStart } from "./perf";
@@ -23,6 +23,7 @@ import * as projects from "./projects";
 import * as store from "./store";
 import { ActionEvent } from "./task-actions";
 import { settleStaleTurns } from "./turn-check";
+import { fireDue } from "./timers";
 import {
   offStatus,
   type Connector,
@@ -33,7 +34,7 @@ import {
   type Triaged,
   type TriageEffect,
 } from "./plugins";
-import { SessionKind, type TaskRow } from "./types";
+import { AgentState, SessionKind, type TaskRow } from "./types";
 
 export type { ConnectorState, ConnectorStatus } from "./plugins";
 
@@ -203,14 +204,14 @@ export class Engine {
       }, 30_000),
     );
     this.watchTmux();
-    const wakeReminders = () => measure("engine.reminders", () => store.wakeReminders());
-    wakeReminders();
-    this.timers.push(setInterval(wakeReminders, 60_000));
+    this.fireTimers();
+    this.timers.push(setInterval(() => this.fireTimers(), 30_000));
     this.watchMoves();
     this.timers.push(
       setInterval(() => {
         this.fireEventActions();
         void this.writeJournals();
+        for (const id of this.turnEnds()) void this.recheckMerge(id);
       }, 2_000),
     );
     if (this.options.offline) {
@@ -234,7 +235,66 @@ export class Engine {
     this.timers.push(setInterval(() => void this.checkMerges(), 2 * 60_000));
   }
 
+  // Due timers become messages on the inbox (core/timers.ts); the worker
+  // routes them to their tasks like any other. One missed while Riker was
+  // closed fires once, here at start.
+  fireTimers(at = new Date()): number {
+    let fired = 0;
+    try {
+      fired = measure("engine.timers", () => fireDue(at).length);
+    } catch (err) {
+      log.error("timers failed", { err: errorMessage(err) });
+    }
+    if (fired) {
+      log.info("timers fired", { fired });
+      if (!this.options.offline) void this.triageInbox();
+    }
+    return fired;
+  }
+
   private merging = false;
+
+  // Each open task's agent state at the last look, null before the first.
+  private agentSeen: Map<number, AgentState> | null = null;
+  private tasksVersion = -1;
+
+  // Tasks whose agent's turn ended since the last look: its state left
+  // working (claude's Stop, riker-tools done, its window closing). The turn
+  // that merged a PR is one of these, and the clocks may be minutes (or a
+  // rate limit) away. Read only when tasks changed; the first look only
+  // learns where things stand.
+  turnEnds(): number[] {
+    const v = tableVersions().tasks;
+    if (v === this.tasksVersion) return [];
+    this.tasksVersion = v;
+    const before = this.agentSeen;
+    const after = new Map(store.agentStates().map((r) => [r.id, r.agent_state]));
+    this.agentSeen = after;
+    if (!before) return [];
+    const ended: number[] = [];
+    for (const [id, state] of after)
+      if (before.get(id) === AgentState.working && state !== AgentState.working) ended.push(id);
+    return ended;
+  }
+
+  // One task's merge, now: what its connectors know of it (its PR), then
+  // whether it landed. A task with no branch and no PR costs nothing.
+  async recheckMerge(taskId: number): Promise<boolean> {
+    const task = store.getTask(taskId);
+    if (!task) return false;
+    for (const c of this.connectors) {
+      if (!c.refreshTask) continue;
+      try {
+        await c.refreshTask(task);
+      } catch (err) {
+        log.warn("turn-end refresh failed", { task: taskId, connector: c.name, err: errorMessage(err) });
+      }
+    }
+    const fresh = store.getTask(taskId);
+    const changed = fresh ? await checkMerge(this.options.config.get(), fresh) : false;
+    if (changed) log.info("merge at turn end", { task: taskId });
+    return changed;
+  }
 
   async checkMerges(): Promise<void> {
     if (this.merging) return;

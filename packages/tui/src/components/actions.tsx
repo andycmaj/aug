@@ -32,11 +32,18 @@ import { errorMessage, logger } from "@riker/core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "@riker/core/adopt";
 import { strayLabel, type Stray } from "@riker/core/strays";
 import { baseKey, neighborKey, type RailItem } from "@riker/core/rail";
-import { isClosed, taskRef } from "@riker/core/rows";
+import { actionAnswers, isClosed, taskRef } from "@riker/core/rows";
 import { postComments } from "@riker/code-review-plannotator/guide";
 import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
 import type { ActionResult } from "@riker/core/run-action";
-import { ActionOutput, actionNamed, actionsFor, keyedActions, makesCheckout } from "@riker/core/task-actions";
+import {
+  ActionOutput,
+  ActionVia,
+  actionNamed,
+  actionsFor,
+  keyedActions,
+  makesCheckout,
+} from "@riker/core/task-actions";
 import { describeProblem } from "@riker/core/repos";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
 import type { NoiseRule } from "@riker/core/config";
@@ -45,11 +52,14 @@ import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "@rik
 import { messageMeta } from "@riker/core/meta";
 import { Kind, Priority, type MessageRow, type TaskRow } from "@riker/core/types";
 import {
+  ActionAnswerModal,
   ChoiceModal,
   ConfirmSendModal,
   InfoModal,
   PromptModal,
 } from "./modals";
+import { chatHidden } from "./canvas";
+import { dayClock } from "./ui";
 import { actionTermId, type TaskActions } from "./task-actions";
 import { useAgentStart } from "./use-agent-start";
 import { useEditor } from "./use-editor";
@@ -370,9 +380,26 @@ export function useActions(dialogs: Dialogs) {
     );
   }
 
+  // d on a done or dropped row reopens it instead (reopen below). Work
+  // whose PR has not landed asks first, No under the cursor.
   function done(task: TaskRow) {
-    // d on a done or dropped row reopens it instead (reopen below).
     if (isClosed(task)) return false;
+    const unmerged = riker.unmergedPr(task);
+    if (!unmerged) return closeDone(task);
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Mark ${taskRef(task.id)} done?`}
+        hint={`${unmerged}. Mark it done anyway?`}
+        choices={[
+          { label: "No, keep it open", run: () => {} },
+          { label: "Yes, mark it done", run: () => closeDone(task) },
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function closeDone(task: TaskRow) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
     advanceFrom(`t${task.id}`);
@@ -519,7 +546,28 @@ export function useActions(dialogs: Dialogs) {
         goToTask(task.id);
         void attachViewer(task.id);
       }
+      // Its answer is a turn in the chat; where the Canvas shows the agent
+      // instead (a coding task's live window), it opens over it.
+      else if (r.ok && started.turnId !== undefined && answerHidden(task.id))
+        readAnswer(task.id, started.turnId);
     });
+  }
+
+  function answerHidden(taskId: number): boolean {
+    const now = riker.task(taskId);
+    return !!now && chatHidden(terminals, now);
+  }
+
+  // A task action's answer, over the Canvas: no run.
+  function readAnswer(taskId: number, turnId: number) {
+    dialogs.show(() => (
+      <ActionAnswerModal
+        taskId={taskId}
+        turnId={turnId}
+        onCopied={(ok) => showToast(ok ? "Answer copied" : "Copy failed", 2000, ok ? "info" : "error")}
+        onClose={dialogs.close}
+      />
+    ));
   }
 
   // The last guide's review, with its findings posted again: no model run.
@@ -588,7 +636,13 @@ export function useActions(dialogs: Dialogs) {
   function pickAction(task: TaskRow): false | void {
     const offered = actionsFor(desk.config(), task);
     const review = desk.hasGuideReview(task.id);
-    if (offered.length === 0 && !review) {
+    // Each action's last answer, read again with no run: the guide's is
+    // its review, and a pane action's turn says only where it opened.
+    const answers = actionAnswers(riker.turns(task.id), (name) => {
+      const spec = actionNamed(desk.config(), name);
+      return spec?.via === ActionVia.pane || spec?.output === ActionOutput.guide;
+    });
+    if (offered.length === 0 && !review && answers.length === 0) {
       showToast("No actions apply here (config.json \"actions\")");
       return;
     }
@@ -611,6 +665,11 @@ export function useActions(dialogs: Dialogs) {
           review
             ? [{ label: OPEN_REVIEW_TITLE, hint: "the last guide, no run", run: () => openGuideReview(task) }]
             : [],
+          answers.map((t) => ({
+            label: `Read: ${t.about || t.author}`,
+            hint: `${dayClock(t.finished_at ?? t.started_at, riker.now())}, no run`,
+            run: () => readAnswer(task.id, t.id),
+          })),
         )}
         onClose={dialogs.close}
       />
