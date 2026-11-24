@@ -371,7 +371,9 @@ than one shows in each. The rows are one task:
   included. Next and back (`n`, `b`) stop at each task once, at its first
   row in walk order (a Win under Wins), and never on the selected task's
   other row (`walkableKeys`). Folding a project hides its rows, not the
-  copies. Search, Go to and the Board list each task once, at its own row
+  copies. Folds outlive a restart (`rail.folded` in `kv`, through the
+  desk): a project archived or deleted since drops out, and a new one
+  opens unfolded. Search, Go to and the Board list each task once, at its own row
   (the Board reads tasks, not the rail).
 - The Wins tab (AUG-0156) reads `task_events` and `wins`, not the rail,
   so nothing there changes. Lanes are unchanged: a copy has its task's

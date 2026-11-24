@@ -196,13 +196,17 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
 
   const pending = createMemo(() => reads.tasksWithPendingAction());
 
-  const [folded, setFolded] = createSignal<Set<number>>(new Set());
+  // Kept in kv by the desk, so a restart opens the rail folded as it was.
+  const [folded, setFolded] = createSignal<Set<number>>(
+    engine.desk.foldedProjects(),
+  );
   const setFold = (projectId: number, on: boolean) => {
     if (folded().has(projectId) === on) return;
     const next = new Set(folded());
     if (on) next.add(projectId);
     else next.delete(projectId);
     setFolded(next);
+    engine.desk.setFoldedProjects(next);
   };
 
   const homeId = reads.home().id;

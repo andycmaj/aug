@@ -24,7 +24,7 @@ import {
 import { nudgeText } from "./feedback";
 import { correct } from "./learn";
 import { holdForStart, taskClosed, taskDropped, taskReopened } from "./lifecycle";
-import { localDay, MAX_WINS } from "./rail";
+import { localDay, MAX_WINS, readFolds, writeFolds } from "./rail";
 import type { RikerConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
 import * as projects from "./projects";
@@ -86,6 +86,7 @@ export type RetriageResult =
 // How the owner signs what they write on the Board.
 const OWNER = "you";
 const HOOKS_OFFERED = "hooks.offered";
+const RAIL_FOLDS = "rail.folded";
 
 export interface DeskOptions {
   drivers: Drivers;
@@ -896,6 +897,24 @@ export class Desk {
           : "No longer waiting on anyone",
       });
     });
+  }
+
+  // The rail's folded projects outlive a restart. Stale ids are dropped on
+  // the way in and out, so kv never keeps a project that is gone.
+  foldedProjects(): Set<number> {
+    return readFolds(store.kvGet(RAIL_FOLDS), this.activeProjectIds());
+  }
+
+  setFoldedProjects(folded: Set<number>): void {
+    const live = new Set(this.activeProjectIds());
+    store.kvSet(
+      RAIL_FOLDS,
+      writeFolds([...folded].filter((id) => live.has(id))),
+    );
+  }
+
+  private activeProjectIds(): number[] {
+    return store.listProjects().map((p) => p.id);
   }
 
   // The owner opened the task: a timer that fired on it stops ringing.
