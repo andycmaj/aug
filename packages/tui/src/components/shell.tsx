@@ -134,8 +134,9 @@ export function useShell(opts: {
     { target: () => layout },
   );
 
-  // ctrl+[ and ctrl+a mean the same everywhere: a layer with no target, so a
-  // modal (outside the layout), the chat box and the rail all reach it. It
+  // Back (ctrl+o, ctrl+[) and Home (ctrl+a) mean the same everywhere: a
+  // layer with no target, so a modal (outside the layout), the chat box and
+  // the rail all reach it. It
   // sits below every other layer: an attached agent's own (agent-terminal.tsx)
   // detaches first and declines to it, and a terminal with no agent keeps the
   // key. Back leaves the dialog, the box or the agent before going back, so it
