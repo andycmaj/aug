@@ -313,7 +313,10 @@ lives in `packages/core/src/capabilities.ts`.
 An action is a skill Riker runs on one task, at your word: `.` on a row picks
 one, the palette lists them, and `riker-tools move action AUG-0012 summarize`
 runs one (the Assistant can too; from Slack it waits for your yes). Its
-answer is an entry of its own on the task, never the agent's. Three ship
+answer is an entry of its own in the task's chat, never the agent's. On a
+coding task whose agent is live (its terminal on the Canvas, not the chat)
+the answer opens over it when done, and `.` lists `Read: <action>` to read
+each one's last answer again with no run. Three ship
 with Riker, as skills in Riker's own plugin (written under `~/.riker/plugin`, so
 nothing to install):
 

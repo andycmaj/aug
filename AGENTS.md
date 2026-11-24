@@ -256,7 +256,8 @@ Tests live beside their package (`packages/<name>/test/`).
   written under `RIKER_HOME/plugin`); config `actions` changes, turns off or
   adds one. `desk.runAction` runs it headless or on a fork of the agent's
   session (`core/run-action.ts`), and its answer is a `TurnRole.action` turn,
-  never the agent's; `pane` (the quiz) runs interactive claude in a split
+  never the agent's; where a live agent hides the chat (`chatHidden`), it
+  opens over the Canvas and `.` reads it again (`ActionAnswerModal`); `pane` (the quiz) runs interactive claude in a split
   of the agent's window. `guide` saves its answer into Plannotator
   (`@riker/code-review-plannotator`; Riker's words for its turn are
   `core/guide-turn.ts`). `.` opens the picker; the palette lists each one;

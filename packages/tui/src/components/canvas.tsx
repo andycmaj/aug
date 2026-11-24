@@ -74,6 +74,32 @@ import {
   useLaneMeta,
 } from "./ui";
 
+type Terminals = ReturnType<typeof useTerminals>;
+
+// A coding agent's terminal, live, takes the Canvas; once it stops, its
+// Result in the chat does.
+function agentTerminal(terminals: Terminals, task: TaskRow): TermState | undefined {
+  const tm = inTmux(task) ? terminals.forTask(task.id) : undefined;
+  return tm?.running ? tm : undefined;
+}
+
+// ghdash (P), a System task's diff in revdiff (e) or a task action's
+// terminal (the guide's review, a quiz) takes the Canvas over the chat
+// and the agent.
+function overTerminal(terminals: Terminals, taskId: number): TermState | undefined {
+  for (const id of [prDashId(taskId), docReviewId(taskId), actionTermId(taskId)]) {
+    const t = terminals.get(id);
+    if (t?.running) return t;
+  }
+  return undefined;
+}
+
+// Whether the task's Canvas shows a terminal instead of its chat: a turn
+// that lands there now (a task action's answer) is out of sight.
+export function chatHidden(terminals: Terminals, task: TaskRow): boolean {
+  return Boolean(overTerminal(terminals, task.id) ?? agentTerminal(terminals, task));
+}
+
 type Compose = (initial: string, keep: (text: string) => void) => void;
 
 export function Canvas(props: {
@@ -98,23 +124,11 @@ export function Canvas(props: {
   });
   const term = createMemo(() => {
     const t = task();
-    // Live, it takes the Canvas; once it stops, its Result in the chat does.
-    const tm =
-      t && inTmux(t) ? terminals.forTask(t.id) : undefined;
-    return tm?.running ? tm : undefined;
+    return t ? agentTerminal(terminals, t) : undefined;
   });
-  // ghdash (P), a System task's diff in revdiff (e) or a task action's
-  // terminal (the guide's review, a quiz) takes the Canvas over the chat
-  // and the agent.
   const dash = createMemo(() => {
     const t = task();
-    if (!t) return undefined;
-    const d = terminals.get(prDashId(t.id));
-    if (d?.running) return d;
-    const r = terminals.get(docReviewId(t.id));
-    if (r?.running) return r;
-    const a = terminals.get(actionTermId(t.id));
-    return a?.running ? a : undefined;
+    return t ? overTerminal(terminals, t.id) : undefined;
   });
   const attached = () =>
     isPaneFocused("canvas") && Boolean(dash() ?? term()?.running);

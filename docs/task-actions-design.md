@@ -166,6 +166,15 @@ matched by plain rules (no model call), in the noise rules' shape:
   the table, one entry each ("Action: summarize the work so far").
 - A running action shows as its running turn on the table. When it ends, a
   toast says so ("summary ready", "guide ready: opening plannotator").
+- A coding task whose agent is live shows the agent's terminal on the
+  Canvas, not the chat its answer lands in (`chatHidden`,
+  `components/canvas.tsx`). There, an answer the owner ran from the TUI
+  opens over the Canvas when done (`ActionAnswerModal`, the `ActionTurn` in
+  a scrollbox: j/k, space, c copies), and the `.` picker lists `Read:
+  <title>` for each action's last finished answer (`actionAnswers`,
+  `core/rows.ts`; the guide's is its review, a pane action's only says
+  where it opened, so neither is listed). An answer a move or a trigger
+  ran is read the same way.
 - A guide says where it is (AUG-0192): `reviewInBatches` and `saveGuide`
   take a `progress` callback (`GuideProgress` in
   `@riker/code-review-plannotator` `progress.ts`: diff read, one call, batches

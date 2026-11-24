@@ -621,7 +621,7 @@ export const MOVES: Record<string, MoveSpec> = {
         (r) => log.info("action from a move", { task: task!.id, name, ok: r.ok }),
         (err) => log.error("action from a move threw", { task: task!.id, name, err }),
       );
-      return `started ${name} on ${ref(task)}: its answer lands on the task when done`;
+      return `started ${name} on ${ref(task)}: its answer lands in the task's chat when done (. on the task, Read, shows it over a live agent)`;
     },
   },
   brief: {
