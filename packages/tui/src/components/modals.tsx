@@ -423,6 +423,9 @@ const SEARCH_ROWS = 14;
 // off the bottom.
 const SEARCH_CHROME_ROWS = 10;
 const SEARCH_HINT_MAX = 48;
+const SEARCH_TOGGLE_DONE = "search.toggleDone";
+// Fits a task ref (RIKER-0023) whole.
+const SEARCH_TAG_WIDTH = 10;
 
 function searchTag(item: RailItem): string {
   switch (item.type) {
@@ -434,8 +437,9 @@ function searchTag(item: RailItem): string {
 }
 
 // / and the go-to chord: every row on the rail, folded and For later ones
-// too, the ones seen lately first, then done and dropped work that matches
-// what is typed. Picking one selects it.
+// too, the ones seen lately first. Done and dropped work joins it while tab
+// has it shown (typing is the filter's, so the toggle is a key that types
+// nothing). Picking one selects it.
 export function SearchModal(props: {
   onPick: (key: string) => void;
   onClose: () => void;
@@ -470,7 +474,7 @@ export function SearchModal(props: {
   const showInbox = () => "inbox".startsWith(nav.filter().trim().toLowerCase());
   const hits = createMemo((): (SearchHit | null)[] => [
     ...(showInbox() ? [null] : []),
-    ...goToList(docs(), nav.filter(), recentKeys),
+    ...goToList(docs(), nav.filter(), recentKeys, riker.searchShowsDone()),
   ]);
   const pick = (hit: SearchHit | null | undefined) => {
     if (hit === undefined) return false;
@@ -481,16 +485,26 @@ export function SearchModal(props: {
     <Modal
       size="lg"
       onClose={props.onClose}
-      bindings={modalNavBindings}
+      bindings={[
+        ...modalNavBindings,
+        { key: "tab", cmd: SEARCH_TOGGLE_DONE, desc: "show or hide done" },
+      ]}
       commands={{
         [ModalCommands.MODAL_DOWN]: () => nav.move(1),
         [ModalCommands.MODAL_UP]: () => nav.move(-1),
         [ModalCommands.MODAL_SELECT]: () => {
           pick(hits()[nav.selected()]);
         },
+        [SEARCH_TOGGLE_DONE]: () => {
+          riker.setSearchShowsDone(!riker.searchShowsDone());
+          nav.setSelected(0);
+        },
       }}
     >
-      <ModalHeader title="Go to" hint="↵ open · esc" />
+      <ModalHeader
+        title={riker.searchShowsDone() ? "Go to · with done" : "Go to"}
+        hint={`↵ open · tab ${riker.searchShowsDone() ? "hide" : "show"} done · esc`}
+      />
       <ModalFilterInput
         onInput={nav.setFilter}
         placeholder="words, RIKER-23, #412, @someone (Slack or GitHub)"
@@ -522,7 +536,7 @@ export function SearchModal(props: {
                     paddingRight={1}
                     backgroundColor={on() ? theme.primary : undefined}
                   >
-                    <text width={8} flexShrink={0} fg={fg() ?? theme.accent}>
+                    <text width={SEARCH_TAG_WIDTH} flexShrink={0} fg={fg() ?? theme.accent}>
                       board
                     </text>
                     <box flexGrow={1} flexShrink={1} overflow="hidden">
@@ -543,7 +557,7 @@ export function SearchModal(props: {
                   paddingRight={1}
                   backgroundColor={on() ? theme.primary : undefined}
                 >
-                  <text width={8} flexShrink={0} fg={fg() ?? theme.accent}>
+                  <text width={SEARCH_TAG_WIDTH} flexShrink={0} fg={fg() ?? theme.accent}>
                     {searchTag(hit.item)}
                   </text>
                   {/* A long title is cut here, not over the hint. */}
