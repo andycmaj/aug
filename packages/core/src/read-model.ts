@@ -8,7 +8,7 @@ import { inboxCount, inboxRows, inboxRuns } from "./inbox";
 import { boardColumnOf, type BoardColumn } from "./lanes";
 import { projectProgress, projectSummary, railProjects } from "./lookup";
 import { perfOn, timing } from "./perf";
-import { taskPr, taskPrStatus } from "./pr";
+import { taskPr, taskPrStatus, unmergedPr } from "./pr";
 import { buildRail, localDay, type RailSection } from "./rail";
 import { spendReport } from "./spend";
 import * as store from "./store";
@@ -98,6 +98,7 @@ function reads(desk: LiveCheck) {
     prStatus: [[T.prStatus], store.prStatus],
     taskPr: [[T.tasks, T.taskThreads, T.messages, T.taskLinks], taskPr],
     taskPrStatus: [[T.tasks, T.taskThreads, T.messages, T.taskLinks, T.prStatus], taskPrStatus],
+    unmergedPr: [[T.tasks, T.taskThreads, T.messages, T.taskLinks, T.prStatus], unmergedPr],
     briefEditable: [[T.tasks, T.sessions], briefEditable],
     proposals: [[T.proposals], store.proposalsForTask],
     project: [[T.projects], store.getProject],
