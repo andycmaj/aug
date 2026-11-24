@@ -15,6 +15,46 @@ answers from canned lines, Send says it is the demo, and a coding agent is a
 small fake that fires the same hooks real Claude Code does. Each run starts from
 a fresh scratch home.
 
+## What it looks like
+
+All of these are the demo's fictional morning (`bun run demo`).
+
+![Riker's Home: the rail of tasks grouped as Home, Wins and Tasks on the left, the Assistant's chat box on the right](docs/screenshots/home.png)
+
+**Home.** The rail on the left is everything waiting on you, grouped by what it
+needs; Home is the Assistant, which you can ask about any work or tell to make,
+move, start or close things.
+
+![A coding task on the Canvas: its source GitHub issue, the PR's failing checks, the coding agent's report and a drafted close-out comment](docs/screenshots/task.png)
+
+**A task.** The selected row opens on the Canvas: where it came from, its PR's
+checks and reviews, what the coding agent did, and the reply Riker drafted.
+
+![The send confirmation dialog, showing the exact comment that will be posted to the GitHub issue](docs/screenshots/send.png)
+
+**Nothing goes out until you approve it.** `y` shows the exact words and where
+they go; `n` or `esc` cancels.
+
+![A pull request review task: the brief for a guided Plannotator review and the review request it came from](docs/screenshots/review.png)
+
+**A review request.** A PR that asks for your review becomes a coding task whose
+brief is a guided Plannotator review, held until you press Start.
+
+![A project on the Canvas: its repo, its tmux session and its two open tasks](docs/screenshots/project.png)
+
+**A project.** Tasks on one repo sit under their project, which carries a brief,
+goals and its own tmux session for the agents.
+
+![The Board's Columns tab: tasks sorted into agent working, waiting on you, agent idle, not running and ready for review](docs/screenshots/board-columns.png)
+
+**The Board.** `v` switches to the Board; Columns sorts every task by what its
+agent is doing.
+
+![The Board's Inbox tab: every GitHub and Slack message triage saw and every Advisor idea, with what each became](docs/screenshots/board-inbox.png)
+
+**The Inbox.** Every message triage saw, newest first, with what it became: a
+task, an FYI, or held for you.
+
 ## Run it for real
 
 Requirements: [bun](https://bun.sh), the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI (logged in),
@@ -514,20 +554,18 @@ If one of your hooks opens a tmux window for every new worktree, guard it with
 
 ## What changed for a terminal
 
-These Taskuary features were rethought for a TUI:
+What a web app would do, and what Riker does instead:
 
-| Taskuary (web)                                 | Riker (TUI)                                                                                                                                                                                              |
+| On the web                                     | Riker (TUI)                                                                                                                                                                                              |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Chat / Board / Game switch                     | `v` toggles Chat and Board. Game is not built.                                                                                                                                                         |
+| Chat / Board switch                            | `v` toggles Chat and Board.                                                                                                                                                                             |
 | One-press **Send** button                      | `y` opens a confirm that shows the exact words; a stray key never sends.                                                                                                                               |
 | Draft edited in place                          | `e` opens the draft in `$EDITOR` inside an embedded terminal. Saving updates it and teaches voice.                                                                                                     |
 | Live terminal on the task page                 | The agent runs in tmux; Riker embeds a view of its window ([ghostty-opentui](https://www.npmjs.com/package/ghostty-opentui)): attach by focusing it, `^]` to detach, `T` (or `^t` while attached) to jump there in your own tmux; `prefix L` comes back. Outside tmux it toasts the `tmux attach` line instead. |
 | Docs page with an editor                       | `D` picks a doc, which opens in `$EDITOR`.                                                                                                                                                             |
-| Rail click opens the task                      | Same as Taskuary: the cursor moves freely, `enter` selects the row (marked `▸`), `n`/`b` walk the selection.                                                                                     |
+| Rail click opens the task                      | The cursor moves freely, `enter` selects the row (marked `▸`), `n`/`b` walk the selection.                                                                                     |
 | Chat pill in the corner                        | `a` opens the Assistant as a modal. Its conversation survives the view switch.                                                                                                                         |
 | File previews (workbooks, images)              | **What it made** renders markdown and CSV/TSV inline. `o` opens any file with your opener (`open`, `wslview`, ...), and `O` opens it in `$EDITOR`. No Slack attachments yet.                           |
-| Browser hand-over, voice, attachments          | Not built.                                                                                                                                                                                             |
-| Morning digest, reports, dashboards, routines  | Not built.                                                                                                                                                                                             |
 
 ## Develop
 
@@ -535,6 +573,7 @@ These Taskuary features were rethought for a TUI:
 bun run typecheck
 bun test            # core logic: triage gates, rail, lanes, agents, hooks, learning, ingest
 bun run demo        # drive in tmux: tmux new -d -s riker 'bun run demo'; tmux capture-pane -p -t riker
+bun run docs:screenshots [name...]  # retake docs/screenshots from the demo (needs tmux and Chrome)
 ```
 
 See [AGENTS.md](AGENTS.md) for the layout and conventions.

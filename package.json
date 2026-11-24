@@ -1,7 +1,7 @@
 {
   "name": "@riker/root",
   "version": "0.0.1",
-  "description": "A local work manager TUI: GitHub and Slack become tasks, Claude does the work, nothing goes out until you approve. A Taskuary clone on OpenTUI Solid.",
+  "description": "A local work manager TUI: GitHub and Slack become tasks, Claude does the work, nothing goes out until you approve. Built on OpenTUI Solid.",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -16,6 +16,8 @@
     "compile": "bun run packages/cli/script/compile.ts",
     "typecheck": "tsc --noEmit",
     "docs:keys": "bun run packages/tui/script/keys-doc.ts",
+    "docs:screenshots": "bun run packages/tui/script/screenshots.ts",
+    "docs:site": "bun run packages/tui/script/site.ts",
     "test": "bun test",
     "format": "prettier --write packages"
   },
