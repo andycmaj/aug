@@ -418,6 +418,14 @@ Tests live beside their package (`packages/<name>/test/`).
   `helpBindings`. A key change runs `bun run docs:keys`;
   `packages/tui/test/keys-doc.test.ts` fails until it does. A new place to
   stand (a pane, a Board tab) is one entry in its `PLACES`.
+- **Both pages are published to GitHub Pages**
+  (https://andycmaj.github.io/riker/) by `.github/workflows/pages.yml` on
+  every push to main. `bun run docs:site` (`packages/tui/src/site.ts`)
+  builds `_site/`: the two pages with a shared nav, the keyboard data
+  rebuilt from the keymap, and an index. Nothing else under `docs/` is
+  published; a new public page is one entry in `SITE_PAGES`.
+  `packages/tui/test/site.test.ts` fails on anything that reads like a
+  token, a home path, an email or a Slack id.
 
 ## TypeScript
 
