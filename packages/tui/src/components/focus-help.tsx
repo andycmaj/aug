@@ -3,7 +3,7 @@
 // (`useFocusBindings`), with their long descriptions; keys for other panes
 // and other rows show when you are there.
 
-import { createMemo, For, type Accessor, type JSX } from "solid-js";
+import { createMemo, For, Show, type Accessor, type JSX } from "solid-js";
 import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import {
@@ -56,6 +56,8 @@ const CLOSE_BINDINGS: BindingSpec[] = [
 export function FocusHelp(props: {
   ctx: Accessor<HelpCtx>;
   onClose: () => void;
+  // Above the keys (the rail's colors) and below them (a closing note).
+  header?: JSX.Element;
   footer?: JSX.Element;
 }) {
   const theme = useTheme();
@@ -99,6 +101,9 @@ export function FocusHelp(props: {
         paddingLeft={4}
         paddingRight={4}
       >
+        <Show when={props.header}>
+          <box marginBottom={1}>{props.header}</box>
+        </Show>
         <For each={groups()}>
           {(group) => (
             <box flexDirection="column" marginBottom={1}>
