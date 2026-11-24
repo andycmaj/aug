@@ -31,6 +31,7 @@ import {
   whyNot,
   WRAP_PLUGIN,
 } from "../src/task-actions";
+import { actionAnswers } from "../src/rows";
 import { transcript } from "../src/transcript";
 import {
   Kind,
@@ -383,6 +384,36 @@ describe("as a move", () => {
     const agent = await runMove(engine.desk, "action", { task: ref, name: "summarize" }, `agent ${ref}`);
     expect(agent.ok).toBe(false);
     expect(agent.result).toContain("owner's move");
+  });
+});
+
+// RIKER-0240: a coding task's live agent takes its Canvas, so the TUI
+// offers each action's last answer to read over it.
+describe("reading an answer again", () => {
+  test("each action's last finished answer, newest first", async () => {
+    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "riker-wt-")) });
+    answer = () => ({ text: "first summary" });
+    const one = engine.desk.runAction(t.id, "summarize");
+    if ("error" in one) throw new Error(one.error);
+    await one.done;
+    answer = () => ({ text: "second summary" });
+    const two = engine.desk.runAction(t.id, "summarize");
+    if ("error" in two) throw new Error(two.error);
+    expect(two.turnId).toBeDefined();
+    // Still running: nothing new to read yet, the last one still is.
+    expect(actionAnswers(store.turnsForTask(t.id)).map((x) => x.body)).toEqual(["first summary"]);
+    await two.done;
+    const quiz = store.addTurn({ taskId: t.id, role: TurnRole.action, author: "quiz", body: "Opened on the Canvas" });
+    const answers = actionAnswers(store.turnsForTask(t.id), (name) => name === "quiz");
+    expect(answers.map((x) => x.id)).toEqual([two.turnId!]);
+    expect(answers[0]!.body).toBe("second summary");
+    expect(actionAnswers(store.turnsForTask(t.id)).map((x) => x.id)).toEqual([quiz.id, two.turnId!]);
+  });
+
+  test("a move says where its answer shows", async () => {
+    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "riker-wt-")) });
+    const run = await runMove(engine.desk, "action", { task: store.taskRef(t.id), name: "summarize" });
+    expect(run.result).toContain("Read");
   });
 });
 

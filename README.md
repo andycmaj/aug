@@ -1,7 +1,12 @@
 # Riker
 
-Your work manager in a terminal. GitHub and Slack become tasks, Claude does the
-work, and nothing goes out until you approve it.
+Your first officer, in a terminal. It triages GitHub and Slack and drafts your
+replies, but that is only part of the job: it also runs your crew of Claude
+agents, starting and stopping them, tracking tasks, projects and worktrees, and
+keeping the work moving.
+
+Docs: [how Riker is built](https://andycmaj.github.io/riker/architecture.html)
+(the architecture walkthrough) and [every key](https://andycmaj.github.io/riker/keyboard.html).
 
 ## Try it
 
@@ -308,7 +313,10 @@ lives in `packages/core/src/capabilities.ts`.
 An action is a skill Riker runs on one task, at your word: `.` on a row picks
 one, the palette lists them, and `riker-tools move action AUG-0012 summarize`
 runs one (the Assistant can too; from Slack it waits for your yes). Its
-answer is an entry of its own on the task, never the agent's. Three ship
+answer is an entry of its own in the task's chat, never the agent's. On a
+coding task whose agent is live (its terminal on the Canvas, not the chat)
+the answer opens over it when done, and `.` lists `Read: <action>` to read
+each one's last answer again with no run. Three ship
 with Riker, as skills in Riker's own plugin (written under `~/.riker/plugin`, so
 nothing to install):
 

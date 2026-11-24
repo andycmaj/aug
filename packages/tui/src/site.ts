@@ -12,6 +12,10 @@ export const DOCS_DIR = join(import.meta.dir, "../../../docs");
 
 const REPO = "https://github.com/andycmaj/riker";
 
+// The README and architecture.html open with these same words.
+export const TAGLINE =
+  "Your first officer, in a terminal. It triages GitHub and Slack and drafts your replies, but that is only part of the job: it also runs your crew of Claude agents, starting and stopping them, tracking tasks, projects and worktrees, and keeping the work moving.";
+
 export interface SitePage {
   file: string;
   label: string;
@@ -85,7 +89,7 @@ function indexPage(): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Riker Docs</title>
-<meta name="description" content="Riker, a work manager in a terminal: its architecture and its keys.">
+<meta name="description" content="Riker, your first officer in a terminal: its architecture and its keys.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 ${fonts?.[0] ?? ""}
@@ -109,7 +113,7 @@ ${siteNav("")}
 <div class="wrap">
   <div class="eyebrow">docs · andycmaj/riker</div>
   <h1>Riker</h1>
-  <p>Your work manager in a terminal. GitHub and Slack become tasks, Claude does the work, and nothing goes out until you approve it.</p>
+  <p>${TAGLINE}</p>
   <div class="cards">
     ${cards}
   </div>

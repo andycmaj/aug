@@ -207,8 +207,8 @@ export function agentStates(): { id: number; agent_state: AgentState }[] {
   );
 }
 
-// Done and dropped work, last closed first: the go-to list finds them by
-// name, since the rail no longer lists them.
+// Done and dropped work, last closed first: the go-to list shows them when
+// asked, since the rail no longer lists them.
 export function closedTasks(limit = 500): TaskRow[] {
   return all<TaskRow>(
     "SELECT * FROM tasks WHERE status IN ('done', 'dropped') AND kind != 'home' ORDER BY closed_at DESC, id DESC LIMIT ?",

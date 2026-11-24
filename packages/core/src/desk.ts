@@ -324,7 +324,7 @@ export class Desk {
   runAction(
     taskId: number,
     name: string,
-  ): { error: string } | { title: string; done: Promise<ActionResult> } {
+  ): { error: string } | { title: string; turnId?: number; done: Promise<ActionResult> } {
     const task = store.getTask(taskId);
     if (!task) return { error: `no task ${store.taskRef(taskId)}` };
     const config = this.config();
@@ -382,7 +382,7 @@ export class Desk {
     task: TaskRow,
     spec: ActionSpec,
     event?: ActionEvent,
-  ): { error: string } | { title: string; done: Promise<ActionResult> } {
+  ): { error: string } | { title: string; turnId?: number; done: Promise<ActionResult> } {
     if (spec.via === ActionVia.agent) {
       const text = invocation(spec, task);
       return {
@@ -395,7 +395,7 @@ export class Desk {
     }
     const run = startAction(config, task, spec, event);
     if ("error" in run) return run;
-    return { title: spec.title, done: run.done };
+    return { title: spec.title, turnId: run.turnId, done: run.done };
   }
 
   // Actions an event runs by itself (their `on` triggers): each once per

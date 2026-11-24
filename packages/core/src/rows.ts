@@ -3,7 +3,7 @@
 // the database.
 
 import { REF_PREFIX, refNumber } from "./brand";
-import { TaskStatus, TurnStatus, type NoteRow, type ProjectRow, type TaskRow, type TurnRow } from "./types";
+import { TaskStatus, TurnRole, TurnStatus, type NoteRow, type ProjectRow, type TaskRow, type TurnRow } from "./types";
 
 export function taskRef(id: number): string {
   return `${REF_PREFIX}${String(id).padStart(4, "0")}`;
@@ -38,6 +38,21 @@ export function turnSteps(turn: TurnRow): string[] {
 
 export function noteReadBy(note: NoteRow): string[] {
   return JSON.parse(note.read_by) as string[];
+}
+
+// Each action's last answer on a task, newest first: what the owner can
+// read again where the Canvas shows the agent instead of the chat. A pane
+// action's turn says only where it opened, so `skip` leaves those out.
+export function actionAnswers(turns: TurnRow[], skip: (name: string) => boolean = () => false): TurnRow[] {
+  const seen = new Set<string>();
+  const answers: TurnRow[] = [];
+  for (const turn of [...turns].reverse()) {
+    if (turn.role !== TurnRole.action || turn.status !== TurnStatus.done) continue;
+    if (!turn.body.trim() || seen.has(turn.author) || skip(turn.author)) continue;
+    seen.add(turn.author);
+    answers.push(turn);
+  }
+  return answers;
 }
 
 // How long the rail keeps saying an action finished or failed.
