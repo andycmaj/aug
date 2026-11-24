@@ -1,7 +1,7 @@
 {
   "name": "@riker/root",
   "version": "0.0.1",
-  "description": "A local work manager TUI: GitHub and Slack become tasks, Claude does the work, nothing goes out until you approve. Built on OpenTUI Solid.",
+  "description": "Your first officer, in a terminal: triages GitHub and Slack, drafts your replies, and runs your crew of Claude agents, their tasks, projects and worktrees. Nothing goes out until you approve it. Built on OpenTUI Solid.",
   "type": "module",
   "private": true,
   "workspaces": [

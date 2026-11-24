@@ -3,7 +3,7 @@
 // (`useFocusBindings`), with their long descriptions; keys for other panes
 // and other rows show when you are there.
 
-import { createMemo, For, type Accessor, type JSX } from "solid-js";
+import { createMemo, For, Show, type Accessor, type JSX } from "solid-js";
 import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import {
@@ -45,6 +45,8 @@ function digitRange(keys: string): string {
 // Rows the modal takes around its scrollbox: its top offset, frame, padding,
 // header and a row below, so the frame's bottom edge stays on screen.
 const CHROME_ROWS = 9;
+// Most of the screen, so long descriptions sit on one line.
+const WIDTH_SHARE = 0.8;
 
 const CLOSE_BINDINGS: BindingSpec[] = [
   { key: "?", cmd: ModalCommands.MODAL_CLOSE, desc: "close" },
@@ -54,6 +56,8 @@ const CLOSE_BINDINGS: BindingSpec[] = [
 export function FocusHelp(props: {
   ctx: Accessor<HelpCtx>;
   onClose: () => void;
+  // Above the keys (the rail's colors) and below them (a closing note).
+  header?: JSX.Element;
   footer?: JSX.Element;
 }) {
   const theme = useTheme();
@@ -77,7 +81,7 @@ export function FocusHelp(props: {
 
   return (
     <Modal
-      width={66}
+      width={Math.floor(dims().width * WIDTH_SHARE)}
       padding={{ y: 1 }}
       onClose={props.onClose}
       bindings={[...navBindings(), ...CLOSE_BINDINGS]}
@@ -97,6 +101,9 @@ export function FocusHelp(props: {
         paddingLeft={4}
         paddingRight={4}
       >
+        <Show when={props.header}>
+          <box marginBottom={1}>{props.header}</box>
+        </Show>
         <For each={groups()}>
           {(group) => (
             <box flexDirection="column" marginBottom={1}>

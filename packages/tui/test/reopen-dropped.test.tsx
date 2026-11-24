@@ -1,5 +1,5 @@
-// AUG-0186: a dropped task is off the rail; go to finds it by name, and d
-// on it reopens it without starting its agent.
+// A dropped task is off the rail; go to finds it by name once tab shows done
+// work, and d on it reopens it without starting its agent.
 
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -36,14 +36,30 @@ async function boot() {
     setup.mockInput.pressKey(key, mods);
     await settle();
   };
-  const goTo = async (words: string) => {
+  const open = async (words: string, toggles = 0) => {
     await press("\\", { ctrl: true });
+    for (let i = 0; i < toggles; i++) {
+      setup.mockInput.pressTab();
+      await settle();
+    }
     for (const c of words) setup.mockInput.pressKey(c);
+    await settle();
+  };
+  const goTo = async (words: string, toggles = 0) => {
+    await open(words, toggles);
     setup.mockInput.pressEnter();
     await settle();
   };
   const frame = () => setup.captureCharFrame();
-  return { press, goTo, frame, engine };
+  const tab = async () => {
+    setup.mockInput.pressTab();
+    await settle();
+  };
+  const escape = async () => {
+    setup.mockInput.pressEscape();
+    await settle();
+  };
+  return { press, tab, escape, open, goTo, frame, engine };
 }
 
 const footer = (frame: string) => frame.split("\n").filter((l) => l.includes("? help")).join("\n");
@@ -56,10 +72,39 @@ test("x drops a task; go to finds it; d reopens it", async () => {
   expect(store.getTask(badge.id)!.status).toBe(TaskStatus.dropped);
   expect(frame()).toContain(`Ignored ${store.taskRef(badge.id)}`);
 
-  await goTo("badge printer");
+  await goTo("badge printer", 1);
   expect(frame()).toContain("dropped by you");
   expect(footer(frame())).toContain("d reopen");
   await press("d");
   expect(store.getTask(badge.id)!.status).toBe(TaskStatus.open);
   expect(frame()).toContain("open again");
+});
+
+test("go to hides done work until tab shows it, and keeps the choice", async () => {
+  const { tab, escape, open, frame } = await boot();
+  const badge = store.listTasks().find((t) => t.title.startsWith("Badge printer"))!;
+  store.updateTask(badge.id, {
+    status: TaskStatus.dropped,
+    closed_at: new Date().toISOString(),
+    closed_by: "you",
+  });
+
+  // Hidden by default, even typed; the Open | All toggle says so. A typed
+  // "d" goes to the query, not the toggle.
+  await open("badge printer d");
+  expect(frame()).toContain("▌ Open ▐  All   ");
+  expect(frame()).toContain("tab  switch");
+  expect(frame()).toContain("Nothing matches");
+  await escape();
+
+  await open("badge printer", 1);
+  expect(frame()).toContain(" Open  ▌ All ▐");
+  expect(frame()).toMatch(/Badge printer.*Dropped/);
+  await escape();
+
+  // Still shown on the next open, this session; tab again hides it.
+  await open("badge printer");
+  expect(frame()).toMatch(/Badge printer.*Dropped/);
+  await tab();
+  expect(frame()).toContain("Nothing matches");
 });

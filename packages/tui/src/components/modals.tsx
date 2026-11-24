@@ -27,7 +27,7 @@ import { taskRef } from "@riker/core/rows";
 import { Kind, type DraftAction, type TurnRow } from "@riker/core/types";
 import { ActionTurn } from "./chat-turn";
 import { stateColor, stateGlyph } from "./connector-line";
-import { dayClock } from "./ui";
+import { dayClock, ModeToggle } from "./ui";
 
 export function PromptModal(props: {
   title: string;
@@ -482,10 +482,17 @@ export function ActionAnswerModal(props: {
 
 const SEARCH_ROWS = 14;
 // Rows the go-to modal takes above and below its list (offset, frame, header,
-// filter), so a short terminal shrinks the list instead of the frame running
-// off the bottom.
-const SEARCH_CHROME_ROWS = 10;
+// filter, the Open | All toggle), so a short terminal shrinks the list instead
+// of the frame running off the bottom.
+const SEARCH_CHROME_ROWS = 11;
 const SEARCH_HINT_MAX = 48;
+const SEARCH_TOGGLE_DONE = "search.toggleDone";
+const SEARCH_MODES = [
+  { mode: "open", label: "Open" },
+  { mode: "all", label: "All" },
+] as const;
+// Fits a task ref (RIKER-0023) whole.
+const SEARCH_TAG_WIDTH = 10;
 
 function searchTag(item: RailItem): string {
   switch (item.type) {
@@ -497,8 +504,9 @@ function searchTag(item: RailItem): string {
 }
 
 // / and the go-to chord: every row on the rail, folded and For later ones
-// too, the ones seen lately first, then done and dropped work that matches
-// what is typed. Picking one selects it.
+// too, the ones seen lately first. Done and dropped work joins it while tab
+// has it shown (typing is the filter's, so the toggle is a key that types
+// nothing). Picking one selects it.
 export function SearchModal(props: {
   onPick: (key: string) => void;
   onClose: () => void;
@@ -523,8 +531,7 @@ export function SearchModal(props: {
   const nav = useListNavigation({
     itemCount: () => hits().length,
     scrollRef: () => scrollRef,
-    // The scrollbox's bottom padding takes one of its rows.
-    visibleItems: listRows - 1,
+    visibleItems: listRows,
   });
   // Read once: what was recent when the list opened.
   const recentKeys = riker.recent().map((i) => i.key);
@@ -533,7 +540,7 @@ export function SearchModal(props: {
   const showInbox = () => "inbox".startsWith(nav.filter().trim().toLowerCase());
   const hits = createMemo((): (SearchHit | null)[] => [
     ...(showInbox() ? [null] : []),
-    ...goToList(docs(), nav.filter(), recentKeys),
+    ...goToList(docs(), nav.filter(), recentKeys, riker.searchShowsDone()),
   ]);
   const pick = (hit: SearchHit | null | undefined) => {
     if (hit === undefined) return false;
@@ -544,12 +551,19 @@ export function SearchModal(props: {
     <Modal
       size="lg"
       onClose={props.onClose}
-      bindings={modalNavBindings}
+      bindings={[
+        ...modalNavBindings,
+        { key: "tab", cmd: SEARCH_TOGGLE_DONE, desc: "show or hide done" },
+      ]}
       commands={{
         [ModalCommands.MODAL_DOWN]: () => nav.move(1),
         [ModalCommands.MODAL_UP]: () => nav.move(-1),
         [ModalCommands.MODAL_SELECT]: () => {
           pick(hits()[nav.selected()]);
+        },
+        [SEARCH_TOGGLE_DONE]: () => {
+          riker.setSearchShowsDone(!riker.searchShowsDone());
+          nav.setSelected(0);
         },
       }}
     >
@@ -563,7 +577,6 @@ export function SearchModal(props: {
         maxHeight={listRows}
         paddingLeft={2}
         paddingRight={2}
-        paddingBottom={1}
       >
         <Show
           when={hits().length > 0}
@@ -585,7 +598,7 @@ export function SearchModal(props: {
                     paddingRight={1}
                     backgroundColor={on() ? theme.primary : undefined}
                   >
-                    <text width={8} flexShrink={0} fg={fg() ?? theme.accent}>
+                    <text width={SEARCH_TAG_WIDTH} flexShrink={0} fg={fg() ?? theme.accent}>
                       board
                     </text>
                     <box flexGrow={1} flexShrink={1} overflow="hidden">
@@ -606,7 +619,7 @@ export function SearchModal(props: {
                   paddingRight={1}
                   backgroundColor={on() ? theme.primary : undefined}
                 >
-                  <text width={8} flexShrink={0} fg={fg() ?? theme.accent}>
+                  <text width={SEARCH_TAG_WIDTH} flexShrink={0} fg={fg() ?? theme.accent}>
                     {searchTag(hit.item)}
                   </text>
                   {/* A long title is cut here, not over the hint. */}
@@ -635,6 +648,11 @@ export function SearchModal(props: {
           </For>
         </Show>
       </scrollbox>
+      <ModeToggle
+        modes={SEARCH_MODES}
+        active={riker.searchShowsDone() ? "all" : "open"}
+        keyName="tab"
+      />
     </Modal>
   );
 }
