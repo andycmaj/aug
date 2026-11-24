@@ -2,7 +2,7 @@
 // and the connections status. All on the framework's Modal, so they own the
 // keyboard while open and hand focus back on close.
 
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show, type Accessor } from "solid-js";
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import {
@@ -24,7 +24,8 @@ import type { RailItem } from "@riker/core/rail";
 import { goToList, searchIndex, type SearchHit } from "@riker/core/search";
 import { INBOX_KEY } from "./board-tab";
 import { taskRef } from "@riker/core/rows";
-import { Kind, type DraftAction } from "@riker/core/types";
+import { Kind, type DraftAction, type TurnRow } from "@riker/core/types";
+import { ActionTurn } from "./chat-turn";
 import { stateColor, stateGlyph } from "./connector-line";
 import { dayClock } from "./ui";
 
@@ -412,6 +413,68 @@ export function InfoModal(props: {
           )}
         </For>
         <box height={1} />
+      </scrollbox>
+    </Modal>
+  );
+}
+
+// A task action's answer, read over the Canvas: a coding task with a live
+// agent shows the agent there, not the chat its answer is a turn in. Read
+// from the turn as it is now, so one still running fills in.
+export function ActionAnswerModal(props: {
+  taskId: number;
+  turnId: number;
+  onCopied: (ok: boolean) => void;
+  onClose: () => void;
+}) {
+  const riker = useRiker();
+  const dims = useTerminalDimensions();
+  const turn = createMemo(() => riker.turns(props.taskId).find((t) => t.id === props.turnId));
+  const width = () => Math.min(100, dims().width - 8);
+  const height = () => Math.max(6, dims().height - 12);
+  let scrollRef: ScrollBoxRenderable | undefined;
+  const scroll = (by: number) => scrollRef?.scrollBy(by);
+  return (
+    <Modal
+      size="lg"
+      onClose={props.onClose}
+      bindings={[
+        ...modalNavBindings,
+        { key: "j", cmd: ModalCommands.MODAL_DOWN, desc: "down" },
+        { key: "k", cmd: ModalCommands.MODAL_UP, desc: "up" },
+        { key: "space", cmd: "answer.page", desc: "page down" },
+        { key: "c", cmd: "answer.copy", desc: "copy the answer" },
+        { key: "y", cmd: "answer.copy", desc: "copy the answer" },
+      ]}
+      commands={{
+        [ModalCommands.MODAL_DOWN]: () => scroll(2),
+        [ModalCommands.MODAL_UP]: () => scroll(-2),
+        [ModalCommands.MODAL_SELECT]: () => props.onClose(),
+        "answer.page": () => scrollRef?.scrollBy(0.8, "viewport"),
+        "answer.copy": () => {
+          const body = turn()?.body;
+          if (body) void copyToClipboard(body).then(props.onCopied);
+        },
+      }}
+    >
+      <ModalHeader
+        title={`${taskRef(props.taskId)} ${riker.task(props.taskId)?.title ?? ""}`.trim()}
+        hint="j/k scroll · space page · c copy · esc"
+      />
+      <scrollbox
+        ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
+        height={height()}
+        paddingLeft={2}
+        paddingRight={2}
+        paddingTop={1}
+        stickyScroll={false}
+      >
+        <Show
+          when={turn()}
+          fallback={<text fg={useTheme().textMuted}>That answer is gone.</text>}
+        >
+          {(t: Accessor<TurnRow>) => <ActionTurn turn={t()} width={width()} />}
+        </Show>
       </scrollbox>
     </Modal>
   );
