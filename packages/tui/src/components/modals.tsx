@@ -26,7 +26,7 @@ import { INBOX_KEY } from "./board-tab";
 import { taskRef } from "@riker/core/rows";
 import { Kind, type DraftAction } from "@riker/core/types";
 import { stateColor, stateGlyph } from "./connector-line";
-import { dayClock } from "./ui";
+import { dayClock, ModeToggle } from "./ui";
 
 export function PromptModal(props: {
   title: string;
@@ -419,11 +419,15 @@ export function InfoModal(props: {
 
 const SEARCH_ROWS = 14;
 // Rows the go-to modal takes above and below its list (offset, frame, header,
-// filter), so a short terminal shrinks the list instead of the frame running
-// off the bottom.
-const SEARCH_CHROME_ROWS = 10;
+// filter, the Open | All toggle), so a short terminal shrinks the list instead
+// of the frame running off the bottom.
+const SEARCH_CHROME_ROWS = 11;
 const SEARCH_HINT_MAX = 48;
 const SEARCH_TOGGLE_DONE = "search.toggleDone";
+const SEARCH_MODES = [
+  { mode: "open", label: "Open" },
+  { mode: "all", label: "All" },
+] as const;
 // Fits a task ref (RIKER-0023) whole.
 const SEARCH_TAG_WIDTH = 10;
 
@@ -464,8 +468,7 @@ export function SearchModal(props: {
   const nav = useListNavigation({
     itemCount: () => hits().length,
     scrollRef: () => scrollRef,
-    // The scrollbox's bottom padding takes one of its rows.
-    visibleItems: listRows - 1,
+    visibleItems: listRows,
   });
   // Read once: what was recent when the list opened.
   const recentKeys = riker.recent().map((i) => i.key);
@@ -501,10 +504,7 @@ export function SearchModal(props: {
         },
       }}
     >
-      <ModalHeader
-        title={riker.searchShowsDone() ? "Go to · with done" : "Go to"}
-        hint={`↵ open · tab ${riker.searchShowsDone() ? "hide" : "show"} done · esc`}
-      />
+      <ModalHeader title="Go to" hint="↵ open · esc" />
       <ModalFilterInput
         onInput={nav.setFilter}
         placeholder="words, RIKER-23, #412, @someone (Slack or GitHub)"
@@ -514,7 +514,6 @@ export function SearchModal(props: {
         maxHeight={listRows}
         paddingLeft={2}
         paddingRight={2}
-        paddingBottom={1}
       >
         <Show
           when={hits().length > 0}
@@ -586,6 +585,11 @@ export function SearchModal(props: {
           </For>
         </Show>
       </scrollbox>
+      <ModeToggle
+        modes={SEARCH_MODES}
+        active={riker.searchShowsDone() ? "all" : "open"}
+        keyName="tab"
+      />
     </Modal>
   );
 }

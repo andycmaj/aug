@@ -89,16 +89,16 @@ test("go to hides done work until tab shows it, and keeps the choice", async () 
     closed_by: "you",
   });
 
-  // Hidden by default, even typed; the header says how to show it. A typed
+  // Hidden by default, even typed; the Open | All toggle says so. A typed
   // "d" goes to the query, not the toggle.
   await open("badge printer d");
-  expect(frame()).toContain("tab show done");
+  expect(frame()).toContain("▌ Open ▐  All   ");
+  expect(frame()).toContain("tab  switch");
   expect(frame()).toContain("Nothing matches");
   await escape();
 
   await open("badge printer", 1);
-  expect(frame()).toContain("Go to · with done");
-  expect(frame()).toContain("tab hide done");
+  expect(frame()).toContain(" Open  ▌ All ▐");
   expect(frame()).toMatch(/Badge printer.*Dropped/);
   await escape();
 

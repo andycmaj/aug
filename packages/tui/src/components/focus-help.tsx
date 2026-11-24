@@ -45,6 +45,8 @@ function digitRange(keys: string): string {
 // Rows the modal takes around its scrollbox: its top offset, frame, padding,
 // header and a row below, so the frame's bottom edge stays on screen.
 const CHROME_ROWS = 9;
+// Most of the screen, so long descriptions sit on one line.
+const WIDTH_SHARE = 0.8;
 
 const CLOSE_BINDINGS: BindingSpec[] = [
   { key: "?", cmd: ModalCommands.MODAL_CLOSE, desc: "close" },
@@ -77,7 +79,7 @@ export function FocusHelp(props: {
 
   return (
     <Modal
-      width={66}
+      width={Math.floor(dims().width * WIDTH_SHARE)}
       padding={{ y: 1 }}
       onClose={props.onClose}
       bindings={[...navBindings(), ...CLOSE_BINDINGS]}
