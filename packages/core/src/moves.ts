@@ -13,6 +13,7 @@ import { DocName } from "./docs";
 import { docNamed, propose } from "./proposals";
 import { logger } from "./log";
 import { findProject, projectLine } from "./lookup";
+import { unmergedPr } from "./pr";
 import { actionNamed, actionsFor, ActionVia } from "./task-actions";
 import { mux } from "./mux";
 import { docDraftsDir } from "./paths";
@@ -277,10 +278,14 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Mark the task done",
     task: true,
     args: {},
+    // The owner's d asks first when the PR is not merged; the Assistant
+    // moves on the owner's words, so it closes and says so for them to hear.
     async run(desk, task) {
+      const unmerged = unmergedPr(task!);
       const r = await desk.close(task!.id);
-      return r.warnings.length
-        ? `${ref(task)} marked done; ${r.warnings.join("; ")}`
+      const warnings = [...(unmerged ? [`${unmerged}; reopen undoes it`] : []), ...r.warnings];
+      return warnings.length
+        ? `${ref(task)} marked done; ${warnings.join("; ")}`
         : `${ref(task)} marked done`;
     },
   },

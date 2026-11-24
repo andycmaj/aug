@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { linkPr } from "../src/feedback";
-import { prChip, prLine, taskPr } from "../src/pr";
+import { prChip, prLine, REVIEW_LINK_BY, REVIEW_LINK_TITLE, taskPr, unmergedPr } from "../src/pr";
 import * as store from "../src/store";
 import { Kind, type PrStatusRow } from "../src/types";
 import { freshHome } from "./support/helpers";
@@ -127,3 +127,60 @@ describe("words for it", () => {
 
 // One GitHub answer per rung of the ladder, read the way the poller reads
 // it: the batch query's node, then the row, then the rail's chip.
+
+describe("whether done is early", () => {
+  const PR = "https://github.com/acme/ledger/pull/230";
+  function withPr(state: PrStatusRow["state"], patch: Partial<PrStatusRow> = {}) {
+    const t = issueTask();
+    linkPr(t.id, PR);
+    store.setPrStatus({
+      task_id: t.id,
+      repo: "acme/ledger",
+      number: 230,
+      url: PR,
+      state,
+      checks: "pass",
+      review: "approved",
+      mergeable: "clean",
+      queue: "none",
+      queue_position: null,
+      queue_reason: null,
+      fetched_at: "",
+      error: null,
+      ...patch,
+    });
+    return store.getTask(t.id)!;
+  }
+
+  test("an open or draft PR is not merged", () => {
+    expect(unmergedPr(withPr("open"))).toBe("PR #230 is open, not merged");
+    expect(unmergedPr(withPr("draft"))).toBe("PR #230 is a draft, not merged");
+  });
+
+  test("a stale read says so", () => {
+    expect(unmergedPr(withPr("open", { error: "rate limited" }))).toBe(
+      "PR #230 is open, not merged (as of its last read)",
+    );
+  });
+
+  test("merged, closed, or a local merge: nothing to ask", () => {
+    expect(unmergedPr(withPr("merged"))).toBeNull();
+    expect(unmergedPr(withPr("closed"))).toBeNull();
+    const local = withPr("open");
+    store.updateTask(local.id, { merged_at: new Date().toISOString() });
+    expect(unmergedPr(store.getTask(local.id)!)).toBeNull();
+  });
+
+  test("no PR, or one not read yet: nothing to ask", () => {
+    expect(unmergedPr(issueTask())).toBeNull();
+    const t = issueTask();
+    linkPr(t.id, PR);
+    expect(unmergedPr(store.getTask(t.id)!)).toBeNull();
+  });
+
+  test("a PR the owner was asked to review is done when the review is", () => {
+    const t = withPr("open");
+    store.addTaskLink(t.id, PR, REVIEW_LINK_TITLE, REVIEW_LINK_BY);
+    expect(unmergedPr(store.getTask(t.id)!)).toBeNull();
+  });
+});

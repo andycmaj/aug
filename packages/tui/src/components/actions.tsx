@@ -370,9 +370,26 @@ export function useActions(dialogs: Dialogs) {
     );
   }
 
+  // d on a done or dropped row reopens it instead (reopen below). Work
+  // whose PR has not landed asks first, No under the cursor.
   function done(task: TaskRow) {
-    // d on a done or dropped row reopens it instead (reopen below).
     if (isClosed(task)) return false;
+    const unmerged = riker.unmergedPr(task);
+    if (!unmerged) return closeDone(task);
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Mark ${taskRef(task.id)} done?`}
+        hint={`${unmerged}. Mark it done anyway?`}
+        choices={[
+          { label: "No, keep it open", run: () => {} },
+          { label: "Yes, mark it done", run: () => closeDone(task) },
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function closeDone(task: TaskRow) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
     advanceFrom(`t${task.id}`);

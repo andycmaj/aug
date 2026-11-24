@@ -45,6 +45,33 @@ describe("the moves bus", () => {
     expect(store.getTask(task.id)!.status).toBe(TaskStatus.done);
   });
 
+  test("done on work whose PR is open closes it and says the PR is not merged", async () => {
+    const task = engine.desk.newTask("Fix the build", Kind.general);
+    const url = "https://github.com/acme/api/pull/7";
+    store.linkThread(task.id, "github:acme/api#7");
+    store.setPrStatus({
+      task_id: task.id,
+      repo: "acme/api",
+      number: 7,
+      url,
+      state: "open",
+      checks: "pass",
+      review: "required",
+      mergeable: "clean",
+      queue: "none",
+      queue_position: null,
+      queue_reason: null,
+      fetched_at: "",
+      error: null,
+    });
+    const move = ask("done", { task: store.taskRef(task.id) });
+    await engine.drainMoves();
+    expect(store.getMove(move.id)!.result).toBe(
+      `${store.taskRef(task.id)} marked done; PR #7 is open, not merged; reopen undoes it`,
+    );
+    expect(store.getTask(task.id)!.status).toBe(TaskStatus.done);
+  });
+
   test("two drains at once never run a move twice", async () => {
     const task = engine.desk.newTask("Ping Sam", Kind.general);
     ask("tell", { task: store.taskRef(task.id), text: "hello" });
