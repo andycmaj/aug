@@ -1,7 +1,12 @@
 # Riker
 
-Your work manager in a terminal. GitHub and Slack become tasks, Claude does the
-work, and nothing goes out until you approve it.
+Your first officer, in a terminal. It triages GitHub and Slack and drafts your
+replies, but that is only part of the job: it also runs your crew of Claude
+agents, starting and stopping them, tracking tasks, projects and worktrees, and
+keeping the work moving.
+
+Docs: [how Riker is built](https://andycmaj.github.io/riker/architecture.html)
+(the architecture walkthrough) and [every key](https://andycmaj.github.io/riker/keyboard.html).
 
 ## Try it
 
