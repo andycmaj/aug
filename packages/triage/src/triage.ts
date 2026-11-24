@@ -391,6 +391,18 @@ const reviewAsk: TriageRule = {
   },
 };
 
+// A PR that asks, or tags, only teams you do not watch is someone else's
+// review: filed for you to read, with no model asked. When who was asked is
+// not known, the model still judges it.
+const othersReview: TriageRule = {
+  name: "others' review",
+  handle: ({ message, config }) => {
+    if (!prOf(message)) return pass("not a pull request");
+    const whose = reviewForOthers(message, config.triage.reviewTeams);
+    return whose ? ok(fileFyi(message, whose)) : pass("not known to be someone else's");
+  },
+};
+
 // Triage breaking is quiet and safe: filed for you to read, never assumed to
 // be work.
 const unjudged: TriageRule = {
@@ -509,6 +521,7 @@ export const TRIAGE_RULES: readonly TriageRule[] = [
   sameThread,
   afterClose,
   reviewAsk,
+  othersReview,
   unjudged,
   sameAsk,
   judgedFyi,
@@ -948,6 +961,25 @@ export function reviewIsYours(
   );
 }
 
+// Why a PR's ask is known to be someone else's: it asked, or tagged, only
+// teams you do not watch. Null when it may be yours or who was asked is not
+// known.
+export function reviewForOthers(
+  message: MessageRow,
+  watched: readonly string[],
+): string | null {
+  const meta = messageMeta(message) as GithubMeta;
+  if (meta.reason === "team_mention") {
+    const tagged = taggedTeams(message.body);
+    if (!tagged.length || tagged.some((t) => watchedTeam(t, watched))) return null;
+    return `tagged ${tagged.join(", ")}, not a team you watch`;
+  }
+  if (meta.reason !== "review_requested" || !meta.requested) return null;
+  const { me, teams } = meta.requested;
+  if (me || !teams.length || teams.some((t) => watchedTeam(t, watched))) return null;
+  return `review requested of ${teams.join(", ")}, not a team you watch`;
+}
+
 // What a review task's agent starts from: the review itself, with the
 // context JOB.md's review flow gathers first.
 export function reviewBrief(pr: ReviewPr, summary = ""): string {
@@ -960,6 +992,22 @@ export function reviewBrief(pr: ReviewPr, summary = ""): string {
     .join("\n");
 }
 
+function joinReview(
+  message: MessageRow,
+  task: TaskRow,
+  prThread: string,
+  config: TriageConfig,
+): TriageOutcome {
+  const outcome = attach(message, task, config);
+  if (message.thread_key !== prThread)
+    store.batch(() => {
+      store.linkThread(task.id, message.thread_key);
+      if (message.url)
+        store.addTaskLink(task.id, message.url, "where the review was asked", "triage");
+    });
+  return outcome;
+}
+
 // A review is a coding task on the PR's repo and branch, held for the
 // owner's Start like any coding task. Its repo's checkout is never guessed:
 // when none is mapped, the task says so, and Start asks.
@@ -970,8 +1018,15 @@ function createReview(
   reason: string,
   config: TriageConfig,
 ): TriageOutcome {
-  const project = pickProject(pr.repo, answer?.project);
   const prThread = `github:${pr.repo}#${pr.number}`;
+  // One task per PR, wherever it was asked: a later ask (a Slack tag, the
+  // GitHub request after it) joins the task the first one made, and brings
+  // a closed one back.
+  const last = store.lastTaskForThread(prThread);
+  const existing =
+    store.openTaskForThread(prThread) ?? (last?.status === TaskStatus.done ? last : null);
+  if (existing) return joinReview(message, existing, prThread, config);
+  const project = pickProject(pr.repo, answer?.project);
   const task = store.batch(() => {
     const created = store.createTask({
       title: (answer?.title || `Review ${pr.repo}#${pr.number}`).slice(0, 120),

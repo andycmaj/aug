@@ -212,7 +212,9 @@ Tests live beside their package (`packages/<name>/test/`).
   its brief: the `review ask` rule always makes one when a PR requests a
   review of, or tags, the owner or a team in `triage.reviewTeams` (who was
   asked is read at ingest, a tagged team from the comment), and a review
-  the model finds elsewhere becomes one too. An
+  the model finds elsewhere becomes one too. One task per PR: a later ask
+  from either side joins it. A PR that asks or tags only teams not in that
+  list is filed FYI with no model (`others' review`). An
   unmapped repo is said on the task, never guessed; Start asks.
 - **Wins history is `task_events`** (triggers in `core/db.ts`, read by
   `core/wins-board.ts`): what happened to a task, kept after its columns

@@ -490,6 +490,7 @@ describe("triage chain", () => {
       "same thread",
       "after close",
       "review ask",
+      "others' review",
       "unjudged",
       "same ask",
       "judged fyi",
@@ -681,16 +682,31 @@ describe("review requests become coding tasks", () => {
     },
   );
 
-  test("asked of a team you do not watch: the model judges it", async () => {
+  test("asked of a team you do not watch: filed for you to read, no model asked", async () => {
     testConfig().update((c) => ({ ...c, triage: { ...c.triage, reviewTeams: ["acme/payments"] } }));
-    fakeBrain(() => verdict("fyi", { reason: "a big team; someone else has it" }));
+    const calls = fakeBrain(() => verdict("coding"));
     const m = reviewAsk({ me: false, teams: ["acme/everyone"] });
     const out = await triage(m, { config: config() });
-    expect(out).toMatchObject({ verdict: "fyi", taskId: null });
+    expect(out).toMatchObject({
+      verdict: "fyi",
+      taskId: null,
+      reason: "review requested of acme/everyone, not a team you watch",
+    });
+    expect(calls).toHaveLength(0);
+    expect(lastRule(m.id)).toBe("others' review");
     const steps = store.triageSteps(lastRun(m.id).id);
     expect(steps.find((s) => s.rule === "review ask")?.reason).toBe(
       "asked of acme/everyone, not a team you watch",
     );
+  });
+
+  test("who was asked not known: the model still judges it", async () => {
+    const calls = fakeBrain(() => verdict("fyi"));
+    const m = reviewAsk(null);
+    await triage(m, { config: config() });
+    expect(calls).toHaveLength(1);
+    const steps = store.triageSteps(lastRun(m.id).id);
+    expect(steps.find((s) => s.rule === "others' review")?.decision).toBe("pass");
   });
 
   test("a repo with no checkout mapped says so, and Start will ask; a mapped one does not", async () => {
@@ -751,6 +767,60 @@ describe("review requests become coding tasks", () => {
     ]);
   });
 
+  function slackAsk(meta: Record<string, unknown>, n = 1): MessageRow {
+    return store.insertMessage({
+      channel: "slack",
+      externalId: `slack:C9:${n}`,
+      threadKey: `slack:C9:${n}00.0`,
+      author: "U3",
+      authorName: "Priya",
+      title: "#payments thread",
+      body: "can someone review https://github.com/acme/api/pull/40 today?",
+      url: `https://acme.slack.com/archives/C9/p${n}00`,
+      receivedAt: new Date(Date.UTC(2026, 10, 5, 12, n)).toISOString(),
+      meta: { channel: "C9", ts: `${n}00.0`, ...meta },
+    })!;
+  }
+
+  test("Slack talk about a PR that does not tag you is not an ask", async () => {
+    fakeBrain(() => verdict("task", { review_pr: "https://github.com/acme/api/pull/40" }));
+    const out = await triage(slackAsk({ mention: false }), { config: config() });
+    expect(out).toMatchObject({ verdict: "held", taskId: null });
+  });
+
+  test("a Slack DM asking a review is an ask", async () => {
+    fakeBrain(() => verdict("task", { review_pr: "https://github.com/acme/api/pull/40" }));
+    const out = await triage(slackAsk({ dm: true }), { config: config() });
+    expect(store.getTask(out.taskId!)).toMatchObject({ kind: "coding", branch: "pr:40" });
+  });
+
+  test("one task per PR: a Slack tag joins the review GitHub asked for", async () => {
+    fakeBrain(() => verdict("task", { review_pr: "https://github.com/acme/api/pull/40" }));
+    const first = await triage(reviewAsk({ me: true, teams: [] }), { config: config() });
+    const out = await triage(slackAsk({ mention: true }, 2), { config: config() });
+    expect(out).toMatchObject({ verdict: "attached", taskId: first.taskId });
+    expect(store.threadsForTask(first.taskId!)).toContain("slack:C9:200.0");
+    expect(store.linksForTask(first.taskId!).map((l) => l.url)).toContain(
+      "https://acme.slack.com/archives/C9/p200",
+    );
+  });
+
+  test("one task per PR: GitHub's request joins the review a Slack tag made", async () => {
+    fakeBrain(() => verdict("task", { review_pr: "https://github.com/acme/api/pull/40" }));
+    const first = await triage(slackAsk({ mention: true }), { config: config() });
+    const out = await triage(reviewAsk({ me: true, teams: [] }, 3), { config: config() });
+    expect(out).toMatchObject({ verdict: "attached", taskId: first.taskId });
+  });
+
+  test("a Slack tag about a reviewed PR brings its closed task back", async () => {
+    fakeBrain(() => verdict("task", { review_pr: "https://github.com/acme/api/pull/40" }));
+    const first = await triage(reviewAsk({ me: true, teams: [] }), { config: config() });
+    taskClosed(first.taskId!, "reviewed");
+    const out = await triage(slackAsk({ mention: true }, 2), { config: config() });
+    expect(out.taskId).toBe(first.taskId);
+    expect(store.getTask(first.taskId!)!.status).toBe("open");
+  });
+
   function prComment(reason: string, body: string, n = 1): MessageRow {
     return store.insertMessage({
       channel: "github",
@@ -795,12 +865,13 @@ describe("review requests become coding tasks", () => {
     },
   );
 
-  test("a team you do not watch tagged on a PR: the model judges it", async () => {
+  test("a team you do not watch tagged on a PR: filed for you to read, no model asked", async () => {
     testConfig().update((c) => ({ ...c, triage: { ...c.triage, reviewTeams: ["acme/payments"] } }));
-    fakeBrain(() => verdict("fyi"));
+    const calls = fakeBrain(() => verdict("coding"));
     const m = prComment("team_mention", "@acme/everyone heads up, mail me at ops@acme.com/x");
     const out = await triage(m, { config: config() });
-    expect(out.verdict).toBe("fyi");
+    expect(out).toMatchObject({ verdict: "fyi", taskId: null });
+    expect(calls).toHaveLength(0);
     const steps = store.triageSteps(lastRun(m.id).id);
     expect(steps.find((s) => s.rule === "review ask")?.reason).toBe(
       "tagged acme/everyone, not a team you watch",
