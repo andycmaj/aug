@@ -34,6 +34,7 @@ import {
   simApi,
   simPrFetch,
   SIM_REPO,
+  SIM_TEAM,
   statePath,
   type SimState,
 } from "./github";
@@ -147,6 +148,7 @@ export function installSim(opts: SimOptions): {
       : DEFAULT_CONFIG.brain,
     spend: haiku ? { capEnabled: true, dailyUsd: 2 } : DEFAULT_CONFIG.spend,
     autostart: false,
+    triage: { ...DEFAULT_CONFIG.triage, reviewTeams: [`${SIM_REPO.split("/")[0]}/${SIM_TEAM}`] },
     tmuxSocket: "riker-sim",
     log: { enabled: true, level: "info" },
   });

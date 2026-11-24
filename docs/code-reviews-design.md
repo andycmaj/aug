@@ -76,9 +76,13 @@ I rarely get review requests, so a generator plays the other side.
   follow-up and re-requests after I ask for changes, replies to my
   comments, merges when I approve, and closes PRs nobody has touched for
   7 days. It touches only its own PRs.
-- `bun run gen once <scenario>` runs on demand. `bun run gen stream` runs
-  steadily: at most 5 open PRs, one event every 30 minutes, 09:00 to
-  18:00 local time, and it stops when `~/.riker/gen/stop` exists. The
-  App's key lives in `~/.riker/gen/` (0600). Haiku's cost is recorded in
-  `spend` under the role `gen`.
+- `bun run gen once ask|team|tag|rerequest|tick` runs on demand.
+  `bun run gen start` runs the stream in the background (`gen stream` in
+  the foreground): at most 5 open PRs, a new one at most every 30
+  minutes, 09:00 to 18:00 local time, my reviews answered within five
+  minutes. `gen stop` ends it. The App's key and config live in
+  `~/.riker/gen/` (0600); `gen setup` lists the steps only I can do, and
+  `gen check` tests them. Haiku's cost is recorded in `spend` under the
+  role `gen`; `--plant` is for the GitHub target only, since the sim makes
+  its diffs from its own commits.
 - GitHub only for now; a Slack target can come later.

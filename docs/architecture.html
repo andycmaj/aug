@@ -489,7 +489,7 @@ $ bun packages/code-review-plannotator/src/cli.ts review \
     <div class="tbl ftree"><table><tbody id="ftree"></tbody></table></div>
   </section>
 
-  <footer class="stamp">Checked against andycmaj/riker main at f483197 (session digests) with the guide offered on review tasks and posting from Plannotator (2026-11-23). Plans named here (RIKER-0188, RIKER-0190, RIKER-0208) were open then.</footer>
+  <footer class="stamp">Checked against andycmaj/riker main at d916a08 with the code reviews one-pager's changes (2026-11-24): one task per PR, the guide reading the PR and what changed since your last review, a posted review closing its task, and the review activity generator. Plans named here (RIKER-0188, RIKER-0190, RIKER-0208) were open then.</footer>
 </div>
 
 <script>
@@ -891,7 +891,7 @@ const PKGS = [
   ["@riker/github", "Notifications in (ingest.ts), the rate-limit gate (gate.ts), each task's PR status (pr-status.ts), what the guide reads beside a PR asked of you (review-context.ts), its draft (draft.ts, sent through gh in send.ts), its config (config.ts), the poll (connector.ts).", "hands core: <code>connectors</code> [github], <code>drafts</code> [github_comment], <code>config</code> [github], <code>reviews</code> (review-context.ts), <code>assistant</code> (gh reads)"],
   ["@riker/slack", "The transports (token, claude-mcp, mcp), the poller and the remote, its draft (draft.ts), its slack and remote config (config.ts), and the hold on moves asked from Slack (confirm.ts).", "hands core: <code>connectors</code> [slack, remote], <code>drafts</code> [slack_reply], <code>config</code> [slack, remote], <code>guards</code> [confirmGuard], <code>assistant</code> (the Slack line)"],
   ["@riker/code-review-plannotator", "The guided review as a library, runnable without Riker: patchFor, planBatches, reviewInBatches with an injected ask, fitGuide, saveGuide, postComments, the CLI and skill/SKILL.md.", "imports nothing of Riker's"],
-  ["@riker/fixtures", "The demo day (bun run demo), the offline GitHub sim (bun run sim, sim:do) and a fake claude that fires real hooks.", "passes the three plugins to its engine"],
+  ["@riker/fixtures", "The demo day (bun run demo), the offline GitHub sim (bun run sim, sim:do), the review activity generator (bun run gen: PRs asking your review, on the sim or a lab repo as a GitHub App) and a fake claude that fires real hooks.", "passes the three plugins to its engine"],
   ["@riker/tui", "The UI: index.tsx, app, components, context, terminal, keymap, palette; and cli.ts, the riker argv parser.", "plugins.ts: <code>rikerPlugins()</code>, read by index.tsx and riker-tools"],
   ["@riker/cli", "What a shell runs: src/riker.ts (the one entry; riker tools … is riker-tools), src/riker-tools.ts, script/riker.ts (bun dev, restarts on RESTART_CODE), script/compile.ts (dist/riker).", "tells core where riker-tools is: <code>setToolsEntry</code>"],
 ];

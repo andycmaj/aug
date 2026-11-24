@@ -451,13 +451,20 @@ Tests live beside their package (`packages/<name>/test/`).
   the engine's `github.api`/`github.prs` seam reads a JSON state file, Send
   writes to it, so triage, `pr_status`, the rail, `riker-tools feedback` and
   nudges run unchanged with no GitHub call. From another terminal,
-  `bun run sim:do pr-open [--mine] | comment | mention | review --verdict
-  approve|changes|comment --comments N | ci fail|pass | push | merge |
-  play <scenario> | state` changes it, and the sim polls on the write. Its
+  `bun run sim:do pr-open [--mine] [--team reviewers] | comment | mention |
+  review --verdict approve|changes|comment --comments N | ci fail|pass |
+  push | merge | rerequest | close | play <scenario> | state` changes it, and the sim polls on the write. Its
   repo `sim/riker` is a remote-less clone of Riker whose PR branches are real
   commits, so a task on one starts in a worktree with a real diff; the
   seeded coding task's `--mine` PR is linked to it. A scenario is a list of
   events in `SCENARIOS` (`events.ts`); `packages/fixtures/test/sim.test.ts` reads the fake
   through `pollGithub` and `readPrBatch`, so it cannot drift from them.
+- `bun run gen` is the review activity generator (`packages/fixtures/src/gen/`,
+  docs/code-reviews-design.md): a colleague asking the owner's review, on the
+  running sim (`--target sim`) or a real lab repo as a GitHub App (`--target
+  github`, `gen setup` lists the owner's steps, `gen check` tests them).
+  `gen once ask|team|tag|rerequest|tick`, or `gen start|stop` for a stream
+  within its limits (`plan.ts`, the whole author loop, no I/O); `--plant`
+  (GitHub only) has haiku hide one bug per PR and keeps where in its state.
 - `bun test` covers the core. Reproduce a bug in a test before fixing it.
 - Real-mode checks cost tokens: use `haiku` in a scratch `RIKER_HOME`.

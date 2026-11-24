@@ -568,6 +568,8 @@ export const SpendRole = {
   action: "action",
   // A session's digest the watcher wrote (core/digest-watcher.ts).
   digest: "digest",
+  // The review activity generator's planted changes (fixtures gen).
+  gen: "gen",
   other: "other",
 } as const;
 export type SpendRole = (typeof SpendRole)[keyof typeof SpendRole];

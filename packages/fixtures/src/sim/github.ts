@@ -28,6 +28,8 @@ import {
 
 export const SIM_REPO = "sim/riker";
 export const SIM_ME = "you";
+// The team the sim's PRs may ask, which its config watches.
+export const SIM_TEAM = "reviewers";
 
 export const CheckStatus = {
   queued: "QUEUED",
@@ -91,6 +93,8 @@ export interface SimPull {
   headCommittedAt: string;
   mergedAt: string | null;
   requested: string[];
+  // Team slugs asked (the org is the repo's); older state files have none.
+  teams?: string[];
   checks: SimCheck[];
   reviews: SimReview[];
   // The files its diff touches, and the new-side lines a review may comment on.
@@ -211,7 +215,7 @@ export function toPull(
     merged: p.state === PullState.merged,
     head: { ref: p.head },
     requested_reviewers: p.requested.map((login) => ({ login })),
-    requested_teams: [],
+    requested_teams: (p.teams ?? []).map((slug) => ({ slug })),
   };
 }
 

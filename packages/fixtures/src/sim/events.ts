@@ -32,7 +32,12 @@ export type SimEvent =
       // The owner's own PR (from the sim's work branch), asking `reviewer`.
       mine?: boolean;
       reviewer?: string;
+      // Ask a team (a slug in the repo's org) instead of a person.
+      team?: string;
     }
+  // Ask the owner's review again (after they reviewed, or of the team).
+  | { type: "rerequest"; pr?: number; by?: string }
+  | { type: "close"; pr?: number; by?: string }
   | { type: "comment"; pr?: number; by?: string; body?: string }
   | { type: "mention"; pr?: number; by?: string; body?: string }
   | {
@@ -120,7 +125,7 @@ function openPr(
   const number = (s.pulls.at(-1)?.number ?? 0) + 1;
   const mine = Boolean(e.mine);
   const author = mine ? s.me : (e.by ?? "bob");
-  const reviewer = e.reviewer ?? (mine ? "alice" : s.me);
+  const reviewer = e.team ? null : (e.reviewer ?? (mine ? "alice" : s.me));
   let head = mine && s.work ? s.work.branch : `sim/pr-${number}`;
   if (!mine && s.checkout && s.commits.length)
     makeBranch(s.checkout, head, pick(s.commits, number - 1));
@@ -148,7 +153,8 @@ function openPr(
     updatedAt: at,
     headCommittedAt: at,
     mergedAt: null,
-    requested: [reviewer],
+    requested: reviewer ? [reviewer] : [],
+    teams: e.team ? [e.team] : [],
     checks: [{ name: "test", status: CheckStatus.running, conclusion: null }],
     reviews: [],
     files: diff.files,
@@ -156,10 +162,11 @@ function openPr(
     subscribed: mine ? "author" : null,
   };
   s.pulls.push(p);
-  if (reviewer === s.me)
+  // GitHub tells the owner of a team's ask too, when they are on it.
+  if (reviewer === s.me || e.team)
     notify(s, p, author, pullApi(s, number), "review_requested");
   return {
-    said: `#${number} opened by ${author}, review asked of ${reviewer}${mine ? ` (head ${head})` : ""}`,
+    said: `#${number} opened by ${author}, review asked of ${e.team ? `team ${e.team}` : reviewer}${mine ? ` (head ${head})` : ""}`,
     opened: p,
   };
 }
@@ -272,6 +279,24 @@ function push(s: SimState, e: Extract<SimEvent, { type: "push" }>): Applied {
   return { said: `pushed to #${p.number}: CI running again` };
 }
 
+function rerequest(s: SimState, e: Extract<SimEvent, { type: "rerequest" }>): Applied {
+  const p = target(s, e.pr);
+  const by = e.by ?? p.author;
+  if (!p.requested.includes(s.me)) p.requested.push(s.me);
+  touch(p);
+  notify(s, p, by, pullApi(s, p.number), "review_requested");
+  return { said: `${by} asked your review of #${p.number} again` };
+}
+
+function close(s: SimState, e: Extract<SimEvent, { type: "close" }>): Applied {
+  const p = target(s, e.pr);
+  p.state = PullState.closed;
+  p.requested = [];
+  p.teams = [];
+  touch(p);
+  return { said: `#${p.number} closed by ${e.by ?? p.author}` };
+}
+
 function merge(s: SimState, e: Extract<SimEvent, { type: "merge" }>): Applied {
   const p = target(s, e.pr);
   p.state = PullState.merged;
@@ -298,6 +323,10 @@ export function applyEvent(s: SimState, e: SimEvent): Applied {
         return push(s, e);
       case "merge":
         return merge(s, e);
+      case "rerequest":
+        return rerequest(s, e);
+      case "close":
+        return close(s, e);
     }
   })();
   s.log.push({ at: now(), line: done.said });
