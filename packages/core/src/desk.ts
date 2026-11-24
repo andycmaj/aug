@@ -31,6 +31,7 @@ import * as projects from "./projects";
 import { applyProjectDoc, renderProjectDoc } from "./project-doc";
 import { Drafts, editPending, sendPending } from "./outbound";
 import * as repos from "./repos";
+import type { PathNeed } from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
@@ -41,9 +42,11 @@ import {
   ActionVia,
   actionNamed,
   invocation,
+  makesCheckout,
   registeredActions,
   triggeredBy,
   whyNot,
+  whyNotOffered,
   type ActionSpec,
 } from "./task-actions";
 import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
@@ -68,9 +71,11 @@ import {
   type TimerRow,
 } from "./types";
 import { addFollowup, addSchedule } from "./timers";
+import { journalSwitch, storySwitch, switchColumn, switchWords, SwitchValue } from "./digests";
+import { pin, undoStory } from "./story";
 import { errorMessage, logger } from "./log";
 
-export type { Jump } from "./projects";
+export { NoJump, type Jump } from "./projects";
 
 const log = logger("desk");
 
@@ -330,6 +335,32 @@ export class Desk {
     const why = whyNot(spec, task);
     if (why) return { error: why };
     return this.startAction(config, task, spec);
+  }
+
+  // What an action offered on a task still needs before runAction: its
+  // worktree, made on the task's branch with no agent started (a review that
+  // just arrived has none). `needs` asks the owner where the repo is checked
+  // out, as Start does; the caller asks and calls again. Never run by itself:
+  // the owner's key, the picker or a move asks for it.
+  async prepareAction(
+    taskId: number,
+    name: string,
+  ): Promise<{ type: "ready" } | { type: "needs"; need: PathNeed } | { type: "failed"; error: string }> {
+    const task = store.getTask(taskId);
+    if (!task) return { type: "failed", error: `no task ${store.taskRef(taskId)}` };
+    const spec = actionNamed(this.config(), name);
+    if (!spec) return { type: "failed", error: `no action ${name}` };
+    const why = whyNotOffered(spec, task);
+    if (why) return { type: "failed", error: why };
+    if (!makesCheckout(spec, task)) return { type: "ready" };
+    const made = await this.cannotAsync(
+      `checkout ${store.taskRef(taskId)}`,
+      "it made a worktree",
+      () => projects.ensureCheckout(this.config(), taskId),
+    );
+    if (made.type === "needs-path") return { type: "needs", need: made.need };
+    if (made.type === "failed") return made;
+    return { type: "ready" };
   }
 
   // The task's last guide, reopened in Plannotator with its findings and no
@@ -766,6 +797,46 @@ export class Desk {
       store.addWin(day, taskId);
       return { ok: true, text: `${ref} is a Win today (${wins.length + 1}/${MAX_WINS})` };
     }, at);
+  }
+
+  // A task's story on, off, or back to its project's and config's say.
+  setStory(taskId: number, value: SwitchValue): string {
+    return this.onTask("story", taskId, () => {
+      store.updateTask(taskId, { story: switchColumn(value) });
+      const task = store.getTask(taskId)!;
+      return `${store.taskRef(taskId)} ${switchWords("story", storySwitch(this.config(), task))}`;
+    });
+  }
+
+  // A project's journal, or the default for its tasks' stories.
+  setProjectSwitch(projectId: number, which: "journal" | "story", value: SwitchValue): string {
+    return this.cannot(which, "a project's switches are not kept for undo; set it back", () => {
+      store.updateProject(projectId, { [which]: switchColumn(value) });
+      const project = store.getProject(projectId)!;
+      if (which === "journal")
+        return `${project.name} ${switchWords("journal", journalSwitch(this.config(), project))}`;
+      const said = value === SwitchValue.default ? "follows config" : value;
+      return `${project.name}: its tasks' stories ${said} unless a task says otherwise`;
+    });
+  }
+
+  // The owner's line on a task's story, or one taken off. Each is a new
+  // version; story_undo steps back.
+  pinStory(taskId: number, line: string, off: boolean): string {
+    return this.cannot(off ? "unpin" : "pin", "a story keeps every version; story_undo steps back one", () => {
+      const v = pin(taskId, line, off);
+      const ref = store.taskRef(taskId);
+      if (!v) return off ? `${ref}: no such pinned line` : `${ref}: pinned already`;
+      return off ? `${ref}: unpinned` : `${ref}: pinned`;
+    });
+  }
+
+  undoStory(taskId: number): string {
+    return this.cannot("story undo", "the version undone stays in the history", () => {
+      const v = undoStory(taskId);
+      const ref = store.taskRef(taskId);
+      return v ? `${ref}: story back to the version before` : `${ref}: no earlier story version`;
+    });
   }
 
   toggleWin(taskId: number, at = new Date()): { ok: boolean; text: string } {

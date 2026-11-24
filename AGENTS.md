@@ -1,7 +1,7 @@
 # Agents
 
-A TUI clone of Taskuary's Chat and Board views, with GitHub and Slack as the
-only connections. The app shell is
+A terminal work manager with Chat and Board views, and GitHub and Slack as
+the only connections. The app shell is
 [`@andycmaj/opentui-app`](https://github.com/andycmaj/opentui-app) (boot,
 focus, keymap, theme, toast, modals, palette, help). The structure mirrors
 `tilt-tui` and `kube-tui`, and the embedded terminal is copied from
@@ -98,7 +98,10 @@ Tests live beside their package (`packages/<name>/test/`).
 - **`core/mux.ts` is the only door to tmux and wt**, and the only importer of
   `libtmux` (alpha, pinned exactly). Identity is the `@riker_project` /
   `@riker_task` user options, never names. Tests use `packages/core/test/support/fake-mux.ts`; real
-  tmux checks use a private server (`-L`), never the default one.
+  tmux checks use a private server (`-L`), never the default one. tmux
+  refuses a command past about 16KB, so long text never rides one: a coding
+  start's brief is a file (`--append-system-prompt-file`, under
+  `paths.launch`), and `sendLine` pastes a long line through `load-buffer -`.
 - **Where a repo is checked out is `core/repos.ts`**: `repos` in
   config is the owner's one path per repo; `core/checkouts.ts` (behind the
   Mux) inspects a path and scans `repoRoots` for checkouts. Every coding
@@ -257,7 +260,15 @@ Tests live beside their package (`packages/<name>/test/`).
   of the agent's window. `guide` saves its answer into Plannotator
   (`@riker/code-review-plannotator`; Riker's words for its turn are
   `core/guide-turn.ts`). `.` opens the picker; the palette lists each one;
-  `actions.<name>.key` binds one at start.
+  `actions.<name>.key` binds one at start, in the footer on the rows it
+  applies to. What is offered (`actionsFor`, `whyNotOffered`) counts a
+  worktree the task's repo can make; what runs (`whyNot`, and every
+  trigger) needs it on disk. `desk.prepareAction` makes it in between, on
+  the task's branch with no agent (`projects.ensureCheckout`), so a review
+  triage files offers its guide on arrival and never runs it by itself.
+  Triage marks that PR as one to review (`reviewedPr`, `core/pr.ts`): its
+  guide's review opens in Plannotator's PR mode, whose Post to GitHub
+  sends the owner's review, and nothing goes to the agent (`reviewExit`).
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `riker-tools move <verb>`, the Assistant's
   prompt and the engine's dispatch, which runs each on the desk. riker-tools
@@ -297,6 +308,16 @@ Tests live beside their package (`packages/<name>/test/`).
   puts them in every brief of a task in the project, so a task's own brief
   need not repeat them; `core/project-doc.ts` is the one file the owner edits
   them in. A goal is met only by the owner's say, never by its tasks closing.
+- **A finished session is written up once** (`core/digests.ts`,
+  docs/session-digests-design.md): a `digests` row from `riker-tools done`'s
+  flags, or from the haiku watcher (`core/digest-watcher.ts`) for a coding
+  session that ended without `done` but changed something. Two readers,
+  both off by default: the project journal (`core/journal.ts`, a file
+  under `RIKER_HOME/projects/<slug>/`; the engine is its only writer, from
+  `task_events`, and writes only between its markers) and the task's story
+  (`core/story.ts`, versioned rows beside the brief, owner pins). Config
+  holds the defaults; `projects.journal|story` and `tasks.story` override
+  them (`J`, `move story|journal`). Digests are redacted and never logged.
 - **The brain docs are `core/docs.ts`** (files under `~/.riker/docs`, budgets,
   the trash, LEARNED.md's header and sections), kept at start by
   `core/doc-sync.ts` (the SOUL rename, notify-only shipped updates by one
@@ -388,13 +409,17 @@ Tests live beside their package (`packages/<name>/test/`).
   shows or hides the rail and stays attached (the agent loses them; a
   terminal with no agent gets them). `buildKeymap` swaps config's navigation
   keys in at start.
-- `ctrl+[` goes back and `ctrl+a` goes Home from anywhere: a modal, the
-  chat box, the Board, an attached agent (detach first). Both are a layer
-  with no target under every other (`shell.tsx`), which the terminal's own
-  layer detaches and declines to. `ctrl+[` is the Esc byte unless the
-  terminal speaks the kitty keyboard protocol to Riker, and tmux folds it
-  into Esc whatever `extended-keys` says, so there it is Esc and its hint
-  hides (`HelpCtx.kittyKeys`).
+- `ctrl+o` (and `ctrl+[`) goes back and `ctrl+a` goes Home from anywhere:
+  a modal, the chat box, the Board, an attached agent (detach first). They
+  are a layer with no target under every other (`shell.tsx`), which the
+  terminal's own layer detaches and declines to. `ctrl+[` is the Esc byte
+  unless the terminal speaks the kitty keyboard protocol to Riker, and tmux
+  folds it into Esc whatever `extended-keys` says, so there it is Esc and
+  its hint hides (`HelpCtx.kittyKeys`); `ctrl+o` works in both.
+- A default ctrl chord must reach Riker inside tmux with `extended-keys`
+  off: never `ctrl+j/m/i/h` (the newline, Enter, Tab and Backspace bytes),
+  `ctrl+b` (tmux's prefix) or `ctrl+h/j/k/l` (vim-tmux-navigator).
+  `packages/tui/test/keymap.test.ts` fails on one.
 - Navigation history is `core/nav-history.ts`, held by the Riker context:
   every change of the selected row or the view is a visit (recorded once per
   handler, so a switch plus a select is one), `[`/`]` go back and forward,
@@ -413,6 +438,14 @@ Tests live beside their package (`packages/<name>/test/`).
   `helpBindings`. A key change runs `bun run docs:keys`;
   `packages/tui/test/keys-doc.test.ts` fails until it does. A new place to
   stand (a pane, a Board tab) is one entry in its `PLACES`.
+- **Both pages are published to GitHub Pages**
+  (https://andycmaj.github.io/riker/) by `.github/workflows/pages.yml` on
+  every push to main. `bun run docs:site` (`packages/tui/src/site.ts`)
+  builds `_site/`: the two pages with a shared nav, the keyboard data
+  rebuilt from the keymap, and an index. Nothing else under `docs/` is
+  published; a new public page is one entry in `SITE_PAGES`.
+  `packages/tui/test/site.test.ts` fails on anything that reads like a
+  token, a home path, an email or a Slack id.
 
 ## TypeScript
 

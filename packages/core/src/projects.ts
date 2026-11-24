@@ -5,7 +5,7 @@
 import { ENV_FLAG, envName, NAME, TOOLS_NAME } from "./brand";
 import { toolsMissing } from "./self";
 import { homedir } from "node:os";
-import { codingCwd, codingLaunch, type CodingLaunch } from "./agents";
+import { codingCwd, codingLaunch, dropLaunchFiles, type CodingLaunch } from "./agents";
 import type { RikerConfig } from "./config";
 import { EndReason, sessionEnded, sessionStarted } from "./lifecycle";
 import { logger } from "./log";
@@ -181,17 +181,7 @@ export async function startTask(
       type: "failed",
       error: `${TOOLS_NAME} is gone (${gone}): restart ${NAME} from a checkout that has it`,
     };
-  // A worktree removed by hand (or with its repo moved) is made again on
-  // the same branch, rather than claude starting in a folder that is gone.
-  if (task.worktree && mux().inspectCheckout(task.worktree).kind === "missing") {
-    store.addTurn({
-      taskId,
-      role: TurnRole.trigger,
-      body: `Its worktree ${task.worktree} was gone: making it again${task.branch ? ` on ${task.branch}` : ""}.`,
-    });
-    store.updateTask(taskId, { worktree: null });
-    task = store.getTask(taskId)!;
-  }
+  task = dropGoneWorktree(task);
   const problem =
     task.repo && !opts.noWorktree && !task.worktree ? checkMapped(config, task.repo) : null;
   if (task.repo && problem)
@@ -225,20 +215,12 @@ export async function startTask(
     if (!cwd && path && !opts.noWorktree) {
       branch = opts.branch ?? task.branch ?? defaultBranch(task);
       // pr:N and branches that exist are switched to; anything else is new.
-      const existing =
-        branch.startsWith("pr:") || (await mux().branchExists(path, branch));
-      const made = await mux().worktree({
-        command: config.worktreeCommand,
-        repoPath: path,
-        branch,
-        create: !existing,
-        env: rikerEnv(task, project, branch),
-      });
+      const made = await makeWorktree(config, task, project, path, branch, !(await branchThere(path, branch)));
       cwd = made.path;
-      branch = made.branch ?? branch;
-      store.updateTask(task.id, { branch, worktree: cwd });
-      if (task.repo) store.addProjectRepo(project.id, task.repo);
+      branch = made.branch;
     }
+    // A worktree an action made before the project existed (ensureCheckout).
+    if (cwd && task.repo) store.addProjectRepo(project.id, task.repo);
     task = store.getTask(task.id)!;
 
     let launch = codingLaunch(config, task, {
@@ -260,6 +242,85 @@ export async function startTask(
     return { type: "started", session: row, windowId: window.id, project };
   } catch (err) {
     log.error("start failed", { task: taskId, err });
+    return { type: "failed", error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// A worktree removed by hand (or with its repo moved) is made again on
+// the same branch, rather than claude starting in a folder that is gone.
+function dropGoneWorktree(task: TaskRow): TaskRow {
+  if (!task.worktree || mux().inspectCheckout(task.worktree).kind !== "missing") return task;
+  store.addTurn({
+    taskId: task.id,
+    role: TurnRole.trigger,
+    body: `Its worktree ${task.worktree} was gone: making it again${task.branch ? ` on ${task.branch}` : ""}.`,
+  });
+  store.updateTask(task.id, { worktree: null });
+  return store.getTask(task.id)!;
+}
+
+function branchThere(path: string, branch: string): Promise<boolean> {
+  return branch.startsWith("pr:") ? Promise.resolve(true) : mux().branchExists(path, branch);
+}
+
+async function makeWorktree(
+  config: RikerConfig,
+  task: TaskRow,
+  project: ProjectRow | null,
+  path: string,
+  branch: string,
+  create: boolean,
+): Promise<{ path: string; branch: string }> {
+  const made = await mux().worktree({
+    command: config.worktreeCommand,
+    repoPath: path,
+    branch,
+    create,
+    env: rikerEnv(task, project, branch),
+  });
+  const out = { path: made.path, branch: made.branch ?? branch };
+  store.updateTask(task.id, { branch: out.branch, worktree: out.path });
+  if (project && task.repo) store.addProjectRepo(project.id, task.repo);
+  return out;
+}
+
+export type CheckoutResult =
+  | { type: "ready"; task: TaskRow }
+  | { type: "needs-path"; need: PathNeed }
+  | { type: "failed"; error: string };
+
+// The task's worktree, made on its branch when it has none, with no agent
+// started: what an action that reads the change needs (the guide on a
+// review that just arrived). Only a branch that exists (pr:N, or one already
+// pushed or made) is checked out; a new one would hold no change to read.
+export async function ensureCheckout(config: RikerConfig, taskId: number): Promise<CheckoutResult> {
+  let task = store.getTask(taskId);
+  if (!task) return { type: "failed", error: `no task ${taskId}` };
+  task = dropGoneWorktree(task);
+  if (task.worktree) return { type: "ready", task };
+  if (!task.repo) return { type: "failed", error: `${store.taskRef(taskId)} has no repo to check out` };
+  const problem = checkMapped(config, task.repo);
+  if (problem) return { type: "needs-path", need: await pathNeed(config, task.repo, problem) };
+  const path = repoPath(config, task.repo);
+  if (!path) return { type: "failed", error: `${task.repo} has no checkout` };
+  const branch = task.branch ?? defaultBranch(task);
+  try {
+    if (!(await branchThere(path, branch)))
+      return {
+        type: "failed",
+        error: `nothing to review yet: ${task.repo} has no branch ${branch} (start the agent first)`,
+      };
+    const project = task.project_id ? store.getProject(task.project_id) : null;
+    const made = await makeWorktree(config, task, project, path, branch, false);
+    store.addTurn({
+      taskId,
+      role: TurnRole.trigger,
+      body: `Made its worktree ${made.path} on ${made.branch}, with no agent started.`,
+    });
+    log.info("checkout made", { task: taskId, branch: made.branch });
+    return { type: "ready", task: store.getTask(taskId)! };
+  } catch (err) {
+    log.error("checkout failed", { task: taskId, err });
     return { type: "failed", error: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -338,6 +399,7 @@ export async function stopTask(taskId: number): Promise<void> {
   for (const w of state.windows.filter((w) => w.taskId === taskId))
     await mux().killWindow(w.id);
   endTmuxSessions(taskId, EndReason.stop);
+  dropLaunchFiles(taskId);
 }
 
 export interface CloseResult {
@@ -364,6 +426,7 @@ export async function closeTask(
     }
   }
   endTmuxSessions(taskId, EndReason.closed);
+  dropLaunchFiles(taskId);
   const path = repoPath(config, task.repo);
   if (task.worktree && task.branch && path) {
     try {
@@ -455,15 +518,29 @@ export async function moveTask(
     await archive(from, await mux().state());
 }
 
+// Why Riker has no client of the agents' server to move: it is not in tmux,
+// it is in another server, or its server lost its socket to a newer one
+// (HostServer in mux.ts).
+export const NoJump = {
+  outside: "outside",
+  elsewhere: "elsewhere",
+  lost: "lost",
+} as const;
+export type NoJump = (typeof NoJump)[keyof typeof NoJump];
+
 // What a jump did: moved your client, found no window, or (Riker not in a
-// client of this server) the line to run in a terminal of your own.
-export type Jump = "jumped" | "gone" | { attach: string };
+// client of this server) why, and the line to run in a terminal of your own.
+export type Jump = "jumped" | "gone" | { attach: string; why: NoJump; socket?: string };
 
 // switch-client moves the client Riker runs in. Outside tmux (or on another
 // server) there is none, and tmux would move whichever client it likes.
 async function jumpTo(sessionId: string, windowId?: string): Promise<Jump> {
-  if (!(await mux().hostWindow()))
-    return { attach: mux().attachCommand(sessionId, windowId) };
+  const host = await mux().hostServer();
+  if (host.at !== "here") {
+    const attach = mux().attachCommand(sessionId, windowId);
+    if (host.at === "none") return { attach, why: NoJump.outside };
+    return { attach, why: host.lost ? NoJump.lost : NoJump.elsewhere, socket: host.socket };
+  }
   await mux().switchClient(sessionId, windowId);
   return "jumped";
 }

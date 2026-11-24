@@ -70,6 +70,21 @@ export function taskPr(task: TaskRow): PrRef | null {
   return null;
 }
 
+// Someone else's PR the owner was asked to review: triage marks it with a
+// link of its own when it files the review, since a task's URL, thread or
+// pr:N branch can be a PR it was asked to work on (the owner's own) instead.
+export const REVIEW_LINK_BY = "triage review";
+export const REVIEW_LINK_TITLE = "the pull request to review";
+
+export function reviewedPr(task: TaskRow): PrRef | null {
+  for (const link of store.linksForTask(task.id))
+    if (link.added_by === REVIEW_LINK_BY) {
+      const pr = fromUrl(link.url);
+      if (pr) return pr;
+    }
+  return null;
+}
+
 // The merge queue's mark: past review, on its way to merged.
 export const QUEUE_MARK = "↠";
 
@@ -166,4 +181,18 @@ export function taskPrStatus(
   if (!pr) return null;
   const status = store.prStatus(task.id);
   return { pr, status: status?.url === pr.url ? status : null };
+}
+
+// Why marking the task done may be early: its own PR is still open (or a
+// draft) and its work has not landed, by GitHub or by a local merge. Null
+// when it is merged, when nothing has read its PR yet, when the PR was
+// closed (closing it was already the owner's call), and for a PR the owner
+// was only asked to review, which is done when the review is.
+export function unmergedPr(task: TaskRow): string | null {
+  if (task.merged_at || reviewedPr(task)) return null;
+  const s = taskPrStatus(task)?.status;
+  if (!s) return null;
+  if (s.state !== PrState.open && s.state !== PrState.draft) return null;
+  const what = s.state === PrState.draft ? "a draft" : "open";
+  return `PR #${s.number} is ${what}, not merged${s.error ? " (as of its last read)" : ""}`;
 }

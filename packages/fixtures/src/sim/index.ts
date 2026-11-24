@@ -16,9 +16,10 @@ import { openDb, useDb } from "@riker/core/db";
 import { ensureDocs } from "@riker/core/docs";
 import { Engine } from "@riker/core/engine";
 import { configureLog, logger } from "@riker/core/log";
-import { setMux, TmuxMux } from "@riker/core/mux";
+import { setMux, TmuxMux, type MadeWorktree, type Worktree } from "@riker/core/mux";
 import { setSender } from "@riker/core/outbound";
 import { taskPr } from "@riker/core/pr";
+import { setGuidePrReviews } from "@riker/core/run-action";
 import { paths } from "@riker/core/paths";
 import * as store from "@riker/core/store";
 import { Kind, type TaskRow } from "@riker/core/types";
@@ -99,6 +100,25 @@ function simCwd(task: TaskRow, file: string): string | null {
   return path;
 }
 
+// wt's pr:N asks GitHub for the PR's head; the sim's clone has no remote,
+// so pr:N is the sim PR's own branch there. Anything else goes to wt.
+class SimMux extends TmuxMux {
+  constructor(
+    socket: string | undefined,
+    private readonly file: string,
+  ) {
+    super(socket);
+  }
+
+  override async worktree(w: Worktree): Promise<MadeWorktree> {
+    const n = w.branch.match(/^pr:(\d+)$/)?.[1];
+    const s = loadState(this.file);
+    const pull = n ? s.pulls.find((p) => p.number === Number(n)) : null;
+    if (!pull || !s.checkout) return super.worktree(w);
+    return { path: worktreeFor(s.checkout, paths.home(), pull.head), branch: w.branch };
+  }
+}
+
 export function installSim(opts: SimOptions): {
   engine: Engine;
   started: () => void;
@@ -131,7 +151,9 @@ export function installSim(opts: SimOptions): {
     log: { enabled: true, level: "info" },
   });
   configureLog(() => config.get().log);
-  setMux(new TmuxMux(config.get().tmuxSocket));
+  setMux(new SimMux(config.get().tmuxSocket, file));
+  // Its PRs are not on GitHub: a review opens on the worktree, not the PR.
+  setGuidePrReviews(false);
   if (!haiku) setBrain(simBrain);
   // Send lands on the sim's GitHub as the owner's own doing.
   setSender(async (draft) => {

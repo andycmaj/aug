@@ -2,6 +2,9 @@
 // model reads back. The Assistant and agents look things up here before they
 // move anything.
 
+import type { RikerConfig } from "./config";
+import { journalSwitch, projectStoryDefault, storySwitch, switchWords } from "./digests";
+import { storyBlock } from "./story";
 import { transcript } from "./transcript";
 import * as store from "./store";
 import { timerLine, timerRef } from "./timers";
@@ -81,7 +84,8 @@ export function linkLine(l: TaskLinkRow | ProjectLinkRow): string {
 // The board drops a task's notes when it closes; its detail keeps the latest.
 const TASK_NOTES = 10;
 
-export function taskDetail(t: TaskRow, turns = 12): string {
+export function taskDetail(t: TaskRow, turns = 12, config?: RikerConfig): string {
+  const story = storyBlock(t.id);
   const facts = [
     taskLine(t),
     t.summary ? `Summary: ${t.summary}` : "",
@@ -94,6 +98,8 @@ export function taskDetail(t: TaskRow, turns = 12): string {
     ...store
       .timersForTask(t.id)
       .map((timer) => `Timer ${timerRef(timer.id)}: ${timerLine(timer, new Date())}`),
+    config ? `Switches: ${switchWords("story", storySwitch(config, t))}` : "",
+    story ? `\n${story}\n` : "",
   ].filter(Boolean);
   const notes = store
     .notesForTask(t.id)
@@ -179,12 +185,13 @@ export function projectLine(p: ProjectRow): string {
 
 // What `riker-tools project <name>` prints: the brief, the goals and how far
 // each has come, the docs, and the open work that names no goal.
-export function projectDetail(p: ProjectRow): string {
+export function projectDetail(p: ProjectRow, config?: RikerConfig): string {
   const progress = projectProgress(p);
   const goals = progress.goals.filter((g) => g.goal.status !== GoalStatus.dropped);
   const links = store.linksForProject(p.id);
   return [
     projectLine(p),
+    config ? projectSwitches(config, p) : "",
     p.brief ? `\nBrief:\n${p.brief}` : "\nNo brief yet.",
     goals.length
       ? `\nGoals:\n${goals
@@ -200,6 +207,11 @@ export function projectDetail(p: ProjectRow): string {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+// What the project's journal and its tasks' stories default to, and why.
+export function projectSwitches(config: RikerConfig, p: ProjectRow): string {
+  return `Switches: ${switchWords("journal", journalSwitch(config, p))}, ${switchWords("stories", projectStoryDefault(config, p))}`;
 }
 
 // A project as the Assistant gets it when the owner names it: the brief,

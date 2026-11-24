@@ -47,7 +47,7 @@ describe("days", () => {
 });
 
 describe("task events", () => {
-  test("every writer is heard: made, closed, reopened, merged, finished", () => {
+  test("every writer is heard: made, closed, reopened, merged, finished, a session's end", () => {
     const t = task("one");
     store.createSession({ id: "s1", taskId: t.id, kind: SessionKind.tmux, cwd: "/", startedBy: "riker" });
     store.updateTask(t.id, { title: "renamed" });
@@ -55,7 +55,8 @@ describe("task events", () => {
     store.updateTask(t.id, { merged_at: new Date().toISOString() });
     taskClosed(t.id, "you");
     store.reopen(t.id);
-    expect(kinds(t.id)).toEqual(["created", "finished", "merged", "done", "reopened"]);
+    // Closing ends the agent's session.
+    expect(kinds(t.id)).toEqual(["created", "finished", "merged", "done", "ended", "reopened"]);
     const done = store.eventsForTask(t.id, new Date(Date.now() + 1000).toISOString()).find((e) => e.kind === "done");
     expect(done?.detail).toBe("you");
   });

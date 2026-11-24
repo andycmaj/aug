@@ -6,7 +6,7 @@
 
 import { createSignal, type Accessor, type JSX } from "solid-js";
 import { existsSync, readFileSync } from "node:fs";
-import { useFocus, useToast } from "@andycmaj/opentui-app";
+import { copyToClipboard, useFocus, useToast } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
@@ -26,19 +26,21 @@ import {
   parseFiles,
   type MadeFile,
 } from "@riker/core/files";
+import { journalSwitch, storySwitchOf, SwitchValue } from "@riker/core/digests";
 import { infoTitle, itemInfo } from "@riker/core/info";
 import { errorMessage, logger } from "@riker/core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "@riker/core/adopt";
 import { strayLabel, type Stray } from "@riker/core/strays";
 import { baseKey, neighborKey, type RailItem } from "@riker/core/rail";
 import { isClosed, taskRef } from "@riker/core/rows";
-import { postComments, reviewNotes } from "@riker/code-review-plannotator/guide";
-import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
+import { postComments } from "@riker/code-review-plannotator/guide";
+import { OPEN_REVIEW_TITLE, reviewExit } from "@riker/core/guide-turn";
 import type { ActionResult } from "@riker/core/run-action";
-import { actionsFor, keyedActions } from "@riker/core/task-actions";
+import { actionNamed, actionsFor, keyedActions, makesCheckout } from "@riker/core/task-actions";
+import { describeProblem } from "@riker/core/repos";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
 import type { NoiseRule } from "@riker/core/config";
-import type { Jump } from "@riker/core/desk";
+import { NoJump, type Jump } from "@riker/core/desk";
 import { clip as inboxClip, InboxResult, rowMessages, type InboxRow } from "@riker/core/inbox";
 import { messageMeta } from "@riker/core/meta";
 import { Kind, Priority, type MessageRow, type TaskRow } from "@riker/core/types";
@@ -91,7 +93,7 @@ export function useActions(dialogs: Dialogs) {
   const { togglePrDash } = usePrDash();
   const { reviewDocs } = useDocReview();
   const { startAgent } = useAgentStart(dialogs, attachViewer);
-  const { showRepos } = useRepos(dialogs);
+  const { showRepos, pathChoices } = useRepos(dialogs);
 
   // A task's rows are about to leave the rail. Selected: the selection
   // walks on. Only under the cursor: the cursor steps to a neighbor (not
@@ -302,11 +304,22 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
-  // Riker outside tmux has no client to move: the line to run instead.
-  function jumped(outcome: Jump, gone: string) {
-    if (outcome === "gone") showToast(gone);
-    else if (outcome !== "jumped")
-      showToast(`Riker is not in tmux; in a terminal run: ${outcome.attach}`, 10000);
+  // Riker with no client of the agents' server has none to move: why, where
+  // else it shows, and the line that opens it (copied, to paste).
+  function jumped(outcome: Jump, gone: string, here?: string) {
+    if (outcome === "gone") return showToast(gone);
+    if (outcome === "jumped") return;
+    void copyToClipboard(outcome.attach).then((ok) => {
+      const run = `In a terminal run${ok ? " (copied)" : ""}: ${outcome.attach}`;
+      const also = here ? ` ${here}.` : "";
+      const why =
+        outcome.why === NoJump.outside
+          ? "Riker is not in tmux, so it has no client to jump."
+          : outcome.why === NoJump.lost
+            ? `Riker's tmux server lost its socket (${outcome.socket}) to a newer server, where its agents run, so it cannot jump. To jump again, run Riker in a client of that server (tmux attach).`
+            : `Riker runs in another tmux server (${outcome.socket}) than its agents, so it cannot jump.`;
+      showToast(`${why}${also} ${run}`, 15000);
+    });
   }
 
   async function jumpToProject(projectId: number) {
@@ -331,7 +344,11 @@ export function useActions(dialogs: Dialogs) {
 
   async function jumpTo(taskId: number) {
     try {
-      jumped(await desk.jumpToTask(taskId), "Its window is gone; s starts it again");
+      jumped(
+        await desk.jumpToTask(taskId),
+        "Its window is gone; s starts it again",
+        "The Canvas shows the agent here",
+      );
     } catch (err) {
       showToast(`Could not jump: ${errorMessage(err)}`, 4000, "error");
     }
@@ -353,9 +370,26 @@ export function useActions(dialogs: Dialogs) {
     );
   }
 
+  // d on a done or dropped row reopens it instead (reopen below). Work
+  // whose PR has not landed asks first, No under the cursor.
   function done(task: TaskRow) {
-    // d on a done or dropped row reopens it instead (reopen below).
     if (isClosed(task)) return false;
+    const unmerged = riker.unmergedPr(task);
+    if (!unmerged) return closeDone(task);
+    dialogs.show(() => (
+      <ChoiceModal
+        title={`Mark ${taskRef(task.id)} done?`}
+        hint={`${unmerged}. Mark it done anyway?`}
+        choices={[
+          { label: "No, keep it open", run: () => {} },
+          { label: "Yes, mark it done", run: () => closeDone(task) },
+        ]}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  function closeDone(task: TaskRow) {
     const live = terminals.forTask(task.id);
     if (live?.running) terminals.close(live.id);
     advanceFrom(`t${task.id}`);
@@ -405,6 +439,20 @@ export function useActions(dialogs: Dialogs) {
     );
   }
 
+  // J flips what the row says now: an unset switch takes the opposite of
+  // what it follows. `move story|journal ... default` clears it.
+  function flipStory(task: TaskRow) {
+    const now = storySwitchOf(desk.config(), task, task.project_id ? riker.project(task.project_id) : null);
+    showToast(desk.setStory(task.id, now.on ? SwitchValue.off : SwitchValue.on), 3000);
+  }
+
+  function flipJournal(projectId: number) {
+    const project = riker.project(projectId);
+    if (!project) return;
+    const now = journalSwitch(desk.config(), project);
+    showToast(desk.setProjectSwitch(projectId, "journal", now.on ? SwitchValue.off : SwitchValue.on), 3000);
+  }
+
   function win(task: TaskRow) {
     const said = desk.toggleWin(task.id);
     showToast(said.text, 3000, said.ok ? undefined : "error");
@@ -441,8 +489,39 @@ export function useActions(dialogs: Dialogs) {
   }
 
   // A task action: started now, its answer a turn on the task; the toast
-  // says when it is back.
-  function runAction(task: TaskRow, name: string) {
+  // says when it is back. One that reads the change on a task with no
+  // worktree yet (a review that just arrived) has it made first, with no
+  // agent started; an unmapped repo asks where it is, as Start does.
+  function runAction(task: TaskRow, name: string): void {
+    void launchAction(task, name);
+  }
+
+  async function launchAction(task: TaskRow, name: string) {
+    const spec = actionNamed(desk.config(), name);
+    if (spec && makesCheckout(spec, task))
+      showToast(`${taskRef(task.id)}: making its worktree${task.branch ? ` on ${task.branch}` : ""}...`);
+    const ready = await desk.prepareAction(task.id, name);
+    if (ready.type === "failed") {
+      showToast(ready.error, 5000, "error");
+      return;
+    }
+    if (ready.type === "needs") {
+      const retry = () => runAction(riker.task(task.id) ?? task, name);
+      dialogs.show(() => (
+        <ChoiceModal
+          title={
+            ready.need.problem.kind === "unmapped"
+              ? `Where is ${ready.need.repo} checked out?`
+              : `${ready.need.repo}: ${describeProblem(ready.need.repo, ready.need.problem)}`
+          }
+          hint={`${spec?.title ?? name} reads the change in a worktree made from this checkout.`}
+          choices={pathChoices({ ...ready.need, mapped: false }, retry)}
+          wide
+          onClose={dialogs.close}
+        />
+      ));
+      return;
+    }
     const started = desk.runAction(task.id, name);
     if ("error" in started) {
       showToast(started.error, 5000, "error");
@@ -492,7 +571,7 @@ export function useActions(dialogs: Dialogs) {
       onExit: () => {
         terminals.close(id);
         if (riker.selectedKey() === `t${task.id}`) setActivePane("canvas");
-        if (run.feedback) sendReviewNotes(task, run.feedback);
+        if (run.feedback) afterReview(task, run.feedback, run.posts);
       },
     });
     setTimeout(() => setActivePane("canvas"), 0);
@@ -505,14 +584,23 @@ export function useActions(dialogs: Dialogs) {
   // What the owner sent from plannotator review goes to the agent, as if
   // typed; an approval or a review closed without feedback sends nothing
   // (reviewNotes). It carries Riker's comments the owner kept, unlabelled, so
-  // the message says so.
-  function sendReviewNotes(task: TaskRow, file: string) {
-    const notes = reviewNotes(existsSync(file) ? readFileSync(file, "utf8") : "");
+  // the message says so. A PR they were asked to review posted to GitHub
+  // from Plannotator: only its status line is said (reviewExit).
+  function afterReview(task: TaskRow, file: string, posts: "github" | undefined) {
+    const { notes, status } = reviewExit(posts, existsSync(file) ? readFileSync(file, "utf8") : "");
+    if (status) showToast(`${taskRef(task.id)}: ${status}`, 6000);
     if (!notes) return;
+    // With no agent running they wait on the task: Start hands them over.
     desk
       .say(task.id, `My notes from the guided review in Plannotator (with the review findings riker posted there that I kept):\n\n${notes}`)
       .then(
-        () => showToast(`Your review notes went to ${taskRef(task.id)}'s agent`, 4000),
+        (heard) =>
+          showToast(
+            heard
+              ? `Your review notes went to ${taskRef(task.id)}'s agent`
+              : `Your review notes are on ${taskRef(task.id)}: its agent gets them when it starts`,
+            4000,
+          ),
         (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),
       );
   }
@@ -915,7 +1003,7 @@ export function useActions(dialogs: Dialogs) {
     dialogs.show(() => (
       <InfoModal
         title={infoTitle(item)}
-        sections={itemInfo(item)}
+        sections={itemInfo(item, new Date(), desk.config())}
         onCopied={(label, ok) =>
           ok
             ? showToast(`Copied the ${label}`)
@@ -1004,6 +1092,17 @@ export function useActions(dialogs: Dialogs) {
       [Commands.OPEN_URL]: () => {
         const item = get();
         if (item) openLink(item);
+      },
+      [Commands.STORY_SWITCH]: () => {
+        const item = get();
+        if (item?.type !== "task" || item.task.kind === Kind.home || item.task.kind === Kind.system)
+          return false;
+        flipStory(item.task);
+      },
+      [Commands.JOURNAL_SWITCH]: () => {
+        const item = get();
+        if (item?.type !== "project") return false;
+        flipJournal(item.project.id);
       },
       [Commands.INFO]: () => {
         const item = get();

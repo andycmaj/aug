@@ -49,6 +49,9 @@ export const paths = {
   // A general agent's scratch folder: it may read and write there, and
   // nowhere that matters.
   work: (taskId: number) => join(rikerHome(), "work", String(taskId)),
+  // What a coding start hands claude in files (its brief, a long note):
+  // tmux refuses a command line past about 16KB.
+  launch: (taskId: number) => join(rikerHome(), "work", String(taskId), "launch"),
   drafts: () => join(rikerHome(), "drafts"),
   // Where the Assistant writes a whole doc before `move propose_doc --file`:
   // a doc's Markdown headings cannot go on a Bash line (see propose_doc).

@@ -353,6 +353,46 @@ CREATE TABLE IF NOT EXISTS action_runs (
   at TEXT NOT NULL,
   PRIMARY KEY (task_id, action, event)
 );
+
+-- A finished session written up once: the project journal and the task's
+-- story read it (core/digests.ts).
+CREATE TABLE IF NOT EXISTS digests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  session_id TEXT,
+  at TEXT NOT NULL,
+  by TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  goals TEXT NOT NULL DEFAULT '',
+  did TEXT NOT NULL DEFAULT '',
+  decisions TEXT NOT NULL DEFAULT '',
+  learned TEXT NOT NULL DEFAULT '',
+  next TEXT NOT NULL DEFAULT '',
+  blocked TEXT NOT NULL DEFAULT '',
+  questions TEXT NOT NULL DEFAULT '',
+  links TEXT NOT NULL DEFAULT '{}',
+  knowledge TEXT NOT NULL DEFAULT '[]',
+  covers_to INTEGER
+);
+CREATE INDEX IF NOT EXISTS digests_task ON digests(task_id);
+CREATE INDEX IF NOT EXISTS digests_session ON digests(session_id);
+
+-- A task's story, one row per version, newest is current (core/story.ts).
+CREATE TABLE IF NOT EXISTS stories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES tasks(id),
+  digest_id INTEGER REFERENCES digests(id),
+  at TEXT NOT NULL,
+  by TEXT NOT NULL,
+  goals TEXT NOT NULL DEFAULT '',
+  now TEXT NOT NULL DEFAULT '',
+  decisions TEXT NOT NULL DEFAULT '',
+  blocked TEXT NOT NULL DEFAULT '',
+  next TEXT NOT NULL DEFAULT '',
+  questions TEXT NOT NULL DEFAULT '',
+  pinned TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS stories_task ON stories(task_id);
 `;
 
 let shared: Database | undefined;
@@ -397,6 +437,8 @@ export const Table = {
   taskEvents: "task_events",
   actionRuns: "action_runs",
   timers: "timers",
+  digests: "digests",
+  stories: "stories",
 } as const;
 export type Table = (typeof Table)[keyof typeof Table];
 
@@ -423,7 +465,8 @@ function trackTables(db: Database): void {
 const SQL_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
 // Task changes into task_events. After migrate: merged_at is an added
-// column. Home is not work, so it has no events.
+// column. A chat session "ends" with every turn, so only a coding (tmux)
+// session's end is an event. Home is not work, so it has no events.
 const EVENT_TRIGGERS = `
 CREATE TRIGGER IF NOT EXISTS ev_task_created AFTER INSERT ON tasks
 WHEN NEW.kind != 'home'
@@ -454,6 +497,11 @@ CREATE TRIGGER IF NOT EXISTS ev_session_finished AFTER UPDATE OF result ON sessi
 WHEN NEW.result IS NOT NULL AND NEW.result IS NOT OLD.result
 BEGIN
   INSERT INTO task_events (task_id, kind, detail, at) VALUES (NEW.task_id, 'finished', NEW.result, ${SQL_NOW});
+END;
+CREATE TRIGGER IF NOT EXISTS ev_session_ended AFTER UPDATE OF ended_at ON sessions
+WHEN OLD.ended_at IS NULL AND NEW.ended_at IS NOT NULL AND NEW.kind = 'tmux'
+BEGIN
+  INSERT INTO task_events (task_id, kind, detail, at) VALUES (NEW.task_id, 'ended', NEW.id, NEW.ended_at);
 END;
 `;
 
@@ -511,6 +559,10 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "projects", column: "brief", ddl: "TEXT NOT NULL DEFAULT ''" },
   { table: "tasks", column: "goal_id", ddl: "INTEGER REFERENCES project_goals(id)" },
   { table: "sessions", column: "end_reason", ddl: "TEXT" },
+  { table: "sessions", column: "transcript_path", ddl: "TEXT" },
+  { table: "projects", column: "journal", ddl: "INTEGER" },
+  { table: "projects", column: "story", ddl: "INTEGER" },
+  { table: "tasks", column: "story", ddl: "INTEGER" },
   { table: "sessions", column: "context_tokens", ddl: "INTEGER" },
   { table: "tasks", column: "merged_at", ddl: "TEXT" },
   { table: "pr_status", column: "error", ddl: "TEXT" },

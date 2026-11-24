@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { guardScript, installHooks } from "../src/adopt";
@@ -99,7 +99,8 @@ describe("what briefs and hooks name", () => {
 
     const task = store.createTask({ title: "Fix it", kind: Kind.coding, channel: "github" });
     const launch = codingLaunch(config(), task, {});
-    const text = launch.argv.join(" ");
+    const brief = launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1]!;
+    const text = `${launch.argv.join(" ")} ${readFileSync(brief, "utf8")}`;
     expect(text).toContain(join(main, TOOLS));
     expect(text).not.toContain(wt);
   });

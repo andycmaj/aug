@@ -15,6 +15,8 @@ import { DocName, forPrompt, head } from "@riker/core/docs";
 import { parsePrUrl } from "@riker/core/feedback";
 import { messageMeta, type GithubMeta } from "@riker/core/meta";
 import { docsBlock } from "@riker/core/prompts";
+import { guideOffer } from "@riker/core/guide-turn";
+import { REVIEW_LINK_BY, REVIEW_LINK_TITLE } from "@riker/core/pr";
 import { finishSuperseded, holdForStart } from "@riker/core/lifecycle";
 import { err, ok, type Result } from "@riker/core/result";
 import { projectRepos } from "@riker/core/rows";
@@ -281,7 +283,7 @@ export function linkByBranch(message: MessageRow): number | null {
 // for the global itself.
 export type TriageConfig = Pick<
   RikerConfig,
-  "autostart" | "brain" | "triage" | "docBudgets" | "repos"
+  "autostart" | "brain" | "triage" | "docBudgets" | "repos" | "actions"
 >;
 
 // The model's verdict, or why there is none.
@@ -995,6 +997,9 @@ function createReview(
       triageReason: reason,
       createdAt: message.received_at,
     });
+    // Marked as a review of someone else's PR: the guide opens it in
+    // Plannotator's PR mode, where the owner posts their review to GitHub.
+    store.addTaskLink(created.id, pr.url, REVIEW_LINK_TITLE, REVIEW_LINK_BY);
     // Asked for in Slack: the PR's own thread is the task's too, so its
     // reviews and CI come back here, and the ask stays a link.
     if (message.thread_key !== prThread) {
@@ -1016,6 +1021,15 @@ function createReview(
         taskId: created.id,
         role: TurnRole.trigger,
         body: `${pr.repo} has no checkout mapped. Start asks where it is (one found on disk, or a fresh clone); or map it first with \`move repo ${pr.repo} --path <dir>\` or \`--clone yes\`.`,
+        startedAt: message.received_at,
+      });
+    // Offered, never run: a guide spends money, so it waits for the owner.
+    const offer = guideOffer(config, created);
+    if (offer)
+      store.addTurn({
+        taskId: created.id,
+        role: TurnRole.trigger,
+        body: offer,
         startedAt: message.received_at,
       });
     holdForStart(created.id);

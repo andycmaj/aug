@@ -203,7 +203,8 @@ test("attached to a terminal, only its own keys are listed", () => {
   expect([...keys.values()].sort()).toEqual(
     [
       Commands.GO_TO,
-      Commands.GO_BACK,
+      Commands.TERMINAL_BACK,
+      Commands.TERMINAL_KITTY_BACK,
       Commands.GO_HOME,
       Commands.TERMINAL_DETACH,
       Commands.TERMINAL_JUMP,
@@ -212,7 +213,8 @@ test("attached to a terminal, only its own keys are listed", () => {
   );
   expect(keys.get("^t")).toBe(Commands.TERMINAL_JUMP);
   expect(keys.get("^e")).toBe(Commands.SIDEBAR_TOGGLE);
-  expect(keys.get("^[")).toBe(Commands.GO_BACK);
+  expect(keys.get("^o")).toBe(Commands.TERMINAL_BACK);
+  expect(keys.get("^[")).toBe(Commands.TERMINAL_KITTY_BACK);
   expect(keys.get("^a")).toBe(Commands.GO_HOME);
 });
 
@@ -227,24 +229,40 @@ test("ctrl+[ is back and ctrl+a is Home, anywhere, an attached terminal too", ()
         (bindings ?? []).filter((b) => b.key === key).map((b) => `${scope}:${b.cmd}`),
       )
       .sort();
-  expect(uses("ctrl+[")).toEqual([`app:${Commands.GO_BACK}`, `terminal:${Commands.GO_BACK}`]);
+  expect(uses("ctrl+[")).toEqual([`app:${Commands.GO_BACK}`, `terminal:${Commands.TERMINAL_KITTY_BACK}`]);
+  expect(uses("ctrl+o")).toEqual([`app:${Commands.GO_BACK}`, `terminal:${Commands.TERMINAL_BACK}`]);
   expect(uses("ctrl+a")).toEqual([`app:${Commands.GO_HOME}`, `terminal:${Commands.GO_HOME}`]);
   for (const key of ["ctrl+j", "ctrl+k", "escape"])
     for (const use of uses(key))
       expect([Commands.GO_BACK, Commands.GO_HOME]).not.toContain(use.split(":")[1]);
 });
 
+// RIKER-0223: no default binding uses a chord that cannot reach Riker in a
+// legacy terminal or tmux: ctrl+j/m/i/h are the newline, Enter, Tab and
+// Backspace bytes, ctrl+b is tmux's prefix, and vim-tmux-navigator (a common
+// tmux plugin) takes ctrl+h/j/k/l. ctrl+[ is allowed only beside ctrl+o and
+// only where the kitty protocol tells it from Esc.
+test("no binding needs a chord tmux or the terminal keeps", () => {
+  const kept = ["ctrl+j", "ctrl+m", "ctrl+i", "ctrl+h", "ctrl+b", "ctrl+k", "ctrl+l", "linefeed"];
+  for (const [scope, bindings] of Object.entries(keymap))
+    for (const b of bindings ?? [])
+      expect(`${scope}:${b.key}:${kept.includes(b.key)}`).toBe(`${scope}:${b.key}:false`);
+});
+
 test("typing in the chat box, ctrl+[ and ctrl+a still show and work", () => {
   const keys = shown(["input", "canvas", "app"], { ...quiet, typing: true });
   expect(keys.get("^[")).toBe(Commands.GO_BACK);
+  expect(keys.get("^o")).toBe(Commands.GO_BACK);
   expect(keys.get("^a")).toBe(Commands.GO_HOME);
   // Where ctrl+[ arrives as Esc (no kitty protocol, or inside tmux), back
   // is not offered: the key would do what Esc does.
   const legacy = shown(["input", "canvas", "app"], { ...quiet, typing: true, kittyKeys: false });
   expect(legacy.has("^[")).toBe(false);
+  expect(legacy.get("^o")).toBe(Commands.GO_BACK);
   expect(legacy.get("^a")).toBe(Commands.GO_HOME);
   const attached = shown(["terminal"], { ...quiet, attached: true, kittyKeys: false });
   expect(attached.has("^[")).toBe(false);
+  expect(attached.get("^o")).toBe(Commands.TERMINAL_BACK);
   // On Home, ctrl+a has nowhere to go.
   const onHome = shown(["input", "canvas", "app"], { ...quiet, kind: "home", typing: true });
   expect(onHome.has("^a")).toBe(false);
@@ -411,4 +429,16 @@ test("an action with a key gets it on the rail and the Canvas, never over a move
   ]);
   expect(refused.map((r) => r.name)).toEqual(["clash"]);
   expect(refused[0]!.why).toContain("d is taken");
+});
+
+test("an action's own key is listed only on the rows it is offered on", () => {
+  const table = buildKeymap({}, [{ name: "guide", key: "shift+v", title: "Guided review" }]);
+  const listed = (ctx: HelpCtx) =>
+    new Map(helpBindings(getScopeBindings(table, "rail"), ctx).map((b) => [b.keys, b.cmd]));
+  const review: HelpCtx = { ...base(), item: "task", kind: "coding", coding: true };
+  expect(listed({ ...review, actions: ["guide", "summarize"] }).get("V")).toBe(actionCommand("guide"));
+  expect(listed({ ...review, actions: ["summarize"] }).has("V")).toBe(false);
+  // A view that does not say which actions apply lists it on every work row.
+  expect(listed(review).get("V")).toBe(actionCommand("guide"));
+  expect(listed({ ...review, kind: "home", actions: ["guide"] }).has("V")).toBe(false);
 });

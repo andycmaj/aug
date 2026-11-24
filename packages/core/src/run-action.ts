@@ -23,6 +23,7 @@ import { linkLine, projectContext } from "./lookup";
 import { mux } from "./mux";
 import { paths } from "./paths";
 import { liveWindow } from "./projects";
+import { reviewedPr } from "./pr";
 import { toolsEnv, toolsRules, TOOLS_NAME } from "./self";
 import * as store from "./store";
 import {
@@ -81,6 +82,10 @@ export interface ActionResult {
     env: Record<string, string>;
     feedback?: string;
     comments?: { port: number; list: ReviewComment[] };
+    // The review is of a PR the owner was asked to review, opened in
+    // Plannotator's PR mode: what they post there goes to GitHub from
+    // Plannotator, so nothing is handed to the agent on exit.
+    posts?: "github";
   };
   // A pane action opened in a split of the agent's window.
   pane?: boolean;
@@ -498,7 +503,7 @@ async function finishGuide(
   return {
     ok: true,
     text: `${spec.title}: saved, opening Plannotator${warn}`,
-    terminal: reviewTerminal(cwd, dir, saved.patch.base, saved.comments),
+    terminal: reviewTerminal(cwd, dir, saved.patch.base, saved.comments, prToReview(task)),
   };
 }
 
@@ -522,34 +527,52 @@ export function guideReview(task: TaskRow): ActionResult | { error: string } {
   return {
     ok: true,
     text: `${kept.title || "Guide"}: opening Plannotator${dropped ? ` (${dropped} note${dropped === 1 ? "" : "s"} on files no longer changed left out)` : ""}`,
-    terminal: reviewTerminal(cwd, dir, patch.base, comments),
+    terminal: reviewTerminal(cwd, dir, patch.base, comments, prToReview(task)),
   };
 }
 
+// Whether a review of someone else's PR opens on the PR itself. Off where
+// the PRs are not on GitHub (the sim).
+let prReviews = true;
+export function setGuidePrReviews(on: boolean): void {
+  prReviews = on;
+}
+
+function prToReview(task: TaskRow): string | null {
+  return prReviews ? (reviewedPr(task)?.url ?? null) : null;
+}
+
 // `plannotator review` on a port Riker picks, so it can post the findings;
-// what the owner sends lands in guide-feedback.md.
+// what the owner sends lands in guide-feedback.md. A PR the owner was asked
+// to review opens on the PR (Plannotator's PR mode), whose own Post to
+// GitHub sends their review; their own work opens on the worktree, against
+// its base, and what they send goes to its agent.
 function reviewTerminal(
   cwd: string,
   dir: string,
   base: string,
   comments: ReviewComment[],
+  pr: string | null,
 ): NonNullable<ActionResult["terminal"]> {
   mkdirSync(dir, { recursive: true });
   const feedback = join(dir, "guide-feedback.md");
   const port = freePort();
   return {
-    argv: [
-      "sh",
-      "-c",
-      'rm -f "$2"; plannotator review --base "$1" | tee "$2"',
-      "plannotator",
-      base,
-      feedback,
-    ],
+    argv: pr
+      ? ["sh", "-c", 'rm -f "$2"; plannotator review "$1" | tee "$2"', "plannotator", pr, feedback]
+      : [
+          "sh",
+          "-c",
+          'rm -f "$2"; plannotator review --base "$1" | tee "$2"',
+          "plannotator",
+          base,
+          feedback,
+        ],
     cwd,
     env: { PLANNOTATOR_UPDATE_CHECK: "0", PLANNOTATOR_PORT: String(port) },
     feedback,
     comments: { port, list: comments },
+    ...(pr ? { posts: "github" as const } : {}),
   };
 }
 

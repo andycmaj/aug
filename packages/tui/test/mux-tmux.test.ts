@@ -2,6 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { TmuxMux, viewerMayHang } from "@riker/core/mux";
+import { codingLaunch } from "@riker/core/agents";
+import * as store from "@riker/core/store";
+import { config, freshHome } from "@riker/core/test/support/helpers";
 import { PtySession } from "../src/terminal/pty-session";
 import { terminalReplies } from "../src/terminal/replies";
 
@@ -293,6 +296,84 @@ describe.skipIf(!hasTmux)("host window", () => {
   });
 });
 
+// A live server's socket file deleted under it: the server runs on, and the
+// next new-session starts a second one at the same path. Riker's own pane is
+// on the first, its agents on the second, and a jump said "not in tmux"
+// (RIKER-0232).
+describe.skipIf(!hasTmux)("a server that lost its socket", () => {
+  const orphans: number[] = [];
+  afterEach(() => {
+    for (const pid of orphans.splice(0)) {
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {
+        // Already gone.
+      }
+    }
+  });
+
+  // Riker's pane on a fresh server whose socket file is then removed.
+  function rikerOnLostServer(s: string) {
+    tmux(s, "new-session", "-d", "-s", "riker", "cat");
+    tmux(s, "new-session", "-d", "-s", "proj", "cat");
+    const pane = tmux(s, "display", "-p", "-t", "riker:", "#{pane_id}");
+    const pid = Number(tmux(s, "display", "-p", "#{pid}"));
+    const path = tmux(s, "display", "-p", "#{socket_path}");
+    orphans.push(pid);
+    rmSync(path);
+    return { env: { TMUX: `${path},${pid},0`, TMUX_PANE: pane }, pid, path };
+  }
+
+  async function withEnv<T>(env: Record<string, string>, run: () => Promise<T>): Promise<T> {
+    const saved = { TMUX: process.env.TMUX, TMUX_PANE: process.env.TMUX_PANE };
+    Object.assign(process.env, env);
+    try {
+      return await run();
+    } finally {
+      for (const [k, v] of Object.entries(saved))
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+    }
+  }
+
+  test("a jump says Riker's server lost its socket when a newer server holds the path", async () => {
+    const s = server("lost");
+    const host = rikerOnLostServer(s);
+    // The second server, as the engine's new-session made it.
+    Bun.spawnSync(["tmux", "-L", s, "-f", "/dev/null", "new-session", "-d", "-s", "agents", "cat"], {
+      env: { ...process.env, TMUX: "" },
+    });
+    expect(Number(tmux(s, "display", "-p", "#{pid}"))).not.toBe(host.pid);
+    const mux = new TmuxMux(s);
+    const seen = await withEnv(host.env, async () => ({
+      window: await mux.hostWindow(),
+      server: await mux.hostServer(),
+    }));
+    expect(seen.window).toBeNull();
+    expect(seen.server).toEqual({ at: "other", socket: host.path, lost: true });
+  });
+
+  test("Riker's own server remakes its socket instead of a second server starting", async () => {
+    const s = server("lost");
+    const host = rikerOnLostServer(s);
+    const mux = new TmuxMux(s);
+    const state = await withEnv(host.env, () => mux.state());
+    expect(state.sessions.map((x) => x.name).sort()).toEqual(["proj", "riker"]);
+    expect(Number(tmux(s, "display", "-p", "#{pid}"))).toBe(host.pid);
+    expect(await withEnv(host.env, () => mux.hostServer())).toMatchObject({ at: "here" });
+  });
+
+  test("a server not Riker's own is left alone", async () => {
+    const s = server("lost");
+    const host = rikerOnLostServer(s);
+    const mux = new TmuxMux(s);
+    const state = await withEnv({ TMUX: "", TMUX_PANE: "" }, () => mux.state());
+    expect(state.sessions).toEqual([]);
+    expect(await withEnv({ TMUX: "", TMUX_PANE: "" }, () => mux.hostServer())).toEqual({ at: "none" });
+    expect(host.pid).toBeGreaterThan(0);
+  });
+});
+
 describe.skipIf(!hasTmux)("paneInfo", () => {
   test("names the pane's session and process, and nothing for a pane that is gone", async () => {
     const s = server("s");
@@ -354,4 +435,52 @@ describe.skipIf(!hasTmux)("viewer beside a terminal of another size", () => {
       if (answered === null) process.kill(serverPid, "SIGKILL");
     }
   }, 20_000);
+});
+
+// tmux refuses a command over about 16KB ("command too long"); a review's
+// brief (PR body, diff, threads) is easily more.
+describe.skipIf(!hasTmux)("long text", () => {
+  test("a start whose brief is past tmux's limit still opens its window", async () => {
+    freshHome();
+    const s = server("big");
+    tmux(s, "new-session", "-d", "-s", "proj");
+    const sessionId = tmux(s, "display", "-p", "-t", "proj:", "#{session_id}");
+    const task = store.createTask({
+      title: "Review #12",
+      kind: "coding",
+      channel: "github",
+      summary: "+ a changed line of the pull request under review\n".repeat(2000),
+    });
+    const launch = codingLaunch(config(), task, { note: "look at the parser first ".repeat(400) });
+    const mux = new TmuxMux(s);
+    // Same command line, with a program that exits instead of claude.
+    const window = await mux.newWindow({
+      sessionId,
+      name: "review",
+      cwd: tmpdir(),
+      env: launch.env,
+      argv: ["true", ...launch.argv.slice(1)],
+    });
+    expect(windows(s)).toContain(`proj ${window.id}`);
+  });
+
+  test("a line past tmux's limit reaches the pane whole", async () => {
+    const s = server("paste");
+    const out = `${tmpdir()}/riker-paste-${process.pid}`;
+    rmSync(out, { force: true });
+    // Raw, so the line is not cut at the terminal's canonical limit.
+    tmux(s, "new-session", "-d", "-s", "proj", `stty raw -echo; head -c 60001 > ${out}`);
+    const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
+    const text = "b".repeat(60000);
+    await new TmuxMux(s).sendLine(windowId, text);
+    await until(() => {
+      try {
+        return readFileSync(out, "utf8").length === 60001;
+      } catch {
+        return false;
+      }
+    });
+    expect(readFileSync(out, "utf8")).toBe(`${text}\r`);
+    rmSync(out, { force: true });
+  });
 });

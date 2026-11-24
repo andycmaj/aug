@@ -31,6 +31,9 @@ export interface HelpCtx {
   closed?: boolean;
   // The task has a pull request ghdash can show.
   pr: boolean;
+  // The task actions offered on this row (actionsFor), so an action's own
+  // key shows only where it runs. Unset: every work row.
+  actions?: string[];
   // A text box has focus: only its own keys are worth showing.
   typing?: boolean;
   // The rail's status filter hides some rows.
@@ -285,6 +288,21 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     help: "ignore",
     relevant: isWork,
   },
+  // J flips a row's session write-up: a task's story, a project's journal.
+  {
+    key: "shift+j",
+    cmd: Commands.STORY_SWITCH,
+    desc: "story on/off: the task's state of play, kept from each finished session",
+    help: "story",
+    relevant: isWork,
+  },
+  {
+    key: "shift+j",
+    cmd: Commands.JOURNAL_SWITCH,
+    desc: "journal on/off: the project's file of finished sessions and task events",
+    help: "journal",
+    relevant: (c) => c.item === "project",
+  },
   {
     key: "x",
     cmd: Commands.PROJECT_ARCHIVE,
@@ -382,7 +400,11 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   },
 ];
 
-export const BACK_CHORD = "ctrl+[";
+// Back has two chords. ctrl+o (vim's jump back) gets through tmux and a
+// legacy terminal; ctrl+[ only where the terminal speaks the kitty protocol
+// to Riker (elsewhere it is the Esc byte).
+export const BACK_CHORD = "ctrl+o";
+export const KITTY_BACK_CHORD = "ctrl+[";
 export const HOME_CHORD = "ctrl+a";
 
 // The navigation keys and the config field that moves each.
@@ -451,12 +473,18 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     // attached agent. ctrl+[ is the Esc byte in a legacy terminal and inside
     // tmux, which folds it into Esc whatever extended-keys says: only a
     // terminal speaking the kitty protocol to Riker sends it apart. There
-    // Esc keeps its own meaning (and still reaches the agent).
+    // Esc keeps its own meaning (and still reaches the agent). ctrl+o works
+    // in both, so it is the one the footer names.
     {
       key: BACK_CHORD,
       cmd: Commands.GO_BACK,
       desc: "back from anywhere: closes the dialog, leaves the box or the agent, then goes back",
       help: "back",
+    },
+    {
+      key: KITTY_BACK_CHORD,
+      cmd: Commands.GO_BACK,
+      desc: "back from anywhere: closes the dialog, leaves the box or the agent, then goes back",
       relevant: (c) => c.kittyKeys !== false,
     },
     // The chat box loses ctrl+a (start of line); home still does it.
@@ -556,13 +584,21 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     },
     // Reserved on an agent (a terminal with no agent, the editor, is sent
     // the key as typed): detach, then back or Home as anywhere else. The
-    // agent loses ctrl+[ (Esc still reaches it) and ctrl+a (start of line
-    // in claude's prompt, and tmux's prefix where that is C-a).
+    // agent loses ctrl+o (claude's transcript toggle; the owner's call,
+    // RIKER-0223), ctrl+[ (Esc still reaches it) and ctrl+a (start of line
+    // in claude's prompt, and tmux's prefix where that is C-a). Each back
+    // chord has a command of its own here, so a terminal with no agent is
+    // sent the byte of the key pressed.
     {
       key: BACK_CHORD,
-      cmd: Commands.GO_BACK,
+      cmd: Commands.TERMINAL_BACK,
       desc: "detach and go back",
       help: "back",
+    },
+    {
+      key: KITTY_BACK_CHORD,
+      cmd: Commands.TERMINAL_KITTY_BACK,
+      desc: "detach and go back",
       relevant: (c) => c.kittyKeys !== false,
     },
     {
@@ -788,9 +824,11 @@ export function buildKeymap(
   const specs: BindingSpec<HelpCtx>[] = bound.map((a) => ({
     key: a.key,
     cmd: actionCommand(a.name),
-    // No footer word: the footer stays the row's own keys; ? help lists it.
     desc: `action: ${a.title}`,
-    relevant: isWork,
+    // In the footer too, on the rows it is offered on (a review that just
+    // arrived offers its guide).
+    help: a.name,
+    relevant: (c: HelpCtx) => isWork(c) && (c.actions?.includes(a.name) ?? true),
   }));
   return {
     ...nav,

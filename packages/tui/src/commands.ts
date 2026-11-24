@@ -21,6 +21,9 @@ export const Commands = {
   // From anywhere, a modal or an attached agent too (shell.tsx).
   GO_BACK: "nav.back",
   GO_HOME: "assistant.go",
+  // Back's two chords on an attached terminal (keymap.ts BACK_CHORD).
+  TERMINAL_BACK: "terminal.back",
+  TERMINAL_KITTY_BACK: "terminal.back.kitty",
   UNDO: "move.undo",
 
   // On the item at the cursor / the selected item
@@ -65,6 +68,8 @@ export const Commands = {
   EDIT_FILE: "item.file.edit",
   MAKE_TASK: "item.task",
   INFO: "item.info",
+  STORY_SWITCH: "task.story",
+  JOURNAL_SWITCH: "project.journal",
   ACTIONS: "task.actions",
   PR_DASH: "pr.dash",
   TYPE: "chat.type",

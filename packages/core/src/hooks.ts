@@ -16,6 +16,9 @@ import {
   workFinished,
   type AgentRef,
 } from "./lifecycle";
+import type { RikerConfig } from "./config";
+import { digestFromDone, storySwitch, type DigestArgs } from "./digests";
+import { storyFromDigest } from "./story";
 import * as store from "./store";
 import { AgentState, TurnRole } from "./types";
 
@@ -73,15 +76,26 @@ export function handleHook(
       return;
     }
     case "stop":
+      keepTranscript(env, payload);
       turnEnded(env, endedAsking(lastMessage(payload)));
       return;
     case "end":
+      keepTranscript(env, payload);
       sessionEnded(env, endReason(payload.reason));
       return;
     case "made":
       linkArtifact(payload, env);
       return;
   }
+}
+
+// Where claude keeps the session's transcript, for the watcher that writes
+// up a session which ended without `done` (core/digest-watcher.ts).
+function keepTranscript(env: HookEnv, payload: HookPayload): void {
+  const path = payload.transcript_path;
+  if (!path) return;
+  if (store.getSession(env.sessionId)?.transcript_path === path) return;
+  store.updateSession(env.sessionId, { transcript_path: path });
 }
 
 function isIdleNotice(payload: HookPayload): boolean {
@@ -213,12 +227,20 @@ export interface DoneArgs {
   summary: string;
   reply?: string;
   close?: "issue" | "merge" | "approve";
+  // What the session did, learned and left, for its digest
+  // (core/digests.ts); kept only when the journal or the story is on.
+  digest?: Omit<DigestArgs, "summary">;
 }
 
 // The agent says it is finished. The session is written up; the task waits
 // for you with its close-out when a reply is owed, otherwise it is done (and
 // stays on the rail until you have read it).
-export function handleDone(env: HookEnv, args: DoneArgs, drafts: Drafts = new Drafts()): string {
+export function handleDone(
+  env: HookEnv,
+  args: DoneArgs,
+  drafts: Drafts = new Drafts(),
+  config?: RikerConfig,
+): string {
   const task = store.getTask(env.taskId);
   if (!task) return `no task ${env.taskId}`;
   const session = store.getSession(env.sessionId);
@@ -256,6 +278,11 @@ export function handleDone(env: HookEnv, args: DoneArgs, drafts: Drafts = new Dr
             : "Ready for review: yours to close (a reply may be owed).",
     });
     if (action) store.setTurnAction(turn.id, action);
+    // Before workFinished: its `finished` event finds the digest there.
+    const digest = config
+      ? digestFromDone(config, task, session, { ...args.digest, summary: args.summary })
+      : null;
+    if (digest && config && storySwitch(config, task).on) storyFromDigest(digest);
     workFinished(env, {
       summary: args.summary,
       closes,

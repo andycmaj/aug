@@ -8,6 +8,7 @@ import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import type { NoiseRule } from "./config";
 import type { Desk } from "./desk";
+import { SwitchValue } from "./digests";
 import { DocName, head } from "./docs";
 import { docNamed, propose } from "./proposals";
 import { logger } from "./log";
@@ -21,6 +22,7 @@ import {
   timerRef,
 } from "./timers";
 import { findProject, projectLine } from "./lookup";
+import { unmergedPr } from "./pr";
 import { actionNamed, actionsFor, ActionVia } from "./task-actions";
 import { mux } from "./mux";
 import { docDraftsDir } from "./paths";
@@ -159,6 +161,13 @@ function docDraftFile(given: string): string {
 
 // A name that matches no project says which ones there are, so the caller
 // can pick one or ask the owner whether to make it.
+function switchValue(v: string | undefined): SwitchValue {
+  const known = Object.values(SwitchValue) as string[];
+  const to = v?.trim().toLowerCase() ?? "";
+  if (!known.includes(to)) throw new MoveError(`say on, off or default, not ${v ?? "nothing"}`);
+  return to as SwitchValue;
+}
+
 function projectNamed(name: string): ProjectRow {
   const project = findProject(name);
   if (project?.status === ProjectStatus.active) return project;
@@ -295,10 +304,14 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Mark the task done",
     task: true,
     args: {},
+    // The owner's d asks first when the PR is not merged; the Assistant
+    // moves on the owner's words, so it closes and says so for them to hear.
     async run(desk, task) {
+      const unmerged = unmergedPr(task!);
       const r = await desk.close(task!.id);
-      return r.warnings.length
-        ? `${ref(task)} marked done; ${r.warnings.join("; ")}`
+      const warnings = [...(unmerged ? [`${unmerged}; reopen undoes it`] : []), ...r.warnings];
+      return warnings.length
+        ? `${ref(task)} marked done; ${warnings.join("; ")}`
         : `${ref(task)} marked done`;
     },
   },
@@ -586,7 +599,7 @@ export const MOVES: Record<string, MoveSpec> = {
     task: true,
     positional: "name",
     args: { name: { help: "the action's name" } },
-    run(desk, task, args) {
+    async run(desk, task, args) {
       const offered = actionsFor(desk.config(), task!);
       const name = args.name?.trim();
       if (!name)
@@ -595,6 +608,12 @@ export const MOVES: Record<string, MoveSpec> = {
           : `no action applies to ${ref(task)}`;
       if (actionNamed(desk.config(), name)?.via === ActionVia.pane)
         throw new MoveError(`${name} needs the TUI: press . on ${ref(task)}`);
+      const ready = await desk.prepareAction(task!.id, name);
+      if (ready.type === "failed") throw new MoveError(ready.error);
+      if (ready.type === "needs")
+        throw new MoveError(
+          `needs a path: ${ready.need.repo} has no checkout to make its worktree from (move repo ${ready.need.repo} --path <dir>, or --clone yes)`,
+        );
       const started = desk.runAction(task!.id, name);
       if ("error" in started) throw new MoveError(started.error);
       // Not awaited: moves run one at a time, and an action takes minutes.
@@ -678,6 +697,35 @@ export const MOVES: Record<string, MoveSpec> = {
       const said = desk.setWin(task!.id, args.off?.trim() !== "yes");
       if (!said.ok) throw new MoveError(said.text);
       return said.text;
+    },
+  },
+  story: {
+    help: "Turn the task's story (its state of play, kept from each finished session) on, off, or back to its project's default",
+    task: true,
+    positional: "to",
+    args: { to: { help: "on | off | default", required: true } },
+    run(desk, task, args) {
+      return desk.setStory(task!.id, switchValue(args.to));
+    },
+  },
+  pin: {
+    help: "Pin a line (a goal, a next step) to the task's story: every later version keeps it; --off yes takes it off",
+    task: true,
+    positional: "line",
+    args: {
+      line: { help: "the line, as it should read", required: true },
+      off: { help: "yes: take that line off" },
+    },
+    run(desk, task, args) {
+      return desk.pinStory(task!.id, args.line, args.off?.trim() === "yes");
+    },
+  },
+  story_undo: {
+    help: "Make the story's version before the current one current again (a bad write-up); pins stay",
+    task: true,
+    args: {},
+    run(desk, task) {
+      return desk.undoStory(task!.id);
     },
   },
   link: {
@@ -860,6 +908,21 @@ export const MOVES: Record<string, MoveSpec> = {
       const project = projectNamed(args.project);
       store.updateProject(project.id, { brief: args.text.trim() });
       return `${project.name}'s brief rewritten`;
+    },
+  },
+  journal: {
+    help: "Turn a project's journal (a file of its finished sessions and task events) on, off, or back to config's default; --stories sets its tasks' story default instead",
+    task: false,
+    positional: "project",
+    args: {
+      project: { help: "the project's name", required: true },
+      to: { help: "on | off | default", required: true },
+      stories: { help: "yes: set the default for its tasks' stories, not its journal" },
+    },
+    run(desk, _task, args) {
+      const project = projectNamed(args.project);
+      const which = args.stories?.trim() === "yes" ? "story" : "journal";
+      return desk.setProjectSwitch(project.id, which, switchValue(args.to));
     },
   },
   project_link: {

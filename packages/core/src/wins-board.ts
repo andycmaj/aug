@@ -254,5 +254,7 @@ export function eventWords(e: TaskEventRow): string {
       return "unmerged";
     case TaskEventKind.finished:
       return "agent finished";
+    case TaskEventKind.ended:
+      return "session ended";
   }
 }

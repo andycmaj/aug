@@ -25,7 +25,9 @@ import {
   type CorrectionRow,
   type ProjectMove,
   PROJECT_MOVE,
+  type DigestRow,
   type DocProposalRow,
+  type StoryRow,
   type ProposalSource,
   type ProposalStatus,
   type DraftAction,
@@ -1489,10 +1491,11 @@ export function removeWin(day: string, taskId: number): void {
 
 // ── task events (the Wins tab's history) ────────────────────────────────
 
-// Events in [from, to), oldest first.
+// Events in [from, to), oldest first. A session's end is the journal's, not
+// the Wins history's.
 export function eventsBetween(from: string, to: string): TaskEventRow[] {
   return all<TaskEventRow>(
-    "SELECT * FROM task_events WHERE at >= ? AND at < ? ORDER BY at, id",
+    "SELECT * FROM task_events WHERE at >= ? AND at < ? AND kind != 'ended' ORDER BY at, id",
     from,
     to,
   );
@@ -1753,4 +1756,96 @@ export function abandonMove(id: number, why: string): boolean {
     .get(why, now(), id);
   changed();
   return abandoned != null;
+}
+
+// ── session digests and stories (docs/session-digests-design.md) ─────────
+
+export type DigestInput = Omit<DigestRow, "id" | "at"> & { at?: string };
+
+export function addDigest(d: DigestInput): DigestRow {
+  const id = run(
+    `INSERT INTO digests (task_id, session_id, at, by, outcome, goals, did, decisions, learned, next, blocked, questions, links, knowledge, covers_to)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    d.task_id,
+    d.session_id,
+    d.at ?? now(),
+    d.by,
+    d.outcome,
+    d.goals,
+    d.did,
+    d.decisions,
+    d.learned,
+    d.next,
+    d.blocked,
+    d.questions,
+    d.links,
+    d.knowledge,
+    d.covers_to,
+  );
+  return one<DigestRow>("SELECT * FROM digests WHERE id = ?", id)!;
+}
+
+export function getDigest(id: number): DigestRow | null {
+  return one<DigestRow>("SELECT * FROM digests WHERE id = ?", id);
+}
+
+// A session's digests, newest first.
+export function digestsForSession(sessionId: string): DigestRow[] {
+  return all<DigestRow>(
+    "SELECT * FROM digests WHERE session_id = ? ORDER BY id DESC",
+    sessionId,
+  );
+}
+
+// The session's end before event `beforeId`: where its next run began.
+export function sessionEndedBefore(sessionId: string, beforeId: number): TaskEventRow | null {
+  return one<TaskEventRow>(
+    "SELECT * FROM task_events WHERE kind = 'ended' AND detail = ? AND id < ? ORDER BY id DESC LIMIT 1",
+    sessionId,
+    beforeId,
+  );
+}
+
+export function latestDigest(taskId: number): DigestRow | null {
+  return one<DigestRow>(
+    "SELECT * FROM digests WHERE task_id = ? ORDER BY id DESC LIMIT 1",
+    taskId,
+  );
+}
+
+export type StoryInput = Omit<StoryRow, "id" | "at"> & { at?: string };
+
+export function addStory(v: StoryInput): StoryRow {
+  const id = run(
+    `INSERT INTO stories (task_id, digest_id, at, by, goals, now, decisions, blocked, next, questions, pinned)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    v.task_id,
+    v.digest_id,
+    v.at ?? now(),
+    v.by,
+    v.goals,
+    v.now,
+    v.decisions,
+    v.blocked,
+    v.next,
+    v.questions,
+    v.pinned,
+  );
+  return one<StoryRow>("SELECT * FROM stories WHERE id = ?", id)!;
+}
+
+// The current version of a task's story: its newest.
+export function currentStory(taskId: number): StoryRow | null {
+  return one<StoryRow>(
+    "SELECT * FROM stories WHERE task_id = ? ORDER BY id DESC LIMIT 1",
+    taskId,
+  );
+}
+
+// Every version, newest first.
+export function storiesFor(taskId: number): StoryRow[] {
+  return all<StoryRow>(
+    "SELECT * FROM stories WHERE task_id = ? ORDER BY id DESC",
+    taskId,
+  );
 }

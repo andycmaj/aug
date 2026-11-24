@@ -14,6 +14,7 @@ import { syncDocs } from "./doc-sync";
 import { refreshInstalls } from "./install";
 import { Drivers } from "./driver";
 import { checkMerges } from "./merge";
+import { journalTick } from "./journal";
 import { errorMessage, logger } from "./log";
 import { count, measure, perfStart } from "./perf";
 import { recoverAtBoot } from "./lifecycle";
@@ -205,7 +206,12 @@ export class Engine {
     this.fireTimers();
     this.timers.push(setInterval(() => this.fireTimers(), 30_000));
     this.watchMoves();
-    this.timers.push(setInterval(() => this.fireEventActions(), 2_000));
+    this.timers.push(
+      setInterval(() => {
+        this.fireEventActions();
+        void this.writeJournals();
+      }, 2_000),
+    );
     if (this.options.offline) {
       for (const c of this.connectors) this.setStatus(c.name, off("fixture mode"));
       this.setStatus("advisor", off("fixture mode"));
@@ -316,6 +322,18 @@ export class Engine {
     }
     store.kvSet(EVENTS_CURSOR, String(events.at(-1)!.id));
     return queued;
+  }
+
+  // Task events into project journals and stories (core/journal.ts), on
+  // their own cursor. A watcher call may take a while; ticks meanwhile
+  // pass.
+  async writeJournals(): Promise<number> {
+    try {
+      return await journalTick(this.options.config.get());
+    } catch (err) {
+      log.error("journal tick failed", { err: err instanceof Error ? err.name : "error" });
+      return 0;
+    }
   }
 
   async drainMoves(): Promise<number> {
