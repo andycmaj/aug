@@ -53,7 +53,7 @@ mode, which keeps only the comments meant for the author. Post to GitHub,
 in Plannotator, sends my review. Riker never posts.
 
 **After I post:** Riker reads Plannotator's decision (`--json`). A posted
-review closes the task into Wins and drops the worktree. Closing
+review closes the task as done and drops the worktree. Closing
 Plannotator without posting leaves the task open. The task reopens when
 the PR is waiting on me again: a re-request, the author answering my
 comments, or new commits after I asked for changes. A re-review's guide
