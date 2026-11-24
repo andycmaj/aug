@@ -23,7 +23,8 @@ import { linkLine, projectContext } from "./lookup";
 import { mux } from "./mux";
 import { paths } from "./paths";
 import { liveWindow } from "./projects";
-import { reviewedPr } from "./pr";
+import { reviewedPr, type PrRef } from "./pr";
+import type { ReviewContext, ReviewSource } from "./plugins";
 import { toolsEnv, toolsRules, TOOLS_NAME } from "./self";
 import * as store from "./store";
 import {
@@ -127,6 +128,8 @@ function actionPrompt(
   as: string,
   // The guide's job, appended to the skill's args.
   job?: string,
+  // What the reviewed PR says beside its diff (ReviewSource).
+  pr?: string,
 ): string {
   const turns = store
     .turnsForTask(task.id)
@@ -144,6 +147,7 @@ function actionPrompt(
       : turns.length
         ? `The task's chat so far, oldest first:\n${transcript(turns)}`
         : "",
+    pr ?? "",
     "",
     job ? `${invocation(spec, task, as)}; job: ${job}` : invocation(spec, task, as),
   ]
@@ -172,6 +176,7 @@ export function startAction(
   spec: ActionSpec,
   // The event that ran it by itself; none when the owner asked.
   event?: string,
+  review?: GuideReviewInput,
 ): ActionRun | { error: string } {
   if (spec.via === ActionVia.pane) return startPane(config, task, spec);
   if (spec.via !== ActionVia.headless && spec.via !== ActionVia.fork)
@@ -214,6 +219,7 @@ export function startAction(
   });
 
   const done = run(config, task, spec, turn, event, {
+    ...(guide && review ? { review } : {}),
     cwd,
     session: session?.id,
     as: source.as,
@@ -308,7 +314,17 @@ function startPane(
   return { turnId: turn.id, done };
 }
 
+// The guide on a PR asked of the owner: where its context is read, and
+// whether to review all of it rather than what changed since their last
+// review.
+export interface GuideReviewInput {
+  pr: PrRef;
+  source: ReviewSource;
+  whole: boolean;
+}
+
 interface RunShape {
+  review?: GuideReviewInput;
   cwd: string;
   session?: string;
   // The skill's name as this run loads it (a wrapped user skill's differs).
@@ -331,7 +347,10 @@ async function run(
   const steps: string[] = [];
   const timing = log.time("action done", { task: task.id, action: spec.name });
   try {
-    if (shape.plan) return await runGuide(config, task, spec, turn, event, shape, shape.plan, steps, timing);
+    if (shape.plan) {
+      const { plan, context } = await reviewScope(task, shape, shape.plan, steps, turn);
+      return await runGuide(config, task, spec, turn, event, shape, plan, steps, timing, context);
+    }
     const result = await think({
       prompt: actionPrompt(spec, task, Boolean(shape.session), shape.as),
       system: actionSystem(spec),
@@ -384,6 +403,54 @@ async function run(
   }
 }
 
+// A PR asked of the owner: its words and threads join every call's prompt,
+// and asked again, the guide reviews what changed since their last review
+// (the whole PR when nothing did, or its history was rewritten). Its
+// context failing to read never stops the review.
+async function reviewScope(
+  task: TaskRow,
+  shape: RunShape,
+  plan: { patch: Patch; batches: BatchPlan },
+  steps: string[],
+  turn: TurnRow,
+): Promise<{ plan: { patch: Patch; batches: BatchPlan }; context?: string }> {
+  const review = shape.review;
+  if (!review) return { plan };
+  const say = (line: string) => {
+    steps.push(line);
+    store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
+  };
+  let read: ReviewContext;
+  try {
+    read = await review.source.context(review.pr);
+  } catch (error) {
+    log.warn("review context not read", { task: task.id, error: String(error) });
+    say(`pull request context not read: ${errorMessage(error)}`);
+    return { plan };
+  }
+  say("pull request context read");
+  const since = read.lastReviewed;
+  if (review.whole || !since) return { plan, context: read.text };
+  const cwd = task.worktree ?? shape.cwd;
+  const delta = patchFor(cwd, since);
+  const short = since.slice(0, 7);
+  const nothingNew = "error" in delta && delta.error.startsWith("no change");
+  if (!nothingNew && ("error" in delta || delta.mergeBase !== since)) {
+    say(`whole PR: your last review (${short}) is not under its head now`);
+    return { plan, context: read.text };
+  }
+  const next = "error" in delta ? null : { patch: delta, batches: planBatches(delta, cwd) };
+  if (!next || next.batches.batches.length === 0) {
+    say(`whole PR: nothing to review since your last review (${short})`);
+    return { plan, context: read.text };
+  }
+  say(`since your last review (${short}): ${next.batches.all.length} files`);
+  return {
+    plan: next,
+    context: `${read.text}\n\nThis review covers only the commits since the owner's last review (${short}); their earlier comments are already on the pull request.`,
+  };
+}
+
 // The guide's calls (@riker/code-review-plannotator run.ts), each a headless call with the
 // action's tools; every step lands on the turn, named by its call.
 async function runGuide(
@@ -396,6 +463,7 @@ async function runGuide(
   plan: { patch: Patch; batches: BatchPlan },
   steps: string[],
   timing: (fields?: Record<string, unknown>) => void,
+  context?: string,
 ): Promise<ActionResult> {
   const cwd = task.worktree ?? shape.cwd;
   const commits = branchCommits(cwd, plan.patch.mergeBase).length ? commitLog(cwd, plan.patch.mergeBase) : "";
@@ -404,7 +472,7 @@ async function runGuide(
     plan: plan.batches,
     commits,
     progress,
-    prompt: (job) => actionPrompt(spec, task, false, shape.as, job),
+    prompt: (job) => actionPrompt(spec, task, false, shape.as, job, context),
     ask: async (prompt, label) => {
       const result = await think({
         prompt,

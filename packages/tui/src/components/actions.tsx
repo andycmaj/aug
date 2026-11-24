@@ -36,7 +36,7 @@ import { isClosed, taskRef } from "@riker/core/rows";
 import { postComments } from "@riker/code-review-plannotator/guide";
 import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
 import type { ActionResult } from "@riker/core/run-action";
-import { actionNamed, actionsFor, keyedActions, makesCheckout } from "@riker/core/task-actions";
+import { ActionOutput, actionNamed, actionsFor, keyedActions, makesCheckout } from "@riker/core/task-actions";
 import { describeProblem } from "@riker/core/repos";
 import { actionCommand, actionKeys, buildKeymap } from "../keymap";
 import type { NoiseRule } from "@riker/core/config";
@@ -475,11 +475,11 @@ export function useActions(dialogs: Dialogs) {
   // says when it is back. One that reads the change on a task with no
   // worktree yet (a review that just arrived) has it made first, with no
   // agent started; an unmapped repo asks where it is, as Start does.
-  function runAction(task: TaskRow, name: string): void {
-    void launchAction(task, name);
+  function runAction(task: TaskRow, name: string, opts: { whole?: boolean } = {}): void {
+    void launchAction(task, name, opts);
   }
 
-  async function launchAction(task: TaskRow, name: string) {
+  async function launchAction(task: TaskRow, name: string, opts: { whole?: boolean }) {
     const spec = actionNamed(desk.config(), name);
     if (spec && makesCheckout(spec, task))
       showToast(`${taskRef(task.id)}: making its worktree${task.branch ? ` on ${task.branch}` : ""}...`);
@@ -489,7 +489,7 @@ export function useActions(dialogs: Dialogs) {
       return;
     }
     if (ready.type === "needs") {
-      const retry = () => runAction(riker.task(task.id) ?? task, name);
+      const retry = () => runAction(riker.task(task.id) ?? task, name, opts);
       dialogs.show(() => (
         <ChoiceModal
           title={
@@ -505,7 +505,7 @@ export function useActions(dialogs: Dialogs) {
       ));
       return;
     }
-    const started = desk.runAction(task.id, name);
+    const started = desk.runAction(task.id, name, opts);
     if ("error" in started) {
       showToast(started.error, 5000, "error");
       return;
@@ -596,11 +596,18 @@ export function useActions(dialogs: Dialogs) {
       <ChoiceModal
         title={`Actions · ${taskRef(task.id)}`}
         hint="Each runs a skill on this task; its answer lands in the chat."
-        choices={offered.map((a) => ({
-          label: a.title,
-          hint: keys.has(a.name) ? `${a.name} · ${a.key}` : a.name,
-          run: () => runAction(task, a.name),
-        })).concat(
+        choices={offered.flatMap((a) => [
+          {
+            label: a.title,
+            hint: keys.has(a.name) ? `${a.name} · ${a.key}` : a.name,
+            run: () => runAction(task, a.name),
+          },
+          // Asked again, the guide reviews what changed since your last
+          // review; this one reviews all of it.
+          ...(a.output === ActionOutput.guide && desk.askedReview(task.id)
+            ? [{ label: `${a.title}, whole PR`, hint: "not only what changed since your last review", run: () => runAction(task, a.name, { whole: true }) }]
+            : []),
+        ]).concat(
           review
             ? [{ label: OPEN_REVIEW_TITLE, hint: "the last guide, no run", run: () => openGuideReview(task) }]
             : [],

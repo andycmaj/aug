@@ -51,7 +51,8 @@ import {
   type ActionSpec,
 } from "./task-actions";
 import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
-import type { MoveGuard, Triage, TriageEffect, TriageOutcome } from "./plugins";
+import type { MoveGuard, ReviewSource, Triage, TriageEffect, TriageOutcome } from "./plugins";
+import { reviewedPr } from "./pr";
 import {
   AgentState,
   IdeaStatus,
@@ -96,6 +97,8 @@ export interface DeskOptions {
   drafts?: Drafts;
   // Moves that wait for the owner's yes (core/moves.ts asks each).
   guards?: readonly MoveGuard[];
+  // Where the guide reads a PR's context, on a review asked of the owner.
+  reviews?: ReviewSource;
 }
 
 export class Desk {
@@ -317,9 +320,12 @@ export class Desk {
 
   // A task action (core/task-actions.ts): started now, its answer a turn on
   // the task. Nothing to undo: an action reads, and its turn stays.
+  // `whole`: the guide on a PR asked of the owner reviews all of it, not
+  // only what changed since their last review.
   runAction(
     taskId: number,
     name: string,
+    opts: { whole?: boolean } = {},
   ): { error: string } | { title: string; done: Promise<ActionResult> } {
     const task = store.getTask(taskId);
     if (!task) return { error: `no task ${store.taskRef(taskId)}` };
@@ -331,7 +337,7 @@ export class Desk {
     }
     const why = whyNot(spec, task);
     if (why) return { error: why };
-    return this.startAction(config, task, spec);
+    return this.startAction(config, task, spec, undefined, opts.whole);
   }
 
   // What an action offered on a task still needs before runAction: its
@@ -365,6 +371,12 @@ export class Desk {
   hasGuideReview(taskId: number): boolean {
     const task = store.getTask(taskId);
     return !!task && hasGuideReview(task);
+  }
+
+  // A PR someone asked the owner to review (triage marked it), not their own.
+  askedReview(taskId: number): boolean {
+    const task = store.getTask(taskId);
+    return !!task && reviewedPr(task) !== null;
   }
 
   guideReview(taskId: number): ActionResult | { error: string } {
@@ -419,6 +431,7 @@ export class Desk {
     task: TaskRow,
     spec: ActionSpec,
     event?: ActionEvent,
+    whole = false,
   ): { error: string } | { title: string; done: Promise<ActionResult> } {
     if (spec.via === ActionVia.agent) {
       const text = invocation(spec, task);
@@ -430,7 +443,14 @@ export class Desk {
         })),
       };
     }
-    const run = startAction(config, task, spec, event);
+    const pr = reviewedPr(task);
+    const run = startAction(
+      config,
+      task,
+      spec,
+      event,
+      pr && this.options.reviews ? { pr, source: this.options.reviews, whole } : undefined,
+    );
     if ("error" in run) return run;
     return { title: spec.title, done: run.done };
   }

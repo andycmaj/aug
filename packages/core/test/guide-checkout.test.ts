@@ -5,7 +5,10 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setGuideTool } from "@riker/code-review-plannotator/guide";
-import { ANSWER, repo } from "@riker/code-review-plannotator/test/support/repo";
+import { ANSWER, repo, sh } from "@riker/code-review-plannotator/test/support/repo";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { ReviewSource } from "../src/plugins";
 import { setBrain, type BrainResult } from "../src/brain";
 import { Engine } from "../src/engine";
 import { guideOffer, reviewExit } from "../src/guide-turn";
@@ -257,6 +260,85 @@ test("Start after the guide made the worktree starts in it, and its project gets
   expect(mux.windows[0]!.cwd).toBe(checkout);
   const project = store.getProject(store.getTask(task.id)!.project_id!)!;
   expect(project.repos).toContain("acme/api");
+});
+
+describe("the guide on a PR asked of the owner reads the PR and what changed since their last review", () => {
+  let prompts: string[];
+  const git = (...a: string[]) => sh(checkout, "git", "-c", "user.email=t@t", "-c", "user.name=t", ...a);
+
+  function asked(source: ReviewSource) {
+    prompts = [];
+    setBrain(async (req): Promise<BrainResult> => {
+      prompts.push(req.prompt);
+      return { text: `\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\``, structured: null, sessionId: null, durationMs: 1, isError: false };
+    });
+    const engine = new Engine({ config: testConfig(), plugins: [{ name: "gh", reviews: source }] });
+    const t = engine.desk.newTask("Review acme/api#40", Kind.coding);
+    store.updateTask(t.id, { repo: "acme/api", branch: "pr:40", url: "https://github.com/acme/api/pull/40" });
+    store.addTaskLink(t.id, "https://github.com/acme/api/pull/40", REVIEW_LINK_TITLE, REVIEW_LINK_BY);
+    return { engine, task: store.getTask(t.id)! };
+  }
+
+  async function guide(engine: Engine, taskId: number, whole = false) {
+    await engine.desk.prepareAction(taskId, "guide");
+    const started = engine.desk.runAction(taskId, "guide", { whole });
+    if ("error" in started) throw new Error(started.error);
+    await started.done;
+    return store.turnsForTask(taskId).filter((t) => t.role === TurnRole.action).at(-1)!;
+  }
+
+  test("first review: the whole PR, with its words beside the diff", async () => {
+    const { engine, task } = asked({
+      context: async () => ({ text: "The pull request, read from GitHub: speed up export", lastReviewed: null }),
+    });
+    await guide(engine, task.id);
+    expect(prompts[0]).toContain("The pull request, read from GitHub: speed up export");
+    expect(prompts[0]).toContain("export function div");
+  });
+
+  test("asked again: only the commits since their last review, or the whole PR on ask", async () => {
+    const reviewed = git("rev-parse", "HEAD").trim();
+    writeFileSync(join(checkout, "mul.ts"), "export const mul = (a: number, b: number) => a * b;\n");
+    git("add", ".");
+    git("commit", "-qm", "mul");
+    const { engine, task } = asked({ context: async () => ({ text: "PR words", lastReviewed: reviewed }) });
+    const turn = await guide(engine, task.id);
+    expect(prompts[0]).toContain("mul.ts");
+    expect(prompts[0]).not.toContain("export function div");
+    expect(prompts[0]).toContain(`since the owner's last review (${reviewed.slice(0, 7)})`);
+    expect(turn.steps).toContain(`since your last review (${reviewed.slice(0, 7)}): 1 files`);
+
+    await guide(engine, task.id, true);
+    expect(prompts.at(-1)).toContain("export function div");
+  });
+
+  test("nothing new since their last review: the whole PR, said so", async () => {
+    const reviewed = git("rev-parse", "HEAD").trim();
+    const { engine, task } = asked({ context: async () => ({ text: "PR words", lastReviewed: reviewed }) });
+    const turn = await guide(engine, task.id);
+    expect(prompts[0]).toContain("export function div");
+    expect(turn.steps).toContain(`whole PR: nothing to review since your last review (${reviewed.slice(0, 7)})`);
+  });
+
+  test("its history rewritten since: the whole PR", async () => {
+    const { engine, task } = asked({
+      context: async () => ({ text: "PR words", lastReviewed: "0123456789abcdef0123456789abcdef01234567" }),
+    });
+    const turn = await guide(engine, task.id);
+    expect(prompts[0]).toContain("export function div");
+    expect(turn.steps).toContain("whole PR: your last review (0123456) is not under its head now");
+  });
+
+  test("the PR failing to read never stops the review", async () => {
+    const { engine, task } = asked({
+      context: async () => {
+        throw new Error("rate limited");
+      },
+    });
+    const turn = await guide(engine, task.id);
+    expect(prompts.length).toBeGreaterThan(0);
+    expect(turn.steps).toContain("pull request context not read: rate limited");
+  });
 });
 
 // What plannotator review --json prints, as 0.29.1 prints it (probed by

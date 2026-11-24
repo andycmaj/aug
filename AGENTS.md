@@ -31,8 +31,9 @@ other way (a new package gets a line in its `ALLOWED`).
   `Drafts`, `desk.drafts` for the TUI), move `guards`, its `config`
   sections (`configSection(key, defaults, merge)`: core keeps what the file
   holds under that key as written, the plugin reads it whole with
-  `section.of(config)`) and `assistant` lines for the Assistant's system
-  prompt. Core's vocabulary stays open: a `Channel` is a string, a
+  `section.of(config)`), a `reviews` source (what the guide reads beside a
+  PR asked of the owner, and the commit they last reviewed) and
+  `assistant` lines for the Assistant's system prompt. Core's vocabulary stays open: a `Channel` is a string, a
   `DraftAction` a `type` plus the plugin's own fields. An entry point hands
   the engine its list (`rikerPlugins()` in `tui/src/plugins.ts`, which
   `index.tsx` and riker-tools both read; the fixture day and the sim have
@@ -42,7 +43,7 @@ other way (a new package gets a line in its `ALLOWED`).
   worker (`src/worker.ts`); `triagePlugin()`.
 - **`@riker/github`**: notifications in (`ingest.ts`), the rate-limit gate
   (`gate.ts`), each task's PR status read (`pr-status.ts`; the rail's words
-  for it stay `core/pr.ts`), its draft (`draft.ts`, sent through gh in
+  for it stay `core/pr.ts`), a review's context (`review-context.ts`), its draft (`draft.ts`, sent through gh in
   `send.ts`), its config (`config.ts`), the poll (`connector.ts`);
   `githubPlugin()`.
 - **`@riker/slack`**: the transports (`transport.ts`, `token.ts`,
