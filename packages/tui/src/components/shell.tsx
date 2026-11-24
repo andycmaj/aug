@@ -241,15 +241,13 @@ export function useShell(opts: {
           <FocusHelp
             ctx={() => props.ctx()}
             onClose={closeModal}
+            header={
+              riker.mode() === ViewMode.chat ? <RailLegend /> : undefined
+            }
             footer={
-              <box flexDirection="column">
-                <Show when={riker.mode() === ViewMode.chat}>
-                  <RailLegend />
-                </Show>
-                <text fg={theme.textMuted} marginTop={1}>
-                  Nothing goes out until you press y and confirm.
-                </text>
-              </box>
+              <text fg={theme.textMuted}>
+                Nothing goes out until you press y and confirm.
+              </text>
             }
           />
         </Show>
