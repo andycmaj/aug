@@ -83,6 +83,10 @@ const prOpen = defineCommand({
       type: "string",
       description: "whose review it asks (default: you, or alice for --mine)",
     },
+    team: {
+      type: "string",
+      description: "ask this team (a slug; the sim watches reviewers) instead",
+    },
   },
   run({ args }) {
     apply(args, {
@@ -91,6 +95,7 @@ const prOpen = defineCommand({
       title: args.title,
       mine: args.mine,
       reviewer: args.reviewer,
+      team: args.team,
     });
   },
 });
@@ -186,6 +191,22 @@ const merge = defineCommand({
   },
 });
 
+const rerequest = defineCommand({
+  meta: { name: "rerequest", description: "ask your review of a PR again" },
+  args: { home: common.home, pr: common.pr, by: common.by },
+  run({ args }) {
+    apply(args, { type: "rerequest", pr: pr(args.pr), by: args.by });
+  },
+});
+
+const close = defineCommand({
+  meta: { name: "close", description: "close a PR without merging" },
+  args: { home: common.home, pr: common.pr, by: common.by },
+  run({ args }) {
+    apply(args, { type: "close", pr: pr(args.pr), by: args.by });
+  },
+});
+
 const play = defineCommand({
   meta: {
     name: "play",
@@ -238,6 +259,8 @@ await runMain(
       ci,
       push,
       merge,
+      rerequest,
+      close,
       play,
       state,
     },

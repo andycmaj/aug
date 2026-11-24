@@ -9,6 +9,7 @@
 
 import type { TurnAnswer } from "./agents";
 import type { ConfigSection, ConfigSource, RikerConfig } from "./config";
+import type { PrRef } from "./pr";
 import type { NewMessage } from "./store";
 import type {
   DraftAction,
@@ -150,6 +151,19 @@ export type MoveGuard = (
   by: string,
 ) => string | null;
 
+// What a reviewer reads beside a pull request's diff when the owner was
+// asked to review it: its words, linked issues and open threads as text,
+// and the commit the owner last reviewed (null when they have not), so a
+// review asked again covers what changed since.
+export interface ReviewContext {
+  text: string;
+  lastReviewed: string | null;
+}
+
+export interface ReviewSource {
+  context(pr: PrRef): Promise<ReviewContext>;
+}
+
 export interface RikerPlugin {
   name: string;
   // Its parts of config.json, each under its own key (core/config.ts).
@@ -158,6 +172,8 @@ export interface RikerPlugin {
   connectors?: Connector[];
   drafts?: DraftKind[];
   guards?: MoveGuard[];
+  // Where the guide reads a PR's context (at most one plugin's is used).
+  reviews?: ReviewSource;
   // Lines for the Assistant's system prompt (core/assistant.ts): what this
   // plugin lets it look up, and how a line heard from its place is answered.
   assistant?(config: RikerConfig): string[];

@@ -129,6 +129,7 @@ export class Engine {
       triage: this.judge ?? undefined,
       drafts,
       guards: plugins.flatMap((p) => p.guards ?? []),
+      reviews: plugins.find((p) => p.reviews)?.reviews,
     });
     for (const c of this.connectors) c.attach(this.connectorContext(c));
   }

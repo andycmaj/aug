@@ -34,7 +34,7 @@ import { strayLabel, type Stray } from "@riker/core/strays";
 import { baseKey, neighborKey, type RailItem } from "@riker/core/rail";
 import { actionAnswers, isClosed, taskRef } from "@riker/core/rows";
 import { postComments } from "@riker/code-review-plannotator/guide";
-import { OPEN_REVIEW_TITLE, reviewExit } from "@riker/core/guide-turn";
+import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
 import type { ActionResult } from "@riker/core/run-action";
 import {
   ActionOutput,
@@ -502,11 +502,11 @@ export function useActions(dialogs: Dialogs) {
   // says when it is back. One that reads the change on a task with no
   // worktree yet (a review that just arrived) has it made first, with no
   // agent started; an unmapped repo asks where it is, as Start does.
-  function runAction(task: TaskRow, name: string): void {
-    void launchAction(task, name);
+  function runAction(task: TaskRow, name: string, opts: { whole?: boolean } = {}): void {
+    void launchAction(task, name, opts);
   }
 
-  async function launchAction(task: TaskRow, name: string) {
+  async function launchAction(task: TaskRow, name: string, opts: { whole?: boolean }) {
     const spec = actionNamed(desk.config(), name);
     if (spec && makesCheckout(spec, task))
       showToast(`${taskRef(task.id)}: making its worktree${task.branch ? ` on ${task.branch}` : ""}...`);
@@ -516,7 +516,7 @@ export function useActions(dialogs: Dialogs) {
       return;
     }
     if (ready.type === "needs") {
-      const retry = () => runAction(riker.task(task.id) ?? task, name);
+      const retry = () => runAction(riker.task(task.id) ?? task, name, opts);
       dialogs.show(() => (
         <ChoiceModal
           title={
@@ -532,7 +532,7 @@ export function useActions(dialogs: Dialogs) {
       ));
       return;
     }
-    const started = desk.runAction(task.id, name);
+    const started = desk.runAction(task.id, name, opts);
     if ("error" in started) {
       showToast(started.error, 5000, "error");
       return;
@@ -612,28 +612,17 @@ export function useActions(dialogs: Dialogs) {
       });
   }
 
-  // What the owner sent from plannotator review goes to the agent, as if
-  // typed; an approval or a review closed without feedback sends nothing
-  // (reviewNotes). It carries Riker's comments the owner kept, unlabelled, so
-  // the message says so. A PR they were asked to review posted to GitHub
-  // from Plannotator: only its status line is said (reviewExit).
+  // How the owner ended plannotator review (desk.finishReview): a review
+  // posted to GitHub closes its task; notes go to the agent, resumed if its
+  // session ended; a bare Approve sends nothing.
   function afterReview(task: TaskRow, file: string, posts: "github" | undefined) {
-    const { notes, status } = reviewExit(posts, existsSync(file) ? readFileSync(file, "utf8") : "");
-    if (status) showToast(`${taskRef(task.id)}: ${status}`, 6000);
-    if (!notes) return;
-    // With no agent running they wait on the task: Start hands them over.
-    desk
-      .say(task.id, `My notes from the guided review in Plannotator (with the review findings riker posted there that I kept):\n\n${notes}`)
-      .then(
-        (heard) =>
-          showToast(
-            heard
-              ? `Your review notes went to ${taskRef(task.id)}'s agent`
-              : `Your review notes are on ${taskRef(task.id)}: its agent gets them when it starts`,
-            4000,
-          ),
-        (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),
-      );
+    const output = existsSync(file) ? readFileSync(file, "utf8") : "";
+    desk.finishReview(task.id, posts, output).then(
+      (said) => {
+        if (said) showToast(said.text, 6000, said.failed ? "error" : undefined);
+      },
+      (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),
+    );
   }
 
   // The action keys bound at start (app.tsx builds the keymap from the same).
@@ -661,11 +650,18 @@ export function useActions(dialogs: Dialogs) {
       <ChoiceModal
         title={`Actions · ${taskRef(task.id)}`}
         hint="Each runs a skill on this task; its answer lands in the chat."
-        choices={offered.map((a) => ({
-          label: a.title,
-          hint: keys.has(a.name) ? `${a.name} · ${a.key}` : a.name,
-          run: () => runAction(task, a.name),
-        })).concat(
+        choices={offered.flatMap((a) => [
+          {
+            label: a.title,
+            hint: keys.has(a.name) ? `${a.name} · ${a.key}` : a.name,
+            run: () => runAction(task, a.name),
+          },
+          // Asked again, the guide reviews what changed since your last
+          // review; this one reviews all of it.
+          ...(a.output === ActionOutput.guide && desk.askedReview(task.id)
+            ? [{ label: `${a.title}, whole PR`, hint: "not only what changed since your last review", run: () => runAction(task, a.name, { whole: true }) }]
+            : []),
+        ]).concat(
           review
             ? [{ label: OPEN_REVIEW_TITLE, hint: "the last guide, no run", run: () => openGuideReview(task) }]
             : [],

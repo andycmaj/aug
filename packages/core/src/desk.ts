@@ -36,6 +36,7 @@ import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
 import { guideReview, hasGuideReview, startAction, type ActionResult } from "./run-action";
+import { ReviewEnd, reviewExit } from "./guide-turn";
 import { capReached } from "./spend";
 import {
   ActionEvent,
@@ -50,7 +51,8 @@ import {
   type ActionSpec,
 } from "./task-actions";
 import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
-import type { MoveGuard, Triage, TriageEffect, TriageOutcome } from "./plugins";
+import type { MoveGuard, ReviewSource, Triage, TriageEffect, TriageOutcome } from "./plugins";
+import { reviewedPr } from "./pr";
 import {
   AgentState,
   IdeaStatus,
@@ -100,6 +102,8 @@ export interface DeskOptions {
   drafts?: Drafts;
   // Moves that wait for the owner's yes (core/moves.ts asks each).
   guards?: readonly MoveGuard[];
+  // Where the guide reads a PR's context, on a review asked of the owner.
+  reviews?: ReviewSource;
 }
 
 export class Desk {
@@ -321,9 +325,12 @@ export class Desk {
 
   // A task action (core/task-actions.ts): started now, its answer a turn on
   // the task. Nothing to undo: an action reads, and its turn stays.
+  // `whole`: the guide on a PR asked of the owner reviews all of it, not
+  // only what changed since their last review.
   runAction(
     taskId: number,
     name: string,
+    opts: { whole?: boolean } = {},
   ): { error: string } | { title: string; turnId?: number; done: Promise<ActionResult> } {
     const task = store.getTask(taskId);
     if (!task) return { error: `no task ${store.taskRef(taskId)}` };
@@ -335,7 +342,7 @@ export class Desk {
     }
     const why = whyNot(spec, task);
     if (why) return { error: why };
-    return this.startAction(config, task, spec);
+    return this.startAction(config, task, spec, undefined, opts.whole);
   }
 
   // What an action offered on a task still needs before runAction: its
@@ -371,10 +378,57 @@ export class Desk {
     return !!task && hasGuideReview(task);
   }
 
+  // A PR someone asked the owner to review (triage marked it), not their own.
+  askedReview(taskId: number): boolean {
+    const task = store.getTask(taskId);
+    return !!task && reviewedPr(task) !== null;
+  }
+
   guideReview(taskId: number): ActionResult | { error: string } {
     const task = store.getTask(taskId);
     if (!task) return { error: `no task ${store.taskRef(taskId)}` };
     return guideReview(task);
+  }
+
+  // A guide's review closed (`output` is what plannotator printed). A
+  // review posted to GitHub is the end of an asked-for review: the task
+  // closes. A bare Approve of your own work sends nothing, and says so on
+  // the task. Notes go to the agent; one whose session ended is resumed
+  // with them, since sending them is the owner's word to go on. Returns a
+  // line for the toast.
+  async finishReview(
+    taskId: number,
+    posts: "github" | undefined,
+    output: string,
+  ): Promise<{ text: string; failed?: boolean } | null> {
+    const task = store.getTask(taskId);
+    if (!task) return null;
+    const ref = store.taskRef(taskId);
+    const { end, notes, status } = reviewExit(posts, output);
+    if (end === ReviewEnd.posted) {
+      const closed = await this.close(taskId);
+      const warn = closed.warnings.length ? ` (${closed.warnings.join("; ")})` : "";
+      return { text: `${ref}: ${status}; closed${warn}` };
+    }
+    if (end === ReviewEnd.approved) {
+      store.addTurn({ taskId, role: TurnRole.trigger, body: status! });
+      return { text: `${ref}: ${status}` };
+    }
+    if (!notes) return status ? { text: `${ref}: ${status}` } : null;
+    const heard = await this.say(
+      taskId,
+      `My notes from the guided review in Plannotator (with the review findings riker posted there that I kept):\n\n${notes}`,
+    );
+    if (heard) return { text: `Your review notes went to ${ref}'s agent` };
+    const started = await this.startAgent(taskId);
+    if (started.type === "started" || started.type === "queued")
+      return { text: `${ref}'s agent resumed with your review notes` };
+    if (started.type === "needs")
+      return { text: `Your review notes are on ${ref}: s starts its agent with them` };
+    return {
+      text: `Your review notes are on ${ref}, but its agent did not start: ${started.error}`,
+      failed: true,
+    };
   }
 
   private startAction(
@@ -382,6 +436,7 @@ export class Desk {
     task: TaskRow,
     spec: ActionSpec,
     event?: ActionEvent,
+    whole = false,
   ): { error: string } | { title: string; turnId?: number; done: Promise<ActionResult> } {
     if (spec.via === ActionVia.agent) {
       const text = invocation(spec, task);
@@ -393,7 +448,14 @@ export class Desk {
         })),
       };
     }
-    const run = startAction(config, task, spec, event);
+    const pr = reviewedPr(task);
+    const run = startAction(
+      config,
+      task,
+      spec,
+      event,
+      pr && this.options.reviews ? { pr, source: this.options.reviews, whole } : undefined,
+    );
     if ("error" in run) return run;
     return { title: spec.title, turnId: run.turnId, done: run.done };
   }

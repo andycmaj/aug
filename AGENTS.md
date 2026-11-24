@@ -31,8 +31,9 @@ other way (a new package gets a line in its `ALLOWED`).
   `Drafts`, `desk.drafts` for the TUI), move `guards`, its `config`
   sections (`configSection(key, defaults, merge)`: core keeps what the file
   holds under that key as written, the plugin reads it whole with
-  `section.of(config)`) and `assistant` lines for the Assistant's system
-  prompt. Core's vocabulary stays open: a `Channel` is a string, a
+  `section.of(config)`), a `reviews` source (what the guide reads beside a
+  PR asked of the owner, and the commit they last reviewed) and
+  `assistant` lines for the Assistant's system prompt. Core's vocabulary stays open: a `Channel` is a string, a
   `DraftAction` a `type` plus the plugin's own fields. An entry point hands
   the engine its list (`rikerPlugins()` in `tui/src/plugins.ts`, which
   `index.tsx` and riker-tools both read; the fixture day and the sim have
@@ -42,7 +43,7 @@ other way (a new package gets a line in its `ALLOWED`).
   worker (`src/worker.ts`); `triagePlugin()`.
 - **`@riker/github`**: notifications in (`ingest.ts`), the rate-limit gate
   (`gate.ts`), each task's PR status read (`pr-status.ts`; the rail's words
-  for it stay `core/pr.ts`), its draft (`draft.ts`, sent through gh in
+  for it stay `core/pr.ts`), a review's context (`review-context.ts`), its draft (`draft.ts`, sent through gh in
   `send.ts`), its config (`config.ts`), the poll (`connector.ts`);
   `githubPlugin()`.
 - **`@riker/slack`**: the transports (`transport.ts`, `token.ts`,
@@ -212,7 +213,9 @@ Tests live beside their package (`packages/<name>/test/`).
   its brief: the `review ask` rule always makes one when a PR requests a
   review of, or tags, the owner or a team in `triage.reviewTeams` (who was
   asked is read at ingest, a tagged team from the comment), and a review
-  the model finds elsewhere becomes one too. An
+  the model finds elsewhere becomes one too. One task per PR: a later ask
+  from either side joins it. A PR that asks or tags only teams not in that
+  list is filed FYI with no model (`others' review`). An
   unmapped repo is said on the task, never guessed; Start asks.
 - **Wins history is `task_events`** (triggers in `core/db.ts`, read by
   `core/wins-board.ts`): what happened to a task, kept after its columns
@@ -269,7 +272,10 @@ Tests live beside their package (`packages/<name>/test/`).
   triage files offers its guide on arrival and never runs it by itself.
   Triage marks that PR as one to review (`reviewedPr`, `core/pr.ts`): its
   guide's review opens in Plannotator's PR mode, whose Post to GitHub
-  sends the owner's review, and nothing goes to the agent (`reviewExit`).
+  sends the owner's review and closes the task, and nothing goes to the
+  agent. On the owner's own work, notes go to the agent, resuming one
+  whose session ended; a bare Approve sends nothing. Plannotator runs with
+  `--json` so `desk.finishReview` reads how it ended (`reviewExit`).
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `riker-tools move <verb>`, the Assistant's
   prompt and the engine's dispatch, which runs each on the desk. riker-tools
@@ -474,13 +480,20 @@ Tests live beside their package (`packages/<name>/test/`).
   the engine's `github.api`/`github.prs` seam reads a JSON state file, Send
   writes to it, so triage, `pr_status`, the rail, `riker-tools feedback` and
   nudges run unchanged with no GitHub call. From another terminal,
-  `bun run sim:do pr-open [--mine] | comment | mention | review --verdict
-  approve|changes|comment --comments N | ci fail|pass | push | merge |
-  play <scenario> | state` changes it, and the sim polls on the write. Its
+  `bun run sim:do pr-open [--mine] [--team reviewers] | comment | mention |
+  review --verdict approve|changes|comment --comments N | ci fail|pass |
+  push | merge | rerequest | close | play <scenario> | state` changes it, and the sim polls on the write. Its
   repo `sim/riker` is a remote-less clone of Riker whose PR branches are real
   commits, so a task on one starts in a worktree with a real diff; the
   seeded coding task's `--mine` PR is linked to it. A scenario is a list of
   events in `SCENARIOS` (`events.ts`); `packages/fixtures/test/sim.test.ts` reads the fake
   through `pollGithub` and `readPrBatch`, so it cannot drift from them.
+- `bun run gen` is the review activity generator (`packages/fixtures/src/gen/`,
+  docs/code-reviews-design.md): a colleague asking the owner's review, on the
+  running sim (`--target sim`) or a real lab repo as a GitHub App (`--target
+  github`, `gen setup` lists the owner's steps, `gen check` tests them).
+  `gen once ask|team|tag|rerequest|tick`, or `gen start|stop` for a stream
+  within its limits (`plan.ts`, the whole author loop, no I/O); `--plant`
+  (GitHub only) has haiku hide one bug per PR and keeps where in its state.
 - `bun test` covers the core. Reproduce a bug in a test before fixing it.
 - Real-mode checks cost tokens: use `haiku` in a scratch `RIKER_HOME`.

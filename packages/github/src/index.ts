@@ -5,6 +5,7 @@ import type { RikerPlugin } from "@riker/core/plugins";
 import { GithubConnector, type GithubOptions } from "./connector";
 import { githubConfig, type GithubConfig } from "./config";
 import { githubComment, type GithubComment } from "./draft";
+import { githubReviews, type GraphqlRun } from "./review-context";
 
 export { GithubConnector, githubConfig, type GithubConfig, githubComment, type GithubComment, type GithubOptions };
 
@@ -14,7 +15,9 @@ const GITHUB_LINES = [
   "Look up issues, PRs and runs with gh's read commands: gh pr view|list|diff|checks|status, gh issue view|list|status, gh search, gh run view|list, gh repo view. Nothing that writes (no comments, no gh api).",
 ];
 
-export function githubPlugin(options: GithubOptions = {}): RikerPlugin & { connector: GithubConnector } {
+export function githubPlugin(
+  options: GithubOptions & { graphql?: GraphqlRun } = {},
+): RikerPlugin & { connector: GithubConnector } {
   const connector = new GithubConnector(options);
   return {
     name: "github",
@@ -22,6 +25,7 @@ export function githubPlugin(options: GithubOptions = {}): RikerPlugin & { conne
     connectors: [connector],
     drafts: [githubComment],
     config: [githubConfig],
+    reviews: githubReviews(options.graphql),
     assistant: () => GITHUB_LINES,
   };
 }

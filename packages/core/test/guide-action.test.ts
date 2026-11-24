@@ -76,7 +76,7 @@ describe("the guide action", () => {
     expect(snap.version).toBe(4);
     expect(snap.review.rawPatch).toContain("+export function div");
 
-    expect(result.terminal!.argv.join(" ")).toContain("plannotator review --base");
+    expect(result.terminal!.argv.join(" ")).toContain("plannotator review --json --base");
     expect(result.terminal!.cwd).toBe(dir);
     expect(result.terminal!.feedback).toEndWith("guide-feedback.md");
     // The review comes up on a port Riker chose, so it can post the notes there.
@@ -114,7 +114,7 @@ describe("the guide action", () => {
     const again = engine.desk.guideReview(task.id);
     if ("error" in again) throw new Error(again.error);
     expect(asked).toBe(0);
-    expect(again.terminal!.argv.join(" ")).toContain("plannotator review --base");
+    expect(again.terminal!.argv.join(" ")).toContain("plannotator review --json --base");
     expect(again.terminal!.feedback).toBe(first.terminal!.feedback);
     expect(again.terminal!.comments!.list).toEqual(first.terminal!.comments!.list);
     const port = again.terminal!.comments!.port;

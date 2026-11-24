@@ -143,6 +143,9 @@ export interface RailInput {
   pendingActions: Set<number>;
   // Tasks a review request filed; they sit under Code Reviews, not Tasks.
   reviews?: Set<number>;
+  // Review task id -> when someone last asked or wrote on it: the oldest
+  // ask leads Code Reviews.
+  asked?: Map<number, string>;
   // Task id -> when the last message from somebody else arrived, for slipped.
   lastHeard: Map<number, string>;
   now: Date;
@@ -233,6 +236,10 @@ export function buildRail(input: RailInput): RailSection[] {
       prState: reviews.has(task.id) ? null : (input.prStates?.get(task.id) ?? null),
       blockers,
     });
+    // The rail's clock ticks by the minute: an ask newer than it is now.
+    const asked = reviews.has(task.id)
+      ? [input.asked?.get(task.id) ?? task.created_at, input.now.toISOString()].sort()[0]
+      : undefined;
     const item: TaskItem = {
       type: "task",
       key: taskKey(task.id),
@@ -245,7 +252,8 @@ export function buildRail(input: RailInput): RailSection[] {
         input.now,
         blockers > 0,
       ),
-      at: task.created_at,
+      // A review's age is how long the ask has waited on you.
+      at: asked ?? task.created_at,
       group: null,
       copy: false,
       tags: [],

@@ -489,7 +489,7 @@ $ bun packages/code-review-plannotator/src/cli.ts review \
     <div class="tbl ftree"><table><tbody id="ftree"></tbody></table></div>
   </section>
 
-  <footer class="stamp">Checked against andycmaj/riker main at 1d3befb with merge checked at a turn's end (2026-11-24). Plans named here (RIKER-0188, RIKER-0190, RIKER-0208) were open then. Published to GitHub Pages by <code>bun run docs:site</code>.</footer>
+  <footer class="stamp">Checked against andycmaj/riker main at 3d18241 with the code reviews one-pager's changes (2026-11-24): one task per PR, the guide reading the PR and what changed since your last review, a posted review closing its task, and the review activity generator. Plans named here (RIKER-0188, RIKER-0190, RIKER-0208) were open then. Published to GitHub Pages by <code>bun run docs:site</code>.</footer>
 </div>
 
 <script>
@@ -888,10 +888,10 @@ renderExplore();
 const PKGS = [
   ["@riker/core", "The domain: store, engine, desk, lifecycle, agent pool, hooks, outbound drafts, learning, the Assistant, the Advisor, task actions. No opentui or solid. Also its embedded text (defaults/, Riker's plugin/, contrib/revdiff/) and the test helpers other packages import (freshHome(), fakeBrain(), fake-mux).", "imports: code-review-plannotator (until RIKER-0190)"],
   ["@riker/triage", "The chain of rules (triage.ts) and the inbox's worker (worker.ts).", "hands core: <code>triage</code> (arrived, next, again, fromHeld)"],
-  ["@riker/github", "Notifications in (ingest.ts), the rate-limit gate (gate.ts), each task's PR status (pr-status.ts), its draft (draft.ts, sent through gh in send.ts), its config (config.ts), the poll (connector.ts).", "hands core: <code>connectors</code> [github], <code>drafts</code> [github_comment], <code>config</code> [github], <code>assistant</code> (gh reads)"],
+  ["@riker/github", "Notifications in (ingest.ts), the rate-limit gate (gate.ts), each task's PR status (pr-status.ts), what the guide reads beside a PR asked of you (review-context.ts), its draft (draft.ts, sent through gh in send.ts), its config (config.ts), the poll (connector.ts).", "hands core: <code>connectors</code> [github], <code>drafts</code> [github_comment], <code>config</code> [github], <code>reviews</code> (review-context.ts), <code>assistant</code> (gh reads)"],
   ["@riker/slack", "The transports (token, claude-mcp, mcp), the poller and the remote, its draft (draft.ts), its slack and remote config (config.ts), and the hold on moves asked from Slack (confirm.ts).", "hands core: <code>connectors</code> [slack, remote], <code>drafts</code> [slack_reply], <code>config</code> [slack, remote], <code>guards</code> [confirmGuard], <code>assistant</code> (the Slack line)"],
   ["@riker/code-review-plannotator", "The guided review as a library, runnable without Riker: patchFor, planBatches, reviewInBatches with an injected ask, fitGuide, saveGuide, postComments, the CLI and skill/SKILL.md.", "imports nothing of Riker's"],
-  ["@riker/fixtures", "The demo day (bun run demo), the offline GitHub sim (bun run sim, sim:do) and a fake claude that fires real hooks.", "passes the three plugins to its engine"],
+  ["@riker/fixtures", "The demo day (bun run demo), the offline GitHub sim (bun run sim, sim:do), the review activity generator (bun run gen: PRs asking your review, on the sim or a lab repo as a GitHub App) and a fake claude that fires real hooks.", "passes the three plugins to its engine"],
   ["@riker/tui", "The UI: index.tsx, app, components, context, terminal, keymap, palette; and cli.ts, the riker argv parser.", "plugins.ts: <code>rikerPlugins()</code>, read by index.tsx and riker-tools"],
   ["@riker/cli", "What a shell runs: src/riker.ts (the one entry; riker tools … is riker-tools), src/riker-tools.ts, script/riker.ts (bun dev, restarts on RESTART_CODE), script/compile.ts (dist/riker).", "tells core where riker-tools is: <code>setToolsEntry</code>"],
 ];
@@ -903,6 +903,7 @@ const PLUGIN_FIELDS = [
   ["drafts", "DraftKinds, one per type: build(message, answer) from a task's last message (null when not its channel), describe() the words before Send, text() and withText() for your edit, send() to a receipt line. Two plugins never share a type.", "@riker/github, @riker/slack"],
   ["guards", "MoveGuards: a move the owner must say yes to first. The guard answers what to say instead, or null to let it run.", "@riker/slack (confirmGuard)"],
   ["config", "ConfigSections: configSection(key, defaults, merge). Core keeps that key of config.json as written; the plugin reads it whole with section.of(config). The engine refuses a core key or one another plugin took.", "@riker/github (github), @riker/slack (slack, remote)"],
+  ["reviews", "A ReviewSource (at most one): context(pr) reads what a reviewer needs beside a PR asked of the owner, its words, the issues it closes, its open threads, and the commit they last reviewed. The guide puts it in every call, and asked again reviews only what changed since (whole PR on the picker).", "@riker/github (review-context.ts)"],
   ["assistant", "assistant(config): lines for the Assistant's system prompt, such as what it may look up and how a line heard from the plugin's place is answered.", "@riker/github, @riker/slack"],
 ];
 $("#pluginFields").innerHTML = PLUGIN_FIELDS.map(([f, w, b]) => `<tr><td>${esc(f)}</td><td>${esc(w)}</td><td>${esc(b)}</td></tr>`).join("");
@@ -916,7 +917,8 @@ const GATES = [
   { nm:"noise", ds:"A config.triage.noise rule matches: a bot wrote it, CI activity, a state change on a thread you only follow, or a pattern taught with the noise move.", out:"fyi" },
   { nm:"same thread", ds:"A GitHub issue or Slack thread is one conversation, so it attaches to its open task. Not for DMs.", out:"attach" },
   { nm:"after close", ds:"They wrote after the close (your own reply doesn't count): it attaches to the closed task.", out:"attach" },
-  { nm:"review ask", ds:"A PR asking a review of you or a triage.reviewTeams team, or tagging one: always a coding review task on pr:N, held for Start. The model gives only its words.", out:"review task", model:true },
+  { nm:"review ask", ds:"A PR asking a review of you or a triage.reviewTeams team, or tagging one: always a coding review task on pr:N, held for Start. A PR that already has a task (asked in Slack, then on GitHub, or again after a close) joins it: one task per PR. The model gives only its words.", out:"review task", model:true },
+  { nm:"others' review", ds:"A PR that asks, or tags, only teams not in triage.reviewTeams is someone else's review: filed for you to read, no model asked. Who was asked not known: the model judges it.", out:"fyi" },
   { nm:"unjudged", ds:"The first rule that needs the verdict asks for it. If the call fails: filed as 'awaiting AI triage', never assumed work; the worker retries.", out:"failed", model:true },
   { nm:"same ask", ds:"A DM is a stream of asks, so the model's same_ask decides whether it joins the open task.", out:"attach" },
   { nm:"judged fyi", ds:"The model says fyi: filed, nothing made.", out:"fyi" },
@@ -1169,7 +1171,7 @@ const GUIDE = [
   { nm:"Save", ds:"saveGuide writes guide.json (Plannotator snapshot v4, the one that carries notes) and guide-findings.json under What it made, then plannotator guide import --snapshot (--pr when the task has one).", out:"guide.ts" },
   { nm:"Report", ds:"The turn lists the chapters and every finding. What no call answered for, chapters that did not parse, files too large and denied calls are said on the turn and in the toast, never 'nothing stood out'.", out:"guide-turn.ts" },
   { nm:"Review", ds:"Run by you: the TUI opens Plannotator on the Canvas on a port Riker picked, clears comments from source riker-guide and posts every finding (on its lines when one hunk shows them, else on its file; Bug and Risk as concerns). A PR you were asked to review opens in PR mode (plannotator review <PR URL>); your own work, on the worktree (--base <base>). Run by a trigger: saved; it waits for Open the guide's review.", out:"run-action.ts" },
-  { nm:"Feedback", ds:"A PR you were asked to review: Plannotator's Post to GitHub submits your review (approve, comment or request changes, line comments); nothing goes to the agent, and the toast says Plannotator's status line (reviewExit). Your own work: what you send goes to the agent when the review exits (reviewNotes), waiting on the task for Start when none runs; never to GitHub. An approval, or closing with no feedback, sends nothing.", out:"guide-turn.ts" },
+  { nm:"Feedback", ds:"plannotator review --json prints how it ended (approved, annotated, dismissed) and desk.finishReview acts on it (reviewExit). A PR you were asked to review: Plannotator's Post to GitHub submits your review (approve, comment or request changes, line comments), nothing goes to the agent, and the task closes; closed without posting, it stays open. Your own work: what you send goes to the agent, and one not running is started (resumed) with it; never to GitHub. A bare Approve sends nothing and says so on the task.", out:"guide-turn.ts · desk.ts" },
 ];
 $("#guideSteps").innerHTML = GUIDE.map((g, i) => `<li class="gate"><span class="num">${i + 1}</span><div><div class="nm">${esc(g.nm)}</div><div class="ds">${esc(g.ds)}</div></div><span class="out">${esc(g.out)}</span></li>`).join("");
 const BATCH_RULES = [
