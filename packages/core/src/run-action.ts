@@ -543,7 +543,7 @@ function prToReview(task: TaskRow): string | null {
 }
 
 // `plannotator review` on a port Riker picks, so it can post the findings;
-// what the owner sends lands in guide-feedback.md. A PR the owner was asked
+// how the owner ended it (one --json record) lands in guide-feedback.md. A PR the owner was asked
 // to review opens on the PR (Plannotator's PR mode), whose own Post to
 // GitHub sends their review; their own work opens on the worktree, against
 // its base, and what they send goes to its agent.
@@ -559,11 +559,11 @@ function reviewTerminal(
   const port = freePort();
   return {
     argv: pr
-      ? ["sh", "-c", 'rm -f "$2"; plannotator review "$1" | tee "$2"', "plannotator", pr, feedback]
+      ? ["sh", "-c", 'rm -f "$2"; plannotator review --json "$1" | tee "$2"', "plannotator", pr, feedback]
       : [
           "sh",
           "-c",
-          'rm -f "$2"; plannotator review --base "$1" | tee "$2"',
+          'rm -f "$2"; plannotator review --json --base "$1" | tee "$2"',
           "plannotator",
           base,
           feedback,

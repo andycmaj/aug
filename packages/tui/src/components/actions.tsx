@@ -34,7 +34,7 @@ import { strayLabel, type Stray } from "@riker/core/strays";
 import { baseKey, neighborKey, type RailItem } from "@riker/core/rail";
 import { isClosed, taskRef } from "@riker/core/rows";
 import { postComments } from "@riker/code-review-plannotator/guide";
-import { OPEN_REVIEW_TITLE, reviewExit } from "@riker/core/guide-turn";
+import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
 import type { ActionResult } from "@riker/core/run-action";
 import { actionNamed, actionsFor, keyedActions, makesCheckout } from "@riker/core/task-actions";
 import { describeProblem } from "@riker/core/repos";
@@ -564,28 +564,17 @@ export function useActions(dialogs: Dialogs) {
       });
   }
 
-  // What the owner sent from plannotator review goes to the agent, as if
-  // typed; an approval or a review closed without feedback sends nothing
-  // (reviewNotes). It carries Riker's comments the owner kept, unlabelled, so
-  // the message says so. A PR they were asked to review posted to GitHub
-  // from Plannotator: only its status line is said (reviewExit).
+  // How the owner ended plannotator review (desk.finishReview): a review
+  // posted to GitHub closes its task; notes go to the agent, resumed if its
+  // session ended; a bare Approve sends nothing.
   function afterReview(task: TaskRow, file: string, posts: "github" | undefined) {
-    const { notes, status } = reviewExit(posts, existsSync(file) ? readFileSync(file, "utf8") : "");
-    if (status) showToast(`${taskRef(task.id)}: ${status}`, 6000);
-    if (!notes) return;
-    // With no agent running they wait on the task: Start hands them over.
-    desk
-      .say(task.id, `My notes from the guided review in Plannotator (with the review findings riker posted there that I kept):\n\n${notes}`)
-      .then(
-        (heard) =>
-          showToast(
-            heard
-              ? `Your review notes went to ${taskRef(task.id)}'s agent`
-              : `Your review notes are on ${taskRef(task.id)}: its agent gets them when it starts`,
-            4000,
-          ),
-        (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),
-      );
+    const output = existsSync(file) ? readFileSync(file, "utf8") : "";
+    desk.finishReview(task.id, posts, output).then(
+      (said) => {
+        if (said) showToast(said.text, 6000, said.failed ? "error" : undefined);
+      },
+      (err) => showToast(`Review notes not sent: ${errorMessage(err)}`, 5000, "error"),
+    );
   }
 
   // The action keys bound at start (app.tsx builds the keymap from the same).

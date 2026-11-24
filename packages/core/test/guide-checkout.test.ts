@@ -134,7 +134,7 @@ describe("the guide on a review with no worktree", () => {
     // Not marked as a PR to review: a local review of the worktree, whose
     // notes go to the agent, never the PR on GitHub.
     const argv = result.terminal!.argv.join(" ");
-    expect(argv).toContain("plannotator review --base");
+    expect(argv).toContain("plannotator review --json --base");
     expect(argv).not.toContain("github.com");
     expect(result.terminal!.posts).toBeUndefined();
     expect(result.terminal!.cwd).toBe(checkout);
@@ -176,7 +176,7 @@ describe("the guide on a review with no worktree", () => {
       const started = engine.desk.runAction(task.id, "guide");
       if ("error" in started) throw new Error(started.error);
       const run = (await started.done).terminal!;
-      expect(run.argv.join(" ")).toContain("plannotator review --base");
+      expect(run.argv.join(" ")).toContain("plannotator review --json --base");
       expect(run.posts).toBeUndefined();
     } finally {
       setGuidePrReviews(true);
@@ -259,25 +259,89 @@ test("Start after the guide made the worktree starts in it, and its project gets
   expect(project.repos).toContain("acme/api");
 });
 
+// What plannotator review --json prints, as 0.29.1 prints it (probed by
+// posting to its /api/feedback and /api/exit).
+const record = (decision: string, message: string) => JSON.stringify({ decision, message });
+const POSTED = record("annotated", "Pull request reviewed on GitHub: https://github.com/acme/api/pull/40");
+const APPROVED = record("approved", "# Code Review\n\nCode review completed — no changes requested.");
+const APPROVED_WITH_NOTES = record(
+  "approved",
+  "# Code Review — Approved with Notes\n\nCode review completed — the changes are approved.\n\nnit: rename y",
+);
+const DISMISSED = record("dismissed", "Review session closed without feedback.");
+const NOTES = record("annotated", "# Code Review Feedback\n\n## a.ts\n\n### Line 3 (new)\nrename this");
+
 describe("when the review closes", () => {
   const notes = "# Code Review Feedback\n\n## a.ts\n\n### Line 3 (new)\nrename this\n";
 
   test("the owner's own work: what they sent goes to the agent", () => {
-    expect(reviewExit(undefined, notes)).toEqual({ notes: notes.trim(), status: null });
-    expect(reviewExit(undefined, "The user approved.")).toEqual({ notes: null, status: null });
+    expect(reviewExit(undefined, NOTES)).toEqual({ end: "notes", notes: notes.trim(), status: null });
+    expect(reviewExit(undefined, notes)).toMatchObject({ end: "notes", notes: notes.trim() });
+    expect(reviewExit(undefined, APPROVED_WITH_NOTES)).toMatchObject({ end: "notes" });
+    expect(reviewExit(undefined, DISMISSED)).toEqual({ end: "none", notes: null, status: null });
+  });
+
+  test("a bare Approve of their own work sends nothing", () => {
+    for (const out of [APPROVED, "The user approved."])
+      expect(reviewExit(undefined, out)).toEqual({
+        end: "approved",
+        notes: null,
+        status: "Self-review: approved, no comments",
+      });
   });
 
   test("a PR they were asked to review: Plannotator posted it, nothing goes to the agent", () => {
-    expect(reviewExit("github", "Pull request reviewed on GitHub: https://github.com/acme/api/pull/40\n")).toEqual({
-      notes: null,
-      status: "Pull request reviewed on GitHub: https://github.com/acme/api/pull/40",
-    });
-    expect(reviewExit("github", "Review session closed without feedback.")).toEqual({
+    for (const out of [POSTED, "Pull request reviewed on GitHub: https://github.com/acme/api/pull/40\n"])
+      expect(reviewExit("github", out)).toEqual({
+        end: "posted",
+        notes: null,
+        status: "Pull request reviewed on GitHub: https://github.com/acme/api/pull/40",
+      });
+    expect(reviewExit("github", record("annotated", "Changes requested on GitHub")).end).toBe("posted");
+    expect(reviewExit("github", DISMISSED)).toEqual({
+      end: "none",
       notes: null,
       status: "Nothing was posted to GitHub",
     });
-    const sent = reviewExit("github", notes);
-    expect(sent.notes).toBeNull();
+    // Approved toward the agent in PR mode: nothing was posted.
+    expect(reviewExit("github", APPROVED).end).toBe("none");
+    const sent = reviewExit("github", NOTES);
+    expect(sent).toMatchObject({ end: "none", notes: null });
     expect(sent.status).toContain("Not posted to GitHub");
+  });
+
+  test("posted to GitHub: the review task closes and its worktree goes", async () => {
+    const { engine, task } = review();
+    await engine.desk.prepareAction(task.id, "guide");
+    const said = await engine.desk.finishReview(task.id, "github", POSTED);
+    expect(said!.text).toBe(
+      `${store.taskRef(task.id)}: Pull request reviewed on GitHub: https://github.com/acme/api/pull/40; closed`,
+    );
+    expect(store.getTask(task.id)!.status).toBe("done");
+  });
+
+  test("not posted: the review task stays open", async () => {
+    const { engine, task } = review();
+    const said = await engine.desk.finishReview(task.id, "github", DISMISSED);
+    expect(said!.text).toContain("Nothing was posted to GitHub");
+    expect(store.getTask(task.id)!.status).toBe("open");
+  });
+
+  test("a bare Approve says so on the task and starts nothing", async () => {
+    const { engine, task } = review();
+    await engine.desk.finishReview(task.id, undefined, APPROVED);
+    const last = store.turnsForTask(task.id).at(-1)!;
+    expect(last).toMatchObject({ role: TurnRole.trigger, body: "Self-review: approved, no comments" });
+    expect(mux.windows).toHaveLength(0);
+  });
+
+  test("notes for an agent that is not running start it with them", async () => {
+    const { engine, task } = review();
+    await engine.desk.prepareAction(task.id, "guide");
+    const said = await engine.desk.finishReview(task.id, undefined, NOTES);
+    expect(said!.text).toBe(`${store.taskRef(task.id)}'s agent resumed with your review notes`);
+    expect(mux.windows).toHaveLength(1);
+    const you = store.turnsForTask(task.id).filter((t) => t.role === TurnRole.you);
+    expect(you.at(-1)!.body).toContain("rename this");
   });
 });

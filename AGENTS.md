@@ -270,7 +270,10 @@ Tests live beside their package (`packages/<name>/test/`).
   triage files offers its guide on arrival and never runs it by itself.
   Triage marks that PR as one to review (`reviewedPr`, `core/pr.ts`): its
   guide's review opens in Plannotator's PR mode, whose Post to GitHub
-  sends the owner's review, and nothing goes to the agent (`reviewExit`).
+  sends the owner's review and closes the task, and nothing goes to the
+  agent. On the owner's own work, notes go to the agent, resuming one
+  whose session ended; a bare Approve sends nothing. Plannotator runs with
+  `--json` so `desk.finishReview` reads how it ended (`reviewExit`).
 - **Other processes ask for moves through `core/moves.ts`.** One registry
   (verb, args, help, run) feeds `riker-tools move <verb>`, the Assistant's
   prompt and the engine's dispatch, which runs each on the desk. riker-tools

@@ -36,6 +36,7 @@ import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
 import { guideReview, hasGuideReview, startAction, type ActionResult } from "./run-action";
+import { ReviewEnd, reviewExit } from "./guide-turn";
 import { capReached } from "./spend";
 import {
   ActionEvent,
@@ -370,6 +371,47 @@ export class Desk {
     const task = store.getTask(taskId);
     if (!task) return { error: `no task ${store.taskRef(taskId)}` };
     return guideReview(task);
+  }
+
+  // A guide's review closed (`output` is what plannotator printed). A
+  // review posted to GitHub is the end of an asked-for review: the task
+  // closes. A bare Approve of your own work sends nothing, and says so on
+  // the task. Notes go to the agent; one whose session ended is resumed
+  // with them, since sending them is the owner's word to go on. Returns a
+  // line for the toast.
+  async finishReview(
+    taskId: number,
+    posts: "github" | undefined,
+    output: string,
+  ): Promise<{ text: string; failed?: boolean } | null> {
+    const task = store.getTask(taskId);
+    if (!task) return null;
+    const ref = store.taskRef(taskId);
+    const { end, notes, status } = reviewExit(posts, output);
+    if (end === ReviewEnd.posted) {
+      const closed = await this.close(taskId);
+      const warn = closed.warnings.length ? ` (${closed.warnings.join("; ")})` : "";
+      return { text: `${ref}: ${status}; closed${warn}` };
+    }
+    if (end === ReviewEnd.approved) {
+      store.addTurn({ taskId, role: TurnRole.trigger, body: status! });
+      return { text: `${ref}: ${status}` };
+    }
+    if (!notes) return status ? { text: `${ref}: ${status}` } : null;
+    const heard = await this.say(
+      taskId,
+      `My notes from the guided review in Plannotator (with the review findings riker posted there that I kept):\n\n${notes}`,
+    );
+    if (heard) return { text: `Your review notes went to ${ref}'s agent` };
+    const started = await this.startAgent(taskId);
+    if (started.type === "started" || started.type === "queued")
+      return { text: `${ref}'s agent resumed with your review notes` };
+    if (started.type === "needs")
+      return { text: `Your review notes are on ${ref}: s starts its agent with them` };
+    return {
+      text: `Your review notes are on ${ref}, but its agent did not start: ${started.error}`,
+      failed: true,
+    };
   }
 
   private startAction(
