@@ -148,6 +148,26 @@ current version, before the turns); `riker-tools task` (and so the
 Assistant, for a task the owner names); the Canvas, one line under the
 task's header (pins, the next step, what blocks it); `I`, all of it.
 
+## Reading them
+
+`V` on a task's row or Canvas reads its story, and on a project's its
+journal, as markdown over the Canvas (`ReaderModal`): j/k and space
+scroll, c copies, e opens it in `$EDITOR` in the Canvas. Over the text it
+lists what there is to open (`docLinks`): for a task its PR, the thread
+it came from, its links and its project's docs; for a project its docs,
+less the journal's own file. 1 to 9 open them through the opener. The story is
+`storyMarkdown`, a heading per part; in `$EDITOR` every part's heading is
+there, and saving reads it back (`parseStory`) as a new version by the
+owner, which `story_undo` steps back from. A line under no part is
+refused, and the file is kept. The journal's `e` edits a copy, since the
+engine may write an entry while it is open: saving lays the edit over the
+file as it is then (`saveJournalEdit`, git merge-file), so both are kept.
+An edit on the lines the engine wrote meanwhile (the newest entry, the
+status block) writes nothing and keeps the copy, and the toast says where. The journal is written as
+plain lines, which markdown would run together, so the reader shows it
+through `journalMarkdown`: markers dropped, the title and `Now:` as
+headings, a session's first line a heading, an event's line a list item.
+
 
 ## Knowledge
 

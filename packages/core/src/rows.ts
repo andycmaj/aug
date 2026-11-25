@@ -73,3 +73,28 @@ export function actionRailWord(
   const failed = turn.status === TurnStatus.failed;
   return { text: `${name} ${failed ? "failed" : "done"}`, running: false, failed };
 }
+
+// What a story or journal reader lists to open, numbered: the task's PR,
+// the thread it came from, its links, then its project's docs. One row per
+// URL, the first place it is named winning.
+export interface DocLink {
+  label: string;
+  url: string;
+}
+
+export function docLinks(parts: {
+  pr?: { repo: string; number: number; url: string } | null;
+  source?: string | null;
+  task?: { url: string; title: string | null }[];
+  project?: { url: string; title: string | null }[];
+}): DocLink[] {
+  const short = (u: string) => u.replace(/^(https?|file):\/\//, "");
+  const all: DocLink[] = [
+    ...(parts.pr ? [{ label: `PR ${parts.pr.repo}#${parts.pr.number}`, url: parts.pr.url }] : []),
+    ...(parts.source ? [{ label: "thread", url: parts.source }] : []),
+    ...(parts.task ?? []).map((l) => ({ label: l.title ?? short(l.url), url: l.url })),
+    ...(parts.project ?? []).map((l) => ({ label: `${l.title ?? short(l.url)} (project)`, url: l.url })),
+  ];
+  const seen = new Set<string>();
+  return all.filter((l) => !seen.has(l.url) && Boolean(seen.add(l.url)));
+}

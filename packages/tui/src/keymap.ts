@@ -303,6 +303,21 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     help: "journal",
     relevant: (c) => c.item === "project",
   },
+  // V reads it, rendered as markdown; e in the reader opens $EDITOR.
+  {
+    key: "shift+v",
+    cmd: Commands.STORY_READ,
+    desc: "read the task's story as markdown (e there rewrites it in $EDITOR)",
+    help: "read story",
+    relevant: isWork,
+  },
+  {
+    key: "shift+v",
+    cmd: Commands.JOURNAL_READ,
+    desc: "read the project's journal as markdown (e there opens the file in $EDITOR)",
+    help: "read journal",
+    relevant: (c) => c.item === "project",
+  },
   {
     key: "x",
     cmd: Commands.PROJECT_ARCHIVE,
