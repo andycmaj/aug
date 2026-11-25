@@ -10,7 +10,7 @@ import {
   type Accessor,
   type ParentProps,
 } from "solid-js";
-import type { BoxRenderable } from "@opentui/core";
+import { RGBA, type BoxRenderable } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createRequiredContext, useTheme } from "@andycmaj/opentui-app";
 import { PtySession } from "../terminal/pty-session";
@@ -19,6 +19,10 @@ import { readClipboard } from "../terminal/clipboard";
 import { terminalReplies } from "../terminal/replies";
 import { ViewportTerminalRenderable } from "../terminal/viewport-terminal";
 import { LinkTracker, type Link } from "@riker/core/link-state";
+
+// How much of the background a veiled terminal shows through: enough that
+// it reads as asleep, not so much that it cannot be read.
+export const VEIL_ALPHA = 0.5;
 
 // tmux attach, an editor or ghdash draws within a second; one silent this
 // long reads failed (it still connects if output comes later).
@@ -76,6 +80,9 @@ interface TerminalsValue {
   // running; the claim returns its release.
   attached: Accessor<string | null>;
   claimKeys: (id: string) => () => void;
+  // Greys a terminal's screen out while it is shown but not attached, so it
+  // is plain that typing does not go to it.
+  veil: (id: string, on: boolean) => void;
 }
 
 const [TerminalsContext, useTerminals] =
@@ -258,6 +265,14 @@ export function TerminalsProvider(props: ParentProps) {
         claimKeys: (id) => {
           setAttached(id);
           return () => setAttached((cur) => (cur === id ? null : cur));
+        },
+        veil: (id, on) => {
+          const term = terms.get(id);
+          if (!term) return;
+          const bg = isHex(theme.background) ? theme.background : "#000000";
+          const color = RGBA.fromHex(bg);
+          color.a = VEIL_ALPHA;
+          term.view.setVeil(on ? color : null);
         },
       }}
     >
