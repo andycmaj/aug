@@ -14,6 +14,13 @@ export function isClosed(task: Pick<TaskRow, "status">): boolean {
   return task.status === TaskStatus.done || task.status === TaskStatus.dropped;
 }
 
+// A labeled field: on the label's line when it is one line, under it when
+// it has paragraphs of its own, so its first one does not run into the
+// label.
+export function labeled(label: string, text: string): string {
+  return text.includes("\n") ? `${label}:\n${text}` : `${label}: ${text}`;
+}
+
 export function parseTaskRef(ref: string): number | null {
   // AUG- too: refs written before the rename never go away.
   return refNumber(ref);
@@ -72,4 +79,29 @@ export function actionRailWord(
   if (!turn.finished_at || now.getTime() - Date.parse(turn.finished_at) > ACTION_SHOWN_MS) return null;
   const failed = turn.status === TurnStatus.failed;
   return { text: `${name} ${failed ? "failed" : "done"}`, running: false, failed };
+}
+
+// What a story or journal reader lists to open, numbered: the task's PR,
+// the thread it came from, its links, then its project's docs. One row per
+// URL, the first place it is named winning.
+export interface DocLink {
+  label: string;
+  url: string;
+}
+
+export function docLinks(parts: {
+  pr?: { repo: string; number: number; url: string } | null;
+  source?: string | null;
+  task?: { url: string; title: string | null }[];
+  project?: { url: string; title: string | null }[];
+}): DocLink[] {
+  const short = (u: string) => u.replace(/^(https?|file):\/\//, "");
+  const all: DocLink[] = [
+    ...(parts.pr ? [{ label: `PR ${parts.pr.repo}#${parts.pr.number}`, url: parts.pr.url }] : []),
+    ...(parts.source ? [{ label: "thread", url: parts.source }] : []),
+    ...(parts.task ?? []).map((l) => ({ label: l.title ?? short(l.url), url: l.url })),
+    ...(parts.project ?? []).map((l) => ({ label: `${l.title ?? short(l.url)} (project)`, url: l.url })),
+  ];
+  const seen = new Set<string>();
+  return all.filter((l) => !seen.has(l.url) && Boolean(seen.add(l.url)));
 }

@@ -141,10 +141,11 @@ function noiseRule(args: Record<string, string>): NoiseRule {
   return rule;
 }
 
-// A doc the Assistant wrote for propose_doc. Its text cannot ride on the
-// Bash line: Claude Code denies a command with a line starting with # in a
-// quoted argument, which is every Markdown heading. Only files in the
-// docDrafts folder, so the move cannot be pointed at any file on disk.
+// Text the Assistant wrote to a file: a doc for propose_doc, a brief. It
+// cannot always ride on the Bash line: Claude Code denies a command with a
+// line starting with # in a quoted argument, which is every Markdown
+// heading. Only files in the docDrafts folder, so the move cannot be pointed
+// at any file on disk.
 function docDraftFile(given: string): string {
   const dir = docDraftsDir();
   let file: string;
@@ -158,6 +159,31 @@ function docDraftFile(given: string): string {
     throw new MoveError(`the file must be in ${dir}: got ${given}`);
   return file;
 }
+
+// A brief given inline or as a draft file; null when neither was. The file
+// goes once the move has made it (drop), so a refused move keeps the draft
+// to call again with. Line breaks are kept: they make a brief readable
+// (BRIEF_STYLE).
+function briefText(
+  args: Record<string, string>,
+  inline: string,
+): { text: string | null; drop(): void } {
+  const given = args[inline]?.trim() ? args[inline] : null;
+  if (given !== null && args.file?.trim())
+    throw new MoveError(`give --${inline} or --file, not both`);
+  if (!args.file?.trim()) return { text: given, drop() {} };
+  const file = docDraftFile(args.file.trim());
+  const text = readFileSync(file, "utf8");
+  if (!text.trim()) throw new MoveError("the brief file is empty");
+  return { text, drop: () => rmSync(file, { force: true }) };
+}
+
+// How the Assistant writes a brief. Whitespace over symbols: a newline
+// costs what a space does, a Markdown marker is a token more. Only in the
+// Assistant's prompt, which makes most briefs: in a coding brief it would
+// ride every request of every session.
+export const BRIEF_STYLE =
+  "Write a brief as short plain paragraphs, a blank line between, each under its label on its own line: What to change, Where, Why, Constraints, Related, Owner's words (skip empty ones). No bullets, bold, tables, headings or (1) markers.";
 
 // A name that matches no project says which ones there are, so the caller
 // can pick one or ask the owner whether to make it.
@@ -524,6 +550,7 @@ export const MOVES: Record<string, MoveSpec> = {
       title: { help: "a short title", required: true },
       kind: { help: `${KINDS.join(" | ")} (default general)` },
       brief: { help: "what is to be done, with what the agent needs to know" },
+      file: { help: "or the brief in a file you wrote in Riker's drafts/docs folder" },
       project: { help: "the project it belongs to" },
       repo: { help: "coding: owner/repo (default: the project's first repo)" },
       goal: { help: "the project goal it works toward (G3); puts it in that project" },
@@ -543,11 +570,12 @@ export const MOVES: Record<string, MoveSpec> = {
         : kind === Kind.coding && project
           ? (store.projectRepos(project)[0] ?? null)
           : null;
+      const brief = briefText(args, "brief");
       const fromId = args.from ? store.parseTaskRef(args.from) : agentTask(by);
       const from = fromId ? store.getTask(fromId) : null;
       if (args.from && !from) throw new MoveError(`no task ${args.from}`);
       const task = store.batch(() => {
-        const made = desk.newTask(args.title.trim(), kind, args.brief?.trim() ?? "", {
+        const made = desk.newTask(args.title.trim(), kind, brief.text?.trim() ?? "", {
           projectId: project?.id ?? null,
           repo,
           fromTaskId: from?.id ?? null,
@@ -569,6 +597,7 @@ export const MOVES: Record<string, MoveSpec> = {
           });
         return made;
       });
+      brief.drop();
       // A task in a project with goals but naming none is said back, so the
       // caller can place it.
       const open = project && !goal
@@ -627,13 +656,19 @@ export const MOVES: Record<string, MoveSpec> = {
   brief: {
     help: "Rewrite the task's brief, before its agent starts (after, tell it)",
     task: true,
-    args: { text: { help: "the whole new brief", required: true } },
+    args: {
+      text: { help: "the whole new brief" },
+      file: { help: "or the brief in a file you wrote in Riker's drafts/docs folder" },
+    },
     run(desk, task, args) {
       if (!desk.briefEditable(task!.id))
         throw new MoveError(
           `${ref(task)}'s agent already started from its brief: tell it what changed instead`,
         );
-      desk.editBrief(task!.id, args.text);
+      const brief = briefText(args, "text");
+      if (brief.text === null) throw new MoveError("brief needs --text or --file");
+      desk.editBrief(task!.id, brief.text);
+      brief.drop();
       return `${ref(task)}'s brief rewritten`;
     },
   },

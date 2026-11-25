@@ -19,7 +19,7 @@ import type { RikerConfig } from "./config";
 import { mentionedProjects, mentionedTasks } from "./mentions";
 import { docsBlock } from "./prompts";
 import { findTasks, projectBrief, projectLine, taskDetail } from "./lookup";
-import { MOVES } from "./moves";
+import { BRIEF_STYLE, MOVES } from "./moves";
 import { docDraftsDir } from "./paths";
 import { TOOLS_NAME, toolsEnv, toolsRules } from "./self";
 import * as store from "./store";
@@ -96,7 +96,7 @@ export function assistantSystem(config: RikerConfig, lines: readonly string[] = 
     ...(lines.length ? ["", ...lines] : []),
     grantedNote("assistant", config),
     SHELL_HOWTO,
-    `Write is allowed only in ${docDraftsDir()}: a doc you hand in with propose_doc goes there first, then --file <path>.`,
+    `Write is allowed only in ${docDraftsDir()}: a doc you hand in with propose_doc, or a brief with a line starting with #, goes there first, then --file <path>.`,
     connectorNote("assistant", config),
     docsNote("assistant", config),
     "",
@@ -108,6 +108,7 @@ export function assistantSystem(config: RikerConfig, lines: readonly string[] = 
     "- Ask before anything that ends work or cannot be undone: archiving a project, ignore, done on more than one task. Wait for a yes.",
     "- Start or stop an agent only when the owner asks. Agents cost money.",
     "- A coding task needs a brief its agent can work from: what to change, where, and why, with what the owner said.",
+    `- ${BRIEF_STYLE} The same for move brief.`,
     "- A project's brief, goals and docs reach every task in it, so a task's brief need not repeat them. When the project has goals, make its tasks with --goal G3 (or set one with goal RIKER-0012 G3).",
     "- A goal is met when the owner says so: its tasks all done is a reason to ask, not to mark it.",
     "- You never send anything to anyone. A reply is drafted by a task's own agent; the owner presses Send.",

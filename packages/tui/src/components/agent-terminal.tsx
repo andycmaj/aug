@@ -18,6 +18,7 @@ import { useFocus, useKeyPassthrough, useScope, useTheme } from "@andycmaj/opent
 import { Commands } from "../commands";
 import { useTerminals } from "../context/terminals";
 import { encodeKey } from "../terminal/key-encode";
+import { LinkMark } from "./link-mark";
 
 // Just the screen: adopts the session's renderable while mounted. The Canvas
 // keeps one mounted as you move between live tasks, so it follows the id;
@@ -154,9 +155,17 @@ export function TerminalHost(props: {
     { target: props.pane },
   );
 
+  // Until its first output the session is still connecting (tmux attach,
+  // claude booting): say that, animated, rather than a blank screen.
+  const link = () => {
+    const s = state();
+    return s?.running && s.link.phase !== "connected" ? s.link : null;
+  };
   const status = createMemo(() => {
     const s = state();
     if (!s) return { text: "no session", color: theme.textMuted };
+    if (!s.running && s.link.phase === "failed")
+      return { text: s.link.reason ?? "failed", color: theme.error };
     if (!s.running)
       return {
         text: `exited ${s.exitCode ?? "?"}`,
@@ -171,7 +180,21 @@ export function TerminalHost(props: {
     <box flexDirection="column" flexGrow={1} flexBasis={0}>
       <TermView id={props.id} marginLeft={1} marginRight={1} />
       <box flexShrink={0} paddingLeft={2} flexDirection="row">
-        <text fg={status().color}>{`[${status().text}]`}</text>
+        <Show
+          when={link()}
+          fallback={<text fg={status().color}>{`[${status().text}]`}</text>}
+        >
+          {(l: () => NonNullable<ReturnType<typeof link>>) => (
+            <text>
+              <span>[</span>
+              <LinkMark link={l()} />
+              <span style={{ fg: theme.textMuted }}>
+                {l().phase === "failed" ? ` ${l().reason ?? "failed"}` : " connecting"}
+              </span>
+              <span>]</span>
+            </text>
+          )}
+        </Show>
         <Show when={!running()}>
           <text fg={theme.textMuted}> · s continue · d mark done</text>
         </Show>

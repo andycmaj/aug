@@ -1,31 +1,19 @@
 // The sidebar's foot: each connection's state in one line, like tilt-tui's
-// connection status.
+// connection status, drawn by LinkMark: animated while it connects, the
+// reason beside a failure.
 
 import { For } from "solid-js";
-import { useTheme, type Theme, type ThemeColor } from "@andycmaj/opentui-app";
+import { useTheme } from "@andycmaj/opentui-app";
 import { useRiker } from "../context/riker";
-import type { ConnectorState } from "@riker/core/engine";
+import { foldConnector, type Link } from "@riker/core/link-state";
+import type { ConnectorStatus } from "@riker/core/engine";
 import { localDay } from "@riker/core/rail";
 import { dailyCap, usd } from "@riker/core/spend";
+import { LinkMark } from "./link-mark";
 
-export function stateGlyph(state: ConnectorState): string {
-  return state === "ok"
-    ? "●"
-    : state === "polling"
-      ? "◐"
-      : state === "error"
-        ? "●"
-        : "○";
-}
-
-export function stateColor(theme: Theme, state: ConnectorState): ThemeColor {
-  return state === "ok"
-    ? theme.success
-    : state === "polling"
-      ? theme.warning
-      : state === "error"
-        ? theme.error
-        : theme.textMuted;
+// The tracked link, or the status read as one before the first change.
+export function linkOf(links: Record<string, Link>, name: string, s: ConnectorStatus): Link {
+  return links[name] ?? foldConnector(null, s, Date.now());
 }
 
 // Today's spend on Riker's own model calls, against the cap when one is on:
@@ -57,7 +45,7 @@ export function ConnectorLine() {
       const s = riker.status()[c.name];
       // A quiet one is shown once it is turned on.
       if (!s || (c.quietWhenOff && s.state === "off")) return [];
-      return [{ name: c.name, s }];
+      return [{ name: c.name, link: linkOf(riker.links(), c.name, s) }];
     });
   return (
     <box
@@ -71,9 +59,7 @@ export function ConnectorLine() {
       <For each={rows()}>
         {(r) => (
           <text>
-            <span
-              style={{ fg: stateColor(theme, r.s.state) }}
-            >{`${stateGlyph(r.s.state)} ${r.name}`}</span>
+            <LinkMark link={r.link} label={r.name} reason />
           </text>
         )}
       </For>

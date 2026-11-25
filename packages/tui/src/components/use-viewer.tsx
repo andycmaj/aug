@@ -2,7 +2,7 @@
 // task's window. Closing it detaches, and the claude keeps running.
 
 import { createEffect } from "solid-js";
-import { useToast } from "@andycmaj/opentui-app";
+import { useToast } from "../context/toast";
 import { useRiker } from "../context/riker";
 import { useTerminals, type TermState } from "../context/terminals";
 import { taskRef } from "@riker/core/rows";

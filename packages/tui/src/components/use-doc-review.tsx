@@ -3,7 +3,8 @@
 // Without revdiff, the diff in a pager.
 
 import { existsSync, readFileSync } from "node:fs";
-import { useFocus, useToast } from "@andycmaj/opentui-app";
+import { useFocus } from "@andycmaj/opentui-app";
+import { useToast } from "../context/toast";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
 import { writeReview } from "@riker/core/proposals";

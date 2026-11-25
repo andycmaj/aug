@@ -22,6 +22,7 @@ import { errorMessage, logger } from "./log";
 import { linkLine, projectContext } from "./lookup";
 import { mux } from "./mux";
 import { paths } from "./paths";
+import { labeled } from "./rows";
 import { liveWindow } from "./projects";
 import { reviewedPr, type PrRef } from "./pr";
 import type { ReviewContext, ReviewSource } from "./plugins";
@@ -137,7 +138,7 @@ function actionPrompt(
     .slice(-CONTEXT_TURNS);
   return [
     `Task ${store.taskRef(task.id)}: ${task.title}`,
-    task.summary ? `Brief: ${task.summary}` : "",
+    task.summary ? labeled("Brief", task.summary) : "",
     task.repo ? `Repo: ${task.repo}` : "",
     task.worktree ? `Checkout: ${task.worktree} (branch ${task.branch ?? "unknown"})` : "",
     ...store.linksForTask(task.id).map((l) => `Link: ${linkLine(l)}`),

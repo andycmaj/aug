@@ -2,7 +2,8 @@
 // message or a doc. The file goes through core/drafts; what comes back is
 // handed to the desk.
 
-import { useFocus, useToast } from "@andycmaj/opentui-app";
+import { useFocus } from "@andycmaj/opentui-app";
+import { useToast } from "../context/toast";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
 import { draftFile, readDraft, removeDraft, writeDraft } from "@riker/core/drafts";
@@ -85,6 +86,48 @@ export function useEditor() {
     });
   }
 
+  // The story in $EDITOR, every part's heading in it: saved, it is a new
+  // version by the owner. A rewrite that does not read back keeps its file
+  // and says where.
+  function editStory(task: TaskRow): false | void {
+    const ref = taskRef(task.id);
+    const doc = desk.storyDoc(task.id, true);
+    const file = draftFile(ref, "story");
+    const head = `<!-- ${ref} story${doc ? `, as of ${doc.asOf}` : ""}. Each line under a heading is one item; save to keep it as a new version. -->`;
+    const body = doc?.text ?? desk.storyTemplate();
+    writeDraft(file, `${head}\n\n${body}\n`);
+    openEditor(file, `story for ${ref}`, (code) => {
+      const text = readDraft(file);
+      if (code !== 0 || text === null) {
+        removeDraft(file);
+        return;
+      }
+      const said = desk.editStory(task.id, text);
+      if (said.ok) removeDraft(file);
+      showToast(said.ok ? said.text : `${said.text} (kept in ${file})`, said.ok ? 3000 : 8000, said.ok ? "info" : "error");
+    });
+  }
+
+  // The journal on a copy: the engine may write an entry while it is open,
+  // so saving lays the edit over the file as it is then. One that touched
+  // the same lines keeps its copy and says where.
+  function editJournal(projectId: number): false | void {
+    const found = desk.journal(projectId);
+    if (!found) return false;
+    const file = draftFile(`project-${projectId}`, "journal");
+    writeDraft(file, found.text);
+    openEditor(file, "journal", (code) => {
+      const text = readDraft(file);
+      if (code !== 0 || text === null) {
+        removeDraft(file);
+        return;
+      }
+      const said = desk.saveJournal(projectId, found.text, text);
+      if (said.ok) removeDraft(file);
+      showToast(said.ok ? said.text : `${said.text}; your copy is in ${file}`, said.ok ? 3000 : 10000, said.ok ? "info" : "error");
+    });
+  }
+
   // The chat box in $EDITOR. Save and quit sends; quitting empty or with an
   // error (vim's :cq) sends nothing and hands the text back to the box.
   function compose(
@@ -112,6 +155,8 @@ export function useEditor() {
     editDraft,
     editBrief,
     editProject,
+    editStory,
+    editJournal,
     compose,
     editorId: EDITOR_ID,
   };

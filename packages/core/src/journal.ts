@@ -18,6 +18,7 @@ import { watchSession } from "./digest-watcher";
 import { EndReason } from "./lifecycle";
 import { logger } from "./log";
 import { paths } from "./paths";
+import { mergeText } from "./proposals";
 import { storyFromDigest } from "./story";
 import * as store from "./store";
 import {
@@ -375,4 +376,56 @@ export async function journalTick(config: RikerConfig): Promise<number> {
 
 export function journalExists(project: ProjectRow): boolean {
   return existsSync(journalFile(project));
+}
+
+// ── reading it ──────────────────────────────────────────────────────────
+
+const STAMPED = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}  /;
+
+// The file as markdown for V's reader. It is written as plain lines, which
+// markdown would run together: the markers go, the title and the status
+// block become headings, a session's first line a heading of its own and
+// an event's line a list item. Text the owner wrote passes through.
+export function journalMarkdown(file: string): string {
+  const src = file.split("\n").filter((l) => !/^\s*<!--.*-->\s*$/.test(l));
+  const out: string[] = [];
+  const nextText = (i: number) => src.slice(i + 1).find((l) => l.trim()) ?? "";
+  src.forEach((line, i) => {
+    if (line === "Now:") out.push("## Now");
+    else if (STAMPED.test(line))
+      out.push(nextText(i).startsWith("Outcome:") ? `### ${line}` : `- ${line}`);
+    else if (!out.some((l) => l.trim()) && line.trim() && !line.startsWith("#")) out.push(`# ${line}`);
+    else out.push(line);
+  });
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// The journal's file and what it says now, or null before its first entry.
+export function readJournal(project: ProjectRow): { file: string; text: string } | null {
+  const file = journalFile(project);
+  if (!existsSync(file)) return null;
+  return { file, text: readOr(file) };
+}
+
+export const JournalSave = {
+  unchanged: "unchanged",
+  saved: "saved",
+  // The engine wrote while the owner edited; both kept.
+  merged: "merged",
+  // Both touched the same lines: nothing written.
+  conflict: "conflict",
+} as const;
+export type JournalSave = (typeof JournalSave)[keyof typeof JournalSave];
+
+// The owner's edit, made on a copy of the file as it was at `base`. The
+// engine may have written an entry since; saving the copy whole would drop
+// it, so the edit goes over the file as it is now (git merge-file).
+export function saveJournalEdit(project: ProjectRow, base: string, edited: string): JournalSave {
+  if (edited === base) return JournalSave.unchanged;
+  const file = journalFile(project);
+  const now = readOr(file);
+  const merged = mergeText(edited, base, now);
+  if (merged === null) return JournalSave.conflict;
+  writeAtomic(file, merged);
+  return now === base ? JournalSave.saved : JournalSave.merged;
 }

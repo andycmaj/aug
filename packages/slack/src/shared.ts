@@ -33,6 +33,8 @@ export interface PollContext {
 export interface SlackPollResult {
   messages: NewMessage[];
   cursor: SlackCursor;
+  // What the poll cost, for the perf line (claude-mcp: rounds and calls).
+  stats?: Record<string, number>;
 }
 
 export interface SlackTransport {

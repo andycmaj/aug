@@ -186,8 +186,21 @@ export class FakeMux implements Mux {
     return this.branches.has(branch);
   }
 
+  // Every branchMerged asked, and the base's tip: moving it moves every key.
+  mergedAsked: string[] = [];
+  keysRead = 0;
+  baseTip = 1;
+
   async branchMerged(_repoPath: string, branch: string): Promise<string | false | null> {
+    this.mergedAsked.push(branch);
     return this.merged.get(branch) ?? null;
+  }
+
+  // A branch's tip is what the test says of it: setting merged is the refs
+  // moving.
+  async mergeKeys(_repoPath: string, branches: string[]): Promise<Map<string, string> | null> {
+    this.keysRead++;
+    return new Map(branches.map((b) => [b, `${String(this.merged.get(b))} ${this.baseTip}`]));
   }
 
   inspectCheckout(path: string): CheckoutState {

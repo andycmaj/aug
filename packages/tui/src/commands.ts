@@ -25,6 +25,8 @@ export const Commands = {
   TERMINAL_BACK: "terminal.back",
   TERMINAL_KITTY_BACK: "terminal.back.kitty",
   UNDO: "move.undo",
+  // The newest error toast (components/toast.tsx), over everything.
+  TOAST_DISMISS: "toast.dismiss",
 
   // On the item at the cursor / the selected item
   OPEN: "item.open",
@@ -70,6 +72,8 @@ export const Commands = {
   INFO: "item.info",
   STORY_SWITCH: "task.story",
   JOURNAL_SWITCH: "project.journal",
+  STORY_READ: "task.story.read",
+  JOURNAL_READ: "project.journal.read",
   ACTIONS: "task.actions",
   PR_DASH: "pr.dash",
   TYPE: "chat.type",

@@ -4,6 +4,7 @@
 
 import type { RikerConfig } from "./config";
 import { journalSwitch, projectStoryDefault, storySwitch, switchWords } from "./digests";
+import { labeled } from "./rows";
 import { storyBlock } from "./story";
 import { transcript } from "./transcript";
 import * as store from "./store";
@@ -88,7 +89,7 @@ export function taskDetail(t: TaskRow, turns = 12, config?: RikerConfig): string
   const story = storyBlock(t.id);
   const facts = [
     taskLine(t),
-    t.summary ? `Summary: ${t.summary}` : "",
+    t.summary ? labeled("Summary", t.summary) : "",
     t.repo ? `Repo: ${t.repo}${t.branch ? ` on ${t.branch}` : ""}` : "",
     t.worktree ? `Worktree: ${t.worktree}` : "",
     t.url ? `Link: ${t.url}` : "",
