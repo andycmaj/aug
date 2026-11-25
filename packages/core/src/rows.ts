@@ -14,6 +14,13 @@ export function isClosed(task: Pick<TaskRow, "status">): boolean {
   return task.status === TaskStatus.done || task.status === TaskStatus.dropped;
 }
 
+// A labeled field: on the label's line when it is one line, under it when
+// it has paragraphs of its own, so its first one does not run into the
+// label.
+export function labeled(label: string, text: string): string {
+  return text.includes("\n") ? `${label}:\n${text}` : `${label}: ${text}`;
+}
+
 export function parseTaskRef(ref: string): number | null {
   // AUG- too: refs written before the rename never go away.
   return refNumber(ref);

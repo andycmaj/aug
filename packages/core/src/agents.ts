@@ -47,6 +47,7 @@ import { TOOLS_NAME, toolsCommand, toolsEnv, toolsRules } from "./self";
 import { capReached, capReason } from "./spend";
 import { transcript } from "./transcript";
 import { digestWanted, storySwitch } from "./digests";
+import { labeled } from "./rows";
 import { storyBlock } from "./story";
 import * as store from "./store";
 import {
@@ -246,7 +247,7 @@ export function turnPrompt(
     : "typed by the owner";
   return [
     `Task ${store.taskRef(task.id)}: ${task.title}`,
-    task.summary ? `Summary: ${task.summary}` : "",
+    task.summary ? labeled("Summary", task.summary) : "",
     task.triage_reason ? `Triage said: ${task.triage_reason}` : "",
     `Came from: ${where}`,
     ...store.linksForTask(task.id).map((l) => `Link: ${linkLine(l)}`),
