@@ -9,6 +9,7 @@ const term = (id: string, taskId?: number, kind: TermState["kind"] = "agent"): T
   taskId,
   running: true,
   exitCode: null,
+  link: { phase: "connected", reason: null, since: 0 },
 });
 
 describe("viewers to close", () => {

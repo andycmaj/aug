@@ -367,6 +367,14 @@ Tests live beside their package (`packages/<name>/test/`).
   `docs.write`'s own Claude Docs writes. A denied connector call gets a
   `grant:` step naming the config key (`grantHint`), and `connectorNote`
   tells every headless agent where grants live.
+- **A connection in progress is `core/link-state.ts`**: connecting,
+  connected, or failed with a short reason, and failed on its own past its
+  timeout (`LinkTracker`). The pollers' status lines (`riker.links()`) and
+  an embedded terminal before its first output (`TermState.link`) keep one;
+  `components/link-mark.tsx` is the one look, animated only while
+  connecting and mounted. Its marks are never a rail mark
+  (`link-state.test.ts`). Motion off (config `motion: false`,
+  `RIKER_MOTION=0`, bun test) draws still marks, the working spinner too.
 - **Logging is `core/log.ts`**: `logger(scope)` writes lines to `riker.log`
   under `RIKER_HOME`, never to the terminal (the TUI owns it). It is off unless
   `RIKER_LOG`, `log.enabled` in config, or `RIKER_DEV` (set by `bun run dev`)
@@ -482,7 +490,10 @@ Tests live beside their package (`packages/<name>/test/`).
   `RIKER_TOOLS_ENTRY=$PWD/packages/cli/src/riker-tools.ts bun dev`, and the
   briefs and hooks it writes name that path.
 - `bun run demo` runs the fixture day. Drive it in tmux with a unique session
-  name and `tmux capture-pane -p`.
+  name and `tmux capture-pane -p`. Under opentui's synchronized output a
+  capture can hold a stale frame of anything animated: run with
+  `RIKER_MOTION=0` for still marks, or read the pane's bytes
+  (`tmux pipe-pane -o 'cat > file'`) to see frames.
 - `bun run sim [review-cycle|review-ask] [--brain fake|haiku]` is the real
   TUI on a scratch home against an offline GitHub (`packages/fixtures/src/sim/`).
   With the fake brain a task action (the guided review) still calls the real

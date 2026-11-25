@@ -27,7 +27,8 @@ import { INBOX_KEY } from "./board-tab";
 import { taskRef, type DocLink } from "@riker/core/rows";
 import { Kind, type DraftAction, type TurnRow } from "@riker/core/types";
 import { ActionTurn } from "./chat-turn";
-import { stateColor, stateGlyph } from "./connector-line";
+import { linkOf } from "./connector-line";
+import { LinkMark } from "./link-mark";
 import { dayClock, ModeToggle } from "./ui";
 
 export function PromptModal(props: {
@@ -227,8 +228,8 @@ export function StatusModal(props: {
   const rows = () => [
     ...riker.engine
       .connections()
-      .map((c) => [c.label, riker.status()[c.name] ?? off] as const),
-    ["Advisor", riker.status().advisor] as const,
+      .map((c) => [c.label, c.name, riker.status()[c.name] ?? off] as const),
+    ["Advisor", "advisor", riker.status().advisor] as const,
   ];
   const hints = () =>
     riker.engine
@@ -263,22 +264,26 @@ export function StatusModal(props: {
         paddingBottom={1}
       >
         <For each={rows()}>
-          {([name, s]) => (
-            <box flexDirection="column" marginBottom={1}>
-              <text>
-                <span
-                  style={{ fg: stateColor(theme, s.state), attributes: 1 }}
-                >{`${stateGlyph(s.state)} ${name}`}</span>
-                <span
-                  style={{ fg: theme.textMuted }}
-                >{`  ${s.state}${s.at ? ` · ${dayClock(s.at)}` : ""}`}</span>
-              </text>
-              <text
-                fg={theme.textMuted}
-                wrapMode="word"
-              >{`  ${s.detail}`}</text>
-            </box>
-          )}
+          {([label, key, s]) => {
+            const link = () => linkOf(riker.links(), key, s);
+            // A poll that timed out is still polling: say so over the last
+            // answer's words.
+            const detail = () =>
+              link().phase === "failed" && s.state === "polling"
+                ? `${link().reason} · ${s.detail}`
+                : s.detail;
+            return (
+              <box flexDirection="column" marginBottom={1}>
+                <text>
+                  <LinkMark link={link()} label={label} bold />
+                  <span
+                    style={{ fg: theme.textMuted }}
+                  >{`  ${link().phase}${s.at ? ` · ${dayClock(s.at)}` : ""}`}</span>
+                </text>
+                <text fg={theme.textMuted} wrapMode="word">{`  ${detail()}`}</text>
+              </box>
+            );
+          }}
         </For>
         <text
           fg={theme.textMuted}
