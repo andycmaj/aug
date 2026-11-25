@@ -128,7 +128,7 @@ function openPr(
   const reviewer = e.team ? null : (e.reviewer ?? (mine ? "alice" : s.me));
   let head = mine && s.work ? s.work.branch : `sim/pr-${number}`;
   if (!mine && s.checkout && s.commits.length)
-    makeBranch(s.checkout, head, pick(s.commits, number - 1));
+    makeBranch(s.checkout, head, s.commits, number - 1, s.base);
   if (!s.checkout) head = mine ? "sim/work" : head;
   const diff = s.checkout
     ? diffLines(s.checkout, s.base, head)
