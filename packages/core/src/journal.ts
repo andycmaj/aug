@@ -376,3 +376,32 @@ export async function journalTick(config: RikerConfig): Promise<number> {
 export function journalExists(project: ProjectRow): boolean {
   return existsSync(journalFile(project));
 }
+
+// ── reading it ──────────────────────────────────────────────────────────
+
+const STAMPED = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}  /;
+
+// The file as markdown for V's reader. It is written as plain lines, which
+// markdown would run together: the markers go, the title and the status
+// block become headings, a session's first line a heading of its own and
+// an event's line a list item. Text the owner wrote passes through.
+export function journalMarkdown(file: string): string {
+  const src = file.split("\n").filter((l) => !/^\s*<!--.*-->\s*$/.test(l));
+  const out: string[] = [];
+  const nextText = (i: number) => src.slice(i + 1).find((l) => l.trim()) ?? "";
+  src.forEach((line, i) => {
+    if (line === "Now:") out.push("## Now");
+    else if (STAMPED.test(line))
+      out.push(nextText(i).startsWith("Outcome:") ? `### ${line}` : `- ${line}`);
+    else if (!out.some((l) => l.trim()) && line.trim() && !line.startsWith("#")) out.push(`# ${line}`);
+    else out.push(line);
+  });
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// The journal's file and what it says now, or null before its first entry.
+export function readJournal(project: ProjectRow): { file: string; text: string } | null {
+  const file = journalFile(project);
+  if (!existsSync(file)) return null;
+  return { file, text: readOr(file) };
+}

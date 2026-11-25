@@ -13,6 +13,7 @@ import {
   ModalFilterInput,
   ModalHeader,
   modalNavBindings,
+  Markdown,
   useTheme,
   truncate,
   useListNavigation,
@@ -475,6 +476,80 @@ export function ActionAnswerModal(props: {
         >
           {(t: Accessor<TurnRow>) => <ActionTurn turn={t()} width={width()} />}
         </Show>
+      </scrollbox>
+    </Modal>
+  );
+}
+
+// A story or a journal, read as markdown over the Canvas. text is read
+// each time it renders, so a write-up landing while it is open shows. e
+// hands it to $EDITOR (closing this first); empty says what would fill it.
+export function ReaderModal(props: {
+  title: string;
+  // A muted line over the text: when it was written, and by whom.
+  note?: string;
+  text: () => string | null;
+  empty: string;
+  onEdit?: () => void;
+  onCopied: (ok: boolean) => void;
+  onClose: () => void;
+}) {
+  const theme = useTheme();
+  const dims = useTerminalDimensions();
+  const width = () => Math.min(100, dims().width - 8);
+  const height = () => Math.max(6, dims().height - 12);
+  let scrollRef: ScrollBoxRenderable | undefined;
+  const scroll = (by: number) => scrollRef?.scrollBy(by);
+  const keys = () => ["j/k", "space page", "c copy", props.onEdit ? "e edit" : null, "esc"].filter(Boolean).join(" · ");
+  return (
+    <Modal
+      size="lg"
+      onClose={props.onClose}
+      bindings={[
+        ...modalNavBindings,
+        { key: "j", cmd: ModalCommands.MODAL_DOWN, desc: "down" },
+        { key: "k", cmd: ModalCommands.MODAL_UP, desc: "up" },
+        { key: "space", cmd: "reader.page", desc: "page down" },
+        { key: "c", cmd: "reader.copy", desc: "copy it" },
+        { key: "y", cmd: "reader.copy", desc: "copy it" },
+        { key: "e", cmd: "reader.edit", desc: "open it in $EDITOR" },
+      ]}
+      commands={{
+        [ModalCommands.MODAL_DOWN]: () => scroll(2),
+        [ModalCommands.MODAL_UP]: () => scroll(-2),
+        [ModalCommands.MODAL_SELECT]: () => props.onClose(),
+        "reader.page": () => scrollRef?.scrollBy(0.8, "viewport"),
+        "reader.copy": () => {
+          const text = props.text();
+          if (text) void copyToClipboard(text).then(props.onCopied);
+        },
+        "reader.edit": () => {
+          if (!props.onEdit) return false;
+          props.onEdit();
+        },
+      }}
+    >
+      <ModalHeader title={props.title} hint={keys()} />
+      <scrollbox
+        ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
+        height={height()}
+        paddingLeft={2}
+        paddingRight={2}
+        paddingTop={1}
+        stickyScroll={false}
+      >
+        <Show when={props.note}>
+          <text fg={theme.textMuted} marginBottom={1}>
+            {props.note ?? ""}
+          </text>
+        </Show>
+        <Show
+          when={props.text()?.trim()}
+          fallback={<text fg={theme.textMuted} wrapMode="word">{props.empty}</text>}
+        >
+          <Markdown text={props.text() ?? ""} width={width() - 4} />
+        </Show>
+        <box height={1} />
       </scrollbox>
     </Modal>
   );

@@ -85,6 +85,36 @@ export function useEditor() {
     });
   }
 
+  // The story in $EDITOR, every part's heading in it: saved, it is a new
+  // version by the owner. A rewrite that does not read back keeps its file
+  // and says where.
+  function editStory(task: TaskRow): false | void {
+    const ref = taskRef(task.id);
+    const doc = desk.storyDoc(task.id, true);
+    const file = draftFile(ref, "story");
+    const head = `<!-- ${ref} story${doc ? `, as of ${doc.asOf}` : ""}. Each line under a heading is one item; save to keep it as a new version. -->`;
+    const body = doc?.text ?? desk.storyTemplate();
+    writeDraft(file, `${head}\n\n${body}\n`);
+    openEditor(file, `story for ${ref}`, (code) => {
+      const text = readDraft(file);
+      if (code !== 0 || text === null) {
+        removeDraft(file);
+        return;
+      }
+      const said = desk.editStory(task.id, text);
+      if (said.ok) removeDraft(file);
+      showToast(said.ok ? said.text : `${said.text} (kept in ${file})`, said.ok ? 3000 : 8000, said.ok ? "info" : "error");
+    });
+  }
+
+  // The journal file itself: the engine writes only between its markers,
+  // so what the owner adds around them stays.
+  function editJournal(projectId: number): false | void {
+    const found = desk.journal(projectId);
+    if (!found) return false;
+    openEditor(found.file, "journal");
+  }
+
   // The chat box in $EDITOR. Save and quit sends; quitting empty or with an
   // error (vim's :cq) sends nothing and hands the text back to the box.
   function compose(
@@ -112,6 +142,8 @@ export function useEditor() {
     editDraft,
     editBrief,
     editProject,
+    editStory,
+    editJournal,
     compose,
     editorId: EDITOR_ID,
   };

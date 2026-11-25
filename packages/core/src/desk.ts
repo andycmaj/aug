@@ -74,7 +74,8 @@ import {
 } from "./types";
 import { addFollowup, addSchedule } from "./timers";
 import { journalSwitch, storySwitch, switchColumn, switchWords, SwitchValue } from "./digests";
-import { pin, undoStory } from "./story";
+import { readJournal } from "./journal";
+import { editStory, pin, storyMarkdown, undoStory } from "./story";
 import { errorMessage, logger } from "./log";
 
 export { NoJump, type Jump } from "./projects";
@@ -892,6 +893,36 @@ export class Desk {
       if (!v) return off ? `${ref}: no such pinned line` : `${ref}: pinned already`;
       return off ? `${ref}: unpinned` : `${ref}: pinned`;
     });
+  }
+
+  // The story as markdown for the owner's reader and $EDITOR, with when
+  // and by whom; null when no session has been written up yet.
+  storyDoc(taskId: number, all = false): { text: string; asOf: string } | null {
+    const v = store.currentStory(taskId);
+    if (!v) return null;
+    return { text: storyMarkdown(v, all), asOf: `${v.at.slice(0, 16).replace("T", " ")} by ${v.by}` };
+  }
+
+  // Every part's heading with nothing under it: a story the owner starts.
+  storyTemplate(): string {
+    return storyMarkdown(null, true);
+  }
+
+  // The owner's rewrite of a story, from $EDITOR: a new version.
+  editStory(taskId: number, text: string): { ok: boolean; text: string } {
+    return this.cannot("story edit", "a story keeps every version; story_undo steps back one", () => {
+      const ref = store.taskRef(taskId);
+      const said = editStory(taskId, text);
+      if ("error" in said) return { ok: false, text: `${ref}: story not saved: ${said.error}` };
+      if (!said.version) return { ok: true, text: `${ref}: story unchanged` };
+      return { ok: true, text: `${ref}: story saved as a new version (story_undo steps back)` };
+    });
+  }
+
+  // A project's journal file and what it says, for the reader and $EDITOR.
+  journal(projectId: number): { file: string; text: string } | null {
+    const project = store.getProject(projectId);
+    return project ? readJournal(project) : null;
   }
 
   undoStory(taskId: number): string {
