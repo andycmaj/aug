@@ -4,7 +4,9 @@
 // ctrl+t detaches too and moves your own tmux client to the agent's window;
 // ctrl+e shows or hides the rail and leaves you attached. ctrl+o (ctrl+[ in
 // a kitty terminal) and ctrl+a detach, then go back or Home (shell.tsx).
-// A paste goes in too, bracketed when the program asked for it.
+// A paste goes in too, bracketed when the program asked for it. Shown but
+// detached, the screen is greyed out under a veil, so it is plain that
+// typing goes elsewhere.
 
 import { batch, createEffect, createMemo, onCleanup, Show } from "solid-js";
 import {
@@ -25,6 +27,8 @@ import { LinkMark } from "./link-mark";
 // adopting once showed the first task's claude while keys went to the next.
 export function TermView(props: {
   id: string;
+  // Shown but not taking keys: the screen is greyed out under a veil.
+  veiled?: () => boolean;
   marginLeft?: number;
   marginRight?: number;
 }) {
@@ -35,6 +39,13 @@ export function TermView(props: {
     if (!host) return;
     const release = terminals.adopt(id, host);
     onCleanup(release);
+  });
+  // Tracks the list too: a session opened after mount still gets its veil.
+  createEffect(() => {
+    const id = props.id;
+    if (!terminals.get(id)) return;
+    terminals.veil(id, props.veiled?.() ?? false);
+    onCleanup(() => terminals.veil(id, false));
   });
   return (
     <box
@@ -178,7 +189,12 @@ export function TerminalHost(props: {
 
   return (
     <box flexDirection="column" flexGrow={1} flexBasis={0}>
-      <TermView id={props.id} marginLeft={1} marginRight={1} />
+      <TermView
+        id={props.id}
+        veiled={() => !props.attached()}
+        marginLeft={1}
+        marginRight={1}
+      />
       <box flexShrink={0} paddingLeft={2} flexDirection="row">
         <Show
           when={link()}

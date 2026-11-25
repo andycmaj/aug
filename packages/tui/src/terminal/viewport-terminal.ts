@@ -1,5 +1,6 @@
 import {
   TextBufferRenderable,
+  type RGBA,
   type RenderContext,
   type TextBufferOptions,
 } from "@opentui/core";
@@ -21,6 +22,9 @@ export class ViewportTerminalRenderable extends TextBufferRenderable {
   // view; null follows the bottom.
   private firstLine: number | null = null;
   private totalLines = 0;
+  // A translucent veil over the screen, laid after the text is drawn so the
+  // characters stay and only their colours fade; null shows it plain.
+  private veil: RGBA | null = null;
   stats = { frames: 0, renderMs: 0 };
 
   constructor(ctx: RenderContext, options: ViewportTerminalOptions) {
@@ -53,6 +57,12 @@ export class ViewportTerminalRenderable extends TextBufferRenderable {
     if (this.firstLine === null) return;
     this.firstLine = null;
     this.dirty = true;
+    this.requestRender();
+  }
+
+  setVeil(color: RGBA | null): void {
+    if (color === this.veil) return;
+    this.veil = color;
     this.requestRender();
   }
 
@@ -90,6 +100,9 @@ export class ViewportTerminalRenderable extends TextBufferRenderable {
       this.stats.renderMs += performance.now() - t0;
     }
     super.renderSelf(buffer);
+    if (this.veil) {
+      buffer.fillRect(this.x, this.y, this.width, this.height, this.veil);
+    }
   }
 
   // Not tied to removal: the renderable is re-parented when its pane remounts.
