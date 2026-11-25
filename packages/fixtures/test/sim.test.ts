@@ -268,3 +268,37 @@ describe("the engine on the sim", () => {
     }
   });
 });
+
+describe("a reviewer's PR", () => {
+  test("is one commit's change over main, not every commit since", () => {
+    const s = happen(simState(), { type: "pr-open", by: "bob" });
+    const p = s.pulls[0]!;
+    const subject = Bun.spawnSync(["git", "-C", checkout.path, "log", "-1", "--format=%s", p.head]).stdout.toString().trim();
+    const sha = checkout.commits.find(
+      (c) => Bun.spawnSync(["git", "-C", checkout.path, "log", "-1", "--format=%s", c]).stdout.toString().trim() === subject,
+    )!;
+    const own = Bun.spawnSync(["git", "-C", checkout.path, "diff", "--name-only", `${sha}^1`, sha])
+      .stdout.toString()
+      .split("\n")
+      .filter(Boolean)
+      .sort();
+    expect([...p.files].sort()).toEqual(own);
+    const parents = Bun.spawnSync(["git", "-C", checkout.path, "log", "-1", "--format=%P", p.head])
+      .stdout.toString()
+      .trim();
+    const main = Bun.spawnSync(["git", "-C", checkout.path, "rev-parse", "main"]).stdout.toString().trim();
+    expect(parents).toBe(main);
+  });
+
+  test("the guide reads its words and threads from the sim", async () => {
+    const { simReviews } = await import("../src/sim/github");
+    const s = happen(simState(), { type: "pr-open", by: "bob", title: "Tidy up", body: "Shorter words." });
+    happen(s, { type: "review", by: "carol", verdict: "changes", comments: 1 });
+    const read = await simReviews(file).context(ref(1));
+    expect(read.lastReviewed).toBeNull();
+    expect(read.text).toContain("Title: Tidy up");
+    expect(read.text).toContain("Shorter words.");
+    expect(read.text).toContain("Review threads already on it");
+    expect(read.text).toContain("Reviews so far: carol changes requested");
+  });
+});

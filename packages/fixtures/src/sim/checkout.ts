@@ -1,7 +1,7 @@
 // The simulator's repository: a scratch clone of Riker itself, so a PR's diff
 // is real code an agent can read. It shares the source's objects (cheap)
 // and has no remote, so nothing in it can be pushed. main sits a few
-// commits back; each PR branch is one of the commits after it.
+// commits back; each PR branch is one commit after it, laid over main.
 
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -22,7 +22,7 @@ const DEPTH = 5;
 export interface SimCheckout {
   path: string;
   base: string;
-  // First-parent commits after main, newest first.
+  // The plain commits after main, newest first: each PR is one of them.
   commits: string[];
   work: { branch: string; path: string };
 }
@@ -52,13 +52,9 @@ export function makeCheckout(source: string, home: string): SimCheckout {
   const head = run(["rev-parse", "HEAD"]);
   const count = Number(run(["rev-list", "--count", "--first-parent", "HEAD"]));
   const depth = Math.max(1, Math.min(DEPTH, count - 1));
-  const commits = run([
-    "rev-list",
-    "--first-parent",
-    `-n${depth}`,
-    "HEAD",
-  ]).split("\n");
   run(["checkout", "-q", "-B", "main", `${head}~${depth}`]);
+  // Each PR is one plain commit's change (a merge is a whole PR's).
+  const commits = run(["rev-list", "--no-merges", `main..${head}`]).split("\n").filter(Boolean);
   const work = join(home, "worktrees", "work");
   run(["worktree", "add", "-q", "-b", WORK_BRANCH, work, head]);
   return {
@@ -69,12 +65,47 @@ export function makeCheckout(source: string, home: string): SimCheckout {
   };
 }
 
+// A PR branch is one commit's change laid over main, so its diff is that
+// commit's and no more (main sits several commits back; the commit itself
+// would carry every one between). `commits` are tried from `from` on, until
+// one lays over cleanly; with none, the first is kept as it is.
 export function makeBranch(
   checkout: string,
   branch: string,
-  sha: string,
+  commits: string[],
+  from: number,
+  base = "main",
 ): void {
-  git(checkout, ["branch", "-f", branch, sha]);
+  for (let i = 0; i < commits.length; i++) {
+    const sha = commits[(from + i) % commits.length]!;
+    const merged = Bun.spawnSync(
+      ["git", "-C", checkout, "merge-tree", "--write-tree", `--merge-base=${sha}^1`, base, sha],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    if (merged.exitCode !== 0) continue;
+    const tree = merged.stdout.toString().split("\n")[0]!.trim();
+    if (tree === git(checkout, ["rev-parse", `${base}^{tree}`])) continue;
+    layOver(checkout, branch, sha, tree, base);
+    return;
+  }
+  git(checkout, ["branch", "-f", branch, commits[from % commits.length]!]);
+}
+
+function layOver(checkout: string, branch: string, sha: string, tree: string, base: string): void {
+  const subject = git(checkout, ["log", "-1", "--format=%s", sha]);
+  const commit = git(checkout, [
+    "-c",
+    "user.name=sim",
+    "-c",
+    "user.email=sim@riker.invalid",
+    "commit-tree",
+    tree,
+    "-p",
+    base,
+    "-m",
+    subject,
+  ]);
+  git(checkout, ["branch", "-f", branch, commit]);
 }
 
 // A worktree on the branch, made once; the branch's own when it has one.

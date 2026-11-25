@@ -28,11 +28,13 @@ import {
 } from "@riker/core/files";
 import { journalSwitch, storySwitchOf, SwitchValue } from "@riker/core/digests";
 import { infoTitle, itemInfo } from "@riker/core/info";
+import { JOURNAL_LINK_TITLE, journalMarkdown } from "@riker/core/journal";
+import { storyMarkdown } from "@riker/core/story";
 import { errorMessage, logger } from "@riker/core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "@riker/core/adopt";
 import { strayLabel, type Stray } from "@riker/core/strays";
 import { baseKey, neighborKey, type RailItem } from "@riker/core/rail";
-import { actionAnswers, isClosed, taskRef } from "@riker/core/rows";
+import { actionAnswers, docLinks, isClosed, taskRef } from "@riker/core/rows";
 import { postComments } from "@riker/code-review-plannotator/guide";
 import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
 import type { ActionResult } from "@riker/core/run-action";
@@ -57,6 +59,7 @@ import {
   ConfirmSendModal,
   InfoModal,
   PromptModal,
+  ReaderModal,
 } from "./modals";
 import { chatHidden } from "./canvas";
 import { dayClock } from "./ui";
@@ -1037,6 +1040,87 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
+  const copied = (ok: boolean) =>
+    showToast(ok ? "Copied" : "No clipboard here", 2000, ok ? "info" : "error");
+
+  // V on a task: its story as markdown, read from the story as it is now.
+  function readStory(task: TaskRow) {
+    const ref = taskRef(task.id);
+    const project = task.project_id ? riker.project(task.project_id) : null;
+    const on = storySwitchOf(desk.config(), task, project).on;
+    const v = riker.story(task.id);
+    dialogs.show(() => (
+      <ReaderModal
+        title={`${ref} story`}
+        note={v ? `as of ${v.at.slice(0, 16).replace("T", " ")}, by ${v.by} · ${task.title}` : task.title}
+        text={() => {
+          const now = riker.story(task.id);
+          return now ? storyMarkdown(now) : null;
+        }}
+        empty={
+          on
+            ? "No story yet: one is written up when a session on this task finishes. e starts one in $EDITOR."
+            : "No story: it is off for this task (J turns it on). e starts one in $EDITOR."
+        }
+        links={() => {
+          const now = riker.task(task.id) ?? task;
+          return docLinks({
+            pr: riker.taskPr(now),
+            source: now.url,
+            task: riker.taskLinks(task.id),
+            project: now.project_id ? riker.projectLinks(now.project_id) : [],
+          });
+        }}
+        onOpen={open}
+        onEdit={() => {
+          dialogs.close();
+          editor.editStory(task);
+        }}
+        onCopied={copied}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
+  // V on a project: its journal file as markdown, read when opened.
+  function readJournal(projectId: number) {
+    const project = riker.project(projectId);
+    if (!project) return;
+    const found = desk.journal(projectId);
+    const on = journalSwitch(desk.config(), project).on;
+    dialogs.show(() => (
+      <ReaderModal
+        title={`${project.name} journal`}
+        note={found?.file.replace(process.env.HOME ?? "\0", "~")}
+        // Its own file is what is open: the rest are the project's docs.
+        links={() =>
+          docLinks({
+            task: riker
+              .projectLinks(projectId)
+              .filter((l) => !(l.title === JOURNAL_LINK_TITLE && found && l.url === `file://${found.file}`)),
+          })
+        }
+        onOpen={open}
+        text={() => (found ? journalMarkdown(found.text) : null)}
+        empty={
+          on
+            ? "No journal yet: its first entry is written when a task here has news."
+            : "No journal: it is off for this project (J turns it on)."
+        }
+        onEdit={
+          found
+            ? () => {
+                dialogs.close();
+                editor.editJournal(projectId);
+              }
+            : undefined
+        }
+        onCopied={copied}
+        onClose={dialogs.close}
+      />
+    ));
+  }
+
   function info(item: RailItem) {
     dialogs.show(() => (
       <InfoModal
@@ -1141,6 +1225,17 @@ export function useActions(dialogs: Dialogs) {
         const item = get();
         if (item?.type !== "project") return false;
         flipJournal(item.project.id);
+      },
+      [Commands.STORY_READ]: () => {
+        const item = get();
+        if (item?.type !== "task" || item.task.kind === Kind.home || item.task.kind === Kind.system)
+          return false;
+        readStory(item.task);
+      },
+      [Commands.JOURNAL_READ]: () => {
+        const item = get();
+        if (item?.type !== "project") return false;
+        readJournal(item.project.id);
       },
       [Commands.INFO]: () => {
         const item = get();

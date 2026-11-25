@@ -19,6 +19,8 @@ import type {
   GhPull,
 } from "@riker/github/ingest";
 import type { PrRef } from "@riker/core/pr";
+import type { ReviewSource } from "@riker/core/plugins";
+import { readReviewContext } from "@riker/github/review-context";
 import {
   readPrBatch,
   type GqlAnswer,
@@ -400,4 +402,41 @@ export function answerGraphql(s: SimState, prs: PrRef[]): GqlAnswer {
 
 export function simPrFetch(file: string): PrFetch {
   return async (prs) => readPrBatch(prs, answerGraphql(loadState(file), prs));
+}
+
+// What the guide reads beside a sim PR, from the state file, through the
+// same reader as GitHub's answer. The sim's pushes make no commits, so a
+// review asked again covers the whole PR.
+export function simReviews(file: string): ReviewSource {
+  return {
+    async context(pr) {
+      const s = loadState(file);
+      const p = s.pulls.find((x) => x.number === pr.number);
+      if (!p) throw new Error(`${pr.repo}#${pr.number} is not in the sim`);
+      const threads = s.comments.filter((c) => c.pr === p.number && c.path);
+      return readReviewContext(pr, {
+        viewer: { login: s.me },
+        repository: {
+          pullRequest: {
+            title: p.title,
+            body: p.body,
+            author: { login: p.author },
+            closingIssuesReferences: { nodes: [] },
+            reviews: {
+              nodes: p.reviews.map((r) => ({ author: { login: r.user }, state: r.state, submittedAt: r.at, commit: null })),
+            },
+            reviewThreads: {
+              nodes: threads.map((c) => ({
+                isResolved: false,
+                isOutdated: false,
+                path: c.path!,
+                line: c.line ?? null,
+                comments: { nodes: [{ author: { login: c.user }, body: c.body }] },
+              })),
+            },
+          },
+        },
+      });
+    },
+  };
 }
