@@ -63,7 +63,7 @@ function storySection(config: RikerConfig, task: TaskRow, now: Date): InfoSectio
     return [label, items.length ? items.join("; ") : null];
   };
   return section("Story", [
-    ["switch", `${switchWords("story", storySwitch(config, task))}; J flips it`],
+    ["switch", `${switchWords("story", storySwitch(config, task))}; J flips it, V reads it`],
     ["as of", v ? `${when(v.at, now)} by ${v.by}` : null],
     part("pinned", "pinned"),
     part("goals", "goals"),
@@ -81,7 +81,7 @@ function storySection(config: RikerConfig, task: TaskRow, now: Date): InfoSectio
 function journalSection(config: RikerConfig, project: ProjectRow): InfoSection {
   const file = journalFile(project);
   const s = section("Journal", [
-    ["switch", `${switchWords("journal", journalSwitch(config, project))}; J flips it`],
+    ["switch", `${switchWords("journal", journalSwitch(config, project))}; J flips it, V reads it`],
     ["stories", switchWords("stories", projectStoryDefault(config, project))],
   ]);
   if (journalExists(project)) s.rows.push({ label: "file", value: file, open: `file://${file}` });

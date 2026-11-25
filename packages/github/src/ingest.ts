@@ -4,6 +4,7 @@
 // marks a notification read.
 
 import { ghTrouble, GhTrouble } from "./gate";
+import { mapLimit } from "@riker/core/concurrent";
 import type { NewMessage } from "@riker/core/store";
 
 // A detail that cannot be read is left out; a rate limit stops the poll,
@@ -65,21 +66,6 @@ export function reviewRequested(
 
 export type GhApi = (path: string) => Promise<unknown>;
 
-export async function ghApi(path: string): Promise<unknown> {
-  const proc = Bun.spawn(["gh", "api", path], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (code !== 0)
-    throw new Error(err.trim() || `gh api ${path} exited ${code}`);
-  return JSON.parse(out) as unknown;
-}
-
 export function numberFromUrl(url: string | null): number | null {
   const m = url?.match(/\/(\d+)$/);
   return m ? Number(m[1]) : null;
@@ -139,14 +125,25 @@ export function toMessage(
   };
 }
 
+// Who gh is logged in as: one call, which the connector keeps for the
+// process rather than asking every poll.
+export async function ghLogin(api: GhApi): Promise<string> {
+  return ((await api("user")) as { login: string }).login;
+}
+
+// Detail reads in flight at once: a burst of notifications reads in a few
+// round trips, well inside GitHub's limit on concurrent requests.
+const DETAIL_CONCURRENCY = 4;
+
 // A PR's head branch is one more call, so it is only fetched for repos where
 // some task has a worktree branch a PR could come from.
 export async function pollGithub(
   sinceIso: string | null,
-  api: GhApi = ghApi,
+  api: GhApi,
   wantsHead: (repo: string) => boolean = () => false,
+  login?: string,
 ): Promise<NewMessage[]> {
-  const me = ((await api("user")) as { login: string }).login;
+  const me = login ?? (await ghLogin(api));
   const query = new URLSearchParams({
     participating: "true",
     all: "false",
@@ -156,45 +153,52 @@ export async function pollGithub(
   const notifications = (await api(
     `notifications?${query}`,
   )) as GhNotification[];
-  const out: NewMessage[] = [];
   // Oldest first so a thread's messages land in the order they were written.
-  for (const n of [...notifications].reverse()) {
-    let item: GhItem | null = null;
-    const detail = n.subject.latest_comment_url ?? n.subject.url;
-    if (detail) {
-      try {
-        item = (await api(
-          detail.replace("https://api.github.com/", ""),
-        )) as GhItem;
-      } catch (err) {
-        item = unlessLimited(err);
-      }
+  const messages = await mapLimit(
+    [...notifications].reverse(),
+    DETAIL_CONCURRENCY,
+    (n) => notificationMessage(n, api, me, wantsHead),
+  );
+  return messages.filter((m): m is NewMessage => m !== null);
+}
+
+async function notificationMessage(
+  n: GhNotification,
+  api: GhApi,
+  me: string,
+  wantsHead: (repo: string) => boolean,
+): Promise<NewMessage | null> {
+  let item: GhItem | null = null;
+  const detail = n.subject.latest_comment_url ?? n.subject.url;
+  if (detail) {
+    try {
+      item = (await api(detail.replace("https://api.github.com/", ""))) as GhItem;
+    } catch (err) {
+      item = unlessLimited(err);
     }
-    // A PR is one more call: for its head where a task could own the
-    // branch, and for who a review request asks. The detail already read
-    // may be the PR itself.
-    let head: string | null = null;
-    let requested: { me: boolean; teams: string[] } | null = null;
-    const review = n.reason === "review_requested";
-    if (
-      n.subject.type === "PullRequest" &&
-      n.subject.url &&
-      (review || wantsHead(n.repository.full_name))
-    ) {
-      try {
-        const pull = (
-          detail === n.subject.url && item
-            ? item
-            : await api(n.subject.url.replace("https://api.github.com/", ""))
-        ) as GhPull;
-        head = pull.head?.ref ?? null;
-        if (review) requested = reviewRequested(pull, n.repository.full_name, me);
-      } catch (err) {
-        head = unlessLimited(err);
-      }
-    }
-    const message = toMessage(n, item, me, head, requested);
-    if (message) out.push(message);
   }
-  return out;
+  // A PR is one more call: for its head where a task could own the
+  // branch, and for who a review request asks. The detail already read
+  // may be the PR itself.
+  let head: string | null = null;
+  let requested: { me: boolean; teams: string[] } | null = null;
+  const review = n.reason === "review_requested";
+  if (
+    n.subject.type === "PullRequest" &&
+    n.subject.url &&
+    (review || wantsHead(n.repository.full_name))
+  ) {
+    try {
+      const pull = (
+        detail === n.subject.url && item
+          ? item
+          : await api(n.subject.url.replace("https://api.github.com/", ""))
+      ) as GhPull;
+      head = pull.head?.ref ?? null;
+      if (review) requested = reviewRequested(pull, n.repository.full_name, me);
+    } catch (err) {
+      head = unlessLimited(err);
+    }
+  }
+  return toMessage(n, item, me, head, requested);
 }

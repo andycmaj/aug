@@ -27,9 +27,11 @@ const TOOLS = [
 
 // A fake `claude -p` in stream-json mode: answers each user line with the
 // next scripted result, and records what it was asked.
+// `rounds` scripts each turn's model steps: the tools each step calls.
 function fakeProc(
   answers: unknown[],
   log: { argv: string[][]; asked: string[] },
+  rounds: string[][][] = [],
 ) {
   return (argv: string[]): ProcLike => {
     log.argv.push(argv);
@@ -58,10 +60,19 @@ function fakeProc(
             JSON.stringify({ type: "system", subtype: "init", tools: TOOLS }),
           );
         }
+        const steps = rounds.shift() ?? [];
+        for (const tools of steps)
+          push(
+            JSON.stringify({
+              type: "assistant",
+              message: { content: tools.map((name) => ({ type: "tool_use", name })) },
+            }),
+          );
         push(
           JSON.stringify({
             type: "result",
             structured_output: answers.shift() ?? { messages: [] },
+            ...(steps.length ? { num_turns: steps.length } : {}),
           }),
         );
       },
@@ -206,6 +217,42 @@ describe("claude-mcp transport", () => {
     expect(result.messages[0].title).toBe("DM with Ruth");
     expect(result.cursor.since).toBe("1800000002.000100");
     transport.stop();
+  });
+
+  test("a poll says how many model rounds and Slack calls it took", async () => {
+    const search = "mcp__claude_ai_Slack__slack_search_messages";
+    const read = "mcp__claude_ai_Slack__slack_read_channel";
+    const transport = new ClaudeMcpTransport({
+      model: "haiku",
+      listTools: async () => TOOLS,
+      spawn: fakeProc([], { argv: [], asked: [] }, [
+        // The first turn looks one thing at a time; the next batches.
+        [[search], [search], [read], ["StructuredOutput"]],
+        [[search, search, read], ["StructuredOutput"]],
+      ]),
+    });
+    const ctx = {
+      cursor: { channels: {}, threads: {}, since: "1799999999" },
+      watchChannels: ["C1"],
+      trackedThreads: [],
+      firstLookSeconds: 86400,
+    };
+    expect((await transport.poll(ctx)).stats).toEqual({ rounds: 4, calls: 3 });
+    expect((await transport.poll(ctx)).stats).toEqual({ rounds: 2, calls: 3 });
+    transport.stop();
+  });
+
+  test("the reader is asked for one round of lookups, and no search for my own lines", () => {
+    const argv = new ClaudeMcpTransport({ model: "haiku" }).readArgv({
+      server: "claude_ai_Slack",
+      read: ["mcp__claude_ai_Slack__slack_read_channel"],
+      write: [],
+      send: null,
+    });
+    const system = argv[argv.indexOf("--append-system-prompt") + 1]!;
+    expect(system).toContain("in a single step");
+    expect(system).toContain("in parallel");
+    expect(system).toContain("no search for my own messages");
   });
 
   test("no Slack server: polling says how to fix it", async () => {

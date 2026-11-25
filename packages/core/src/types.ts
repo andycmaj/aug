@@ -707,7 +707,7 @@ export interface StoryRow {
   task_id: number;
   digest_id: number | null;
   at: string;
-  // agent, watcher, owner (a pin), or "undo".
+  // agent, watcher, owner (a pin or a rewrite in $EDITOR), or "undo".
   by: string;
   goals: string;
   now: string;

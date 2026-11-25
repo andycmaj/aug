@@ -4,6 +4,7 @@
 
 import { messageMeta } from "@riker/core/meta";
 import type { DraftKind } from "@riker/core/plugins";
+import type { GithubClient } from "./client";
 import { githubSend } from "./send";
 
 // A type, not an interface, so it fits core's open DraftAction.
@@ -16,7 +17,9 @@ export type GithubComment = {
   close?: "issue" | "merge" | "approve";
 };
 
-export const githubComment: DraftKind<GithubComment> = {
+// Sent through the plugin's client, so a Send waits out a rate limit with
+// the rest of Riker's calls.
+export const githubComment = (client: GithubClient): DraftKind<GithubComment> => ({
   type: "github_comment",
   build(message, answer) {
     const meta = messageMeta(message);
@@ -45,5 +48,5 @@ export const githubComment: DraftKind<GithubComment> = {
   },
   text: (action) => action.body,
   withText: (action, body) => ({ ...action, body }),
-  send: githubSend,
-};
+  send: (action, config) => githubSend(client, action, config),
+});

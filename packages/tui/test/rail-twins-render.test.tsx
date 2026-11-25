@@ -45,8 +45,12 @@ async function boot() {
   store.setWatching(ids.watched, true);
   store.setWatching(ids.both, true);
   const day = localDay(new Date());
-  store.addWin(day, ids.both);
+  // Wins list in the order they were pinned (pinned_at, then task id on a
+  // tie). Pin in the order the tests walk, a tick apart, so the order does
+  // not hang on both pins landing in the same millisecond.
   store.addWin(day, ids.win);
+  await Bun.sleep(2);
+  store.addWin(day, ids.both);
 
   const setup = await testRender(() => <App engine={engine} />, {
     width: 160,
