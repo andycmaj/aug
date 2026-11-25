@@ -4,6 +4,7 @@
 
 import { Database } from "bun:sqlite";
 import { paths, ensureHome } from "./paths";
+import { costBefore } from "./session-log";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -307,6 +308,11 @@ CREATE TABLE IF NOT EXISTS spend (
   output_tokens INTEGER NOT NULL DEFAULT 0,
   cache_read_tokens INTEGER NOT NULL DEFAULT 0,
   cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+  -- A persisted session's id and claude's total for it after this call: a
+  -- resumed call reports the session's whole total, so its row costs the
+  -- difference from the last one.
+  session_id TEXT,
+  session_total REAL,
   at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS spend_day ON spend(day);
@@ -598,6 +604,8 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "sessions", column: "context_tokens", ddl: "INTEGER" },
   { table: "tasks", column: "merged_at", ddl: "TEXT" },
   { table: "pr_status", column: "error", ddl: "TEXT" },
+  { table: "spend", column: "session_id", ddl: "TEXT" },
+  { table: "spend", column: "session_total", ddl: "REAL" },
   { table: "pr_status", column: "queue", ddl: "TEXT NOT NULL DEFAULT 'none'" },
   { table: "pr_status", column: "queue_position", ddl: "INTEGER" },
   { table: "pr_status", column: "queue_reason", ddl: "TEXT" },
@@ -634,6 +642,9 @@ function columns(db: Database, table: string): string[] {
 export function migrate(db: Database): void {
   const before = columns(db, "messages");
   const stateAdded = before.length > 0 && !before.includes("state");
+  const spendBefore = columns(db, "spend");
+  const sessionsAdded =
+    spendBefore.length > 0 && !spendBefore.includes("session_id");
   for (const { table, column, ddl } of ADDED_COLUMNS) {
     const cols = columns(db, table);
     if (cols.length > 0 && !cols.includes(column)) {
@@ -643,6 +654,12 @@ export function migrate(db: Database): void {
   // Indexes on added columns wait until the columns exist.
   if (columns(db, "tasks").includes("branch")) {
     db.exec("CREATE INDEX IF NOT EXISTS tasks_branch ON tasks(repo, branch)");
+  }
+  if (columns(db, "spend").includes("session_id")) {
+    if (sessionsAdded) {
+      spendBySession(db);
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS spend_session ON spend(session_id)");
   }
   if (columns(db, "messages").includes("state")) {
     if (stateAdded) {
@@ -665,6 +682,55 @@ export function migrate(db: Database): void {
   }
   backfillTriage(db);
   remindersToTimers(db);
+}
+
+// Before spend kept sessions, a resumed chat turn was recorded at its
+// session's running total (claude -p --resume restores the cost state), so
+// Home read $68 a turn. Each chat row is put on its session (its task's chat
+// session latest started by then) and keeps only the difference from the
+// row before it in that session; a session's first row, from the total
+// before it in the session's own log, when the log says. Task actions on
+// forks are left as they were.
+function spendBySession(db: Database): void {
+  if (columns(db, "sessions").length === 0) {
+    return;
+  }
+  const rows = db
+    .query(
+      `SELECT sp.id, sp.cost_usd AS cost,
+         (SELECT s.id FROM sessions s
+           WHERE s.task_id = sp.task_id AND s.kind = 'chat' AND s.started_at <= sp.at
+           ORDER BY s.started_at DESC LIMIT 1) AS session
+       FROM spend sp
+       WHERE sp.role IN ('assistant', 'general') AND sp.task_id IS NOT NULL
+       ORDER BY sp.id`,
+    )
+    .all() as { id: number; cost: number; session: string | null }[];
+  const update = db.query(
+    "UPDATE spend SET session_id = ?, session_total = ?, cost_usd = ? WHERE id = ?",
+  );
+  const last = new Map<string, number>();
+  db.transaction(() => {
+    for (const row of rows) {
+      if (!row.session) {
+        continue;
+      }
+      const prev = last.get(row.session) ?? loggedBefore(row.session, row.cost);
+      const cost =
+        prev !== null && row.cost >= prev ? row.cost - prev : row.cost;
+      last.set(row.session, row.cost);
+      update.run(row.session, row.cost, cost, row.id);
+    }
+  })();
+}
+
+// Never fails a start: a log unread leaves the row as it was.
+function loggedBefore(sessionId: string, total: number): number | null {
+  try {
+    return costBefore(sessionId, total);
+  } catch {
+    return null;
+  }
 }
 
 // A task put away before reminders were timers keeps its day: one remind

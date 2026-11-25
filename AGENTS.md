@@ -414,8 +414,13 @@ Tests live beside their package (`packages/<name>/test/`).
   `log.time()` for timings.
 - **What model calls cost is `core/spend.ts`**: `think()` records each
   call's `total_cost_usd` and tokens in `spend` (local day, task, role from
-  the call's `spend` tag); the Slack reader's persistent session reports a
-  running total, so it records the difference per turn. `config.spend` caps
+  the call's `spend` tag). A resumed call (a fork too) reports its
+  session's whole total, since claude restores the cost state, so its row
+  costs the difference from what the session had cost before: the last
+  `spend.session_total` for it, else the last `cost-state` line in the
+  session's own jsonl (`core/session-log.ts`); a total below that means
+  nothing was restored. The Slack reader's persistent session reports a
+  running total too, so it records the difference per turn. `config.spend` caps
   the day: past it the pool queues `by: "riker"` turns with the reason and the
   Advisor and doc pass skip; the owner's turns and coding Starts still run.
   The sidebar's status line, the table header, the Board's Cost tab and

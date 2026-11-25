@@ -1541,11 +1541,14 @@ export interface SpendInput {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  // The persisted session the call ran in and claude's total for it then.
+  sessionId?: string | null;
+  sessionTotal?: number | null;
 }
 
 export function addSpend(row: SpendInput): void {
   run(
-    "INSERT INTO spend (day, task_id, role, model, cost_usd, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO spend (day, task_id, role, model, cost_usd, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, session_id, session_total, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     row.day,
     row.taskId,
     row.role,
@@ -1555,7 +1558,20 @@ export function addSpend(row: SpendInput): void {
     row.output,
     row.cacheRead,
     row.cacheWrite,
+    row.sessionId ?? null,
+    row.sessionTotal ?? null,
     now(),
+  );
+}
+
+// What claude last said a session had cost in all, or null if Riker never
+// recorded it.
+export function lastSessionTotal(sessionId: string): number | null {
+  return (
+    one<{ total: number }>(
+      "SELECT session_total AS total FROM spend WHERE session_id = ? AND session_total IS NOT NULL ORDER BY id DESC LIMIT 1",
+      sessionId,
+    )?.total ?? null
   );
 }
 
