@@ -3,6 +3,7 @@ import { Drafts } from "@riker/core/outbound";
 import * as store from "@riker/core/store";
 import { freshHome } from "@riker/core/test/support/helpers";
 import { Kind } from "@riker/core/types";
+import { GithubClient } from "../src/client";
 import { githubComment } from "../src/draft";
 import { githubPlugin } from "../src/index";
 
@@ -26,7 +27,7 @@ function issueTask(type: string) {
 }
 
 describe("a GitHub draft", () => {
-  const drafts = new Drafts([githubComment]);
+  const drafts = new Drafts([githubComment(new GithubClient())]);
 
   test("close-outs only where the system has them", () => {
     const issue = issueTask("Issue");

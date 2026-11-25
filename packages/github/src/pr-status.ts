@@ -5,6 +5,7 @@
 import { errorMessage, logger } from "@riker/core/log";
 import { taskPr, type PrRef } from "@riker/core/pr";
 import * as store from "@riker/core/store";
+import type { GithubClient } from "./client";
 import {
   PrChecks,
   PrMergeable,
@@ -242,27 +243,14 @@ export function readPrBatch(prs: PrRef[], answer: GqlAnswer): PrBatch {
   return { views, budget: budget ?? null };
 }
 
-export async function ghPrBatch(prs: PrRef[]): Promise<PrBatch> {
-  const proc = Bun.spawn(
-    ["gh", "api", "graphql", "-f", `query=${prBatchQuery(prs)}`],
-    { stdout: "pipe", stderr: "pipe" },
-  );
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  // gh exits 1 when any PR in the batch errs (one deleted, one private) but
-  // still prints the answer; only an answer with no data failed as a whole.
-  let answer: GqlAnswer | null = null;
-  try {
-    answer = JSON.parse(out) as GqlAnswer;
-  } catch {
-    answer = null;
-  }
-  if (answer?.data) return readPrBatch(prs, answer);
-  if (code === 0 && answer) return readPrBatch(prs, answer);
-  throw new Error(err.trim() || `gh api graphql exited ${code}`);
+// PR status through the client: one GraphQL query per batch. A batch where
+// one PR errs (deleted, private) still answers for the rest.
+export function prBatchVia(client: GithubClient): PrFetch {
+  return async (prs) => {
+    const answer = (await client.graphql(prBatchQuery(prs))) as GqlAnswer | null;
+    if (!answer) throw new Error("GitHub answered with nothing");
+    return readPrBatch(prs, answer);
+  };
 }
 
 function setFromView(task: TaskRow, pr: PrRef, view: GhPrView): PrStatusRow {
@@ -279,7 +267,7 @@ function setFromView(task: TaskRow, pr: PrRef, view: GhPrView): PrStatusRow {
 
 export async function refreshPrStatus(
   task: TaskRow,
-  fetch: PrFetch = ghPrBatch,
+  fetch: PrFetch,
 ): Promise<PrStatusRow | null> {
   const pr = taskPr(task);
   if (!pr) return null;
@@ -325,7 +313,7 @@ export interface PrRefresh {
 }
 
 export interface PrRefreshOptions {
-  fetch?: PrFetch;
+  fetch: PrFetch;
   gate?: GithubGate;
   reserve?: number;
 }
@@ -333,9 +321,9 @@ export interface PrRefreshOptions {
 // A batch at a time, and each answer says how much budget is left: under
 // the reserve, the round stops, and so does one that hit a rate limit.
 export async function refreshPrStatuses(
-  options: PrRefreshOptions = {},
+  options: PrRefreshOptions,
 ): Promise<PrRefresh> {
-  const fetch = options.fetch ?? ghPrBatch;
+  const fetch = options.fetch;
   const reserve = options.reserve ?? GRAPHQL_RESERVE;
   const gate = options.gate;
   const out: PrRefresh = {

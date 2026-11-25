@@ -10,7 +10,7 @@ import { slackConfig, slackPlugin } from "@riker/slack";
 import { watch, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { setBrain, type BrainCall, type BrainResult } from "@riker/core/brain";
+import { claudeBrain, setBrain, type BrainCall, type BrainResult } from "@riker/core/brain";
 import { DEFAULT_CONFIG, fixedConfig } from "@riker/core/config";
 import { openDb, useDb } from "@riker/core/db";
 import { ensureDocs } from "@riker/core/docs";
@@ -22,7 +22,7 @@ import { taskPr } from "@riker/core/pr";
 import { setGuidePrReviews } from "@riker/core/run-action";
 import { paths } from "@riker/core/paths";
 import * as store from "@riker/core/store";
-import { Kind, type TaskRow } from "@riker/core/types";
+import { Kind, SpendRole, type TaskRow } from "@riker/core/types";
 import { demoBrain, demoHome } from "../demo";
 import { makeCheckout, repoRoot, worktreeFor } from "./checkout";
 import { applyEvent, playScenario, SCENARIOS } from "./events";
@@ -33,6 +33,7 @@ import {
   saveState,
   simApi,
   simPrFetch,
+  simReviews,
   SIM_REPO,
   SIM_TEAM,
   statePath,
@@ -76,6 +77,9 @@ function seed(file: string): SimState {
 // The demo's canned brain, but triage names a task after what it is about
 // rather than "A demo ask".
 async function simBrain(call: BrainCall): Promise<BrainResult> {
+  // A task action (the guided review) runs only on the owner's word, and
+  // a canned answer reviews nothing: it is the one real model call.
+  if (call.spend?.role === SpendRole.action) return claudeBrain(call);
   const result = await demoBrain(call);
   const where = call.prompt.match(/^Where: (.+)$/m)?.[1];
   const props = call.schema?.properties ?? {};
@@ -188,7 +192,7 @@ export function installSim(opts: SimOptions): {
     return `sim: ${done}`;
   });
   const fake = fileURLToPath(new URL("../fake-claude.ts", import.meta.url));
-  const github = githubPlugin({ api: simApi(file), prs: simPrFetch(file) });
+  const github = githubPlugin({ api: simApi(file), prs: simPrFetch(file), reviews: simReviews(file) });
   const engine = new Engine({
     config,
     noWorktrees: true,
