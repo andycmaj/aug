@@ -107,6 +107,10 @@ export interface RikerConfig {
   // Whether the terminal's font is a Nerd Font, for marks like merged's
   // git-merge glyph. Unset: guessed from the fonts installed (core/glyphs.ts).
   nerdFont?: boolean;
+  // false draws a connection that is still connecting (and an agent at
+  // work) with a still mark instead of an animation; so does RIKER_MOTION=0
+  // (core/link-state.ts).
+  motion?: boolean;
   // The TUI's navigation keys, in opentui's spelling ("alt+g", "shift+h").
   // Read at start: a change needs a restart.
   keys?: NavKeys;
@@ -272,6 +276,7 @@ export const CORE_KEYS: ReadonlySet<string> = new Set([
   "tmuxSocket",
   "docBudgets",
   "nerdFont",
+  "motion",
   "keys",
   "scratchRepo",
   "repoRoots",

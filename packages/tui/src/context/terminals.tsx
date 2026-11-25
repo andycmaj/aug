@@ -18,6 +18,11 @@ import { TerminalModes } from "../terminal/modes";
 import { readClipboard } from "../terminal/clipboard";
 import { terminalReplies } from "../terminal/replies";
 import { ViewportTerminalRenderable } from "../terminal/viewport-terminal";
+import { LinkTracker, type Link } from "@riker/core/link-state";
+
+// tmux attach, an editor or ghdash draws within a second; one silent this
+// long reads failed (it still connects if output comes later).
+export const TERM_CONNECT_MS = 15_000;
 
 export interface TermRequest {
   id: string;
@@ -28,6 +33,8 @@ export interface TermRequest {
   cwd?: string;
   env?: Record<string, string>;
   onExit?: (code: number | null) => void;
+  // How long it may stay silent before it reads failed; TERM_CONNECT_MS.
+  connectMs?: number;
 }
 
 export interface TermState {
@@ -37,12 +44,16 @@ export interface TermState {
   taskId?: number;
   running: boolean;
   exitCode: number | null;
+  // Connecting from spawn until its first output; failed when it exits
+  // before any, or stays silent past TERM_CONNECT_MS.
+  link: Link;
 }
 
 interface Term {
   request: TermRequest;
   view: ViewportTerminalRenderable;
   session: PtySession;
+  link: LinkTracker;
   modes: TerminalModes;
   host: BoxRenderable | null;
   size: { cols: number; rows: number };
@@ -92,6 +103,7 @@ export function TerminalsProvider(props: ParentProps) {
         taskId: t.request.taskId,
         running: t.session.running,
         exitCode: t.session.exitCode,
+        link: t.link.link,
       })),
     );
 
@@ -128,13 +140,20 @@ export function TerminalsProvider(props: ParentProps) {
       size: { cols, rows },
       host: null,
       session: null as unknown as PtySession,
+      // Publishes only once the term is listed: open publishes after.
+      link: new LinkTracker({
+        timeoutMs: request.connectMs ?? TERM_CONNECT_MS,
+        onChange: () => terms.get(request.id) === term && publish(),
+      }),
     };
+    term.link.connecting();
     term.session = new PtySession(request.argv, {
       cols,
       rows,
       cwd: request.cwd,
       env: request.env,
       onData: (data) => {
+        if (term.link.link.phase !== "connected") term.link.connected();
         view.feed(data);
         const text = decoder.decode(data, { stream: true });
         modes.feed(text);
@@ -147,6 +166,9 @@ export function TerminalsProvider(props: ParentProps) {
         if (replies) term.session.write(replies);
       },
       onExit: (code) => {
+        if (term.link.link.phase !== "connected")
+          term.link.failed(`exited ${code ?? "?"} before any output`);
+        term.link.dispose();
         publish();
         request.onExit?.(code);
       },
@@ -171,6 +193,7 @@ export function TerminalsProvider(props: ParentProps) {
     const term = terms.get(id);
     if (!term) return;
     term.session.kill();
+    term.link.dispose();
     if (term.host) term.host.remove(term.view);
     term.view.destroyTerminal();
     terms.delete(id);
