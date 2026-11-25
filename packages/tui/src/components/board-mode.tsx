@@ -21,8 +21,8 @@ import {
   usePane,
   useScope,
   useTheme,
-  useToast,
 } from "@andycmaj/opentui-app";
+import { useToast } from "../context/toast";
 import { Commands } from "../commands";
 import { useRiker, ViewMode } from "../context/riker";
 import { BOARD_COLUMNS, LANE_META } from "@riker/core/lanes";

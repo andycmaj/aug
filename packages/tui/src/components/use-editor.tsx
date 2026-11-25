@@ -2,7 +2,8 @@
 // message or a doc. The file goes through core/drafts; what comes back is
 // handed to the desk.
 
-import { useFocus, useToast } from "@andycmaj/opentui-app";
+import { useFocus } from "@andycmaj/opentui-app";
+import { useToast } from "../context/toast";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
 import { draftFile, readDraft, removeDraft, writeDraft } from "@riker/core/drafts";

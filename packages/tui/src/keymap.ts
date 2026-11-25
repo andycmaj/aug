@@ -72,6 +72,7 @@ export type BoardTab = (typeof BoardTab)[keyof typeof BoardTab];
 
 // Section titles for the ? help, one per scope.
 export const SCOPE_LABELS: Record<string, string> = {
+  toast: "An error toast (while one is up)",
   terminal: "The terminal (every other key goes to it)",
   input: "The chat box",
   rail: "The rail",
@@ -556,6 +557,17 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       cmd: Commands.INPUT_LEAVE,
       desc: "leave the box",
       help: "leave",
+    },
+  ],
+  // While an error toast is up, over every pane and modal (its layer
+  // exists only then): Esc dismisses the newest and does nothing else. An
+  // attached agent still gets Esc; detach first.
+  toast: [
+    {
+      key: "escape",
+      cmd: Commands.TOAST_DISMISS,
+      desc: "dismiss the error (the newest, one at a time)",
+      help: "dismiss",
     },
   ],
   // Reserved while a terminal is attached: every other key goes to it.

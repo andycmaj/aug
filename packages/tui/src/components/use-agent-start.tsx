@@ -2,7 +2,8 @@
 // still needs (a repo, where it is checked out, a branch); each need is one
 // dialog here, and the answer starts again. Nothing here decides the order.
 
-import { useFocus, useToast } from "@andycmaj/opentui-app";
+import { useFocus } from "@andycmaj/opentui-app";
+import { useToast } from "../context/toast";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
 import { inTmux, type StartOptions } from "@riker/core/driver";

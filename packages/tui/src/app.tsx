@@ -7,12 +7,12 @@ import {
   FocusProvider,
   KeymapProvider,
   ThemeProvider,
-  Toast,
-  ToastProvider,
   type ThemeName,
 } from "@andycmaj/opentui-app";
 import { RikerProvider, useRiker, ViewMode } from "./context/riker";
 import { TerminalsProvider } from "./context/terminals";
+import { ToastProvider } from "./context/toast";
+import { Toast } from "./components/toast";
 import type { Engine } from "@riker/core/engine";
 import { BoardMode } from "./components/board-mode";
 import { ChatMode } from "./components/chat-mode";

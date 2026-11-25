@@ -3,7 +3,7 @@
 // the choices for one repo's checkout, which a coding Start offers too when
 // the checkout will not do. Nothing is mapped unless the owner picks it.
 
-import { useToast } from "@andycmaj/opentui-app";
+import { useToast } from "../context/toast";
 import { useRiker } from "../context/riker";
 import { errorMessage } from "@riker/core/log";
 import {

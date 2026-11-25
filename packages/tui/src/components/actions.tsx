@@ -6,7 +6,8 @@
 
 import { createSignal, type Accessor, type JSX } from "solid-js";
 import { existsSync, readFileSync } from "node:fs";
-import { copyToClipboard, useFocus, useToast } from "@andycmaj/opentui-app";
+import { copyToClipboard, useFocus } from "@andycmaj/opentui-app";
+import { useToast } from "../context/toast";
 import { Commands } from "../commands";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
