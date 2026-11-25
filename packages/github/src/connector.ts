@@ -22,7 +22,7 @@ import {
   type Pause,
 } from "./gate";
 import { githubConfig } from "./config";
-import { ghApi, pollGithub, type GhApi } from "./ingest";
+import { ghApi, ghLogin, pollGithub, type GhApi } from "./ingest";
 import {
   ghPrBatch,
   refreshPrEndRest,
@@ -61,6 +61,7 @@ export class GithubConnector implements Connector {
   readonly hint = "GitHub uses your gh login.";
   private gate: GithubGate | null = null;
   private polling = false;
+  private login: string | null = null;
   private ctx!: ConnectorContext;
 
   constructor(private opts: GithubOptions = {}) {}
@@ -160,6 +161,21 @@ export class GithubConnector implements Connector {
     this.holdGithub(budget, limitedUntil(budget, limits, nowMs), PauseWhy.rateLimit);
   }
 
+  // New notifications into the inbox, then the cursor. Who gh is logged in
+  // as is asked once a process: it was half of every quiet poll.
+  private async notifications(api: GhApi): Promise<number> {
+    const startedAt = now();
+    const since =
+      store.kvGet("github.since") ??
+      new Date(Date.now() - 2 * 86400000).toISOString();
+    this.login ??= await ghLogin(api);
+    const fresh = this.ctx.ingest(
+      await pollGithub(since, api, store.hasBranchTasks, this.login),
+    );
+    store.kvSet("github.since", startedAt);
+    return fresh;
+  }
+
   // force (the owner's check now) skips a backoff, never a rate limit.
   async poll(force = false): Promise<void> {
     if (this.polling) return;
@@ -181,22 +197,20 @@ export class GithubConnector implements Connector {
     const started = Date.now();
     const api = this.opts.api ?? ghApi;
     try {
-      let fresh = 0;
-      if (!restHeld) {
-        const startedAt = now();
-        const since =
-          store.kvGet("github.since") ??
-          new Date(Date.now() - 2 * 86400000).toISOString();
-        fresh = this.ctx.ingest(await pollGithub(since, api, store.hasBranchTasks));
-        store.kvSet("github.since", startedAt);
-      }
-      // On the same clock: what the rail says about each task's PR.
-      const prs = graphHeld
-        ? null
-        : await refreshPrStatuses({
-            fetch: this.opts.prs ?? ghPrBatch,
-            gate,
-          });
+      // Notifications (REST) and PR status (GraphQL) spend different budgets
+      // and touch different rows, so they read side by side; the poll ends
+      // only when both have, so the next one never overlaps either.
+      const [notified, read] = await Promise.allSettled([
+        restHeld ? Promise.resolve(0) : this.notifications(api),
+        // On the same clock: what the rail says about each task's PR.
+        graphHeld
+          ? Promise.resolve(null)
+          : refreshPrStatuses({ fetch: this.opts.prs ?? ghPrBatch, gate }),
+      ]);
+      if (notified.status === "rejected") throw notified.reason;
+      if (read.status === "rejected") throw read.reason;
+      const fresh = notified.value;
+      const prs = read.value;
       if (prs?.limited) await this.githubLimited(GhBudget.graphql);
       else if (prs?.budget && prs.budget.remaining < GRAPHQL_RESERVE)
         this.holdGithub(

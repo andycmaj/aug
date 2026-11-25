@@ -2,6 +2,7 @@
 // the inbox is yours: direct messages, mentions of you, the configured
 // channels, and new replies on threads Riker already tracks.
 
+import { mapLimit } from "@riker/core/concurrent";
 import { logger } from "@riker/core/log";
 import type { NewMessage } from "@riker/core/store";
 import {
@@ -76,6 +77,13 @@ interface SlackConversation {
   priority?: number;
 }
 
+// Who the token is and the names it has looked up: the same from one poll
+// to the next, so a transport keeps them instead of asking every time.
+export interface SlackWho {
+  me: string;
+  team: string;
+}
+
 export interface SlackPollInput {
   api: SlackApi;
   cursor: SlackCursor;
@@ -85,6 +93,21 @@ export interface SlackPollInput {
   // How far back a first look reaches.
   firstLookSeconds: number;
   maxDms: number;
+  who?: SlackWho;
+  names?: Map<string, string>;
+}
+
+// History and reply reads in flight at once: a quiet poll is one read per
+// conversation, and in a row 25 DMs took seconds. A few at a time stays well
+// inside Slack's per-method limits.
+const READ_CONCURRENCY = 6;
+
+export async function whoAmI(api: SlackApi): Promise<SlackWho> {
+  const auth = await api("auth.test", {});
+  return {
+    me: String(auth.user_id),
+    team: String(auth.url ?? "").replace(/\/$/, ""),
+  };
 }
 
 export async function pollSlack(
@@ -96,10 +119,8 @@ export async function pollSlack(
     threads: { ...input.cursor.threads },
     searchedAt: input.cursor.searchedAt,
   };
-  const auth = await api("auth.test", {});
-  const me = String(auth.user_id);
-  const team = String(auth.url ?? "").replace(/\/$/, "");
-  const names = new Map<string, string>();
+  const { me, team } = input.who ?? (await whoAmI(api));
+  const names = input.names ?? new Map<string, string>();
   const nameOf = async (id: string | undefined): Promise<string> => {
     if (!id) return "someone";
     const known = names.get(id);
@@ -148,41 +169,100 @@ export async function pollSlack(
     });
   };
 
-  // Direct messages: the most active ones, every message.
-  const convs = (await api("users.conversations", {
-    types: "im,mpim",
-    limit: "200",
-    exclude_archived: "true",
-  })) as {
-    channels?: SlackConversation[];
+  // The conversation list and the mention search do not depend on each
+  // other, nor do the history and reply reads after them: they all go out
+  // at once, a few at a time. What they found is then read in the order the
+  // calls used to run, so messages and cursors come out the same.
+  const conversations = async () => {
+    // Direct messages: the most active ones, every message.
+    const convs = (await api("users.conversations", {
+      types: "im,mpim",
+      limit: "200",
+      exclude_archived: "true",
+    })) as {
+      channels?: SlackConversation[];
+    };
+    const dms = [...(convs.channels ?? [])]
+      .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+      .slice(0, input.maxDms);
+    const watched = input.watchChannels.map(
+      (id) => ({ id, is_im: false }) as SlackConversation,
+    );
+    return mapLimit([...dms, ...watched], READ_CONCURRENCY, async (conv) => {
+      try {
+        const history = (await api("conversations.history", {
+          channel: conv.id,
+          oldest: cursor.channels[conv.id] ?? firstLook,
+          limit: "50",
+        })) as { messages?: SlackMessage[] };
+        return { conv, messages: history.messages ?? [] };
+      } catch (err) {
+        log.warn("history skipped", { channel: conv.id, err });
+        return null;
+      }
+    });
   };
-  const dms = [...(convs.channels ?? [])]
-    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
-    .slice(0, input.maxDms);
-  const watched = input.watchChannels.map(
-    (id) => ({ id, is_im: false }) as SlackConversation,
-  );
 
-  for (const conv of [...dms, ...watched]) {
-    const dm = Boolean(conv.is_im || conv.is_mpim);
-    const oldest = cursor.channels[conv.id] ?? firstLook;
-    let history: { messages?: SlackMessage[] };
+  // Mentions anywhere (needs search:read; skipped quietly without it).
+  const mentions = async (): Promise<SlackMessage[] | null> => {
     try {
-      history = (await api("conversations.history", {
-        channel: conv.id,
-        oldest,
-        limit: "50",
-      })) as typeof history;
+      const found = (await api("search.messages", {
+        query: `<@${me}>`,
+        sort: "timestamp",
+        count: "30",
+      })) as {
+        messages?: { matches?: SlackMessage[] };
+      };
+      return found.messages?.matches ?? [];
     } catch (err) {
-      log.warn("history skipped", { channel: conv.id, err });
-      continue;
+      // no search scope
+      log.debug("mention search skipped", { err });
+      return null;
     }
-    const msgs = [...(history.messages ?? [])].reverse();
-    const where = dm
-      ? conv.is_im
-        ? `DM with ${await nameOf(conv.user)}`
-        : `group DM`
-      : `#${conv.name ?? conv.id}`;
+  };
+
+  // New replies on threads Riker tracks.
+  const threads = () =>
+    mapLimit(input.trackedThreads, READ_CONCURRENCY, async (tracked) => {
+      const [channel, threadTs] = tracked.split(":");
+      if (!channel || !threadTs) return null;
+      const key = `slack:${channel}:${threadTs}`;
+      const oldest = cursor.threads[key] ?? threadTs;
+      try {
+        const replies = (await api("conversations.replies", {
+          channel,
+          ts: threadTs,
+          oldest,
+          limit: "50",
+        })) as {
+          messages?: SlackMessage[];
+        };
+        return { channel, threadTs, key, oldest, messages: replies.messages ?? [] };
+      } catch (err) {
+        log.warn("thread skipped", { thread: tracked, err });
+        return null;
+      }
+    });
+
+  const [histories, matches, replies] = await Promise.all([
+    conversations(),
+    mentions(),
+    threads(),
+  ]);
+
+  for (const read of histories) {
+    if (!read) continue;
+    const { conv } = read;
+    const dm = Boolean(conv.is_im || conv.is_mpim);
+    const msgs = [...read.messages].reverse();
+    // A quiet DM needs no name: looking it up was a call per DM per poll.
+    const where = !msgs.length
+      ? ""
+      : dm
+        ? conv.is_im
+          ? `DM with ${await nameOf(conv.user)}`
+          : `group DM`
+        : `#${conv.name ?? conv.id}`;
     for (const msg of msgs) {
       const m = await toMessage(msg, conv.id, where, dm);
       if (m) out.push(m);
@@ -193,17 +273,9 @@ export async function pollSlack(
       cursor.channels[conv.id] = String(Date.now() / 1000);
   }
 
-  // Mentions anywhere (needs search:read; skipped quietly without it).
-  try {
-    const found = (await api("search.messages", {
-      query: `<@${me}>`,
-      sort: "timestamp",
-      count: "30",
-    })) as {
-      messages?: { matches?: SlackMessage[] };
-    };
+  if (matches) {
     const after = cursor.searchedAt ?? firstLook;
-    for (const match of [...(found.messages?.matches ?? [])].reverse()) {
+    for (const match of [...matches].reverse()) {
       if (match.ts <= after || !match.channel?.id) continue;
       const dm = Boolean(match.channel.is_im || match.channel.is_mpim);
       if (dm) continue;
@@ -218,41 +290,22 @@ export async function pollSlack(
         cursor.searchedAt = match.ts;
     }
     cursor.searchedAt ??= String(Date.now() / 1000);
-  } catch (err) {
-    // no search scope
-    log.debug("mention search skipped", { err });
   }
 
-  // New replies on threads Riker tracks.
-  for (const tracked of input.trackedThreads) {
-    const [channel, threadTs] = tracked.split(":");
-    if (!channel || !threadTs) continue;
-    const key = `slack:${channel}:${threadTs}`;
-    const oldest = cursor.threads[key] ?? threadTs;
-    try {
-      const replies = (await api("conversations.replies", {
+  for (const read of replies) {
+    if (!read) continue;
+    const { channel, threadTs, key, oldest } = read;
+    for (const msg of read.messages) {
+      if (msg.ts <= oldest) continue;
+      const m = await toMessage(
+        { ...msg, thread_ts: threadTs },
         channel,
-        ts: threadTs,
-        oldest,
-        limit: "50",
-      })) as {
-        messages?: SlackMessage[];
-      };
-      for (const msg of replies.messages ?? []) {
-        if (msg.ts <= oldest) continue;
-        const m = await toMessage(
-          { ...msg, thread_ts: threadTs },
-          channel,
-          "thread",
-          false,
-        );
-        if (m) out.push(m);
-        if (!cursor.threads[key] || msg.ts > cursor.threads[key])
-          cursor.threads[key] = msg.ts;
-      }
-    } catch (err) {
-      log.warn("thread skipped", { thread: tracked, err });
-      continue;
+        "thread",
+        false,
+      );
+      if (m) out.push(m);
+      if (!cursor.threads[key] || msg.ts > cursor.threads[key])
+        cursor.threads[key] = msg.ts;
     }
   }
 
@@ -283,7 +336,14 @@ export async function slackPost(
 export class TokenTransport implements SlackTransport {
   readonly kind = "token" as const;
 
-  constructor(private token: string | undefined) {}
+  private who: SlackWho | null = null;
+  // Names looked up so far, kept across polls: each was a users.info call.
+  private names = new Map<string, string>();
+
+  constructor(
+    private token: string | undefined,
+    private api: SlackApi | null = null,
+  ) {}
 
   available(): { ok: boolean; detail: string } {
     return this.token
@@ -294,9 +354,11 @@ export class TokenTransport implements SlackTransport {
         };
   }
 
-  poll(ctx: PollContext): Promise<SlackPollResult> {
+  async poll(ctx: PollContext): Promise<SlackPollResult> {
     if (!this.token) throw new Error("no Slack token");
-    return pollSlack({ ...ctx, api: slackApi(this.token), maxDms: 25 });
+    const api = (this.api ??= slackApi(this.token));
+    this.who ??= await whoAmI(api);
+    return pollSlack({ ...ctx, api, maxDms: 25, who: this.who, names: this.names });
   }
 
   send(action: SlackReply): Promise<string> {
