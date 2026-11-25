@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { Database, type SQLQueryBindings } from "bun:sqlite";
 import { db } from "../src/db";
-import { readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { DEFAULT_CONFIG, fileConfig, loadConfig } from "../src/config";
 import { paths } from "../src/paths";
 import { Engine } from "../src/engine";
@@ -740,13 +741,82 @@ describe("links", () => {
     ]);
   });
 
-  test("only http(s) URLs attach", async () => {
+  test("http and https attach, any case, stored as given", async () => {
     const task = engine.desk.newTask("Plan the launch", Kind.general);
-    for (const url of ["docs/plan.md", "file:///etc/passwd", "javascript:alert(1)"]) {
-      const out = await engine.runMove("link", { task: store.taskRef(task.id), url });
-      expect(out).toEqual({ ok: false, result: `${url} is not an http(s) URL` });
+    const ref = store.taskRef(task.id);
+    const urls = [
+      "http://intranet.test/spec",
+      "https://github.com/andycmaj/riker/pull/40",
+      "HTTPS://Docs.Example.com/Plan?x=1#Top",
+      "Http://example.test/a%20b",
+    ];
+    for (const url of urls) {
+      const out = await engine.runMove("link", { task: ref, url: `  ${url}\n` });
+      expect(out).toEqual({ ok: true, result: `linked ${url} to ${ref}` });
+    }
+    expect(store.linksForTask(task.id).map((l) => l.url)).toEqual(urls);
+    for (const url of urls) {
+      const out = await engine.runMove("unlink", { task: ref, url });
+      expect(out.ok).toBe(true);
     }
     expect(store.linksForTask(task.id)).toEqual([]);
+  });
+
+  test("a file on disk attaches, by path or file: URL", async () => {
+    const task = engine.desk.newTask("Prove the fix", Kind.general);
+    const ref = store.taskRef(task.id);
+    const proof = join(paths.home(), "work", "proof.md");
+    mkdirSync(dirname(proof), { recursive: true });
+    writeFileSync(proof, "red, then green");
+    for (const url of [proof, `file://${proof}`, `FILE://${proof}`]) {
+      const out = await engine.runMove("link", { task: ref, url, title: "Proof" });
+      expect(out).toEqual({ ok: true, result: `linked Proof (${url}) to ${ref}` });
+    }
+    expect(store.linksForTask(task.id).map((l) => l.url)).toEqual([
+      proof,
+      `file://${proof}`,
+      `FILE://${proof}`,
+    ]);
+    const gone = join(paths.home(), "work", "nope.md");
+    for (const url of [gone, `file://${gone}`, paths.home()]) {
+      const out = await engine.runMove("link", { task: ref, url });
+      expect(out.ok).toBe(false);
+      expect(out.result).toContain("is not a file on disk");
+    }
+  });
+
+  test("other schemes and relative paths are refused", async () => {
+    const task = engine.desk.newTask("Plan the launch", Kind.general);
+    const bad = [
+      "docs/plan.md",
+      "~/plan.md",
+      "javascript:alert(1)",
+      "JavaScript:alert(1)",
+      "ftp://files.test/plan",
+      "vscode://file/etc/hosts",
+      "data:text/html,hi",
+      "file://otherhost/etc/hosts",
+      "mailto:someone@example.test",
+      "",
+    ];
+    for (const url of bad) {
+      const out = await engine.runMove("link", { task: store.taskRef(task.id), url });
+      expect(out.ok).toBe(false);
+    }
+    const out = await engine.runMove("link", { task: store.taskRef(task.id), url: "javascript:alert(1)" });
+    expect(out.result).toBe("javascript:alert(1) is not an http(s) URL or a file's absolute path");
+    expect(store.linksForTask(task.id)).toEqual([]);
+  });
+
+  test("project_link takes the same links, and project_unlink matches as given", async () => {
+    await engine.runMove("project_new", { name: "Launch" });
+    const url = "HTTPS://Docs.Example.com/Spec";
+    const out = await engine.runMove("project_link", { project: "Launch", url: ` ${url} ` });
+    expect(out.ok).toBe(true);
+    const bad = await engine.runMove("project_link", { project: "Launch", url: "file:///nope/x.md" });
+    expect(bad).toEqual({ ok: false, result: "/nope/x.md is not a file on disk" });
+    const off = await engine.runMove("project_unlink", { project: "Launch", url });
+    expect(off).toEqual({ ok: true, result: `unlinked ${url} from Launch` });
   });
 
   test("unlink takes it off, and names the links when the URL is not one", async () => {

@@ -6,6 +6,8 @@
 
 import { createSignal, type Accessor, type JSX } from "solid-js";
 import { existsSync, readFileSync } from "node:fs";
+import { basename } from "node:path";
+import { isFile, linkTarget } from "@riker/core/links";
 import { copyToClipboard, useFocus } from "@andycmaj/opentui-app";
 import { useToast } from "../context/toast";
 import { Commands } from "../commands";
@@ -969,7 +971,27 @@ export function useActions(dialogs: Dialogs) {
     return out;
   }
 
-  function open(target: string) {
+  // A link: a web address through the system opener, a file in $EDITOR on
+  // the Canvas, anything else nowhere (core/links.ts).
+  function open(link: string) {
+    const to = linkTarget(link);
+    if (!to) {
+      showToast("Not opened: only http(s) links and files open", 5000, "error");
+      return;
+    }
+    if (to.type === "web") {
+      openWith(to.url);
+      return;
+    }
+    if (!isFile(to.path)) {
+      showToast(`${basename(to.path)} is gone`, 5000, "error");
+      return;
+    }
+    editor.openEditor(to.path, basename(to.path));
+  }
+
+  // A file the agent made, as the desktop opens it (an image, a PDF).
+  function openWith(target: string) {
     try {
       openTarget(target, desk.config().opener);
     } catch (err) {
@@ -995,7 +1017,7 @@ export function useActions(dialogs: Dialogs) {
       ...madeFiles(item).map((f) => ({
         label: f.name,
         hint: formatBytes(f.bytes),
-        run: () => open(f.path),
+        run: () => openWith(f.path),
       })),
     ];
     if (choices.length === 0) {
