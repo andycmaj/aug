@@ -34,6 +34,7 @@ import {
   rikerPluginDir,
   rikerSkillRules,
   ACTION_BASE,
+  actionBase,
   RIKER_PLUGIN,
   invocation,
   paneCommand,
@@ -156,6 +157,19 @@ function actionPrompt(
     .join("\n");
 }
 
+// The guide's patch: against the PR's base, so a PR stacked on another
+// shows only its own files, as Plannotator's diff against its parent does.
+// A base this checkout cannot find (the parent's branch never fetched) is
+// taken against main instead, as before the PR's base was known.
+export function guidePatch(task: TaskRow, cwd: string): Patch | { error: string } {
+  const base = actionBase(task);
+  const patch = patchFor(cwd, base);
+  if (!("error" in patch) || base === ACTION_BASE || !patch.error.startsWith("no merge base"))
+    return patch;
+  log.warn("guide base not found, taking main", { task: task.id, base });
+  return patchFor(cwd, ACTION_BASE);
+}
+
 // The session a fork resumes: the latest one, when its folder is still
 // there (a worktree removed at close leaves nothing to resume in).
 function forkable(task: TaskRow): { id: string; cwd: string } | null {
@@ -206,7 +220,7 @@ export function startAction(
   const cwd = session?.cwd ?? cwdFor(task);
   let plan: { patch: Patch; batches: BatchPlan } | undefined;
   if (guide) {
-    const patch = patchFor(task.worktree ?? cwd, ACTION_BASE);
+    const patch = guidePatch(task, task.worktree ?? cwd);
     if ("error" in patch) return { error: `${spec.name}: ${patch.error}` };
     plan = { patch, batches: planBatches(patch, task.worktree ?? cwd) };
   }

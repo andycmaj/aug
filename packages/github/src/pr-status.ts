@@ -31,6 +31,8 @@ const log = logger("pr");
 // queue event and head commit's date flattened beside it.
 export interface GhPrView {
   state?: string;
+  // The branch it merges into: another PR's when it is stacked.
+  baseRefName?: string | null;
   isDraft?: boolean;
   reviewDecision?: string | null;
   mergeable?: string;
@@ -116,7 +118,7 @@ export function readPrView(
   view: GhPrView,
 ): Pick<
   PrStatusRow,
-  "state" | "checks" | "review" | "mergeable" | keyof QueueFields
+  "state" | "checks" | "review" | "mergeable" | "base" | keyof QueueFields
 > {
   const state =
     view.state === "MERGED"
@@ -146,6 +148,7 @@ export function readPrView(
     checks: rollup(view.statusCheckRollup),
     review,
     mergeable,
+    base: view.baseRefName || null,
     ...(open ? readQueue(view) : NOT_QUEUED),
   };
 }
@@ -166,7 +169,7 @@ export type PrFetch = (prs: PrRef[]) => Promise<PrBatch>;
 export const PR_BATCH = 25;
 
 const PR_FRAGMENT = `fragment pr on PullRequest {
-  state isDraft reviewDecision mergeable
+  state isDraft reviewDecision mergeable baseRefName
   isInMergeQueue mergeQueueEntry { position state }
   timelineItems(last: 1, itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT]) { nodes {
     __typename

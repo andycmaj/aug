@@ -449,6 +449,9 @@ export interface PrStatusRow {
   fetched_at: string;
   // Why the last read failed; the rest is from the read before it.
   error: string | null;
+  // The branch it merges into (baseRefName): another PR's branch when it
+  // is stacked. Null until a read says it.
+  base?: string | null;
 }
 
 export interface KnowledgeRow {
