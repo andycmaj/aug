@@ -229,6 +229,15 @@ Tests live beside their package (`packages/<name>/test/`).
   `core/wins-board.ts`): what happened to a task, kept after its columns
   move on. The Board's tab 1 (`components/wins-tab.tsx`) shows a day's
   Wins and what else got done (docs/rail-status-design.md, Wins).
+- **Docs is the Board's tab 6** (`core/documents.ts`,
+  `components/docs-tab.tsx`): every link and doc Riker holds (task links,
+  project docs and journals, each task's thread and PR, files agents made,
+  URLs in notes and messages filed on tasks, the brain docs), one row per
+  address with all its owners, read from what is stored and never fetched.
+  A link is an http(s) URL or a file on disk (`core/links.ts`): a web
+  address opens through the system opener, a file in $EDITOR, nothing
+  else opens. The Inbox, Wins and Docs tabs share one list
+  (`components/expand-list.tsx`); a new list view uses it.
 - **The Inbox is the Board's tab 4** (`core/inbox.ts`,
   `components/inbox-tab.tsx`): every message triage saw and every Advisor
   idea, newest first, with the chain that routed it. Every inbox and

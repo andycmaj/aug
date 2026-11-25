@@ -25,6 +25,7 @@ import { findProject, projectLine } from "./lookup";
 import { unmergedPr } from "./pr";
 import { actionNamed, actionsFor, ActionVia } from "./task-actions";
 import { mux } from "./mux";
+import { checkLink } from "./links";
 import { docDraftsDir } from "./paths";
 import * as repos from "./repos";
 import * as store from "./store";
@@ -228,14 +229,11 @@ function checkRepo(repo: string): string {
   }
 }
 
-// The owner opens a link with the system opener, so only web addresses: a
-// file: or app URL an agent attached would run something on a keypress.
+// A web address, or a file on disk that opens in $EDITOR (core/links.ts).
 function checkUrl(url: string): string {
-  const clean = url.trim();
-  const parsed = URL.canParse(clean) ? new URL(clean) : null;
-  if (parsed?.protocol !== "http:" && parsed?.protocol !== "https:")
-    throw new MoveError(`${clean || "url"} is not an http(s) URL`);
-  return clean;
+  const out = checkLink(url);
+  if (out instanceof Error) throw new MoveError(out.message);
+  return out;
 }
 
 // --path, --clone, --rename and --anyway answer "needs path". --path never
@@ -768,7 +766,7 @@ export const MOVES: Record<string, MoveSpec> = {
     task: true,
     positional: "url",
     args: {
-      url: { help: "the http(s) URL", required: true },
+      url: { help: "the http(s) URL, or a file's absolute path", required: true },
       title: { help: "what it is, in a few words" },
     },
     run(desk, task, args, by) {
@@ -966,7 +964,7 @@ export const MOVES: Record<string, MoveSpec> = {
     positional: "project",
     args: {
       project: { help: "the project's name", required: true },
-      url: { help: "the http(s) URL", required: true },
+      url: { help: "the http(s) URL, or a file's absolute path", required: true },
       title: { help: "what it is, in a few words" },
     },
     run(_engine, _task, args, by) {

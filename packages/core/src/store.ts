@@ -440,6 +440,49 @@ export function getProject(id: number): ProjectRow | null {
   return one<ProjectRow>("SELECT * FROM projects WHERE id = ?", id);
 }
 
+// Every place a link or doc is kept, whole, for the Documents view
+// (core/documents.ts): read in one go so the view is one read. Archived
+// projects and closed tasks count; Home does not.
+export interface DocumentSources {
+  taskLinks: TaskLinkRow[];
+  projectLinks: ProjectLinkRow[];
+  projects: { id: number; name: string; status: string }[];
+  tasks: {
+    id: number;
+    title: string;
+    url: string | null;
+    project_id: number | null;
+    created_at: string;
+  }[];
+  threads: { task_id: number; thread_key: string; linked_at: string }[];
+  made: { task_id: number; files: string; started_at: string }[];
+  notes: { task_id: number | null; author: string; body: string; created_at: string }[];
+  messages: { task_id: number; author_name: string; body: string; received_at: string }[];
+}
+
+export function documentSources(): DocumentSources {
+  return {
+    taskLinks: all<TaskLinkRow>("SELECT * FROM task_links ORDER BY id"),
+    projectLinks: all<ProjectLinkRow>("SELECT * FROM project_links ORDER BY id"),
+    projects: all("SELECT id, name, status FROM projects ORDER BY id"),
+    tasks: all(
+      "SELECT id, title, url, project_id, created_at FROM tasks WHERE kind != 'home' ORDER BY id",
+    ),
+    threads: all(
+      "SELECT task_id, thread_key, linked_at FROM task_threads ORDER BY linked_at",
+    ),
+    made: all(
+      "SELECT task_id, files, started_at FROM turns WHERE files != '[]' ORDER BY id",
+    ),
+    notes: all(
+      "SELECT task_id, author, body, created_at FROM notes WHERE body LIKE '%http%' OR body LIKE '%file:%' ORDER BY id",
+    ),
+    messages: all(
+      "SELECT task_id, author_name, body, received_at FROM messages WHERE task_id IS NOT NULL AND body LIKE '%http%' ORDER BY id",
+    ),
+  };
+}
+
 export function listProjects(): ProjectRow[] {
   return all<ProjectRow>(
     "SELECT * FROM projects WHERE status = 'active' ORDER BY created_at, id",

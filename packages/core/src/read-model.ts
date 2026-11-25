@@ -4,6 +4,7 @@
 // never import the store.
 
 import { Table } from "./db";
+import { documents } from "./documents";
 import { inboxCount, inboxRows, inboxRuns } from "./inbox";
 import { boardColumnOf, type BoardColumn } from "./lanes";
 import { projectProgress, projectSummary, railProjects } from "./lookup";
@@ -129,6 +130,10 @@ function reads(desk: LiveCheck) {
     wins: [[T.wins], store.winsOn],
     board: [[T.tasks], board],
     inbox: [[T.messages, T.ideas], inboxRows],
+    documents: [
+      [T.taskLinks, T.projectLinks, T.projects, T.tasks, T.taskThreads, T.turns, T.notes, T.messages],
+      () => documents(store.documentSources()),
+    ],
     inboxCount: [[T.messages, T.ideas], inboxCount],
     inboxRuns: [[T.triageRuns, T.triageSteps], inboxRuns],
     spendOn: [[T.spend], store.spendOn],

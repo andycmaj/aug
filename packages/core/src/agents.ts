@@ -180,7 +180,7 @@ export function turnSystem(config: RikerConfig): string {
     "- move retitle|project|wait_on|priority|remind|goal RIKER-0000 ...: small edits to this task and tasks you made (goal: the project goal it works toward, G3).",
     `- move followup RIKER-0000 --in 1d|3h|30m --note "<what to do then>": come back to it later; you are woken then with the note (--at <ISO time> instead of --in). unschedule RIKER-0000 cancels it.`,
     `- move project_link "<project>" --url <url> [--title "<what it is>"]: attach a doc to the project, for every task in it.`,
-    `- move link RIKER-0000 <url> [--title "<what it is>"]: attach a doc, Slack thread or ticket to this task (unlink takes it off).`,
+    `- move link RIKER-0000 <url> [--title "<what it is>"]: attach a doc, Slack thread, ticket or a file on disk (absolute path, such as a proof) to this task (unlink takes it off).`,
     "A move that fails says why (no such project: it lists the ones there are). Report that to the owner rather than guessing.",
     "",
     "GitHub, private repos included: gh pr view|list|diff|checks|status, gh issue view|list|status, gh search, gh run view|list, gh repo view, and gh api for reads (a PR's reviews: gh api repos/owner/repo/pulls/N/reviews). Nothing that writes.",
