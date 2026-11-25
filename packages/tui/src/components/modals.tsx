@@ -24,7 +24,7 @@ import type { InfoSection } from "@riker/core/info";
 import type { RailItem } from "@riker/core/rail";
 import { goToList, searchIndex, type SearchHit } from "@riker/core/search";
 import { INBOX_KEY } from "./board-tab";
-import { taskRef } from "@riker/core/rows";
+import { taskRef, type DocLink } from "@riker/core/rows";
 import { Kind, type DraftAction, type TurnRow } from "@riker/core/types";
 import { ActionTurn } from "./chat-turn";
 import { stateColor, stateGlyph } from "./connector-line";
@@ -488,6 +488,9 @@ export function ReaderModal(props: {
   title: string;
   // A muted line over the text: when it was written, and by whom.
   note?: string;
+  // Listed over the text, 1-9 opening each.
+  links?: () => DocLink[];
+  onOpen?: (url: string) => void;
   text: () => string | null;
   empty: string;
   onEdit?: () => void;
@@ -500,7 +503,17 @@ export function ReaderModal(props: {
   const height = () => Math.max(6, dims().height - 12);
   let scrollRef: ScrollBoxRenderable | undefined;
   const scroll = (by: number) => scrollRef?.scrollBy(by);
-  const keys = () => ["j/k", "space page", "c copy", props.onEdit ? "e edit" : null, "esc"].filter(Boolean).join(" · ");
+  const links = () => props.links?.() ?? [];
+  const keys = () =>
+    ["j/k", "space page", links().length ? `1-${Math.min(9, links().length)} open` : null, "c copy", props.onEdit ? "e edit" : null, "esc"]
+      .filter(Boolean)
+      .join(" · ");
+  const openNth = (n: number) => {
+    const link = links()[n - 1];
+    if (!link || !props.onOpen) return false;
+    props.onOpen(link.url);
+  };
+  const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
   return (
     <Modal
       size="lg"
@@ -513,6 +526,7 @@ export function ReaderModal(props: {
         { key: "c", cmd: "reader.copy", desc: "copy it" },
         { key: "y", cmd: "reader.copy", desc: "copy it" },
         { key: "e", cmd: "reader.edit", desc: "open it in $EDITOR" },
+        ...DIGITS.map((n) => ({ key: String(n), cmd: `reader.open.${n}`, desc: `open link ${n}` })),
       ]}
       commands={{
         [ModalCommands.MODAL_DOWN]: () => scroll(2),
@@ -527,6 +541,7 @@ export function ReaderModal(props: {
           if (!props.onEdit) return false;
           props.onEdit();
         },
+        ...Object.fromEntries(DIGITS.map((n) => [`reader.open.${n}`, () => openNth(n)])),
       }}
     >
       <ModalHeader title={props.title} hint={keys()} />
@@ -542,6 +557,19 @@ export function ReaderModal(props: {
           <text fg={theme.textMuted} marginBottom={1}>
             {props.note ?? ""}
           </text>
+        </Show>
+        <Show when={links().length > 0}>
+          <box flexDirection="column" marginBottom={1}>
+            <For each={links()}>
+              {(link, i) => (
+                <text wrapMode="none">
+                  <span style={{ fg: i() < 9 ? theme.primary : theme.textMuted }}>{`${i() < 9 ? i() + 1 : "·"}  `}</span>
+                  <span style={{ fg: theme.text }}>{truncate(link.label, Math.max(10, Math.floor(width() / 2)))}</span>
+                  <span style={{ fg: theme.textMuted }}>{`  ${truncate(link.url, Math.max(10, width() - link.label.length - 12))}`}</span>
+                </text>
+              )}
+            </For>
+          </box>
         </Show>
         <Show
           when={props.text()?.trim()}

@@ -99,6 +99,9 @@ test("V on a project reads its journal as markdown, markers left out", async () 
   expect(shown).toContain("ledger fixes journal");
   expect(shown).toContain("wrote the reader");
   expect(shown).not.toContain("riker:journal");
+  // The project's docs to open, but not the journal file that is open.
+  expect(shown).toMatch(/1 {2}month-end close runbook/);
+  expect(shown).not.toMatch(/\d {2}Journal/);
   expect(shown).not.toContain("### ");
   await press("ESCAPE");
   expect(frame()).not.toContain("journal-entry-0241");
@@ -131,6 +134,45 @@ test("e on the journal edits a copy; an entry Riker wrote meanwhile is kept", as
   const toast = (await frameWith("Riker wrote")).replace(/\s+/g, " ");
   if (process.env.READER_FRAMES) writeFileSync(`${process.env.READER_FRAMES}.merge`, `${frame()}\n`);
   expect(toast).toContain("Riker wrote");
+});
+
+test("the reader lists the task's links and docs, and a number opens one", async () => {
+  const { engine, frame, press, goTo, frameWith } = await boot();
+  const task = store.listTasks().find((t) => t.title === "CSV import fails on a BOM")!;
+  store.addTaskLink(task.id, "https://example.com/spec-0241", "Spec doc 0241", "owner");
+  store.addProjectLink(task.project_id!, "https://example.com/runbook-0241", "Runbook 0241", "owner");
+  const opened = join(home!, "opened.txt");
+  const opener = join(home!, "fake-opener.sh");
+  writeFileSync(opener, `#!/bin/sh\nprintf '%s\\n' "$1" >> "${opened}"\n`);
+  chmodSync(opener, 0o755);
+  engine.desk.config().opener = [opener];
+  await goTo("CSV import");
+  await press("V");
+  const shown = await frameWith("Runbook 0241");
+  if (process.env.READER_FRAMES) writeFileSync(`${process.env.READER_FRAMES}.links`, `${shown}\n`);
+  const rows = shown.split("\n");
+  const row = (label: string) => rows.find((l) => l.includes(label)) ?? "";
+  // The PR first, then the thread, the task's link, the project's docs.
+  expect(row("PR northwind/ledger#219")).toMatch(/1 {2}PR/);
+  expect(row("Spec doc 0241")).toMatch(/3 {2}Spec doc 0241/);
+  // The demo project has a doc of its own before it.
+  expect(row("Runbook 0241 (project)")).toMatch(/5 {2}Runbook/);
+  expect(shown).toContain("1-5 open");
+  await press("3");
+  const end = Date.now() + 3000;
+  const read = () => {
+    try {
+      return readFileSync(opened, "utf8");
+    } catch {
+      return "";
+    }
+  };
+  while (!read() && Date.now() < end) await Bun.sleep(20);
+  expect(read()).toBe("https://example.com/spec-0241\n");
+  // Still open: a number is not a Board tab here.
+  expect(frame()).toContain("Spec doc 0241");
+  await press("8");
+  expect(read()).toBe("https://example.com/spec-0241\n");
 });
 
 test("V with no story yet says when one comes", async () => {

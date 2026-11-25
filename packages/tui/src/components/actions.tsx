@@ -28,13 +28,13 @@ import {
 } from "@riker/core/files";
 import { journalSwitch, storySwitchOf, SwitchValue } from "@riker/core/digests";
 import { infoTitle, itemInfo } from "@riker/core/info";
-import { journalMarkdown } from "@riker/core/journal";
+import { JOURNAL_LINK_TITLE, journalMarkdown } from "@riker/core/journal";
 import { storyMarkdown } from "@riker/core/story";
 import { errorMessage, logger } from "@riker/core/log";
 import { claudeSettingsPath, hooksInstalled, installHooks } from "@riker/core/adopt";
 import { strayLabel, type Stray } from "@riker/core/strays";
 import { baseKey, neighborKey, type RailItem } from "@riker/core/rail";
-import { actionAnswers, isClosed, taskRef } from "@riker/core/rows";
+import { actionAnswers, docLinks, isClosed, taskRef } from "@riker/core/rows";
 import { postComments } from "@riker/code-review-plannotator/guide";
 import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
 import type { ActionResult } from "@riker/core/run-action";
@@ -1062,6 +1062,16 @@ export function useActions(dialogs: Dialogs) {
             ? "No story yet: one is written up when a session on this task finishes. e starts one in $EDITOR."
             : "No story: it is off for this task (J turns it on). e starts one in $EDITOR."
         }
+        links={() => {
+          const now = riker.task(task.id) ?? task;
+          return docLinks({
+            pr: riker.taskPr(now),
+            source: now.url,
+            task: riker.taskLinks(task.id),
+            project: now.project_id ? riker.projectLinks(now.project_id) : [],
+          });
+        }}
+        onOpen={open}
         onEdit={() => {
           dialogs.close();
           editor.editStory(task);
@@ -1082,6 +1092,15 @@ export function useActions(dialogs: Dialogs) {
       <ReaderModal
         title={`${project.name} journal`}
         note={found?.file.replace(process.env.HOME ?? "\0", "~")}
+        // Its own file is what is open: the rest are the project's docs.
+        links={() =>
+          docLinks({
+            task: riker
+              .projectLinks(projectId)
+              .filter((l) => !(l.title === JOURNAL_LINK_TITLE && found && l.url === `file://${found.file}`)),
+          })
+        }
+        onOpen={open}
         text={() => (found ? journalMarkdown(found.text) : null)}
         empty={
           on

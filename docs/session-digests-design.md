@@ -152,7 +152,10 @@ task's header (pins, the next step, what blocks it); `I`, all of it.
 
 `V` on a task's row or Canvas reads its story, and on a project's its
 journal, as markdown over the Canvas (`ReaderModal`): j/k and space
-scroll, c copies, e opens it in `$EDITOR` in the Canvas. The story is
+scroll, c copies, e opens it in `$EDITOR` in the Canvas. Over the text it
+lists what there is to open (`docLinks`): for a task its PR, the thread
+it came from, its links and its project's docs; for a project its docs,
+less the journal's own file. 1 to 9 open them through the opener. The story is
 `storyMarkdown`, a heading per part; in `$EDITOR` every part's heading is
 there, and saving reads it back (`parseStory`) as a new version by the
 owner, which `story_undo` steps back from. A line under no part is

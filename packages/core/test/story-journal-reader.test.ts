@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Engine } from "../src/engine";
+import { docLinks } from "../src/rows";
 import { handleDone } from "../src/hooks";
 import { journalFile, journalMarkdown, journalTick, JournalSave, saveJournalEdit, writeJournal } from "../src/journal";
 import { sessionEnded, sessionStarted, workMerged, EndReason } from "../src/lifecycle";
@@ -161,5 +162,29 @@ describe("saving an edit of the journal", () => {
       text: `${project.name} journal: saved, with what Riker wrote while you edited`,
     });
     expect(engine.desk.saveJournal(project.id, base, base.replace("(task 1)", "(x)")).ok).toBe(false);
+  });
+});
+
+describe("what the reader lists to open", () => {
+  test("PR, thread, the task's links, then the project's docs; one row per URL", () => {
+    const links = docLinks({
+      pr: { repo: "o/r", number: 7, url: "https://github.com/o/r/pull/7" },
+      source: "https://github.com/o/r/issues/3",
+      task: [
+        { url: "https://x.test/spec", title: "Spec" },
+        { url: "https://github.com/o/r/pull/7", title: "the PR again" },
+      ],
+      project: [
+        { url: "file:///home/me/notes.md", title: null },
+        { url: "https://x.test/spec", title: "Spec, from the project" },
+      ],
+    });
+    expect(links).toEqual([
+      { label: "PR o/r#7", url: "https://github.com/o/r/pull/7" },
+      { label: "thread", url: "https://github.com/o/r/issues/3" },
+      { label: "Spec", url: "https://x.test/spec" },
+      { label: "/home/me/notes.md (project)", url: "file:///home/me/notes.md" },
+    ]);
+    expect(docLinks({})).toEqual([]);
   });
 });
