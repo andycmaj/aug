@@ -342,7 +342,8 @@ export function prStatus(taskId: number): PrStatusRow | null {
   return one<PrStatusRow>("SELECT * FROM pr_status WHERE task_id = ?", taskId);
 }
 
-// A read that changed nothing only moves fetched_at, without a redraw.
+// A read that changed nothing only moves fetched_at, without a redraw. The
+// base shows nowhere, so its change alone redraws nothing either.
 export function setPrStatus(row: PrStatusRow): void {
   const had = prStatus(row.task_id);
   const same =
@@ -363,13 +364,13 @@ export function setPrStatus(row: PrStatusRow): void {
       (k) => had[k] === row[k],
     );
   const sql = `INSERT INTO pr_status (task_id, repo, number, url, state, checks, review, mergeable,
-       queue, queue_position, queue_reason, fetched_at, error)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       queue, queue_position, queue_reason, fetched_at, error, base)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (task_id) DO UPDATE SET repo = excluded.repo, number = excluded.number,
        url = excluded.url, state = excluded.state, checks = excluded.checks,
        review = excluded.review, mergeable = excluded.mergeable, queue = excluded.queue,
        queue_position = excluded.queue_position, queue_reason = excluded.queue_reason,
-       fetched_at = excluded.fetched_at, error = excluded.error`;
+       fetched_at = excluded.fetched_at, error = excluded.error, base = excluded.base`;
   const params = [
     row.task_id,
     row.repo,
@@ -384,6 +385,7 @@ export function setPrStatus(row: PrStatusRow): void {
     row.queue_reason,
     row.fetched_at,
     row.error,
+    row.base ?? null,
   ];
   if (same) db().query(sql).run(...params);
   else run(sql, ...params);

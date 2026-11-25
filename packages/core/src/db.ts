@@ -569,6 +569,9 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "pr_status", column: "queue", ddl: "TEXT NOT NULL DEFAULT 'none'" },
   { table: "pr_status", column: "queue_position", ddl: "INTEGER" },
   { table: "pr_status", column: "queue_reason", ddl: "TEXT" },
+  // The branch the PR merges into (another PR's in a stack): what the
+  // guide's patch is taken against.
+  { table: "pr_status", column: "base", ddl: "TEXT" },
   { table: "messages", column: "state", ddl: "TEXT NOT NULL DEFAULT 'new'" },
   { table: "messages", column: "attempts", ddl: "INTEGER NOT NULL DEFAULT 0" },
   { table: "messages", column: "next_at", ddl: "TEXT" },

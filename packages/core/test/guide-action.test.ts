@@ -14,7 +14,7 @@ import { actionNamed } from "../src/task-actions";
 import { setMux } from "../src/mux";
 import * as store from "../src/store";
 import { actionRailWord } from "../src/rows";
-import { Kind, TurnRole } from "../src/types";
+import { Kind, PrChecks, PrMergeable, PrQueue, PrReview, PrState, TurnRole } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
 import { freshHome, testConfig } from "./support/helpers";
 
@@ -172,6 +172,89 @@ describe("the guide action", () => {
     expect(prompts[0]).toContain("job: whole");
     // div is new line 5.
     expect(prompts[0]).toMatch(/^\s+5 \+export function div/m);
+  });
+
+  describe("on a PR stacked on another's branch", () => {
+    const PR = "https://github.com/acme/math/pull/12";
+
+    // main, then the parent PR's branch (notes.md), then this PR's (div).
+    function stacked(): string {
+      const dir = repo();
+      const git = (...a: string[]) => sh(dir, "git", "-c", "user.email=t@t", "-c", "user.name=t", ...a);
+      git("checkout", "-q", "main");
+      git("checkout", "-qb", "parent");
+      writeFileSync(join(dir, "notes.md"), "# notes\n");
+      git("add", ".");
+      git("commit", "-qm", "parent");
+      git("rebase", "-q", "parent", "feature");
+      return dir;
+    }
+
+    function stackedTask(dir: string, base: string | null) {
+      const made = codingTask(dir);
+      store.updateTask(made.task.id, { url: PR });
+      store.setPrStatus({
+        task_id: made.task.id,
+        repo: "acme/math",
+        number: 12,
+        url: PR,
+        state: PrState.open,
+        checks: PrChecks.pass,
+        review: PrReview.none,
+        mergeable: PrMergeable.clean,
+        queue: PrQueue.none,
+        queue_position: null,
+        queue_reason: null,
+        fetched_at: "",
+        error: null,
+        base,
+      });
+      return { engine: made.engine, task: store.getTask(made.task.id)! };
+    }
+
+    const patchOf = () =>
+      (JSON.parse(readFileSync(saved.at(-1)!.file, "utf8")) as { review: { rawPatch: string } }).review.rawPatch;
+
+    test("takes the guide against the PR's base: only its own files, and its review on that base", async () => {
+      const dir = stacked();
+      answering(`\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\``);
+      const { engine, task } = stackedTask(dir, "parent");
+      const started = engine.desk.runAction(task.id, "guide");
+      if ("error" in started) throw new Error(started.error);
+      const result = await started.done;
+      expect(result.ok).toBe(true);
+      expect(patchOf()).toContain("+export function div");
+      expect(patchOf()).not.toContain("notes.md");
+      expect(result.terminal!.argv).toContain("parent");
+      expect(prompts[0]).toContain("base parent");
+      expect(readFindings(paths.work(task.id))!.base).toBe("parent");
+      // Opened again later, it refits against the same base.
+      const again = engine.desk.guideReview(task.id);
+      if ("error" in again) throw new Error(again.error);
+      expect(again.terminal!.argv).toContain("parent");
+    });
+
+    test("with no base read (gh failed), it is taken against main, the stack's files and all", async () => {
+      const dir = stacked();
+      answering(`\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\``);
+      const { engine, task } = stackedTask(dir, null);
+      store.markPrStale(task.id, "HTTP 502");
+      const started = engine.desk.runAction(task.id, "guide");
+      if ("error" in started) throw new Error(started.error);
+      expect((await started.done).ok).toBe(true);
+      expect(patchOf()).toContain("notes.md");
+      expect(readFindings(paths.work(task.id))!.base).toBe("main");
+    });
+
+    test("a base this checkout does not have is taken against main", async () => {
+      const dir = stacked();
+      answering(`\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\``);
+      const { engine, task } = stackedTask(dir, "never-fetched");
+      const started = engine.desk.runAction(task.id, "guide");
+      if ("error" in started) throw new Error(started.error);
+      expect((await started.done).ok).toBe(true);
+      expect(readFindings(paths.work(task.id))!.base).toBe("main");
+    });
   });
 
   test("no change against the base is refused before the run spends anything", () => {

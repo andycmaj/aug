@@ -22,6 +22,7 @@ import { runMove } from "../src/moves";
 import { setMux } from "../src/mux";
 import * as store from "../src/store";
 import {
+  actionBase,
   actionsFor,
   rikerPluginDir,
   ensureRikerPlugin,
@@ -35,10 +36,16 @@ import { actionAnswers } from "../src/rows";
 import { transcript } from "../src/transcript";
 import {
   Kind,
+  PrChecks,
+  PrMergeable,
+  PrQueue,
+  PrReview,
+  PrState,
   SessionKind,
   TaskStatus,
   TurnRole,
   type MessageRow,
+  type PrStatusRow,
   type TaskRow,
 } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
@@ -145,6 +152,64 @@ describe("args", () => {
     );
     const summarize = registeredActions(config()).find((a) => a.name === "summarize")!;
     expect(invocation(summarize, t)).toStartWith(`/riker:summarize task ${ref}`);
+  });
+});
+
+describe("the base an action is taken against", () => {
+  const PR = "https://github.com/acme/ledger/pull/230";
+
+  function prStatus(taskId: number, patch: Partial<PrStatusRow> = {}) {
+    store.setPrStatus({
+      task_id: taskId,
+      repo: "acme/ledger",
+      number: 230,
+      url: PR,
+      state: PrState.open,
+      checks: PrChecks.pass,
+      review: PrReview.none,
+      mergeable: PrMergeable.clean,
+      queue: PrQueue.none,
+      queue_position: null,
+      queue_reason: null,
+      fetched_at: "",
+      error: null,
+      ...patch,
+    });
+  }
+
+  test("a PR stacked on another's branch is taken against that branch", () => {
+    const t = task(Kind.coding, { url: PR });
+    prStatus(t.id, { base: "stack-2-parser" });
+    expect(actionBase(t)).toBe("stack-2-parser");
+    expect(fillArgs("{base}", t)).toBe("stack-2-parser");
+  });
+
+  test("a PR into main is main, and a task with no PR is main", () => {
+    const t = task(Kind.coding, { url: PR });
+    prStatus(t.id, { base: "main" });
+    expect(actionBase(t)).toBe("main");
+    expect(actionBase(task())).toBe("main");
+  });
+
+  test("a PR not read yet, or whose read failed before it said a base, is main", () => {
+    const t = task(Kind.coding, { url: PR });
+    expect(actionBase(t)).toBe("main");
+    prStatus(t.id, { base: null, error: "HTTP 502" });
+    expect(actionBase(t)).toBe("main");
+  });
+
+  test("a read that failed keeps the base the one before it said", () => {
+    const t = task(Kind.coding, { url: PR });
+    prStatus(t.id, { base: "stack-2-parser" });
+    store.markPrStale(t.id, "HTTP 502");
+    expect(store.prStatus(t.id)!.error).toBe("HTTP 502");
+    expect(actionBase(t)).toBe("stack-2-parser");
+  });
+
+  test("a read about another PR than the task's now says nothing", () => {
+    const t = task(Kind.coding, { url: PR });
+    prStatus(t.id, { url: "https://github.com/acme/ledger/pull/199", number: 199, base: "old-parent" });
+    expect(actionBase(t)).toBe("main");
   });
 });
 

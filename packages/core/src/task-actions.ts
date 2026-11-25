@@ -27,7 +27,7 @@ import type { RikerConfig } from "./config";
 import { envName, LEGACY, PLUGIN } from "./brand";
 import { logger } from "./log";
 import { paths } from "./paths";
-import { taskPr } from "./pr";
+import { taskPr, taskPrStatus } from "./pr";
 import * as store from "./store";
 import { messageMeta } from "./meta";
 import { Kind, type MessageRow, type TaskRow } from "./types";
@@ -363,9 +363,17 @@ export function actionsFor(config: RikerConfig, task: TaskRow): ActionSpec[] {
   return registeredActions(config).filter((a) => whyNotOffered(a, task) === null);
 }
 
-// A task does not record what it branched from; the skills fall back to
-// master when there is no main.
+// What a task without a PR is taken against; the skills fall back to master
+// when there is no main.
 export const ACTION_BASE = "main";
+
+// The branch a task's change is taken against: its PR's base, as the last
+// read of it said (another PR's branch when it is stacked), else main. A
+// read that failed keeps the base the one before it said; a PR never read,
+// or a row about a PR the task no longer points at, says nothing.
+export function actionBase(task: TaskRow): string {
+  return taskPrStatus(task)?.status?.base || ACTION_BASE;
+}
 
 export function prUrl(task: TaskRow): string | null {
   const pr = taskPr(task);
@@ -379,7 +387,7 @@ export function fillArgs(template: string, task: TaskRow): string {
     title: task.title,
     worktree: task.worktree ?? "none",
     branch: task.branch ?? "none",
-    base: ACTION_BASE,
+    base: actionBase(task),
     pr: prUrl(task) ?? "none",
   };
   return template.replace(/\{(\w+)\}/g, (whole, key: string) =>

@@ -164,6 +164,21 @@ describe("refreshing", () => {
     });
   });
 
+  test("keeps the branch a PR merges into, and a failed read keeps the last one", async () => {
+    const t = issueTask();
+    linkPr(t.id, "https://github.com/acme/ledger/pull/230");
+    await refreshPrStatuses({
+      fetch: byUrl(async () => ({ state: "OPEN", baseRefName: "stack-2-parser", statusCheckRollup: [] })),
+    });
+    expect(store.prStatus(t.id)?.base).toBe("stack-2-parser");
+    await refreshPrStatuses({
+      fetch: byUrl(async () => {
+        throw new Error("HTTP 502");
+      }),
+    });
+    expect(store.prStatus(t.id)).toMatchObject({ base: "stack-2-parser", error: "HTTP 502" });
+  });
+
   test("a merged PR is not asked again; a failing one keeps being asked", async () => {
     const t = issueTask();
     linkPr(t.id, "https://github.com/acme/ledger/pull/230");
@@ -307,6 +322,7 @@ describe("one GraphQL query for a batch", () => {
     expect(q).toContain('p0: repository(owner: "acme", name: "ledger") { pullRequest(number: 1)');
     expect(q).toContain('p1: repository(owner: "acme", name: "web") { pullRequest(number: 9)');
     expect(q).toContain("rateLimit { remaining resetAt }");
+    expect(q).toContain("baseRefName");
   });
 
   test("reads each PR, and names the one GitHub could not find", () => {
