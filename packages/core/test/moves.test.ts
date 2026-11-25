@@ -533,7 +533,7 @@ describe("what an agent may ask for", () => {
     const theirs = await engine.runMove("priority", { task: store.taskRef(other.id), level: "urgent" }, by);
     expect(theirs).toEqual({
       ok: false,
-      result: `an agent changes only its own task (${store.taskRef(mine.id)}) and tasks it made`,
+      result: `an agent changes only its own task (${store.taskRef(mine.id)}), or one it made`,
     });
   });
 
@@ -554,10 +554,48 @@ describe("what an agent may ask for", () => {
     const refused = await engine.runMove("remind", { task: store.taskRef(other.id), days: "3" }, by);
     expect(refused).toEqual({
       ok: false,
-      result: `an agent changes only its own task (${store.taskRef(mine.id)}) and tasks it made`,
+      result: `an agent changes only its own task (${store.taskRef(mine.id)}), or one it made`,
     });
     // Starting and closing what it made stay the owner's.
     expect((await engine.runMove("done", { task: ref }, by)).ok).toBe(false);
+  });
+
+  test("it files a task it made in a project and blocks it, never one made from another", async () => {
+    // The split that left a task out of its project: made --from without
+    // --project, then put right by the agent that made it.
+    const mine = engine.desk.newTask("mine", Kind.general);
+    const other = engine.desk.newTask("other", Kind.general);
+    const lib = await engine.desk.createProject("lib");
+    const by = `agent ${store.taskRef(mine.id)}`;
+    const made = await engine.runMove(
+      "new",
+      { title: "split out the library", from: store.taskRef(mine.id) },
+      by,
+    );
+    expect(made.ok).toBe(true);
+    const child = store.listTasks().find((t) => t.title === "split out the library")!;
+    const ref = store.taskRef(child.id);
+    expect((await engine.runMove("project", { task: ref, project: "lib" }, by)).ok).toBe(true);
+    expect(store.getTask(child.id)!.project_id).toBe(lib.id);
+    expect((await engine.runMove("block_on", { task: ref, on: store.taskRef(mine.id) }, by)).ok).toBe(true);
+    expect(store.blockersOf(child.id)).toEqual([mine.id]);
+    expect((await engine.runMove("retitle", { task: ref, title: "the library, split" }, by)).ok).toBe(true);
+
+    const refusal = {
+      ok: false,
+      result: `an agent changes only its own task (${store.taskRef(mine.id)}), or one it made`,
+    };
+    const unrelated = await engine.runMove("project", { task: store.taskRef(other.id), project: "lib" }, by);
+    expect(unrelated).toEqual(refusal);
+    const cousin = engine.desk.newTask("made from the other", Kind.general, "", { fromTaskId: other.id });
+    expect(store.getTask(cousin.id)!.from_task_id).toBe(other.id);
+    const theirs = await engine.runMove(
+      "block_on",
+      { task: store.taskRef(cousin.id), on: store.taskRef(mine.id) },
+      by,
+    );
+    expect(theirs).toEqual(refusal);
+    expect(store.getTask(cousin.id)!.project_id).toBeNull();
   });
 
   test("new --remind puts the task away in the same move", async () => {

@@ -761,7 +761,7 @@ export function codingBrief(config: RikerConfig, task: TaskRow): string {
     `Durable discoveries go in Knowledge: ${toolsCommand("knowledge", "add", "--topic", "<topic>", "--title", "<title>", "<body>")}`,
     `Work that belongs in a task of its own: ${toolsCommand("move", "new", "<title>", "--kind", "coding", "--brief", "<what to do>", "--from", ref)} (look up projects with ${toolsCommand("projects")}, one in full with ${toolsCommand("project", "<name>")}).`,
     `Search it: ${toolsCommand("knowledge", "search", "<words>")}`,
-    `To pick this up again later (check a PR tomorrow and report), set a follow-up; it wakes you then with the note: ${toolsCommand("move", "followup", ref, "--in", "1d", "--note", "<what to do then>")} (--in 30m|3h|1d|2w, or --at <ISO time>). The same small moves (followup, remind, priority, retitle, link) work on tasks you made.`,
+    `To pick this up again later (check a PR tomorrow and report), set a follow-up; it wakes you then with the note: ${toolsCommand("move", "followup", ref, "--in", "1d", "--note", "<what to do then>")} (--in 30m|3h|1d|2w, or --at <ISO time>). The same small moves (followup, remind, priority, retitle, project, block_on, link) work on tasks you made: one you made without --project goes in with move project <ref> --project <name>.`,
     `To show the owner a terminal program (a diff viewer), run it in a split of your own pane, not a new tmux window: ${toolsCommand("pane", "--zoom", "--wait", "--", "<command...>")}`,
     "Do not edit the owner's dotfiles or Claude settings. Setup riker needs there is `riker install <name>` (`riker install --check` lists it); anything else, say in your done reply.",
     "",
