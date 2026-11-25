@@ -162,6 +162,7 @@ describe("read model", () => {
       blockers: (r) => r.blockers(plain.id),
       wins: (r) => r.wins("2026-11-15"),
       inbox: (r) => r.inbox(),
+      documents: (r) => r.documents(),
       inboxCount: (r) => r.inboxCount(),
       inboxRuns: (r) => r.inboxRuns(message.id),
       spendOn: (r) => r.spendOn("2026-11-15"),
