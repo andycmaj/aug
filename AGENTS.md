@@ -41,8 +41,8 @@ other way (a new package gets a line in its `ALLOWED`).
   prs, clock })`, `slackPlugin({ transport, remoteLink })`.
 - **`@riker/triage`**: the chain of rules (`src/triage.ts`) and the inbox's
   worker (`src/worker.ts`); `triagePlugin()`.
-- **`@riker/github`**: notifications in (`ingest.ts`), the rate-limit gate
-  (`gate.ts`), each task's PR status read (`pr-status.ts`; the rail's words
+- **`@riker/github`**: notifications in (`ingest.ts`), the one door to gh
+  (`client.ts`), the rate-limit gate (`gate.ts`), each task's PR status read (`pr-status.ts`; the rail's words
   for it stay `core/pr.ts`), a review's context (`review-context.ts`), its draft (`draft.ts`, sent through gh in
   `send.ts`), its config (`config.ts`), the poll (`connector.ts`);
   `githubPlugin()`.
@@ -132,11 +132,19 @@ Tests live beside their package (`packages/<name>/test/`).
   into `pr_status` on the GitHub clock, 25 PRs to one GraphQL query; the rail and the Canvas's
   header show it (marked stale when the last read failed), and `P` opens
   ghdash on it in the Canvas (`components/use-pr-dash.tsx`).
-- **When Riker may call GitHub is `@riker/github` `gate.ts`**: a rate limit
-  pauses that budget (REST or GraphQL) until its reset, kept in `kv` across
-  restarts; a failed poll backs off (doubling, jittered, capped); a PR that
-  keeps failing backs off alone; under `GRAPHQL_RESERVE` points PR status
-  waits for the reset. The engine's GitHub status line says each of these.
+- **Every gh call goes through `@riker/github` `client.ts`** (the poll,
+  PR status, the guide's review context, Send): `gh api -i`, so GitHub's
+  rate-limit headers are read on every answer, and a call into a paused
+  budget throws `GhThrottled` ("rate limited until 14:05") before gh runs.
+  Nothing there retries. Tests fake gh with `githubPlugin({ run })`; the
+  `api`/`prs` seams (sim, older tests) replace whole calls instead.
+- **When Riker may call GitHub is `@riker/github` `gate.ts`**: a spent
+  budget (REST or GraphQL) pauses until its reset, kept in `kv` across
+  restarts; a secondary limit honors `retry-after`, else waits a minute and
+  doubles while it recurs; under `REST_RESERVE`/`GRAPHQL_RESERVE` a budget
+  waits for the reset (the owner's Send still goes); a failed poll backs
+  off (doubling, jittered, capped); a PR that keeps failing backs off
+  alone. The engine's GitHub status line says each of these.
 - **Claudes started outside Riker are `core/strays.ts`**: found through Claude
   Code's own `~/.claude/sessions/<pid>.json` (pid, session id, cwd, tmux
   pane). The `adopt` move and `A` on the Board's Columns make one a coding task: one in
@@ -359,6 +367,14 @@ Tests live beside their package (`packages/<name>/test/`).
   `docs.write`'s own Claude Docs writes. A denied connector call gets a
   `grant:` step naming the config key (`grantHint`), and `connectorNote`
   tells every headless agent where grants live.
+- **A connection in progress is `core/link-state.ts`**: connecting,
+  connected, or failed with a short reason, and failed on its own past its
+  timeout (`LinkTracker`). The pollers' status lines (`riker.links()`) and
+  an embedded terminal before its first output (`TermState.link`) keep one;
+  `components/link-mark.tsx` is the one look, animated only while
+  connecting and mounted. Its marks are never a rail mark
+  (`link-state.test.ts`). Motion off (config `motion: false`,
+  `RIKER_MOTION=0`, bun test) draws still marks, the working spinner too.
 - **Logging is `core/log.ts`**: `logger(scope)` writes lines to `riker.log`
   under `RIKER_HOME`, never to the terminal (the TUI owns it). It is off unless
   `RIKER_LOG`, `log.enabled` in config, or `RIKER_DEV` (set by `bun run dev`)
@@ -474,17 +490,24 @@ Tests live beside their package (`packages/<name>/test/`).
   `RIKER_TOOLS_ENTRY=$PWD/packages/cli/src/riker-tools.ts bun dev`, and the
   briefs and hooks it writes name that path.
 - `bun run demo` runs the fixture day. Drive it in tmux with a unique session
-  name and `tmux capture-pane -p`.
+  name and `tmux capture-pane -p`. Under opentui's synchronized output a
+  capture can hold a stale frame of anything animated: run with
+  `RIKER_MOTION=0` for still marks, or read the pane's bytes
+  (`tmux pipe-pane -o 'cat > file'`) to see frames.
 - `bun run sim [review-cycle|review-ask] [--brain fake|haiku]` is the real
-  TUI on a scratch home against an offline GitHub (`packages/fixtures/src/sim/`):
-  the engine's `github.api`/`github.prs` seam reads a JSON state file, Send
+  TUI on a scratch home against an offline GitHub (`packages/fixtures/src/sim/`).
+  With the fake brain a task action (the guided review) still calls the real
+  model, on the owner's word only; its PRs are not on GitHub, so a review
+  opens on the worktree, never in Plannotator's PR mode (the generator's
+  GitHub target is for that). The engine's `github.api`/`github.prs` seam reads a JSON state file, Send
   writes to it, so triage, `pr_status`, the rail, `riker-tools feedback` and
   nudges run unchanged with no GitHub call. From another terminal,
   `bun run sim:do pr-open [--mine] [--team reviewers] | comment | mention |
   review --verdict approve|changes|comment --comments N | ci fail|pass |
   push | merge | rerequest | close | play <scenario> | state` changes it, and the sim polls on the write. Its
-  repo `sim/riker` is a remote-less clone of Riker whose PR branches are real
-  commits, so a task on one starts in a worktree with a real diff; the
+  repo `sim/riker` is a remote-less clone of Riker whose PR branches are
+  each one real commit laid over main, so a task on one starts in a
+  worktree with a real diff of review size; the
   seeded coding task's `--mine` PR is linked to it. A scenario is a list of
   events in `SCENARIOS` (`events.ts`); `packages/fixtures/test/sim.test.ts` reads the fake
   through `pollGithub` and `readPrBatch`, so it cannot drift from them.

@@ -37,14 +37,20 @@ export interface GhRemaining {
 // Below this many GraphQL points Riker stops reading PR status until the
 // reset, so the owner's own gh and their agents keep the rest.
 export const GRAPHQL_RESERVE = 1000;
+// The same for REST (5000 an hour): headers on every call say what is left.
+export const REST_RESERVE = 500;
 // A secondary rate limit says no reset time; GitHub asks for a minute or
 // more. Without any answer at all, wait a while.
 export const SECONDARY_PAUSE_MS = 5 * 60_000;
+// A secondary limit with no retry-after waits a minute, then doubles each
+// time it comes back before a call in that budget works again.
+export const SECONDARY_FIRST_MS = 60_000;
 export const UNKNOWN_RESET_PAUSE_MS = 15 * 60_000;
 export const BACKOFF_CAP_MS = 30 * 60_000;
 
 export const PauseWhy = {
   rateLimit: "rate limited",
+  secondary: "secondary limit",
   reserve: "saving budget",
 } as const;
 export type PauseWhy = (typeof PauseWhy)[keyof typeof PauseWhy];
@@ -61,12 +67,25 @@ export interface GateClock {
 
 const realClock: GateClock = { now: Date.now, random: Math.random };
 
+export function reserveOf(budget: GhBudget): number {
+  return budget === GhBudget.graphql ? GRAPHQL_RESERVE : REST_RESERVE;
+}
+
+// What a refused call said about when to come back, read from its status
+// and headers (client.ts). primary: the budget is spent, back at its
+// reset. secondary: GitHub wants Riker to slow down, after retryAfterMs
+// when it says so.
+export type GhLimit =
+  | { kind: "primary"; budget: GhBudget; resetAt: number | null }
+  | { kind: "secondary"; budget: GhBudget; retryAfterMs: number | null };
+
 export class GithubGate {
   private paused = new Map<GhBudget, Pause>();
   private failures = 0;
   private backoffUntil = 0;
   private lastError: string | null = null;
   private prs = new Map<string, { n: number; until: number }>();
+  private strikes = new Map<GhBudget, number>();
 
   // baseMs is the poll interval: the first backoff is about two of them.
   constructor(
@@ -87,6 +106,38 @@ export class GithubGate {
     const had = this.pause(budget);
     if (had && had.until >= until) return;
     this.paused.set(budget, { until, why });
+  }
+
+  // A rate limit GitHub answered with: the pause it earns. A primary one
+  // waits for the reset (a minute when none was said); a secondary one
+  // honors retry-after and, struck again before a call works, waits
+  // doubling, jittered, from a minute.
+  limited(limit: GhLimit): Pause {
+    const now = this.clock.now();
+    if (limit.kind === "primary") {
+      const until = Math.max(limit.resetAt ?? 0, now + 60_000);
+      this.hold(limit.budget, until, PauseWhy.rateLimit);
+    } else {
+      const n = (this.strikes.get(limit.budget) ?? 0) + 1;
+      this.strikes.set(limit.budget, n);
+      // Jitter only adds: GitHub asks for at least the step.
+      const step = Math.min(SECONDARY_FIRST_MS * 2 ** (n - 1), BACKOFF_CAP_MS);
+      const backoff = step + (this.clock.random() * step) / 4;
+      const asked = limit.retryAfterMs ?? 0;
+      const wait = n === 1 && asked ? asked : Math.max(asked, backoff);
+      this.hold(limit.budget, now + wait, PauseWhy.secondary);
+    }
+    return this.pause(limit.budget)!;
+  }
+
+  // What a call's headers said is left. A call that worked clears the
+  // secondary strikes; under the reserve, that budget waits for its reset
+  // so the owner's own gh and agents keep the rest.
+  observe(budget: GhBudget, remaining: number, resetAt: number): Pause | null {
+    this.strikes.delete(budget);
+    if (remaining >= reserveOf(budget) || resetAt <= this.clock.now()) return null;
+    this.hold(budget, resetAt, PauseWhy.reserve);
+    return this.pause(budget);
   }
 
   // While backing off, when the next poll may run and what failed last.

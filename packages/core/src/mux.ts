@@ -146,6 +146,11 @@ export interface Mux {
   // it landed in, false if it has not, null when git cannot say (no such
   // branch, no reflog to tell where it started).
   branchMerged(repoPath: string, branch: string): Promise<string | false | null>;
+  // What branchMerged's answer rests on, per branch, in one cheap read: the
+  // base's name and tips and the branch's tip. Same key, same answer; a
+  // branch with no tip is left out (branchMerged would say null). Null when
+  // git cannot read the repo.
+  mergeKeys(repoPath: string, branches: string[]): Promise<Map<string, string> | null>;
   // What is at a path: gone, a checkout and its GitHub repos, a worktree.
   inspectCheckout(path: string): CheckoutState;
   // Main checkouts under the roots, depth folders down.
@@ -217,6 +222,49 @@ export function parseWorktree(stdout: string): MadeWorktree | null {
 
 const WT_TIMEOUT_MS = 5 * 60_000;
 const GIT_TIMEOUT_MS = 10_000;
+
+type Git = (...args: string[]) => Promise<string | null>;
+
+function gitIn(repoPath: string): Git {
+  return async (...args) => {
+    const proc = Bun.spawn(["git", "-C", repoPath, ...args], {
+      stdout: "pipe",
+      stderr: "ignore",
+      stdin: "ignore",
+      timeout: GIT_TIMEOUT_MS,
+    });
+    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return code === 0 ? out.trim() : null;
+  };
+}
+
+// The repo's base (origin's HEAD, else main), its local and origin tips, and
+// each branch's tip, in two calls. A pattern also matches refs under it
+// (refs/heads/main/x), so only exact names count. Null when the listing
+// fails.
+async function baseTips(
+  git: Git,
+  branches: string[],
+): Promise<{ base: string; local?: string; remote?: string; tips: Map<string, string> } | null> {
+  const head = await git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD");
+  const base = head?.replace(/^origin\//, "") || "main";
+  const localRef = `refs/heads/${base}`;
+  const remoteRef = `refs/remotes/origin/${base}`;
+  const wanted = new Set(branches.map((b) => `refs/heads/${b}`));
+  const listed = await git("for-each-ref", "--format=%(refname) %(objectname)", localRef, remoteRef, ...wanted);
+  if (listed === null) return null;
+  let local: string | undefined;
+  let remote: string | undefined;
+  const tips = new Map<string, string>();
+  for (const line of listed.split("\n")) {
+    const [ref, sha] = line.split(" ");
+    if (!ref || !sha) continue;
+    if (ref === localRef) local = sha;
+    if (ref === remoteRef) remote = sha;
+    if (wanted.has(ref)) tips.set(ref.slice("refs/heads/".length), sha);
+  }
+  return { base, local, remote, tips };
+}
 // A big repo over a slow link.
 const CLONE_TIMEOUT_MS = 10 * 60_000;
 
@@ -750,38 +798,11 @@ export class TmuxMux implements Mux {
   // on GitHub reaches origin/<base> with any fetch, while the checkout's own
   // <base> waits for the owner's pull. Nothing here fetches.
   async branchMerged(repoPath: string, branch: string): Promise<string | false | null> {
-    const git = async (...args: string[]) => {
-      const proc = Bun.spawn(["git", "-C", repoPath, ...args], {
-        stdout: "pipe",
-        stderr: "ignore",
-        stdin: "ignore",
-        timeout: GIT_TIMEOUT_MS,
-      });
-      const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-      return code === 0 ? out.trim() : null;
-    };
-    const head = await git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD");
-    const base = head?.replace(/^origin\//, "") || "main";
-    const localRef = `refs/heads/${base}`;
-    const remoteRef = `refs/remotes/origin/${base}`;
-    const branchRef = `refs/heads/${branch}`;
-    // One call for the three tips; a pattern also matches refs under it
-    // (refs/heads/main/x), so only exact names count.
-    const tips = new Map<string, string>();
-    const listed = await git(
-      "for-each-ref",
-      "--format=%(refname) %(objectname)",
-      localRef,
-      remoteRef,
-      branchRef,
-    );
-    for (const line of listed?.split("\n") ?? []) {
-      const [ref, sha] = line.split(" ");
-      if (ref && sha) tips.set(ref, sha);
-    }
-    const tip = tips.get(branchRef);
-    const local = tips.get(localRef);
-    const remote = tips.get(remoteRef);
+    const git = gitIn(repoPath);
+    const read = await baseTips(git, [branch]);
+    if (!read) return null;
+    const { base, local, remote } = read;
+    const tip = read.tips.get(branch);
     if (!tip || (!local && !remote)) return null;
     let baseTip = (local ?? remote)!;
     let into = local ? base : `origin/${base}`;
@@ -805,6 +826,15 @@ export class TmuxMux implements Mux {
     if (!squash) return false;
     const cherry = await git("cherry", baseTip, squash);
     return cherry?.startsWith("-") ? into : false;
+  }
+
+  async mergeKeys(repoPath: string, branches: string[]): Promise<Map<string, string> | null> {
+    const read = await baseTips(gitIn(repoPath), branches);
+    if (!read) return null;
+    const keys = new Map<string, string>();
+    for (const [branch, tip] of read.tips)
+      keys.set(branch, `${tip} ${read.base} ${read.local ?? "-"} ${read.remote ?? "-"}`);
+    return keys;
   }
 
   inspectCheckout(path: string): CheckoutState {

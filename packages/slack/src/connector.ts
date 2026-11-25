@@ -107,7 +107,7 @@ export class SlackConnector implements Connector {
       };
       const fresh = this.ctx.ingest(result.messages);
       store.kvSet(`slack.cursor.${slack.kind}`, JSON.stringify(result.cursor));
-      done({ read: result.messages.length, fresh });
+      done({ read: result.messages.length, fresh, ...polled.stats });
       this.ctx.setStatus({
         state: "ok",
         detail: `${fresh ? `${fresh} new` : "up to date"} · ${slack.kind}`,

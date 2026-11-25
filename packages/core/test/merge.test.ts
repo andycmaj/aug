@@ -143,6 +143,67 @@ describe("a turn's end", () => {
   });
 });
 
+// RIKER-0182: the sweep ran branchMerged (a handful of git calls) on every
+// task with a branch every couple of minutes and every GitHub poll, 14.6k a
+// day. Its answer moves only with the refs it reads, so a sweep reads them
+// once per repo and asks only where they moved.
+describe("a sweep's cost", () => {
+  const seed = (n: number) =>
+    Array.from({ length: n }, (_, i) => {
+      fake.merged.set(`b${i}`, false);
+      return branchTask(`b${i}`);
+    });
+
+  test("bounded by the branches that moved, not the tasks", async () => {
+    seed(200);
+    await checkMerges(config());
+    expect(fake.mergedAsked.length).toBe(200);
+    expect(fake.keysRead).toBe(1);
+    fake.mergedAsked = [];
+    for (let i = 0; i < 5; i++) await checkMerges(config());
+    expect(fake.mergedAsked).toEqual([]);
+    expect(fake.keysRead).toBe(6);
+    fake.merged.set("b7", "main");
+    fake.merged.set("b42", false);
+    expect(await checkMerges(config())).toBe(1);
+    expect(fake.mergedAsked).toEqual(["b7"]);
+  });
+
+  test("the base moving asks every branch again", async () => {
+    seed(3);
+    await checkMerges(config());
+    fake.mergedAsked = [];
+    fake.baseTip++;
+    await checkMerges(config());
+    expect(fake.mergedAsked.sort()).toEqual(["b0", "b1", "b2"]);
+  });
+
+  test("git that cannot say is asked again next time", async () => {
+    branchTask("lost");
+    await checkMerges(config());
+    await checkMerges(config());
+    expect(fake.mergedAsked).toEqual(["lost", "lost"]);
+  });
+
+  test("a closed task's branch is forgotten and asked afresh if it reopens", async () => {
+    const [id] = seed(1);
+    await checkMerges(config());
+    store.updateTask(id, { status: TaskStatus.done });
+    await checkMerges(config());
+    store.updateTask(id, { status: TaskStatus.open });
+    await checkMerges(config());
+    expect(fake.mergedAsked).toEqual(["b0", "b0"]);
+  });
+
+  test("a turn's end reuses what the sweep learned", async () => {
+    const [id] = seed(1);
+    await checkMerges(config());
+    const e = new Engine({ config: testConfig(), offline: true, plugins: [] });
+    expect(await e.recheckMerge(id)).toBe(false);
+    expect(fake.mergedAsked).toEqual(["b0"]);
+  });
+});
+
 describe("branchMerged (real git)", () => {
   async function sh(cwd: string, ...argv: string[]) {
     const proc = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
@@ -224,5 +285,34 @@ describe("branchMerged (real git)", () => {
     await git("commit", "-qm", "a");
     await git("branch", "main/x");
     expect(await new TmuxMux().branchMerged(repo, "main/x")).toBeNull();
+  });
+
+  test("a merge key moves with the branch and the base, and only then", async () => {
+    const repo = mkdtempSync(join(tmpdir(), "riker-merge-"));
+    const git = (...a: string[]) => sh(repo, "git", ...a);
+    const commit = async (file: string) => {
+      await Bun.write(join(repo, file), file);
+      await git("add", file);
+      await git("commit", "-qm", file);
+    };
+    await git("init", "-q", "-b", "main");
+    await commit("a");
+    await git("update-ref", "refs/remotes/origin/main", "main");
+    await git("branch", "one");
+    await git("branch", "two");
+    const mux = new TmuxMux();
+    const keys = () => mux.mergeKeys(repo, ["one", "two", "nope", "main"]);
+    const first = (await keys())!;
+    expect([...first.keys()].sort()).toEqual(["main", "one", "two"]);
+    expect(await keys()).toEqual(first);
+    await git("checkout", "-q", "one");
+    await commit("b");
+    const moved = (await keys())!;
+    expect(moved.get("one")).not.toBe(first.get("one"));
+    expect(moved.get("two")).toBe(first.get("two"));
+    await git("update-ref", "refs/remotes/origin/main", "one");
+    const based = (await keys())!;
+    expect(based.get("two")).not.toBe(moved.get("two"));
+    expect(await mux.mergeKeys(join(repo, "missing"), ["one"])).toBeNull();
   });
 });

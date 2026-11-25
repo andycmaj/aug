@@ -61,7 +61,9 @@ export function undoStory(taskId: number): StoryRow | null {
   return store.addStory({ ...copyOf(before, taskId), by: "undo", pinned: cur.pinned });
 }
 
-const SECTIONS: [keyof StoryRow, string][] = [
+type StoryField = "pinned" | "goals" | "now" | "decisions" | "blocked" | "next" | "questions";
+
+const SECTIONS: [StoryField, string][] = [
   ["pinned", "Pinned by the owner"],
   ["goals", "Goals"],
   ["now", "Now"],
@@ -87,4 +89,58 @@ export function storyBlock(taskId: number): string | null {
   const text = storyText(v);
   if (!text) return null;
   return `Story so far (as of ${v.at.slice(0, 16).replace("T", " ")}, by ${v.by}):\n\n${text}`;
+}
+
+// The story as markdown, a heading per part: what V reads. With all, the
+// empty parts too, so the owner rewriting it in $EDITOR sees every heading.
+export function storyMarkdown(v: StoryRow | null, all = false): string {
+  return SECTIONS.flatMap(([key, label]) => {
+    const items = lines(String(v?.[key] ?? ""));
+    if (!items.length && !all) return [];
+    return [items.length ? `## ${label}\n\n${items.map((i) => `- ${i}`).join("\n")}` : `## ${label}`];
+  }).join("\n\n");
+}
+
+const LABEL_FIELD = new Map(SECTIONS.map(([key, label]) => [label.toLowerCase(), key]));
+
+// storyMarkdown read back: each heading names a part, each line under it
+// is one item ("- " optional). A line under no heading, or under a heading
+// that is not a part, is refused rather than dropped.
+export function parseStory(text: string): { fields: Record<StoryField, string> } | { error: string } {
+  const items = new Map<StoryField, string[]>(SECTIONS.map(([key]) => [key, []]));
+  let cur: StoryField | null = null;
+  const stray: string[] = [];
+  const body = text.replace(/<!--[\s\S]*?-->/g, "");
+  for (const raw of body.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const heading = line.match(/^#{1,6}\s+(.*?)\s*:?\s*$/);
+    if (heading) {
+      cur = LABEL_FIELD.get(heading[1].toLowerCase()) ?? null;
+      if (!cur) stray.push(line);
+      continue;
+    }
+    const item = line.replace(/^[-*+]\s+/, "").trim();
+    if (!cur) stray.push(line);
+    else if (item) items.get(cur)!.push(item);
+  }
+  if (stray.length)
+    return {
+      error: `not a part of the story: ${stray[0]}${stray.length > 1 ? ` (and ${stray.length - 1} more)` : ""}; the parts are ${SECTIONS.map(([, l]) => l).join(", ")}`,
+    };
+  const fields = Object.fromEntries([...items].map(([k, v]) => [k, v.join("\n")])) as Record<StoryField, string>;
+  return { fields };
+}
+
+// The owner's rewrite as a new version, so story_undo steps back from it.
+// The same parts as now is no version at all.
+export function editStory(taskId: number, text: string): { version: StoryRow | null } | { error: string } {
+  const parsed = parseStory(text);
+  if ("error" in parsed) return parsed;
+  const cur = store.currentStory(taskId);
+  const same = SECTIONS.every(([key]) => lines(cur?.[key] ?? "").join("\n") === parsed.fields[key]);
+  if (same) return { version: null };
+  return {
+    version: store.addStory({ ...copyOf(cur, taskId), ...parsed.fields, by: "owner" }),
+  };
 }

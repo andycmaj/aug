@@ -7,7 +7,7 @@
 import type { RikerConfig } from "./config";
 import { mergeUndone, workMerged } from "./lifecycle";
 import { errorMessage, logger } from "./log";
-import { mux } from "./mux";
+import { type Mux, mux } from "./mux";
 import { taskPrStatus } from "./pr";
 import { repoPath } from "./repos";
 import * as store from "./store";
@@ -15,13 +15,50 @@ import { PrState, TaskStatus, type TaskRow } from "./types";
 
 const log = logger("merge");
 
+// One repo's merge keys (mux.mergeKeys), read once per sweep; undefined
+// reads them for the one branch.
+type Keys = Map<string, string> | null | undefined;
+
+// branchMerged is a handful of git calls, and the sweep runs every couple of
+// minutes on every task with a branch. Its answer moves only with the refs
+// it reads, so it is asked again only where a branch's key moved. Kept per
+// Mux, so a test's fresh fake starts empty. Null (git could not say, maybe a
+// timeout) is never kept.
+const verdicts = new WeakMap<Mux, Map<string, { key: string; verdict: string | false }>>();
+
+function verdictsOf(m: Mux): Map<string, { key: string; verdict: string | false }> {
+  let v = verdicts.get(m);
+  if (!v) {
+    v = new Map();
+    verdicts.set(m, v);
+  }
+  return v;
+}
+
+const slot = (path: string, branch: string) => `${path}\0${branch}`;
+
+async function branchLanded(path: string, branch: string, keys: Keys): Promise<string | false | null> {
+  const m = mux();
+  const read = keys === undefined ? await m.mergeKeys(path, [branch]) : keys;
+  const key = read?.get(branch);
+  if (!key) return null;
+  const known = verdictsOf(m);
+  const at = slot(path, branch);
+  const hit = known.get(at);
+  if (hit?.key === key) return hit.verdict;
+  const verdict = await m.branchMerged(path, branch);
+  if (verdict === null) known.delete(at);
+  else known.set(at, { key, verdict });
+  return verdict;
+}
+
 // The words for how it landed, false when it has not, null when nothing
 // can say.
-async function landed(config: RikerConfig, task: TaskRow): Promise<string | false | null> {
+async function landed(config: RikerConfig, task: TaskRow, keys: Keys): Promise<string | false | null> {
   const pr = taskPrStatus(task)?.status ?? null;
   if (pr?.state === PrState.merged) return `(PR #${pr.number})`;
   const path = repoPath(config, task.repo);
-  const local = task.branch && path ? await mux().branchMerged(path, task.branch) : null;
+  const local = task.branch && path ? await branchLanded(path, task.branch, keys) : null;
   if (local) return `into ${local}`;
   if (local === false) return false;
   return pr && (pr.state === PrState.open || pr.state === PrState.draft) ? false : null;
@@ -33,10 +70,14 @@ function wantsCheck(task: TaskRow): boolean {
 }
 
 // One task: true when its merged mark changed.
-export async function checkMerge(config: RikerConfig, task: TaskRow): Promise<boolean> {
+export function checkMerge(config: RikerConfig, task: TaskRow): Promise<boolean> {
+  return checkOne(config, task, undefined);
+}
+
+async function checkOne(config: RikerConfig, task: TaskRow, keys: Keys): Promise<boolean> {
   if (!wantsCheck(task)) return false;
   try {
-    const how = await landed(config, task);
+    const how = await landed(config, task, keys);
     // The clock's sweep and a turn's end can ask at once: what the task says
     // now, not before the await, decides, so the mark is made once.
     const current = store.getTask(task.id);
@@ -55,9 +96,32 @@ export async function checkMerge(config: RikerConfig, task: TaskRow): Promise<bo
   return false;
 }
 
-// One task at a time: a few git calls each.
+// Every task: one git call per repo for the keys, then branchMerged only
+// for a branch whose key moved, one task at a time.
 export async function checkMerges(config: RikerConfig): Promise<number> {
+  const tasks = store.listTasks().filter(wantsCheck);
+  const branches = new Map<string, string[]>();
+  for (const task of tasks) {
+    const path = repoPath(config, task.repo);
+    if (path && task.branch) branches.set(path, [...(branches.get(path) ?? []), task.branch]);
+  }
+  const keys = new Map<string, Map<string, string> | null>();
+  for (const [path, names] of branches) {
+    try {
+      keys.set(path, await mux().mergeKeys(path, [...new Set(names)]));
+    } catch (err) {
+      log.warn("merge keys failed", { error: errorMessage(err) });
+      keys.set(path, null);
+    }
+  }
+  // A branch no task asks about any more is forgotten.
+  const known = verdictsOf(mux());
+  const asked = new Set([...branches].flatMap(([path, names]) => names.map((b) => slot(path, b))));
+  for (const at of known.keys()) if (!asked.has(at)) known.delete(at);
   let changed = 0;
-  for (const task of store.listTasks()) if (await checkMerge(config, task)) changed++;
+  for (const task of tasks) {
+    const path = repoPath(config, task.repo);
+    if (await checkOne(config, task, path ? keys.get(path) : undefined)) changed++;
+  }
   return changed;
 }

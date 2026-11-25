@@ -72,6 +72,8 @@ export const Commands = {
   INFO: "item.info",
   STORY_SWITCH: "task.story",
   JOURNAL_SWITCH: "project.journal",
+  STORY_READ: "task.story.read",
+  JOURNAL_READ: "project.journal.read",
   ACTIONS: "task.actions",
   PR_DASH: "pr.dash",
   TYPE: "chat.type",

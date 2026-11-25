@@ -40,6 +40,8 @@ import {
 } from "@riker/core/rail";
 import { onChange } from "@riker/core/store";
 import { NavHistory, type Place } from "@riker/core/nav-history";
+import { LinkTracker, motionOn, type Link } from "@riker/core/link-state";
+import { MotionContext } from "./motion";
 import { useRenderPerf } from "./render-perf";
 import { AgentState, type TaskRow } from "@riker/core/types";
 
@@ -53,6 +55,10 @@ interface RikerContextValue extends ReadModel {
   // The owner's moves: what the keys and the palette call.
   desk: Desk;
   status: Accessor<EngineStatus>;
+  // Each status line as a connection (core/link-state.ts): a poll still
+  // waiting for its first answer is connecting, one that hangs past
+  // CONNECT_TIMEOUT_MS reads failed until it answers.
+  links: Accessor<Record<string, Link>>;
   now: Accessor<Date>;
   spinner: Accessor<string>;
   // Every row, folded ones included.
@@ -120,6 +126,14 @@ const [RikerContext, useRiker] = createRequiredContext<RikerContextValue>("Riker
 export { useRiker };
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+// With motion off the spinner holds still, but a running turn's clock still
+// reads its tick.
+const SPIN_MS = 120;
+const STILL_TICK_MS = 1000;
+// A poll that has not answered by now reads failed. The Advisor is a model
+// call, not a connection, and may think as long as it likes.
+const CONNECT_TIMEOUT_MS = 60_000;
+const NO_TIMEOUT = new Set(["advisor"]);
 
 export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   const engine = props.engine;
@@ -154,6 +168,22 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     sample("tui.refresh_reads", reran, "reads");
   };
   const [status, setStatus] = createSignal(engine.status);
+  const [links, setLinks] = createSignal<Record<string, Link>>({});
+  const trackers = new Map<string, LinkTracker>();
+  const applyLinks = (next: EngineStatus) => {
+    for (const [key, s] of Object.entries(next)) {
+      let tracker = trackers.get(key);
+      if (!tracker) {
+        tracker = new LinkTracker({
+          timeoutMs: NO_TIMEOUT.has(key) ? null : CONNECT_TIMEOUT_MS,
+          onChange: (link) => setLinks((all) => ({ ...all, [key]: link })),
+        });
+        trackers.set(key, tracker);
+      }
+      tracker.apply(s);
+    }
+  };
+  const motion = () => motionOn(engine.desk.config());
   const [now, setNow] = createSignal(new Date());
   const [frame, setFrame] = createSignal(0);
   const [mode, setMode] = createSignal<ViewMode>(ViewMode.chat);
@@ -169,7 +199,11 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
 
   onMount(() => {
     const offChange = onChange(bump);
-    const offStatus = engine.onStatus(setStatus);
+    applyLinks(engine.status);
+    const offStatus = engine.onStatus((s) => {
+      setStatus(s);
+      applyLinks(s);
+    });
     let seen = dataVersion();
     const poll = setInterval(() => {
       const v = dataVersion();
@@ -180,16 +214,12 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
       }
     }, 400);
     const clock = setInterval(() => setNow(new Date()), 30_000);
-    const spin = setInterval(
-      () => setFrame((f) => (f + 1) % SPINNER.length),
-      120,
-    );
     onCleanup(() => {
       offChange();
       offStatus();
       clearInterval(poll);
       clearInterval(clock);
-      clearInterval(spin);
+      for (const t of trackers.values()) t.dispose();
       redraw.cancel();
     });
   });
@@ -419,7 +449,23 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
       (i) => i.type === "task" && i.task.agent_state === AgentState.working,
     ),
   );
-  const spinner = () => (anyWorking() ? SPINNER[frame()] : SPINNER[0]);
+  // Ticks only while an agent works: nothing redraws for it otherwise.
+  // Motion is read once per run, not per row per frame (config is a file).
+  let spinMoves = true;
+  createEffect(() => {
+    if (!anyWorking()) return;
+    spinMoves = motion();
+    const spin = setInterval(
+      () => setFrame((f) => (f + 1) % SPINNER.length),
+      spinMoves ? SPIN_MS : STILL_TICK_MS,
+    );
+    onCleanup(() => clearInterval(spin));
+  });
+  const spinner = () => {
+    if (!anyWorking()) return SPINNER[0];
+    const f = frame();
+    return spinMoves ? SPINNER[f] : SPINNER[0];
+  };
 
   const board = createMemo((): Record<BoardColumn, TaskRow[]> =>
     reads.board(pending()),
@@ -432,6 +478,7 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
         engine,
         desk: engine.desk,
         status,
+        links,
         now,
         spinner,
         rail,
@@ -476,7 +523,9 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
         setWantsInput,
       }}
     >
-      {props.children}
+      <MotionContext.Provider value={motion}>
+        {props.children}
+      </MotionContext.Provider>
     </RikerContext.Provider>
   );
 }

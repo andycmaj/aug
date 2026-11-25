@@ -27,7 +27,12 @@ const FLAGS = [
   "pr",
 ] as const;
 
-function* contexts(): Generator<HelpCtx> {
+// The contexts a pane can be in. Only the Board sets its tab (board-mode),
+// and only the Inbox tab sets the inbox flags (inbox-tab): crossing them
+// everywhere made ~220k contexts no pane has, and the test outran its
+// timeout under load.
+function* contexts(scope: string): Generator<HelpCtx> {
+  const boards = scope === "board" ? Object.values(BoardTab) : [undefined];
   for (const item of ITEMS)
     for (const kind of item === "task" ? KINDS : [null])
       // Only a task carries drafts, agents and the rest (see chat-mode's ctx).
@@ -36,8 +41,8 @@ function* contexts(): Generator<HelpCtx> {
         bits < (item === "task" ? 1 << FLAGS.length : 1);
         bits++
       )
-        for (const board of [undefined, ...Object.values(BoardTab)])
-        for (let inbox = 0; inbox < 32; inbox++) {
+        for (const board of boards)
+        for (let inbox = 0; inbox < (board === BoardTab.inbox ? 32 : 1); inbox++) {
           const ctx: HelpCtx = {
             item,
             kind,
@@ -80,7 +85,7 @@ function footer(scope: string, ctx: HelpCtx): Map<string, string> {
 test("in each pane, a key means one thing for any item", () => {
   const clashes = new Set<string>();
   for (const scope of ["rail", "canvas", "board"])
-    for (const ctx of contexts()) {
+    for (const ctx of contexts(scope)) {
       const bindings = filterRelevant(
         [
           ...getScopeBindings(keymap, scope),
@@ -432,13 +437,13 @@ test("an action with a key gets it on the rail and the Canvas, never over a move
 });
 
 test("an action's own key is listed only on the rows it is offered on", () => {
-  const table = buildKeymap({}, [{ name: "guide", key: "shift+v", title: "Guided review" }]);
+  const table = buildKeymap({}, [{ name: "guide", key: "shift+z", title: "Guided review" }]);
   const listed = (ctx: HelpCtx) =>
     new Map(helpBindings(getScopeBindings(table, "rail"), ctx).map((b) => [b.keys, b.cmd]));
   const review: HelpCtx = { ...base(), item: "task", kind: "coding", coding: true };
-  expect(listed({ ...review, actions: ["guide", "summarize"] }).get("V")).toBe(actionCommand("guide"));
-  expect(listed({ ...review, actions: ["summarize"] }).has("V")).toBe(false);
+  expect(listed({ ...review, actions: ["guide", "summarize"] }).get("Z")).toBe(actionCommand("guide"));
+  expect(listed({ ...review, actions: ["summarize"] }).has("Z")).toBe(false);
   // A view that does not say which actions apply lists it on every work row.
-  expect(listed(review).get("V")).toBe(actionCommand("guide"));
-  expect(listed({ ...review, kind: "home", actions: ["guide"] }).has("V")).toBe(false);
+  expect(listed(review).get("Z")).toBe(actionCommand("guide"));
+  expect(listed({ ...review, kind: "home", actions: ["guide"] }).has("Z")).toBe(false);
 });
