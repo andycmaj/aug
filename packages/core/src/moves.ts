@@ -1119,7 +1119,7 @@ export async function runMove(
     if (task && task.id !== own && task.from_task_id !== own)
       return {
         ok: false,
-        result: `an agent changes only its own task (${store.taskRef(own)}) and tasks it made`,
+        result: `an agent changes only its own task (${store.taskRef(own)}), or one it made`,
       };
   }
   const missing = Object.entries(spec.args)
