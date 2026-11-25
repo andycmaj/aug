@@ -602,6 +602,8 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "projects", column: "story", ddl: "INTEGER" },
   { table: "tasks", column: "story", ddl: "INTEGER" },
   { table: "sessions", column: "context_tokens", ddl: "INTEGER" },
+  // The model a chat session started on: its prompt cache is that model's.
+  { table: "sessions", column: "model", ddl: "TEXT" },
   { table: "tasks", column: "merged_at", ddl: "TEXT" },
   { table: "pr_status", column: "error", ddl: "TEXT" },
   { table: "spend", column: "session_id", ddl: "TEXT" },

@@ -333,6 +333,9 @@ export interface SessionRow {
   // Tokens the session's last request carried (a chat session's context),
   // so a turn can leave a session grown too dear to resume.
   context_tokens: number | null;
+  // The model a chat session started on (its prompt cache is that model's);
+  // null for a tmux session or one from before it was kept.
+  model: string | null;
   // Claude's transcript of it, as its hooks last said (the watcher reads it).
   transcript_path: string | null;
 }

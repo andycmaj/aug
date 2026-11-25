@@ -57,6 +57,9 @@ export interface RikerConfig {
     triageModel: string;
     agentModel: string;
     assistantModel: string;
+    // A Home turn that is one short move or lookup (core/home-model.ts) runs
+    // on this one instead, when set; empty is off.
+    assistantSimpleModel?: string;
   };
   // How many agents may be working at once, chat and coding alike. Past it,
   // chat turns Riker starts by itself and your coding Starts wait their turn;
@@ -169,6 +172,7 @@ export const DEFAULT_CONFIG: RikerConfig = {
     triageModel: "haiku",
     agentModel: "sonnet",
     assistantModel: "sonnet",
+    assistantSimpleModel: "haiku",
   },
   maxActiveAgents: 4,
   spend: { capEnabled: true, dailyUsd: 25 },
