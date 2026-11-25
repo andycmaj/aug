@@ -254,6 +254,10 @@ describe("from the store", () => {
     const brain = byUrl.get(docPath(DocName.persona))!;
     expect(brain.owners[0].source).toBe(DocSource.brain);
     expect(brain.kind).toBe(DocKind.file);
-    expect(rows.map((r) => r.at)).toEqual([...rows.map((r) => r.at)].sort().reverse());
+    // Newest first, Riker's own docs after everything else.
+    const own = rows.filter((r) => r.owners[0].source === DocSource.brain);
+    const rest = rows.filter((r) => r.owners[0].source !== DocSource.brain);
+    expect(rows).toEqual([...rest, ...own]);
+    expect(rest.map((r) => r.at)).toEqual([...rest.map((r) => r.at)].sort().reverse());
   });
 });

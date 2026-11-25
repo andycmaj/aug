@@ -403,6 +403,23 @@ test("the Wins tab's keys: Enter opens the row, t goes, h and l walk days", () =
   expect(columns.has("t")).toBe(false);
 });
 
+test("the Docs tab's keys: Enter opens the row, o opens the link, x only on attached links", () => {
+  const docs = (item: HelpCtx["item"], extra: Partial<HelpCtx> = {}) =>
+    footer("board", { ...base(), item, board: BoardTab.docs, ...extra });
+  const attached = docs("doc", { docOwned: true, docRemovable: true });
+  expect(
+    ["Enter", "o", "t", "y", "L", "x", "f", "p", "P", "/"].map((k) => attached.get(k)),
+  ).toEqual(["details", "open", "go to", "copy", "attach", "remove", "kind", "project", "group", "search"]);
+  // A PR its branch opened, or a brain doc: nothing to take off, nowhere to go.
+  const seen = docs("doc", { docOwned: false, docRemovable: false });
+  expect([seen.has("x"), seen.has("t"), seen.get("o")]).toEqual([false, false, "open"]);
+  // An empty list still filters and searches.
+  const empty = docs(null);
+  expect([empty.has("Enter"), empty.get("f"), empty.get("/")]).toEqual([false, "kind", "search"]);
+  // Docs is tab 6, after Cost.
+  expect(Object.values(BoardTab)).toEqual(["wins", "columns", "knowledge", "inbox", "cost", "docs"]);
+});
+
 function base(): HelpCtx {
   return {
     item: null,

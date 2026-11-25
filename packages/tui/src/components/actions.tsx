@@ -765,6 +765,15 @@ export function useActions(dialogs: Dialogs) {
     riker.selectTask(taskId);
   }
 
+  function goToProject(projectId: number) {
+    riker.setMode(ViewMode.chat);
+    riker.select(`p${projectId}`);
+  }
+
+  function copyText(text: string) {
+    void copyToClipboard(text).then(copied);
+  }
+
   // m: a message triage did not make work becomes a task; an idea is
   // approved. Either way you stay on the Inbox.
   function inboxMakeTask(row: InboxRow) {
@@ -1298,6 +1307,9 @@ export function useActions(dialogs: Dialogs) {
     walk,
     newTask,
     goToTask,
+    goToProject,
+    copyText,
+    openLink: open,
     inboxMakeTask,
     inboxDismiss,
     inboxIgnore,

@@ -19,7 +19,7 @@ import { RAIL_FILTERS } from "@riker/core/rail";
 // What the footer needs to know to show only the moves that apply.
 export interface HelpCtx {
   // message, fyi and idea are Inbox rows (the Board's tab), never the rail's.
-  item: "task" | "message" | "fyi" | "idea" | "project" | null;
+  item: "task" | "message" | "fyi" | "idea" | "project" | "doc" | null;
   kind: string | null;
   hasDraft: boolean;
   live: boolean;
@@ -55,18 +55,23 @@ export interface HelpCtx {
   inboxWork?: boolean;
   // The Wins tab shows today (l and 0 have nowhere to go).
   winsToday?: boolean;
+  // A Docs row a task or project owns (t has somewhere to go).
+  docOwned?: boolean;
+  // A Docs row someone attached, so it can be taken off.
+  docRemovable?: boolean;
   // The terminal sends ctrl+[ apart from Esc (the kitty keyboard protocol;
   // never inside tmux). Without it ctrl+[ is Esc, so back is not offered.
   kittyKeys?: boolean;
 }
 
-// In tab order (keys 1-5): Wins first.
+// In tab order (keys 1-6): Wins first.
 export const BoardTab = {
   wins: "wins",
   columns: "columns",
   knowledge: "knowledge",
   inbox: "inbox",
   cost: "cost",
+  docs: "docs",
 } as const;
 export type BoardTab = (typeof BoardTab)[keyof typeof BoardTab];
 
@@ -176,6 +181,8 @@ const isSystem = (c: HelpCtx) => isTask(c) && c.kind === "system";
 const onColumns = (c: HelpCtx) => c.board === BoardTab.columns;
 const onInbox = (c: HelpCtx) => c.board === BoardTab.inbox;
 const onWins = (c: HelpCtx) => c.board === BoardTab.wins;
+const onDocs = (c: HelpCtx) => c.board === BoardTab.docs;
+const onDoc = (c: HelpCtx) => onDocs(c) && c.item === "doc";
 // An Inbox message (an FYI or not), not an idea.
 const inboxMessage = (c: HelpCtx) =>
   onInbox(c) && (c.item === "message" || c.item === "fyi");
@@ -463,8 +470,8 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       cmd: Commands.SEARCH_OPEN,
       desc: "search the rail: words, RIKER-23, #412, @someone",
       help: "search",
-      // The Inbox's / searches the Inbox.
-      relevant: (c) => c.board !== BoardTab.inbox,
+      // The Inbox's and Docs' / search their own lists.
+      relevant: (c) => c.board !== BoardTab.inbox && c.board !== BoardTab.docs,
     },
     // The go-to chord works while typing and while attached (see terminal):
     // it is a control key, so it never reaches the box or the agent.
@@ -651,18 +658,19 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     { key: "left", cmd: Commands.BOARD_LEFT, desc: "column left", relevant: onColumns },
     { key: "l", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
     { key: "right", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
-    // The footer folds the five into "1-5 tabs" (BOARD_HELP_OPTIONS).
+    // The footer folds the six into "1-6 tabs" (BOARD_HELP_OPTIONS).
     { key: "1", cmd: Commands.BOARD_TAB_1, desc: "tab: wins", help: "tabs" },
     { key: "2", cmd: Commands.BOARD_TAB_2, desc: "tab: columns" },
     { key: "3", cmd: Commands.BOARD_TAB_3, desc: "tab: knowledge" },
     { key: "4", cmd: Commands.BOARD_TAB_4, desc: "tab: inbox" },
     { key: "5", cmd: Commands.BOARD_TAB_5, desc: "tab: cost" },
+    { key: "6", cmd: Commands.BOARD_TAB_6, desc: "tab: docs" },
     {
       key: "return",
       cmd: Commands.OPEN,
       desc: "open the task in Chat, or jump to the project's session",
       help: "open",
-      relevant: (c) => c.item !== null && !onInbox(c) && !onWins(c),
+      relevant: (c) => c.item !== null && !onInbox(c) && !onWins(c) && !onDocs(c),
     },
     // Wins: a day's Wins and what else got done, the day before beside it.
     {
@@ -701,6 +709,47 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       help: "today",
       relevant: (c) => onWins(c) && !c.winsToday,
     },
+    // Docs: every link and doc Riker holds, one row per address.
+    {
+      key: "return",
+      cmd: Commands.DOCUMENTS_EXPAND,
+      desc: "Docs: show or hide the address, who attached it and where",
+      help: "details",
+      relevant: onDoc,
+    },
+    {
+      key: "o",
+      cmd: Commands.DOCUMENTS_OPEN_LINK,
+      desc: "Docs: open it (a web link in the browser, a file in $EDITOR)",
+      help: "open",
+      relevant: onDoc,
+    },
+    {
+      key: "t",
+      cmd: Commands.DOCUMENTS_GO,
+      desc: "Docs: go to the task or project it belongs to",
+      help: "go to",
+      relevant: (c) => onDoc(c) && Boolean(c.docOwned),
+    },
+    { key: "y", cmd: Commands.DOCUMENTS_COPY, desc: "Docs: copy the address", help: "copy", relevant: onDoc },
+    {
+      key: "shift+l",
+      cmd: Commands.DOCUMENTS_ATTACH,
+      desc: "Docs: attach it to another task",
+      help: "attach",
+      relevant: onDoc,
+    },
+    {
+      key: "x",
+      cmd: Commands.DOCUMENTS_REMOVE,
+      desc: "Docs: take it off where it was attached (asks first; nothing outside Riker changes)",
+      help: "remove",
+      relevant: (c) => onDoc(c) && Boolean(c.docRemovable),
+    },
+    { key: "f", cmd: Commands.DOCUMENTS_KIND, desc: "Docs: next kind (PR, issue, doc, thread, file, other)", help: "kind", relevant: onDocs },
+    { key: "p", cmd: Commands.DOCUMENTS_PROJECT, desc: "Docs: next project", help: "project", relevant: onDocs },
+    { key: "shift+p", cmd: Commands.DOCUMENTS_GROUP, desc: "Docs: group by project, or one list", help: "group", relevant: onDocs },
+    { key: "/", cmd: Commands.DOCUMENTS_SEARCH, desc: "Docs: search title, address, kind, task and project", help: "search", relevant: onDocs },
     // The Inbox: every message triage saw and every Advisor idea.
     {
       key: "return",
@@ -832,7 +881,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "move the task to a project",
       relevant: (c) => isTask(c) || (onInbox(c) && Boolean(c.inboxWork)),
     },
-    { key: "shift+p", cmd: Commands.PR_DASH, desc: "its PR in ghdash (in Chat)", help: "PR", relevant: (c) => c.pr },
+    { key: "shift+p", cmd: Commands.PR_DASH, desc: "its PR in ghdash (in Chat)", help: "PR", relevant: (c) => c.pr && !onDocs(c) },
     { key: "shift+r", cmd: Commands.REPOS, desc: "repos: where each is checked out, and checkouts to add" },
   ],
 };
@@ -923,5 +972,5 @@ export const keymap = defaultKeymap;
 
 // Footer folding for the Board's tab digits.
 export const BOARD_HELP_OPTIONS = {
-  combinedKeys: { [Commands.BOARD_TAB_1]: "1-5" },
+  combinedKeys: { [Commands.BOARD_TAB_1]: "1-6" },
 };

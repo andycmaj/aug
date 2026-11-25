@@ -304,7 +304,12 @@ export function buildDocuments(src: DocumentSources, extra: DocOwner[] = []): Do
       .join(" ")
       .toLowerCase();
   }
-  return [...rows.values()].sort((a, b) => b.at.localeCompare(a.at) || a.key.localeCompare(b.key));
+  // Riker's own docs last: they are rewritten at start, and newest first
+  // would bury every link under them.
+  const own = (r: DocRow) => (r.owners.every((o) => o.source === DocSource.brain) ? 1 : 0);
+  return [...rows.values()].sort(
+    (a, b) => own(a) - own(b) || b.at.localeCompare(a.at) || a.key.localeCompare(b.key),
+  );
 }
 
 export function documents(src: DocumentSources): DocRow[] {
