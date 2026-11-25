@@ -6,7 +6,7 @@ import { setMux } from "@riker/core/mux";
 import type { PrFetch } from "../src/pr-status";
 import { githubPlugin } from "../src/index";
 import * as store from "@riker/core/store";
-import { Kind } from "@riker/core/types";
+import { Kind, PrState } from "@riker/core/types";
 import { FakeMux } from "@riker/core/test/support/fake-mux";
 import { freshHome, testConfig } from "@riker/core/test/support/helpers";
 
@@ -234,5 +234,52 @@ describe("a task's PR at its turn's end", () => {
     await github.refreshTask(store.getTask(t.id)!);
     expect(calls).toEqual(["graphql", "rate_limit", "repos/acme/ledger/pulls/10"]);
     expect(store.prStatus(t.id)).toEqual(before);
+  });
+});
+
+describe("what one poll costs", () => {
+  test("a quiet poll on many PRs: login once a process, notifications once, 25 PRs a query", async () => {
+    for (let n = 1; n <= 60; n++) prTask(n);
+    const { github, calls } = fakeGithub({ prs: open });
+    await github.poll();
+    expect(calls.toSorted()).toEqual(["graphql", "graphql", "graphql", "notifications", "user"]);
+    calls.length = 0;
+    await github.poll();
+    expect(calls.toSorted()).toEqual(["graphql", "graphql", "graphql", "notifications"]);
+  });
+
+  test("notifications and PR status read side by side, and the poll waits for both", async () => {
+    prTask(1);
+    const events: string[] = [];
+    let releaseNotes!: () => void;
+    let releasePrs!: () => void;
+    const notesHeld = new Promise<void>((r) => (releaseNotes = r));
+    const prsHeld = new Promise<void>((r) => (releasePrs = r));
+    const { github } = fakeGithub({
+      notifications: async () => {
+        events.push("notifications asked");
+        await notesHeld;
+        events.push("notifications answered");
+        return [];
+      },
+      prs: async (refs) => {
+        events.push("graphql asked");
+        await prsHeld;
+        events.push("graphql answered");
+        return open(refs);
+      },
+    });
+    let finished = false;
+    const poll = github.poll().then(() => (finished = true));
+    await Bun.sleep(5);
+    // Both are out at once: in a row, GraphQL would wait for notifications.
+    expect(events.toSorted()).toEqual(["graphql asked", "notifications asked"]);
+    releaseNotes();
+    await Bun.sleep(5);
+    expect(finished).toBe(false);
+    releasePrs();
+    await poll;
+    expect(events.slice(2)).toEqual(["notifications answered", "graphql answered"]);
+    expect(store.prStatus(store.listTasks()[0]!.id)?.state).toBe(PrState.open);
   });
 });
