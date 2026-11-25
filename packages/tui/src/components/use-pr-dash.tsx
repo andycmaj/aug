@@ -3,7 +3,8 @@
 // ghdash or the key again gives the Canvas back.
 
 import { existsSync } from "node:fs";
-import { useFocus, useToast } from "@andycmaj/opentui-app";
+import { useFocus } from "@andycmaj/opentui-app";
+import { useToast } from "../context/toast";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
 import { taskPr } from "@riker/core/pr";
