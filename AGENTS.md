@@ -484,15 +484,19 @@ Tests live beside their package (`packages/<name>/test/`).
 - `bun run demo` runs the fixture day. Drive it in tmux with a unique session
   name and `tmux capture-pane -p`.
 - `bun run sim [review-cycle|review-ask] [--brain fake|haiku]` is the real
-  TUI on a scratch home against an offline GitHub (`packages/fixtures/src/sim/`):
-  the engine's `github.api`/`github.prs` seam reads a JSON state file, Send
+  TUI on a scratch home against an offline GitHub (`packages/fixtures/src/sim/`).
+  With the fake brain a task action (the guided review) still calls the real
+  model, on the owner's word only; its PRs are not on GitHub, so a review
+  opens on the worktree, never in Plannotator's PR mode (the generator's
+  GitHub target is for that). The engine's `github.api`/`github.prs` seam reads a JSON state file, Send
   writes to it, so triage, `pr_status`, the rail, `riker-tools feedback` and
   nudges run unchanged with no GitHub call. From another terminal,
   `bun run sim:do pr-open [--mine] [--team reviewers] | comment | mention |
   review --verdict approve|changes|comment --comments N | ci fail|pass |
   push | merge | rerequest | close | play <scenario> | state` changes it, and the sim polls on the write. Its
-  repo `sim/riker` is a remote-less clone of Riker whose PR branches are real
-  commits, so a task on one starts in a worktree with a real diff; the
+  repo `sim/riker` is a remote-less clone of Riker whose PR branches are
+  each one real commit laid over main, so a task on one starts in a
+  worktree with a real diff of review size; the
   seeded coding task's `--mine` PR is linked to it. A scenario is a list of
   events in `SCENARIOS` (`events.ts`); `packages/fixtures/test/sim.test.ts` reads the fake
   through `pollGithub` and `readPrBatch`, so it cannot drift from them.
