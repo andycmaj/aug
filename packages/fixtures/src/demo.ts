@@ -22,6 +22,7 @@ import type { MadeFile } from "@riker/core/files";
 import { setMux, TmuxMux } from "@riker/core/mux";
 import { setSender } from "@riker/core/outbound";
 import { defaultHome, paths } from "@riker/core/paths";
+import { DEMO_AGENT_SUBCOMMAND, scriptArgv } from "@riker/core/self";
 import { recordSpend } from "@riker/core/spend";
 import * as store from "@riker/core/store";
 import { addFollowup } from "@riker/core/timers";
@@ -890,7 +891,7 @@ export function installFixture(name: string): Engine {
     plugins: [triagePlugin(), githubPlugin(), slackPlugin()],
     launchOverride: (task, launch) => ({
       ...launch,
-      argv: [process.execPath, fake, task.title],
+      argv: [...scriptArgv(fake, DEMO_AGENT_SUBCOMMAND), task.title],
     }),
   });
 }
