@@ -113,21 +113,7 @@ export function readReviewContext(pr: PrRef, data: ReviewContextData): ReviewCon
 
 export type GraphqlRun = (query: string, vars: Record<string, string | number>) => Promise<unknown>;
 
-async function ghGraphql(query: string, vars: Record<string, string | number>): Promise<unknown> {
-  const args = ["gh", "api", "graphql", "-f", `query=${query}`];
-  for (const [k, v] of Object.entries(vars))
-    args.push(typeof v === "number" ? "-F" : "-f", `${k}=${v}`);
-  const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  if (code !== 0) throw new Error(err.trim() || `gh api graphql exited ${code}`);
-  return JSON.parse(out);
-}
-
-export function githubReviews(run: GraphqlRun = ghGraphql): ReviewSource {
+export function githubReviews(run: GraphqlRun): ReviewSource {
   return {
     async context(pr) {
       const [owner, name] = pr.repo.split("/");

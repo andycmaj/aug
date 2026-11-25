@@ -8,12 +8,12 @@ import { errorMessage, logger } from "@riker/core/log";
 import { taskPr } from "@riker/core/pr";
 import * as store from "@riker/core/store";
 import { PrState, type TaskRow } from "@riker/core/types";
+import { GithubClient } from "./client";
 import {
   clockTime,
   GhBudget,
   ghTrouble,
   GhTrouble,
-  GithubGate,
   GRAPHQL_RESERVE,
   limitedUntil,
   PauseWhy,
@@ -22,9 +22,9 @@ import {
   type Pause,
 } from "./gate";
 import { githubConfig } from "./config";
-import { ghApi, pollGithub, type GhApi } from "./ingest";
+import { pollGithub, type GhApi } from "./ingest";
 import {
-  ghPrBatch,
+  prBatchVia,
   refreshPrEndRest,
   refreshPrStatus,
   refreshPrStatuses,
@@ -47,10 +47,11 @@ function short(message: string): string {
   return line.length > 100 ? `${line.slice(0, 99)}…` : line;
 }
 
-function pauseWords(what: string, p: Pause): string {
-  return p.why === PauseWhy.rateLimit
-    ? `${what}rate limited until ${clockTime(p.until)}`
-    : `${what}paused until ${clockTime(p.until)} (GraphQL budget low)`;
+function pauseWords(what: string, p: Pause, budget: GhBudget): string {
+  const at = clockTime(p.until);
+  if (p.why === PauseWhy.rateLimit) return `${what}rate limited until ${at}`;
+  if (p.why === PauseWhy.secondary) return `${what}secondary rate limit, waiting until ${at}`;
+  return `${what}paused until ${at} (${budget === GhBudget.graphql ? "GraphQL" : "REST"} budget low)`;
 }
 
 const log = logger("github");
@@ -59,14 +60,27 @@ export class GithubConnector implements Connector {
   readonly name = "github";
   readonly label = "GitHub";
   readonly hint = "GitHub uses your gh login.";
-  private gate: GithubGate | null = null;
   private polling = false;
   private ctx!: ConnectorContext;
+  private readonly client: GithubClient;
+  private readonly api: GhApi;
+  private readonly prs: PrFetch;
 
-  constructor(private opts: GithubOptions = {}) {}
+  // The seams (api, prs) replace a whole call; the client is the door the
+  // real ones share with Send and the review guide, so one rate limit
+  // pauses them all.
+  constructor(
+    private opts: GithubOptions = {},
+    client?: GithubClient,
+  ) {
+    this.client = client ?? new GithubClient({ clock: opts.clock });
+    this.api = opts.api ?? ((path) => this.client.api(path));
+    this.prs = opts.prs ?? prBatchVia(this.client);
+  }
 
   attach(ctx: ConnectorContext): void {
     this.ctx = ctx;
+    this.client.pollEvery(() => githubConfig.of(this.ctx.config.get()).pollSeconds * 1000);
   }
 
   start(): void {
@@ -98,11 +112,11 @@ export class GithubConnector implements Connector {
     if (!gate.prAllowed(pr.url)) return;
     const rest = async () => {
       if (gate.pause(GhBudget.rest)) return;
-      await refreshPrEndRest(task, pr, this.opts.api ?? ghApi);
+      await refreshPrEndRest(task, pr, this.api);
     };
     if (gate.pause(GhBudget.graphql)) return rest();
     try {
-      await refreshPrStatus(task, this.opts.prs ?? ghPrBatch);
+      await refreshPrStatus(task, this.prs);
       gate.prSucceeded(pr.url);
     } catch (err) {
       const message = errorMessage(err);
@@ -116,42 +130,24 @@ export class GithubConnector implements Connector {
     }
   }
 
-  // The gate outlives a restart only for a rate limit: GitHub's reset time
-  // does not move because Riker did.
-  private githubGate(): GithubGate {
-    if (this.gate) return this.gate;
-    const gate = new GithubGate(
-      () => githubConfig.of(this.ctx.config.get()).pollSeconds * 1000,
-      this.opts.clock,
-    );
-    for (const budget of Object.values(GhBudget)) {
-      const saved = store.kvGet(`github.pause.${budget}`);
-      if (!saved) continue;
-      try {
-        const p = JSON.parse(saved) as Pause;
-        gate.hold(budget, p.until, p.why);
-      } catch {
-        // A pause that cannot be read is no pause.
-      }
-    }
-    this.gate = gate;
-    return gate;
+  private githubGate() {
+    return this.client.gate();
   }
 
   private holdGithub(budget: GhBudget, until: number, why: PauseWhy): void {
-    const gate = this.githubGate();
-    gate.hold(budget, until, why);
-    const p = gate.pause(budget);
-    if (p) store.kvSet(`github.pause.${budget}`, JSON.stringify(p));
+    this.client.hold(budget, until, why);
     log.warn("github paused", { budget, why, until: new Date(until).toISOString() });
   }
 
-  // gh api rate_limit is free; it says when the spent budget comes back.
+  // A call came back rate limited. Through the client, the budget is
+  // already paused (its headers, or a pause the call ran into); through a
+  // seam, gh api rate_limit (free) says when
+  // the spent budget comes back.
   private async githubLimited(budget: GhBudget): Promise<void> {
-    const api = this.opts.api ?? ghApi;
+    if (this.githubGate().pause(budget)) return;
     let limits: GhRateLimit | null = null;
     try {
-      limits = (await api("rate_limit")) as GhRateLimit;
+      limits = (await this.api("rate_limit")) as GhRateLimit;
     } catch (err) {
       log.warn("rate_limit failed", { err: errorMessage(err) });
     }
@@ -170,7 +166,7 @@ export class GithubConnector implements Connector {
     if (restHeld && graphHeld) {
       this.ctx.setStatus({
         state: "error",
-        detail: pauseWords("", restHeld),
+        detail: pauseWords("", restHeld, GhBudget.rest),
         at: now(),
       });
       return;
@@ -179,7 +175,7 @@ export class GithubConnector implements Connector {
     this.ctx.setStatus({ ...this.ctx.status(), state: "polling" });
     const done = log.time("github poll");
     const started = Date.now();
-    const api = this.opts.api ?? ghApi;
+    const api = this.api;
     try {
       let fresh = 0;
       if (!restHeld) {
@@ -194,7 +190,7 @@ export class GithubConnector implements Connector {
       const prs = graphHeld
         ? null
         : await refreshPrStatuses({
-            fetch: this.opts.prs ?? ghPrBatch,
+            fetch: this.prs,
             gate,
           });
       if (prs?.limited) await this.githubLimited(GhBudget.graphql);
@@ -216,7 +212,7 @@ export class GithubConnector implements Connector {
         const p = gate.pause(GhBudget.rest);
         this.ctx.setStatus({
           state: "error",
-          detail: p ? pauseWords("", p) : short(message),
+          detail: p ? pauseWords("", p, GhBudget.rest) : short(message),
           at: now(),
         });
       } else {
@@ -243,9 +239,9 @@ export class GithubConnector implements Connector {
       ? `${prs.failed} PR${prs.failed === 1 ? "" : "s"} failed: ${short(prs.error ?? "")}`
       : "";
     const parts = [
-      restHeld ? pauseWords("", restHeld) : fresh ? `${fresh} new` : "up to date",
+      restHeld ? pauseWords("", restHeld, GhBudget.rest) : fresh ? `${fresh} new` : "up to date",
       failedWords,
-      graphHeld ? pauseWords("PR status ", graphHeld) : "",
+      graphHeld ? pauseWords("PR status ", graphHeld, GhBudget.graphql) : "",
       ms > SLOW_GITHUB_MS ? `slow ${Math.round(ms / 1000)}s` : "",
     ];
     let state: ConnectorState = "ok";
@@ -254,7 +250,7 @@ export class GithubConnector implements Connector {
       parts.push(`retry ${clockTime(until)}`);
       state = "error";
     } else gate.succeeded();
-    if (graphHeld?.why === PauseWhy.rateLimit || restHeld) state = "error";
+    if ((graphHeld && graphHeld.why !== PauseWhy.reserve) || restHeld) state = "error";
     this.ctx.setStatus({
       state,
       detail: parts.filter(Boolean).join(" · "),
