@@ -2,14 +2,8 @@
 // first, one line each. Enter opens a row in place to show the chain that
 // routed it. Nothing here sends anything to anyone.
 
-import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js";
-import type { ScrollBoxRenderable } from "@opentui/core";
-import {
-  contrastingForeground,
-  truncate,
-  useTheme,
-  type ThemeColor,
-} from "@andycmaj/opentui-app";
+import { createMemo, createSignal, For, Show } from "solid-js";
+import { truncate, useTheme, type ThemeColor } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useRiker } from "../context/riker";
 import {
@@ -31,15 +25,14 @@ import { timerLine, timerRef } from "@riker/core/timers";
 import { StepDecision } from "@riker/core/types";
 import type { HelpCtx } from "../keymap";
 import type { Actions, Dialogs } from "./actions";
-import { PromptModal } from "./modals";
+import { askSearch, ExpandList, FilterPills, listCursor, selColor, when } from "./expand-list";
 
 type Handler = () => false | void;
 
 // Kept across tab switches, like the Board's tab.
 const [filter, setFilter] = createSignal<InboxFilter>(InboxFilter.actionable);
 const [query, setQuery] = createSignal("");
-const [at, setAt] = createSignal(0);
-const [openKey, setOpenKey] = createSignal<string | null>(null);
+const cursor = listCursor();
 const [revealed, setRevealed] = createSignal<string | null>(null);
 
 export function useInboxTab(opts: {
@@ -52,8 +45,7 @@ export function useInboxTab(opts: {
   const rows = createMemo(() =>
     all().filter((r) => inFilter(r, filter()) && matchesQuery(r, query())),
   );
-  const row = (): InboxRow | null =>
-    rows()[Math.min(at(), rows().length - 1)] ?? null;
+  const row = (): InboxRow | null => rows()[cursor.index(rows().length)] ?? null;
   const counts = createMemo(() => {
     const out = {} as Record<InboxFilter, number>;
     for (const f of INBOX_FILTERS)
@@ -62,9 +54,7 @@ export function useInboxTab(opts: {
   });
 
   const move = (d: number) => {
-    setAt((i) => Math.max(0, Math.min(rows().length - 1, i + d)));
-    // One row open at a time, and only the one you are on.
-    setOpenKey(null);
+    cursor.move(d, rows().length);
     setRevealed(null);
   };
 
@@ -87,34 +77,26 @@ export function useInboxTab(opts: {
   };
 
   const commands: Record<string, Handler> = {
-    [Commands.INBOX_EXPAND]: onRow((r) => {
-      setOpenKey((k) => (k === r.key ? null : r.key));
-    }),
+    [Commands.INBOX_EXPAND]: onRow((r) => cursor.toggle(r.key)),
     [Commands.INBOX_FILTER]: () => {
       if (!opts.active()) return false;
       setFilter(nextFilter(filter()));
-      setAt(0);
-      setOpenKey(null);
+      cursor.reset();
     },
     [Commands.INBOX_SEARCH]: () => {
       if (!opts.active()) return false;
-      if (query()) {
-        setQuery("");
-        setAt(0);
-        return;
-      }
-      opts.dialogs.show(() => (
-        <PromptModal
-          title="Search the Inbox"
-          hint="Subject, sender, source (slack, github, advisor) or result. / again clears it."
-          onSubmit={(text) => {
-            setQuery(text);
-            setAt(0);
-            setOpenKey(null);
-          }}
-          onClose={opts.dialogs.close}
-        />
-      ));
+      askSearch(
+        opts.dialogs,
+        query(),
+        (text) => {
+          setQuery(text);
+          cursor.reset();
+        },
+        {
+          title: "Search the Inbox",
+          hint: "Subject, sender, source (slack, github, advisor) or result. / again clears it.",
+        },
+      );
     },
     [Commands.INBOX_GO]: onRow((r) => {
       if (r.taskId === null) return false;
@@ -146,7 +128,7 @@ export function useInboxTab(opts: {
       void opts.actions.retriage(r.message);
     }),
     [Commands.INBOX_BODY]: onMessage((r) => {
-      setOpenKey(r.key);
+      cursor.open(r.key);
       setRevealed((k) => (k === r.key ? null : r.key));
     }),
   };
@@ -173,8 +155,8 @@ export function useInboxTab(opts: {
     View: (props: { width: number }) => (
       <InboxView
         rows={rows()}
-        selected={Math.min(at(), rows().length - 1)}
-        openKey={openKey()}
+        selected={row()?.key ?? null}
+        openKey={cursor.openKey()}
         revealed={revealed()}
         counts={counts()}
         filter={filter()}
@@ -183,15 +165,6 @@ export function useInboxTab(opts: {
       />
     ),
   };
-}
-
-// Today's time, else the day: a list read top-down by recency.
-function when(iso: string, now: Date): string {
-  const d = new Date(iso);
-  const sameDay = d.toDateString() === now.toDateString();
-  return sameDay
-    ? d.toTimeString().slice(0, 5)
-    : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 type Tone = "muted" | "warning" | "success" | "info";
@@ -244,7 +217,7 @@ function Upcoming(props: { width: number }) {
 
 function InboxView(props: {
   rows: InboxRow[];
-  selected: number;
+  selected: string | null;
   openKey: string | null;
   revealed: string | null;
   counts: Record<InboxFilter, number>;
@@ -254,22 +227,6 @@ function InboxView(props: {
 }) {
   const theme = useTheme();
   const riker = useRiker();
-  let scrollRef: ScrollBoxRenderable | undefined;
-
-  // Rows above the selected one are one line each (only the selected one
-  // opens), so its top is its index.
-  createEffect(
-    on(
-      () => [props.selected, props.openKey] as const,
-      ([selected, openKey]) => {
-        if (!scrollRef || selected < 0) return;
-        const view = scrollRef.viewport.height ?? 10;
-        if (openKey || selected < scrollRef.scrollTop) scrollRef.scrollTo(selected);
-        else if (selected + 1 > scrollRef.scrollTop + view)
-          scrollRef.scrollTo(selected + 1 - view);
-      },
-    ),
-  );
 
   const tone = (t: Tone): ThemeColor =>
     t === "muted"
@@ -282,21 +239,28 @@ function InboxView(props: {
 
   const subjectWidth = () => Math.max(16, props.width - 7 - 8 - 16 - 16 - 22 - 12);
 
+  const ref = (row: InboxRow) => {
+    if (row.taskId === null) return "";
+    const t = riker.task(row.taskId);
+    const project = t?.project_id ? riker.project(t.project_id)?.name : null;
+    // An idea's task is only what it is about until approving it
+    // makes one; a bare ref read as "the Advisor made a task".
+    const about = row.type === "idea" && row.idea.made_task_id === null;
+    return `${about ? "about " : ""}${taskRef(row.taskId)}${project ? ` ${project}` : ""}`;
+  };
+
   return (
     <box flexDirection="column" flexGrow={1} flexBasis={0} paddingLeft={1}>
-      <box flexDirection="row" gap={1} flexShrink={0} paddingBottom={1}>
-        <For each={INBOX_FILTERS}>
-          {(f) => (
-            <text
-              fg={f.filter === props.filter ? contrastingForeground(theme.secondary) : theme.textMuted}
-              bg={f.filter === props.filter ? theme.secondary : undefined}
-            >{` ${f.word} ${props.counts[f.filter]} `}</text>
-          )}
-        </For>
-        <text fg={theme.textMuted}>{"f next"}</text>
-        <Show when={props.query}>
-          <text fg={theme.accent}>{`/ "${props.query}"`}</text>
-        </Show>
+      <box flexShrink={0} paddingBottom={1}>
+        <FilterPills
+          pills={INBOX_FILTERS.map((f) => ({
+            word: f.word,
+            count: props.counts[f.filter],
+            on: f.filter === props.filter,
+          }))}
+          hint="f next"
+          query={props.query}
+        />
       </box>
       <Show when={props.filter === InboxFilter.timers}>
         <Upcoming width={props.width} />
@@ -315,56 +279,41 @@ function InboxView(props: {
           </text>
         }
       >
-        <scrollbox
-          ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
-          flexGrow={1}
-          flexBasis={0}
-        >
-          <For each={props.rows}>
-            {(row, i) => {
-              const sel = () => i() === props.selected;
-              const fg = (c: ThemeColor) => (sel() ? contrastingForeground(theme.primary) : c);
-              const ref = () => {
-                if (row.taskId === null) return "";
-                const t = riker.task(row.taskId);
-                const project = t?.project_id ? riker.project(t.project_id)?.name : null;
-                // An idea's task is only what it is about until approving it
-                // makes one; a bare ref read as "the Advisor made a task".
-                const about = row.type === "idea" && row.idea.made_task_id === null;
-                return `${about ? "about " : ""}${taskRef(row.taskId)}${project ? ` ${project}` : ""}`;
-              };
-              return (
-                <box flexDirection="column">
-                  <box flexDirection="row" gap={1} backgroundColor={sel() ? theme.primary : undefined}>
-                    <text fg={fg(theme.textMuted)} width={7} flexShrink={0}>
-                      {when(row.at, riker.now())}
-                    </text>
-                    <text fg={fg(theme.secondary)} width={8} flexShrink={0}>
-                      {row.source}
-                    </text>
-                    <text fg={fg(theme.text)} width={16} flexShrink={0}>
-                      {truncate(row.from, 16)}
-                    </text>
-                    <text fg={fg(row.read ? theme.textMuted : theme.text)} flexGrow={1}>
-                      {truncate(row.subject, subjectWidth())}
-                    </text>
-                    <text fg={fg(tone(resultTone(row.result)))} width={16} flexShrink={0}>
-                      {row.type === "message" && row.folded.length > 0
-                        ? `${row.folded.length + 1} joined a task`
-                        : RESULT_WORDS[row.result]}
-                    </text>
-                    <text fg={fg(theme.textMuted)} width={22} flexShrink={0}>
-                      {truncate(ref(), 22)}
-                    </text>
-                  </box>
-                  <Show when={props.openKey === row.key}>
-                    <Detail row={row} revealed={props.revealed === row.key} width={props.width} />
-                  </Show>
-                </box>
-              );
-            }}
-          </For>
-        </scrollbox>
+        <ExpandList
+          id="inbox"
+          entries={props.rows.map((row) => ({ row }))}
+          rowKey={(row) => row.key}
+          selected={props.selected}
+          openKey={props.openKey}
+          row={(row, sel) => {
+            const fg = selColor(theme, sel);
+            return (
+              <>
+                <text fg={fg(theme.textMuted)} width={7} flexShrink={0}>
+                  {when(row.at, riker.now())}
+                </text>
+                <text fg={fg(theme.secondary)} width={8} flexShrink={0}>
+                  {row.source}
+                </text>
+                <text fg={fg(theme.text)} width={16} flexShrink={0}>
+                  {truncate(row.from, 16)}
+                </text>
+                <text fg={fg(row.read ? theme.textMuted : theme.text)} flexGrow={1}>
+                  {truncate(row.subject, subjectWidth())}
+                </text>
+                <text fg={fg(tone(resultTone(row.result)))} width={16} flexShrink={0}>
+                  {row.type === "message" && row.folded.length > 0
+                    ? `${row.folded.length + 1} joined a task`
+                    : RESULT_WORDS[row.result]}
+                </text>
+                <text fg={fg(theme.textMuted)} width={22} flexShrink={0}>
+                  {truncate(ref(row), 22)}
+                </text>
+              </>
+            );
+          }}
+          detail={(row) => <Detail row={row} revealed={props.revealed === row.key} width={props.width} />}
+        />
       </Show>
     </box>
   );

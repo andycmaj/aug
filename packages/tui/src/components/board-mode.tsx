@@ -32,6 +32,7 @@ import { BOARD_HELP_OPTIONS, BoardTab, type HelpCtx } from "../keymap";
 import { RikerFooter } from "./footer";
 import { boardTab, setBoardTab } from "./board-tab";
 import { CostTab } from "./cost-tab";
+import { useDocsTab } from "./docs-tab";
 import { useInboxTab } from "./inbox-tab";
 import { useWinsTab } from "./wins-tab";
 import { actionsFor } from "@riker/core/task-actions";
@@ -47,6 +48,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "knowledge", label: "3 Knowledge" },
   { key: "inbox", label: "4 Inbox" },
   { key: "cost", label: "5 Cost" },
+  { key: "docs", label: "6 Docs" },
 ];
 
 const tab = boardTab;
@@ -83,6 +85,12 @@ export function BoardMode() {
   const wins = useWinsTab({
     active: () => tab() === Tab.wins,
     actions: shell.actions,
+  });
+
+  const docs = useDocsTab({
+    active: () => tab() === Tab.docs,
+    actions: shell.actions,
+    dialogs: shell.dialogs,
   });
 
   const target = (): TaskRow | null => {
@@ -149,6 +157,9 @@ export function BoardMode() {
       case Tab.wins:
         wins.move(d);
         break;
+      case Tab.docs:
+        docs.move(d);
+        break;
       case Tab.cost:
         costScroll?.scrollBy(d * 2);
         break;
@@ -174,7 +185,9 @@ export function BoardMode() {
               ? inbox.move(-Infinity)
               : tab() === Tab.wins
                 ? wins.move(-Infinity)
-                : costScroll?.scrollTo(0),
+                : tab() === Tab.docs
+                  ? docs.move(-Infinity)
+                  : costScroll?.scrollTo(0),
       [Commands.NAV_BOTTOM]: () => vertical(999),
       [Commands.BOARD_LEFT]: () => horizontal(-1),
       [Commands.BOARD_RIGHT]: () => horizontal(1),
@@ -183,15 +196,17 @@ export function BoardMode() {
       [Commands.BOARD_TAB_3]: () => setTab(Tab.knowledge),
       [Commands.BOARD_TAB_4]: () => setTab(Tab.inbox),
       [Commands.BOARD_TAB_5]: () => setTab(Tab.cost),
+      [Commands.BOARD_TAB_6]: () => setTab(Tab.docs),
       ...inbox.commands,
       ...wins.commands,
+      ...docs.commands,
       [Commands.PROJECT_ADOPT]: () => void shell.actions.adopt(),
       [Commands.REPOS]: () => void shell.actions.showRepos(),
       [Commands.MOVE_TO_PROJECT]: onTask(shell.actions.moveToProject),
       [Commands.OPEN]: () => {
         // Enter on the Inbox and Wins opens the row in place (INBOX_EXPAND,
         // WINS_EXPAND).
-        if (tab() === Tab.inbox || tab() === Tab.wins) return false;
+        if (tab() === Tab.inbox || tab() === Tab.wins || tab() === Tab.docs) return false;
         const t = target();
         if (t) openInChat(t);
       },
@@ -221,6 +236,8 @@ export function BoardMode() {
   const subject = (): string => {
     const t = target();
     if (t) return `${taskRef(t.id)} ${t.title}`;
+    const doc = docs.subject();
+    if (doc) return doc;
     const label = TABS.find((x) => x.key === tab())?.label.replace(/^\d+ /, "");
     return `Board: ${label ?? tab()}`;
   };
@@ -243,6 +260,7 @@ export function BoardMode() {
       board: tab(),
       ...(tab() === Tab.inbox ? inbox.ctx() : {}),
       ...(tab() === Tab.wins ? wins.ctx() : {}),
+      ...(tab() === Tab.docs ? docs.ctx() : {}),
     };
   };
 
@@ -312,6 +330,9 @@ export function BoardMode() {
             </Match>
             <Match when={tab() === Tab.wins}>
               <wins.View width={dims().width} />
+            </Match>
+            <Match when={tab() === Tab.docs}>
+              <docs.View width={dims().width} />
             </Match>
             <Match when={tab() === Tab.cost}>
               <CostTab

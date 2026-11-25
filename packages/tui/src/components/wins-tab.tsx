@@ -3,14 +3,8 @@
 // h and l walk the pair back and forth a day. Enter opens a row in place
 // (the day's events, turns, moves, PR and agent time); t goes to the task.
 
-import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js";
-import type { ScrollBoxRenderable } from "@opentui/core";
-import {
-  contrastingForeground,
-  truncate,
-  useTheme,
-  type ThemeColor,
-} from "@andycmaj/opentui-app";
+import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
+import { truncate, useTheme } from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useRiker } from "../context/riker";
 import { localDay, MAX_WINS } from "@riker/core/rail";
@@ -27,6 +21,7 @@ import {
   type WinsDay,
 } from "@riker/core/wins-board";
 import type { Actions } from "./actions";
+import { ExpandList, listCursor, selColor, type ListEntry } from "./expand-list";
 import { clock, toneColor, useLaneMeta } from "./ui";
 
 type Handler = () => false | void;
@@ -41,8 +36,7 @@ interface WinsLine {
 // Kept across tab switches, like the Board's tab. null is today, so the
 // tab follows the clock past midnight.
 const [focusDay, setFocusDay] = createSignal<string | null>(null);
-const [at, setAt] = createSignal(0);
-const [openKey, setOpenKey] = createSignal<string | null>(null);
+const cursor = listCursor();
 
 const OUTCOME_LOOK: Record<Outcome, { mark: string; word: string; tone: "success" | "accent" | "muted" | "text" }> = {
   done: { mark: "✓", word: "done", tone: "success" },
@@ -64,19 +58,15 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
       [...d.wins, ...d.also].map((row) => ({ key: `${d.day}:${row.task.id}`, day: d.day, row })),
     ),
   );
-  const line = (): WinsLine | null => lines()[Math.min(at(), lines().length - 1)] ?? null;
+  const line = (): WinsLine | null => lines()[cursor.index(lines().length)] ?? null;
 
-  const move = (d: number) => {
-    setAt((i) => Math.max(0, Math.min(lines().length - 1, i + d)));
-    setOpenKey(null);
-  };
+  const move = (d: number) => cursor.move(d, lines().length);
 
   const shift = (by: number) => {
     const next = shiftDay(day(), by);
     if (next > today()) return false;
     setFocusDay(next === today() ? null : next);
-    setAt(0);
-    setOpenKey(null);
+    cursor.reset();
   };
 
   const onLine = (fn: (l: WinsLine) => false | void): Handler => () => {
@@ -87,17 +77,14 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
   };
 
   const commands: Record<string, Handler> = {
-    [Commands.WINS_EXPAND]: onLine((l) => {
-      setOpenKey((k) => (k === l.key ? null : l.key));
-    }),
+    [Commands.WINS_EXPAND]: onLine((l) => cursor.toggle(l.key)),
     [Commands.WINS_GO]: onLine((l) => opts.actions.goToTask(l.row.task.id)),
     [Commands.WINS_PREV_DAY]: () => (opts.active() ? shift(-1) : false),
     [Commands.WINS_NEXT_DAY]: () => (opts.active() && focusDay() ? shift(1) : false),
     [Commands.WINS_TODAY]: () => {
       if (!opts.active() || !focusDay()) return false;
       setFocusDay(null);
-      setAt(0);
-      setOpenKey(null);
+      cursor.reset();
     },
   };
 
@@ -114,9 +101,8 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
     View: (props: { width: number }) => (
       <WinsView
         days={days()}
-        lines={lines()}
         selected={line()?.key ?? null}
-        openKey={openKey()}
+        openKey={cursor.openKey()}
         today={today()}
         width={props.width}
       />
@@ -152,148 +138,81 @@ function rowSays(row: DayRow): string {
 
 function WinsView(props: {
   days: WinsDay[];
-  lines: WinsLine[];
   selected: string | null;
   openKey: string | null;
   today: string;
-  width: number;
-}) {
-  const theme = useTheme();
-  let scrollRef: ScrollBoxRenderable | undefined;
-
-  createEffect(
-    on(
-      () => [props.selected, props.openKey] as const,
-      ([selected]) => {
-        if (!selected) return;
-        // After layout, so the row has its place.
-        setTimeout(() => scrollRef?.scrollChildIntoView(`wins-${selected}`), 0);
-      },
-    ),
-  );
-
-  return (
-    <box flexDirection="column" flexGrow={1} flexBasis={0} paddingLeft={1}>
-      <box flexDirection="row" gap={2} flexShrink={0} paddingBottom={1}>
-        <text fg={theme.textMuted}>
-          {props.days[0]?.isToday ? "h the day before" : "h the day before · l the day after · 0 today"}
-        </text>
-      </box>
-      <scrollbox ref={(r: ScrollBoxRenderable) => (scrollRef = r)} flexGrow={1} flexBasis={0} paddingRight={2}>
-        <For each={props.days}>
-          {(d, i) => (
-            <DaySection
-              day={d}
-              first={i() === 0}
-              today={props.today}
-              selected={props.selected}
-              openKey={props.openKey}
-              width={props.width}
-            />
-          )}
-        </For>
-      </scrollbox>
-    </box>
-  );
-}
-
-function DaySection(props: {
-  day: WinsDay;
-  first: boolean;
-  today: string;
-  selected: string | null;
-  openKey: string | null;
-  width: number;
-}) {
-  const theme = useTheme();
-  const done = () => props.day.wins.filter((w) => w.outcome === Outcome.done).length;
-  const heading = (text: string, extra?: string) => (
-    <text marginTop={1}>
-      <span style={{ fg: theme.accent, attributes: 1 }}>{text}</span>
-      <Show when={extra}>
-        <span style={{ fg: theme.textMuted }}>{`  ${extra}`}</span>
-      </Show>
-    </text>
-  );
-  return (
-    <box flexDirection="column" marginTop={props.first ? 0 : 2}>
-      <text fg={theme.primary} attributes={1}>
-        {dayTitle(props.day.day, props.today)}
-      </text>
-      {heading(
-        `Wins ${props.day.wins.length ? `${done()}/${props.day.wins.length}` : ""}`.trim(),
-        props.day.isToday && props.day.wins.length < MAX_WINS
-          ? `${MAX_WINS - props.day.wins.length} more can be pinned: z on a rail row`
-          : undefined,
-      )}
-      <For
-        each={props.day.wins}
-        fallback={
-          <box paddingLeft={2}>
-            <text fg={theme.textMuted}>
-              {props.day.isToday
-                ? "No Wins pinned today. z on a rail row pins one (up to 5)."
-                : "No Wins were pinned this day."}
-            </text>
-          </box>
-        }
-      >
-        {(row) => (
-          <Row
-            row={row}
-            day={props.day}
-            selected={props.selected}
-            openKey={props.openKey}
-            width={props.width}
-          />
-        )}
-      </For>
-      {heading(
-        props.day.isToday ? "Also done today" : "Also done",
-        [
-          props.day.made ? `${props.day.made} task${props.day.made === 1 ? "" : "s"} made` : null,
-          props.day.moves ? `${props.day.moves} move${props.day.moves === 1 ? "" : "s"} by the Assistant and agents` : null,
-        ]
-          .filter(Boolean)
-          .join(" · ") || undefined,
-      )}
-      <For
-        each={props.day.also}
-        fallback={
-          <box paddingLeft={2}>
-            <text fg={theme.textMuted}>Nothing else closed, merged or talked over.</text>
-          </box>
-        }
-      >
-        {(row) => (
-          <Row
-            row={row}
-            day={props.day}
-            selected={props.selected}
-            openKey={props.openKey}
-            width={props.width}
-          />
-        )}
-      </For>
-    </box>
-  );
-}
-
-function Row(props: {
-  row: DayRow;
-  day: WinsDay;
-  selected: string | null;
-  openKey: string | null;
   width: number;
 }) {
   const theme = useTheme();
   const lane = useLaneMeta();
-  const key = () => `${props.day.day}:${props.row.task.id}`;
-  const on = () => props.selected === key();
-  const fg = (c: ThemeColor) => (on() ? contrastingForeground(theme.primary) : c);
+
+  const heading = (key: string, text: string, extra?: string): ListEntry<WinsLine> => ({
+    key,
+    heading: () => (
+      <text marginTop={1}>
+        <span style={{ fg: theme.accent, attributes: 1 }}>{text}</span>
+        <Show when={extra}>
+          <span style={{ fg: theme.textMuted }}>{`  ${extra}`}</span>
+        </Show>
+      </text>
+    ),
+  });
+  const quiet = (key: string, text: string): ListEntry<WinsLine> => ({
+    key,
+    heading: () => (
+      <box paddingLeft={2}>
+        <text fg={theme.textMuted}>{text}</text>
+      </box>
+    ),
+  });
+
+  // Each day: its title, its Wins, then what else got done.
+  const entries = createMemo((): ListEntry<WinsLine>[] =>
+    props.days.flatMap((d, i) => {
+      const done = d.wins.filter((w) => w.outcome === Outcome.done).length;
+      const rows = (list: DayRow[]) => list.map((row) => ({ row: { key: `${d.day}:${row.task.id}`, day: d.day, row } }));
+      const title: ListEntry<WinsLine> = {
+        key: `${d.day}:title`,
+        heading: (): JSX.Element => (
+          <text fg={theme.primary} attributes={1} marginTop={i === 0 ? 0 : 2}>
+            {dayTitle(d.day, props.today)}
+          </text>
+        ),
+      };
+      return [
+        title,
+        heading(
+          `${d.day}:wins`,
+          `Wins ${d.wins.length ? `${done}/${d.wins.length}` : ""}`.trim(),
+          d.isToday && d.wins.length < MAX_WINS
+            ? `${MAX_WINS - d.wins.length} more can be pinned: z on a rail row`
+            : undefined,
+        ),
+        ...(d.wins.length
+          ? rows(d.wins)
+          : [
+              quiet(
+                `${d.day}:no-wins`,
+                d.isToday ? "No Wins pinned today. z on a rail row pins one (up to 5)." : "No Wins were pinned this day.",
+              ),
+            ]),
+        heading(
+          `${d.day}:also`,
+          d.isToday ? "Also done today" : "Also done",
+          [
+            d.made ? `${d.made} task${d.made === 1 ? "" : "s"} made` : null,
+            d.moves ? `${d.moves} move${d.moves === 1 ? "" : "s"} by the Assistant and agents` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined,
+        ),
+        ...(d.also.length ? rows(d.also) : [quiet(`${d.day}:no-also`, "Nothing else closed, merged or talked over.")]),
+      ];
+    }),
+  );
+
   // Today a Win still open says its lane; otherwise how it came out.
-  const look = () => {
-    const r = props.row;
+  const look = (r: DayRow) => {
     if (r.lane && r.outcome === Outcome.open) {
       const meta = lane(r.lane);
       return { mark: meta.mark, word: meta.word, color: toneColor(theme, meta.tone) };
@@ -302,28 +221,47 @@ function Row(props: {
     return { mark: o.mark, word: o.word, color: toneColor(theme, o.tone) };
   };
   const titleWidth = () => Math.max(16, Math.min(56, props.width - 70));
+
   return (
-    <box id={`wins-${key()}`} flexDirection="column" paddingLeft={1}>
-      <box flexDirection="row" gap={1} backgroundColor={on() ? theme.primary : undefined}>
-        <text fg={fg(look().color)} width={2} flexShrink={0}>
-          {look().mark}
-        </text>
-        <text fg={fg(theme.textMuted)} width={8} flexShrink={0}>
-          {taskRef(props.row.task.id)}
-        </text>
-        <text fg={fg(theme.text)} width={titleWidth()} flexShrink={0}>
-          {truncate(props.row.task.title, titleWidth())}
-        </text>
-        <text fg={fg(look().color)} width={22} flexShrink={0}>
-          {truncate(look().word, 22)}
-        </text>
-        <text fg={fg(theme.textMuted)} flexGrow={1}>
-          {truncate(rowSays(props.row), Math.max(10, props.width - titleWidth() - 46))}
+    <box flexDirection="column" flexGrow={1} flexBasis={0} paddingLeft={1}>
+      <box flexDirection="row" gap={2} flexShrink={0} paddingBottom={1}>
+        <text fg={theme.textMuted}>
+          {props.days[0]?.isToday ? "h the day before" : "h the day before · l the day after · 0 today"}
         </text>
       </box>
-      <Show when={props.openKey === key()}>
-        <Detail taskId={props.row.task.id} day={props.day.day} width={props.width} />
-      </Show>
+      <ExpandList
+        id="wins"
+        entries={entries()}
+        rowKey={(l) => l.key}
+        selected={props.selected}
+        openKey={props.openKey}
+        indent={1}
+        paddingRight={2}
+        row={(l, sel) => {
+          const fg = selColor(theme, sel);
+          const lk = look(l.row);
+          return (
+            <>
+              <text fg={fg(lk.color)} width={2} flexShrink={0}>
+                {lk.mark}
+              </text>
+              <text fg={fg(theme.textMuted)} width={8} flexShrink={0}>
+                {taskRef(l.row.task.id)}
+              </text>
+              <text fg={fg(theme.text)} width={titleWidth()} flexShrink={0}>
+                {truncate(l.row.task.title, titleWidth())}
+              </text>
+              <text fg={fg(lk.color)} width={22} flexShrink={0}>
+                {truncate(lk.word, 22)}
+              </text>
+              <text fg={fg(theme.textMuted)} flexGrow={1}>
+                {truncate(rowSays(l.row), Math.max(10, props.width - titleWidth() - 46))}
+              </text>
+            </>
+          );
+        }}
+        detail={(l) => <Detail taskId={l.row.task.id} day={l.day} width={props.width} />}
+      />
     </box>
   );
 }

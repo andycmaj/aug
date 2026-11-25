@@ -143,6 +143,13 @@ const PLACES: {
     ctx: { ...quiet, item: "message", board: BoardTab.inbox },
   },
   {
+    id: "board-docs",
+    title: "Board · Docs",
+    where: "Board, tab 6, on a link someone attached",
+    scopes: ["board", "app"],
+    ctx: { ...quiet, item: "doc", board: BoardTab.docs, docOwned: true, docRemovable: true },
+  },
+  {
     id: "board-cost",
     title: "Board · Cost",
     where: "Board, tab 5",

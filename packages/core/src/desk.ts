@@ -662,6 +662,11 @@ export class Desk {
     return this.onTask("unlink", taskId, () => store.removeTaskLink(taskId, url));
   }
 
+  // A project's doc off the project: only Riker's row goes.
+  unlinkProject(projectId: number, url: string): boolean {
+    return store.removeProjectLink(projectId, url);
+  }
+
   jumpToProject(projectId: number) {
     return projects.jumpToProject(this.config(), projectId);
   }

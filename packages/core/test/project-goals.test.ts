@@ -44,7 +44,7 @@ describe("project brief, goals and docs", () => {
     expect(store.getProject(p.id)!.brief).toBe("Ship the ledger export.");
     expect(store.linksForProject(p.id).map((l) => [l.url, l.title])).toEqual([[notion, "the plan"]]);
 
-    const bad = await engine.runMove("project_link", { project: "Ledger", url: "file:///etc/passwd" });
+    const bad = await engine.runMove("project_link", { project: "Ledger", url: "javascript:alert(1)" });
     expect(bad.ok).toBe(false);
     const miss = await engine.runMove("project_unlink", { project: "Ledger", url: "https://x.test" });
     expect(miss.result).toBe(`Ledger has no link https://x.test. Links: ${notion}`);
