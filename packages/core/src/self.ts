@@ -11,6 +11,16 @@ import { rikerHome } from "./paths";
 // is riker-tools itself under the `tools` subcommand (@riker/cli's riker.ts).
 const COMPILED = import.meta.url.includes("/$bunfs/");
 export const TOOLS_SUBCOMMAND = "tools";
+// The fixture day's stand-in coding agent (@riker/fixtures fake-claude.ts).
+export const DEMO_AGENT_SUBCOMMAND = "demo-agent";
+
+// How Riker runs one of its own scripts as a process: bun on the file from
+// source. A compiled binary's files live in its own $bunfs, which no other
+// process can open, so there it is the binary itself under the subcommand its
+// entry routes to that script.
+export function scriptArgv(script: string, subcommand: string): string[] {
+  return COMPILED ? [process.execPath, subcommand] : [process.execPath, script];
+}
 
 // riker-tools lives in @riker/cli, which depends on core: the entry point that
 // starts Riker (or riker-tools itself) says where it is.

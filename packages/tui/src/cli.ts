@@ -12,6 +12,7 @@ import { loadConfig } from "@riker/core/config";
 import { migrateHome, planHomeMigration } from "@riker/core/migrate-home";
 import { setMux, TmuxMux } from "@riker/core/mux";
 import { copyLegacyTags } from "@riker/core/projects";
+import { VERSION } from "@riker/core/version";
 
 export interface CLIConfig {
   // A built-in fixture name: no network, no AI, a fictional day.
@@ -189,7 +190,7 @@ const SUBCOMMANDS = { hooks, install, uninstall, sim, migrate };
 const main = defineCommand({
   meta: {
     name: "riker",
-    version: "0.0.1",
+    version: VERSION,
     description:
       "Your work manager in a terminal: GitHub and Slack become tasks, Claude does the work, nothing goes out until you approve.",
   },

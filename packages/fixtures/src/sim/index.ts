@@ -21,6 +21,7 @@ import { setSender } from "@riker/core/outbound";
 import { taskPr } from "@riker/core/pr";
 import { setGuidePrReviews } from "@riker/core/run-action";
 import { paths } from "@riker/core/paths";
+import { DEMO_AGENT_SUBCOMMAND, scriptArgv } from "@riker/core/self";
 import * as store from "@riker/core/store";
 import { Kind, SpendRole, type TaskRow } from "@riker/core/types";
 import { demoBrain, demoHome } from "../demo";
@@ -201,7 +202,7 @@ export function installSim(opts: SimOptions): {
       const cwd = simCwd(task, file) ?? launch.cwd;
       const argv = haiku
         ? [launch.argv[0], "--model", "haiku", ...launch.argv.slice(1)]
-        : [process.execPath, fake, task.title];
+        : [...scriptArgv(fake, DEMO_AGENT_SUBCOMMAND), task.title];
       return { ...launch, cwd, argv };
     },
   });
