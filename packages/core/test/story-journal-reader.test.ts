@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { Engine } from "../src/engine";
 import { handleDone } from "../src/hooks";
-import { journalMarkdown, journalTick } from "../src/journal";
+import { journalFile, journalMarkdown, journalTick, JournalSave, saveJournalEdit, writeJournal } from "../src/journal";
 import { sessionEnded, sessionStarted, workMerged, EndReason } from "../src/lifecycle";
 import { editStory, parseStory, pin, storyMarkdown } from "../src/story";
 import * as store from "../src/store";
+import { readFileSync } from "node:fs";
 import { Kind, SessionKind } from "../src/types";
 import { config, freshHome, testConfig } from "./support/helpers";
 
@@ -112,5 +113,53 @@ describe("the journal as markdown", () => {
     const { project } = setup();
     const engine = new Engine({ config: testConfig() });
     expect(engine.desk.journal(project.id)).toBeNull();
+  });
+});
+
+describe("saving an edit of the journal", () => {
+  const entry = (n: number) => `2026-11-24 1${n}:00  RIKER-000${n}  made  (task ${n})`;
+
+  function opened() {
+    const { project } = setup();
+    writeJournal(project, entry(1), "2026-11-24T10:00:00Z");
+    const base = readFileSync(journalFile(project), "utf8");
+    return { project, base };
+  }
+
+  test("as it was: written whole; the same text: nothing", () => {
+    const { project, base } = opened();
+    expect(saveJournalEdit(project, base, base)).toBe(JournalSave.unchanged);
+    expect(saveJournalEdit(project, base, `${base}\nMy note.\n`)).toBe(JournalSave.saved);
+    expect(readFileSync(journalFile(project), "utf8")).toBe(`${base}\nMy note.\n`);
+  });
+
+  test("an entry written while it was open is kept beside the owner's note", () => {
+    const { project, base } = opened();
+    writeJournal(project, entry(2), "2026-11-24T11:00:00Z");
+    const edited = base.replace(/journal\n/, "journal\n\nMy note under the title.\n");
+    expect(saveJournalEdit(project, base, edited)).toBe(JournalSave.merged);
+    const now = readFileSync(journalFile(project), "utf8");
+    expect(now).toContain("My note under the title.");
+    expect(now).toContain(entry(2));
+    expect(now).toContain(entry(1));
+  });
+
+  test("both on the same lines: nothing written, the engine's entry stays", () => {
+    const { project, base } = opened();
+    writeJournal(project, entry(2), "2026-11-24T11:00:00Z");
+    const engineWrote = readFileSync(journalFile(project), "utf8");
+    expect(saveJournalEdit(project, base, base.replace("(task 1)", "(task 1, edited)"))).toBe(JournalSave.conflict);
+    expect(readFileSync(journalFile(project), "utf8")).toBe(engineWrote);
+  });
+
+  test("the desk says which", () => {
+    const { project, base } = opened();
+    const engine = new Engine({ config: testConfig() });
+    writeJournal(project, entry(2), "2026-11-24T11:00:00Z");
+    expect(engine.desk.saveJournal(project.id, base, `${base}\nEnd note.\n`)).toEqual({
+      ok: true,
+      text: `${project.name} journal: saved, with what Riker wrote while you edited`,
+    });
+    expect(engine.desk.saveJournal(project.id, base, base.replace("(task 1)", "(x)")).ok).toBe(false);
   });
 });

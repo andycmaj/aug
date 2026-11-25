@@ -3,7 +3,7 @@
 // saves as the owner's new version.
 
 import { afterEach, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testRender } from "@opentui/solid";
@@ -102,6 +102,35 @@ test("V on a project reads its journal as markdown, markers left out", async () 
   expect(shown).not.toContain("### ");
   await press("ESCAPE");
   expect(frame()).not.toContain("journal-entry-0241");
+});
+
+test("e on the journal edits a copy; an entry Riker wrote meanwhile is kept", async () => {
+  const { frame, press, goTo, frameWith } = await boot();
+  const project = store.listProjects().find((p) => p.name === "ledger fixes")!;
+  const file = writeJournal(project, "2026-11-24 10:00  RIKER-0001  made  (first)", new Date().toISOString());
+  // The editor adds a note at the end of its copy, and while it is open an
+  // entry lands in the file (what the engine does).
+  const script = join(home!, "fake-editor.sh");
+  writeFileSync(
+    script,
+    `#!/bin/sh\nprintf '\\nowner-note-0241\\n' >> "$1"\nperl -0pi -e 's/(<!-- riker:journal -->\\n)/$1<!-- riker:entry 2026-11 -->\\nengine-entry-0241\\n\\n/' "${file}"\n`,
+  );
+  chmodSync(script, 0o755);
+  delete process.env.VISUAL;
+  process.env.EDITOR = script;
+  await goTo("ledger fixes");
+  await press("V");
+  await frameWith("ledger fixes journal");
+  await press("e");
+  const end = Date.now() + 5000;
+  while (!readFileSync(file, "utf8").includes("owner-note-0241") && Date.now() < end) await Bun.sleep(30);
+  const now = readFileSync(file, "utf8");
+  expect(now).toContain("owner-note-0241");
+  expect(now).toContain("engine-entry-0241");
+  expect(now).toContain("(first)");
+  const toast = (await frameWith("Riker wrote")).replace(/\s+/g, " ");
+  if (process.env.READER_FRAMES) writeFileSync(`${process.env.READER_FRAMES}.merge`, `${frame()}\n`);
+  expect(toast).toContain("Riker wrote");
 });
 
 test("V with no story yet says when one comes", async () => {

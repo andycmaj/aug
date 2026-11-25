@@ -18,6 +18,7 @@ import { watchSession } from "./digest-watcher";
 import { EndReason } from "./lifecycle";
 import { logger } from "./log";
 import { paths } from "./paths";
+import { mergeText } from "./proposals";
 import { storyFromDigest } from "./story";
 import * as store from "./store";
 import {
@@ -404,4 +405,27 @@ export function readJournal(project: ProjectRow): { file: string; text: string }
   const file = journalFile(project);
   if (!existsSync(file)) return null;
   return { file, text: readOr(file) };
+}
+
+export const JournalSave = {
+  unchanged: "unchanged",
+  saved: "saved",
+  // The engine wrote while the owner edited; both kept.
+  merged: "merged",
+  // Both touched the same lines: nothing written.
+  conflict: "conflict",
+} as const;
+export type JournalSave = (typeof JournalSave)[keyof typeof JournalSave];
+
+// The owner's edit, made on a copy of the file as it was at `base`. The
+// engine may have written an entry since; saving the copy whole would drop
+// it, so the edit goes over the file as it is now (git merge-file).
+export function saveJournalEdit(project: ProjectRow, base: string, edited: string): JournalSave {
+  if (edited === base) return JournalSave.unchanged;
+  const file = journalFile(project);
+  const now = readOr(file);
+  const merged = mergeText(edited, base, now);
+  if (merged === null) return JournalSave.conflict;
+  writeAtomic(file, merged);
+  return now === base ? JournalSave.saved : JournalSave.merged;
 }

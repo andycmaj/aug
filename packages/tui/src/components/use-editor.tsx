@@ -107,12 +107,24 @@ export function useEditor() {
     });
   }
 
-  // The journal file itself: the engine writes only between its markers,
-  // so what the owner adds around them stays.
+  // The journal on a copy: the engine may write an entry while it is open,
+  // so saving lays the edit over the file as it is then. One that touched
+  // the same lines keeps its copy and says where.
   function editJournal(projectId: number): false | void {
     const found = desk.journal(projectId);
     if (!found) return false;
-    openEditor(found.file, "journal");
+    const file = draftFile(`project-${projectId}`, "journal");
+    writeDraft(file, found.text);
+    openEditor(file, "journal", (code) => {
+      const text = readDraft(file);
+      if (code !== 0 || text === null) {
+        removeDraft(file);
+        return;
+      }
+      const said = desk.saveJournal(projectId, found.text, text);
+      if (said.ok) removeDraft(file);
+      showToast(said.ok ? said.text : `${said.text}; your copy is in ${file}`, said.ok ? 3000 : 10000, said.ok ? "info" : "error");
+    });
   }
 
   // The chat box in $EDITOR. Save and quit sends; quitting empty or with an

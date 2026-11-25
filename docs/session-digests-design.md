@@ -156,8 +156,11 @@ scroll, c copies, e opens it in `$EDITOR` in the Canvas. The story is
 `storyMarkdown`, a heading per part; in `$EDITOR` every part's heading is
 there, and saving reads it back (`parseStory`) as a new version by the
 owner, which `story_undo` steps back from. A line under no part is
-refused, and the file is kept. The journal's `e` opens the file itself;
-the engine writes only between its markers. The journal is written as
+refused, and the file is kept. The journal's `e` edits a copy, since the
+engine may write an entry while it is open: saving lays the edit over the
+file as it is then (`saveJournalEdit`, git merge-file), so both are kept.
+An edit on the lines the engine wrote meanwhile (the newest entry, the
+status block) writes nothing and keeps the copy, and the toast says where. The journal is written as
 plain lines, which markdown would run together, so the reader shows it
 through `journalMarkdown`: markers dropped, the title and `Now:` as
 headings, a session's first line a heading, an event's line a list item.

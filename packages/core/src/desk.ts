@@ -74,7 +74,7 @@ import {
 } from "./types";
 import { addFollowup, addSchedule } from "./timers";
 import { journalSwitch, storySwitch, switchColumn, switchWords, SwitchValue } from "./digests";
-import { readJournal } from "./journal";
+import { JournalSave, readJournal, saveJournalEdit } from "./journal";
 import { editStory, pin, storyMarkdown, undoStory } from "./story";
 import { errorMessage, logger } from "./log";
 
@@ -923,6 +923,27 @@ export class Desk {
   journal(projectId: number): { file: string; text: string } | null {
     const project = store.getProject(projectId);
     return project ? readJournal(project) : null;
+  }
+
+  // The owner's journal edit, made on a copy opened at `base`: laid over
+  // the file as it is now, so an entry written meanwhile is kept.
+  saveJournal(projectId: number, base: string, edited: string): { ok: boolean; text: string } {
+    const project = store.getProject(projectId);
+    if (!project) return { ok: false, text: "That project is gone" };
+    return this.cannot("journal edit", "it is a file: edit it again to take it back", () => {
+      const said = saveJournalEdit(project, base, edited);
+      const name = `${project.name} journal`;
+      switch (said) {
+        case JournalSave.unchanged:
+          return { ok: true, text: `${name}: unchanged` };
+        case JournalSave.saved:
+          return { ok: true, text: `${name}: saved` };
+        case JournalSave.merged:
+          return { ok: true, text: `${name}: saved, with what Riker wrote while you edited` };
+        case JournalSave.conflict:
+          return { ok: false, text: `${name}: not saved: Riker wrote to the lines you edited while you had it open` };
+      }
+    });
   }
 
   undoStory(taskId: number): string {
