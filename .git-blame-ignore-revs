@@ -1,0 +1,6 @@
+# Format-only commits: git blame skips them with
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub reads this file by itself.)
+
+# oxfmt: format the repo and brace every statement body
+a2743d0ba4c1e8ed60dfde1153270419a389d1b1
