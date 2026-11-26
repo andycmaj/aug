@@ -43,20 +43,31 @@ const SIMPLE: readonly RegExp[] = [
   /^(?:make|create|add|file|new)(?: me)?(?: a)?(?: new)? task(?: (?:called|titled|named))?(?::)? \S.{0,79}$/,
 ];
 
-const POLITE = /^(?:please|pls|hey|ok|okay|can you|could you)\s+|\s+(?:please|pls|thanks|thank you)$/g;
+const POLITE =
+  /^(?:please|pls|hey|ok|okay|can you|could you)\s+|\s+(?:please|pls|thanks|thank you)$/g;
 
 // The owner's words since the last answer, when they are one short line
 // that is a single move or lookup naming no project: what the simple model
 // can do as well as the full one.
 export function simpleAsk(turns: TurnRow[]): boolean {
-  if (lastDenials(turns).length) return false;
+  if (lastDenials(turns).length) {
+    return false;
+  }
   const last = turns.findLastIndex((t) => t.role === TurnRole.agent);
   const fresh = turns.slice(last + 1);
-  if (fresh.length !== 1 || fresh[0].role !== TurnRole.you) return false;
+  if (fresh.length !== 1 || fresh[0].role !== TurnRole.you) {
+    return false;
+  }
   const said = fresh[0].body.trim();
-  if (!said || said.length > SIMPLE_MAX_CHARS || said.includes("\n")) return false;
-  if (mentionedProjects(said).length) return false;
-  if ((said.match(REF) ?? []).length > 1) return false;
+  if (!said || said.length > SIMPLE_MAX_CHARS || said.includes("\n")) {
+    return false;
+  }
+  if (mentionedProjects(said).length) {
+    return false;
+  }
+  if ((said.match(REF) ?? []).length > 1) {
+    return false;
+  }
   const line = said
     .toLowerCase()
     .replace(/[.!?\s]+$/, "")
@@ -64,7 +75,9 @@ export function simpleAsk(turns: TurnRow[]): boolean {
     .replace(POLITE, "")
     .replace(REF, "REF")
     .replace(/\s+/g, " ");
-  if (NEEDS_THOUGHT.test(line.replace(/\bREF\b/g, ""))) return false;
+  if (NEEDS_THOUGHT.test(line.replace(/\bREF\b/g, ""))) {
+    return false;
+  }
   return SIMPLE.some((re) => re.test(line));
 }
 
@@ -86,11 +99,17 @@ export function homeModel(
   const cheap = config.brain.assistantSimpleModel ?? "";
   const simple = cheap !== "" && simpleAsk(turns);
   const want = simple ? cheap : full;
-  if (!session) return { model: want, leave: null, simple };
+  if (!session) {
+    return { model: want, leave: null, simple };
+  }
   const was = session.model ?? full;
-  if (was === want) return { model: want, leave: null, simple };
+  if (was === want) {
+    return { model: want, leave: null, simple };
+  }
   // A warm session on the full model answers a simple turn cheaper than a
   // new one would write its context on the simple model.
-  if (simple) return { model: was, leave: null, simple };
+  if (simple) {
+    return { model: was, leave: null, simple };
+  }
   return { model: want, leave: `model ${was} to ${want}`, simple };
 }

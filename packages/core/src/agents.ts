@@ -10,7 +10,12 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { assistantCall, rememberWhere, whereThingsStand } from "./assistant";
-import { managerCall, managerModel, pictureKey, projectPicture } from "./manager";
+import {
+  managerCall,
+  managerModel,
+  pictureKey,
+  projectPicture,
+} from "./manager";
 import { think, BrainError, type BrainCall } from "./brain";
 import {
   capabilityAllow,
@@ -510,7 +515,9 @@ export class AgentPool {
     const runsRiker = home || project !== null;
     const prior = chatResume(taskId, history);
     const priorRow = prior ? store.getSession(prior) : null;
-    const idle = priorRow ? leaveSession(priorRow, history, runsRiker, config) : null;
+    const idle = priorRow
+      ? leaveSession(priorRow, history, runsRiker, config)
+      : null;
     // Home picks its model per turn; a session keeps the model it started on.
     const pick = home
       ? homeModel(config, history, priorRow && !idle ? priorRow : null)
@@ -523,7 +530,9 @@ export class AgentPool {
         ? `model ${was} to ${managerModel(config)}`
         : null;
     const left = idle ?? pick?.leave ?? managerLeave;
-    if (left) log.info("new session", { task: taskId, left: prior, why: left });
+    if (left) {
+      log.info("new session", { task: taskId, left: prior, why: left });
+    }
     const resume = left ? undefined : prior;
     const sessionId = resume ?? randomUUID();
     const ref = { taskId, sessionId };
@@ -579,12 +588,38 @@ export class AgentPool {
         : "";
     try {
       const call = pick
-        ? assistantCall(config, history, reason, resume, where, lines, pick.model)
+        ? assistantCall(
+            config,
+            history,
+            reason,
+            resume,
+            where,
+            lines,
+            pick.model,
+          )
         : project
-          ? managerCall(config, task, project, history, reason, resume, where, lines)
+          ? managerCall(
+              config,
+              task,
+              project,
+              history,
+              reason,
+              resume,
+              where,
+              lines,
+            )
           : generalCall(config, task, history, reason, Boolean(resume));
-      if (!resume && call.model) store.updateSession(sessionId, { model: call.model });
-      if (pick) log.info("home model", { task: taskId, model: pick.model, simple: pick.simple, resume: !!resume });
+      if (!resume && call.model) {
+        store.updateSession(sessionId, { model: call.model });
+      }
+      if (pick) {
+        log.info("home model", {
+          task: taskId,
+          model: pick.model,
+          simple: pick.simple,
+          resume: !!resume,
+        });
+      }
       const result = await think({
         ...call,
         cwd,

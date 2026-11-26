@@ -27,8 +27,9 @@ beforeEach(() => {
 
 function said(...lines: string[]): TurnRow[] {
   const home = store.homeTask();
-  for (const body of lines)
+  for (const body of lines) {
     store.addTurn({ taskId: home.id, role: TurnRole.you, author: "you", body });
+  }
   return store.turnsForTask(home.id);
 }
 
@@ -36,7 +37,11 @@ function simpleOn() {
   const source = withLimit(4);
   source.update((c) => ({
     ...c,
-    brain: { ...c.brain, assistantModel: "sonnet", assistantSimpleModel: "haiku" },
+    brain: {
+      ...c.brain,
+      assistantModel: "sonnet",
+      assistantSimpleModel: "haiku",
+    },
   }));
   return source;
 }
@@ -80,8 +85,13 @@ describe("a simple Home ask", () => {
   });
 
   test("naming a project is not simple", () => {
-    store.createProject({ name: "aug-bootstrap", tmuxSession: "aug-bootstrap" });
-    expect(simpleAsk(said("make a task called fix login @aug-bootstrap"))).toBe(false);
+    store.createProject({
+      name: "aug-bootstrap",
+      tmuxSession: "aug-bootstrap",
+    });
+    expect(simpleAsk(said("make a task called fix login @aug-bootstrap"))).toBe(
+      false,
+    );
   });
 
   test("two lines since the last answer are not one move", () => {
@@ -94,16 +104,31 @@ describe("a simple Home ask", () => {
 
   test("a turn after denied calls is not", () => {
     const home = store.homeTask();
-    store.addTurn({ taskId: home.id, role: TurnRole.you, author: "you", body: "x" });
-    const answer = store.addTurn({ taskId: home.id, role: TurnRole.agent, author: "riker", body: "could not" });
-    store.updateTurn(answer.id, { steps: JSON.stringify([`${DENIED_STEP}Bash(rm -rf /)`]) });
+    store.addTurn({
+      taskId: home.id,
+      role: TurnRole.you,
+      author: "you",
+      body: "x",
+    });
+    const answer = store.addTurn({
+      taskId: home.id,
+      role: TurnRole.agent,
+      author: "riker",
+      body: "could not",
+    });
+    store.updateTurn(answer.id, {
+      steps: JSON.stringify([`${DENIED_STEP}Bash(rm -rf /)`]),
+    });
     expect(simpleAsk(said("status"))).toBe(false);
   });
 });
 
 function simpleOff() {
   const source = withLimit(4);
-  source.update((c) => ({ ...c, brain: { ...c.brain, assistantSimpleModel: "" } }));
+  source.update((c) => ({
+    ...c,
+    brain: { ...c.brain, assistantSimpleModel: "" },
+  }));
   return source;
 }
 
@@ -167,7 +192,9 @@ describe("Home's model per turn", () => {
     const pool = new AgentPool({ config: simpleOn() });
     said("plan the auth rewrite with me");
     await pool.request(home.id, "typed", "owner");
-    const answer = store.turnsForTask(home.id).findLast((t) => t.role === TurnRole.agent)!;
+    const answer = store
+      .turnsForTask(home.id)
+      .findLast((t) => t.role === TurnRole.agent)!;
     store.updateTurn(answer.id, {
       finished_at: new Date(Date.now() - 90 * 60_000).toISOString(),
     });
@@ -183,39 +210,83 @@ describe("Home's model per turn", () => {
     said("status");
     await pool.request(home.id, "typed", "owner");
     expect(calls[0].model).toBe(config().brain.assistantModel);
-    expect(store.getSession(calls[0].sessionId!)!.model).toBe(config().brain.assistantModel);
+    expect(store.getSession(calls[0].sessionId!)!.model).toBe(
+      config().brain.assistantModel,
+    );
   });
 
   test("a task's turn is never routed: it runs on agentModel", async () => {
-    const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
-    store.addTurn({ taskId: task.id, role: TurnRole.you, author: "you", body: "status" });
+    const task = store.createTask({
+      title: "t",
+      kind: Kind.general,
+      channel: "owner",
+    });
+    store.addTurn({
+      taskId: task.id,
+      role: TurnRole.you,
+      author: "you",
+      body: "status",
+    });
     await new AgentPool({ config: simpleOn() }).request(task.id, "go", "owner");
     expect(calls[0].model).toBe(config().brain.agentModel);
   });
 
   test("a project manager's simple line is not routed: unset projectManagerModel is assistantModel", async () => {
-    const p = store.createProject({ name: "rail-polish", tmuxSession: "rail-polish" });
+    const p = store.createProject({
+      name: "rail-polish",
+      tmuxSession: "rail-polish",
+    });
     const manager = store.ensureManager(p.id);
-    store.addTurn({ taskId: manager.id, role: TurnRole.you, author: "you", body: "done RIKER-0001" });
-    await new AgentPool({ config: simpleOn() }).request(manager.id, "typed", "owner");
+    store.addTurn({
+      taskId: manager.id,
+      role: TurnRole.you,
+      author: "you",
+      body: "done RIKER-0001",
+    });
+    await new AgentPool({ config: simpleOn() }).request(
+      manager.id,
+      "typed",
+      "owner",
+    );
     expect(calls[0].model).toBe("sonnet");
     expect(store.getSession(calls[0].sessionId!)!.model).toBe("sonnet");
   });
 
   test("a manager runs on projectManagerModel, and a change to it starts a new session", async () => {
     const source = simpleOn();
-    source.update((c) => ({ ...c, brain: { ...c.brain, projectManagerModel: "opus" } }));
+    source.update((c) => ({
+      ...c,
+      brain: { ...c.brain, projectManagerModel: "opus" },
+    }));
     const p = store.createProject({ name: "billing", tmuxSession: "billing" });
     const manager = store.ensureManager(p.id);
     const pool = new AgentPool({ config: source });
-    store.addTurn({ taskId: manager.id, role: TurnRole.you, author: "you", body: "status" });
+    store.addTurn({
+      taskId: manager.id,
+      role: TurnRole.you,
+      author: "you",
+      body: "status",
+    });
     await pool.request(manager.id, "typed", "owner");
     expect(calls[0].model).toBe("opus");
-    store.addTurn({ taskId: manager.id, role: TurnRole.you, author: "you", body: "and the next step?" });
+    store.addTurn({
+      taskId: manager.id,
+      role: TurnRole.you,
+      author: "you",
+      body: "and the next step?",
+    });
     await pool.request(manager.id, "typed", "owner");
     expect(calls[1].resume).toBe(calls[0].sessionId);
-    source.update((c) => ({ ...c, brain: { ...c.brain, projectManagerModel: "sonnet" } }));
-    store.addTurn({ taskId: manager.id, role: TurnRole.you, author: "you", body: "what now?" });
+    source.update((c) => ({
+      ...c,
+      brain: { ...c.brain, projectManagerModel: "sonnet" },
+    }));
+    store.addTurn({
+      taskId: manager.id,
+      role: TurnRole.you,
+      author: "you",
+      body: "what now?",
+    });
     await pool.request(manager.id, "typed", "owner");
     expect(calls[2].model).toBe("sonnet");
     expect(calls[2].resume).toBeUndefined();
