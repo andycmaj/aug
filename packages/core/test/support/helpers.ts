@@ -35,10 +35,11 @@ export function config(): RikerConfig {
   return current.get();
 }
 
-// costUsd: what each call reports it cost (none by default, so no spend row).
+// costUsd: what each call reports it cost (none by default, so no spend row);
+// a function gives each call its own, as a resumed session's growing total.
 export function fakeBrain(
   answer: (call: BrainCall) => unknown,
-  opts: { costUsd?: number } = {},
+  opts: { costUsd?: number | ((call: BrainCall) => number) } = {},
 ): BrainCall[] {
   const calls: BrainCall[] = [];
   setBrain(async (call): Promise<BrainResult> => {
@@ -53,7 +54,10 @@ export function fakeBrain(
       ...(opts.costUsd === undefined
         ? {}
         : {
-            costUsd: opts.costUsd,
+            costUsd:
+              typeof opts.costUsd === "function"
+                ? opts.costUsd(call)
+                : opts.costUsd,
             usage: { input: 10, output: 5, cacheRead: 100, cacheWrite: 0 },
           }),
     };

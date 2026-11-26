@@ -8,6 +8,7 @@
 import type { RikerConfig } from "./config";
 import { logger } from "./log";
 import { localDay } from "./rail";
+import { sessionLogCost } from "./session-log";
 import * as store from "./store";
 import {
   SpendRole,
@@ -34,6 +35,13 @@ interface Costed {
   };
 }
 
+// A persisted session the call ran in, and the total claude reported for it
+// (the cost recorded is then only this turn's part of that total).
+export interface SessionCost {
+  id: string;
+  total: number;
+}
+
 // Never throws: a spend row lost to a locked database must not fail the
 // call it paid for.
 export function recordSpend(
@@ -41,6 +49,7 @@ export function recordSpend(
   model: string | null | undefined,
   result: Costed,
   at = new Date(),
+  session?: SessionCost,
 ): void {
   if (result.costUsd === undefined && !result.usage) {
     return;
@@ -56,10 +65,37 @@ export function recordSpend(
       output: result.usage?.output ?? 0,
       cacheRead: result.usage?.cacheRead ?? 0,
       cacheWrite: result.usage?.cacheWrite ?? 0,
+      sessionId: session?.id ?? null,
+      sessionTotal: session?.total ?? null,
     });
   } catch (err) {
     log.error("spend not recorded", { role: tag?.role ?? null, err });
   }
+}
+
+// `claude -p --resume` (a fork too) restores the session's cost state, so
+// the result's total_cost_usd is the session's whole life, not the turn.
+// What it was before the turn: the total Riker last recorded for it, else
+// the session log's own. Read before the call, which appends to that log.
+export function priorSessionCost(sessionId: string): number | null {
+  try {
+    return store.lastSessionTotal(sessionId) ?? sessionLogCost(sessionId);
+  } catch (err) {
+    log.warn("prior session cost unread", { session: sessionId, err });
+    return null;
+  }
+}
+
+// The turn's part of a resumed session's total. A total below the one
+// before means claude restored nothing: the whole total is the turn's.
+export function turnCost(
+  total: number | undefined,
+  before: number | null,
+): number | undefined {
+  if (total === undefined || before === null || total < before) {
+    return total;
+  }
+  return total - before;
 }
 
 export function spentToday(at = new Date()): SpendTotal {

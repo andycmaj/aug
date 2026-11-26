@@ -8,7 +8,12 @@
 
 import { logger } from "./log";
 import { claudeEnv } from "./self";
-import { recordSpend, type SpendTag } from "./spend";
+import {
+  priorSessionCost,
+  recordSpend,
+  turnCost,
+  type SpendTag,
+} from "./spend";
 
 const log = logger("brain");
 
@@ -119,6 +124,15 @@ export async function think(call: BrainCall): Promise<BrainResult> {
   };
   log.trace("call", { ...fields, prompt: call.prompt.slice(0, 500) });
   const done = log.time("call done", fields);
+  const before = call.resume ? priorSessionCost(call.resume) : null;
+  if (call.resume && before === null && call.spend) {
+    log.warn(
+      "resumed session's cost so far unknown: its whole total is recorded",
+      {
+        session: call.resume,
+      },
+    );
+  }
   try {
     const result = await impl(call);
     done({
@@ -128,12 +142,31 @@ export async function think(call: BrainCall): Promise<BrainResult> {
       costUsd: result.costUsd ?? null,
       ...(result.isError ? { text: result.text.slice(0, 500) } : {}),
     });
-    recordSpend(call.spend, call.model, result);
+    recordSpend(
+      call.spend,
+      call.model,
+      { ...result, costUsd: turnCost(result.costUsd, before) },
+      new Date(),
+      kept(call, result),
+    );
     return result;
   } catch (err) {
     done({ ok: false, err });
     throw err;
   }
+}
+
+// The session a call leaves to resume, with claude's total for it, so the
+// next turn records only its own part. A fork or a one-shot keeps none.
+function kept(
+  call: BrainCall,
+  result: BrainResult,
+): { id: string; total: number } | undefined {
+  if (call.fork || result.costUsd === undefined) {
+    return undefined;
+  }
+  const id = call.resume ?? call.sessionId;
+  return id ? { id, total: result.costUsd } : undefined;
 }
 
 export class BrainError extends Error {}
