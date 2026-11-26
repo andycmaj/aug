@@ -158,6 +158,48 @@ describe.skipIf(!hasTmux)("viewer session", () => {
     );
   });
 
+  // On tmux's default window-size (latest), a resize counts as the viewer's
+  // activity, so the Canvas refitting while you are in the window yourself
+  // shrank it to the Canvas under your bigger client.
+  test("the Canvas refitting does not shrink a window you are in", async () => {
+    const { s, host, windowId } = await withViewer();
+    const size = () =>
+      tmux(
+        s,
+        "display",
+        "-p",
+        "-t",
+        windowId,
+        "#{window_width}x#{window_height}",
+      );
+    const viewerWidth = () =>
+      tmux(s, "list-clients", "-t", "riker-view-test", "-F", "#{client_width}");
+    const owner = `env -u TMUX tmux -L ${s} attach -t proj:0`;
+    tmux(
+      host,
+      "new-session",
+      "-d",
+      "-x",
+      "200",
+      "-y",
+      "60",
+      "-s",
+      "owner",
+      owner,
+    );
+    await until(() => clients(s).length === 2);
+    await until(() => size() === "200x59");
+
+    tmux(host, "resize-window", "-t", "riker:", "-x", "90", "-y", "28");
+    await until(() => viewerWidth() === "90");
+    await Bun.sleep(100);
+    expect(size()).toBe("200x59");
+
+    // Once you leave, the window fits the Canvas again.
+    tmux(s, "select-window", "-t", "proj:1");
+    await until(() => size() === "90x28");
+  });
+
   test("moving a viewed window takes it out of the project, not the viewer", async () => {
     const { s, projId, outerId, windowId } = await withViewer();
     await new TmuxMux(s).moveWindow(windowId, projId, outerId);

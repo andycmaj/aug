@@ -984,6 +984,25 @@ export class TmuxMux implements Mux {
       "-F",
       "#{==:#{get-clipboard},buffer}",
       "set-option -s get-clipboard request",
+      // tmux's default window-size (latest) gives the window to whichever
+      // client moved last, and a resize counts: the Canvas refitting while
+      // you are in the window yourself shrank it under your bigger client.
+      // Sized to the largest client on it right now, yours wins while you
+      // are there and the Canvas gets it back once you leave.
+      ";",
+      "set-option",
+      "-w",
+      "-t",
+      windowId,
+      "window-size",
+      "largest",
+      ";",
+      "set-option",
+      "-w",
+      "-t",
+      windowId,
+      "aggressive-resize",
+      "on",
       ";",
       "set-hook",
       "client-attached",
