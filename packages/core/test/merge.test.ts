@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DEFAULT_CONFIG } from "../src/config";
 import { Lane, laneOf } from "../src/lanes";
 import { Engine } from "../src/engine";
-import { checkMerges } from "../src/merge";
+import { checkMerges, unmergedWork } from "../src/merge";
 import { setMux, TmuxMux } from "../src/mux";
 import type { Connector } from "../src/plugins";
 import * as store from "../src/store";
@@ -204,6 +204,74 @@ describe("a sweep's cost", () => {
   });
 });
 
+describe("unmerged work at done", () => {
+  function withPr(id: number, state: "open" | "closed" | "merged") {
+    store.linkThread(id, "github:acme/api#7");
+    store.setPrStatus({
+      task_id: id,
+      repo: "acme/api",
+      number: 7,
+      url: "https://github.com/acme/api/pull/7",
+      state,
+      checks: "pass",
+      review: "none",
+      mergeable: "clean",
+      queue: "none",
+      queue_position: null,
+      queue_reason: null,
+      fetched_at: "",
+      error: null,
+    });
+  }
+  const ask = (id: number) => unmergedWork(config(), store.getTask(id)!);
+
+  test("every task not merged asks, with or without a PR or branch", async () => {
+    const chat = store.createTask({ title: "Reply to Sam", kind: Kind.general, channel: "owner" });
+    expect(await ask(chat.id)).toEqual({ why: null });
+    const id = branchTask();
+    fake.merged.set("fix-export", false);
+    fake.ahead.set("fix-export", 0);
+    expect(await ask(id)).toEqual({ why: null });
+    fake.ahead.delete("fix-export");
+    expect(await ask(id)).toEqual({ why: null });
+    const unmapped = store.createTask({ title: "x", kind: Kind.coding, channel: "owner", repo: "acme/unmapped", branch: "y" });
+    expect(await ask(unmapped.id)).toEqual({ why: null });
+  });
+
+  test("a branch with commits not in the base says how many", async () => {
+    const id = branchTask();
+    fake.merged.set("fix-export", false);
+    fake.ahead.set("fix-export", 4);
+    expect(await ask(id)).toEqual({ why: "Branch fix-export has 4 commits not merged" });
+    fake.ahead.set("fix-export", 1);
+    expect(await ask(id)).toEqual({ why: "Branch fix-export has 1 commit not merged" });
+  });
+
+  test("merged, by mark, PR or branch: nothing to ask", async () => {
+    const marked = branchTask("a");
+    store.updateTask(marked, { merged_at: new Date().toISOString() });
+    expect(await ask(marked)).toBeNull();
+    const landed = branchTask("b");
+    fake.merged.set("b", "main");
+    fake.ahead.set("b", 4);
+    expect(await ask(landed)).toBeNull();
+    const viaPr = branchTask("c");
+    withPr(viaPr, "merged");
+    expect(await ask(viaPr)).toBeNull();
+  });
+
+  test("its PR speaks first: open or closed, whatever the branch holds", async () => {
+    const id = branchTask();
+    fake.merged.set("fix-export", false);
+    fake.ahead.set("fix-export", 4);
+    withPr(id, "open");
+    expect(await ask(id)).toEqual({ why: "PR #7 is open, not merged" });
+    const closed = branchTask("other");
+    withPr(closed, "closed");
+    expect(await ask(closed)).toEqual({ why: "PR #7 was closed, not merged" });
+  });
+});
+
 describe("branchMerged (real git)", () => {
   async function sh(cwd: string, ...argv: string[]) {
     const proc = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
@@ -237,6 +305,31 @@ describe("branchMerged (real git)", () => {
     await git("commit", "-qm", "squashed");
     expect(await mux.branchMerged(repo, "sq")).toBe("main");
     expect(await mux.branchMerged(repo, "nope")).toBeNull();
+  });
+
+  test("branchAhead counts the branch's commits not in the base", async () => {
+    const repo = mkdtempSync(join(tmpdir(), "riker-merge-"));
+    const git = (...a: string[]) => sh(repo, "git", ...a);
+    const commit = async (file: string) => {
+      await Bun.write(join(repo, file), file);
+      await git("add", file);
+      await git("commit", "-qm", file);
+    };
+    await git("init", "-q", "-b", "main");
+    await commit("a");
+    await git("update-ref", "refs/remotes/origin/main", "main");
+    const mux = new TmuxMux();
+    await git("branch", "idle");
+    expect(await mux.branchAhead(repo, "idle")).toBe(0);
+    await git("checkout", "-qb", "work");
+    await commit("b");
+    await commit("c");
+    await git("checkout", "-q", "main");
+    expect(await mux.branchAhead(repo, "work")).toBe(2);
+    // Merged on origin while the local main is behind: origin is the base.
+    await git("update-ref", "refs/remotes/origin/main", "work");
+    expect(await mux.branchAhead(repo, "work")).toBe(0);
+    expect(await mux.branchAhead(repo, "nope")).toBeNull();
   });
 
   // A PR merged on GitHub reaches origin/main with any fetch; the checkout's

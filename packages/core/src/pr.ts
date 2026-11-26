@@ -183,13 +183,10 @@ export function taskPrStatus(
   return { pr, status: status?.url === pr.url ? status : null };
 }
 
-// Why marking the task done may be early: its own PR is still open (or a
-// draft) and its work has not landed, by GitHub or by a local merge. Null
-// when it is merged, when nothing has read its PR yet, when the PR was
-// closed (closing it was already the owner's call), and for a PR the owner
-// was only asked to review, which is done when the review is.
+// What an open or draft PR says of a task's unmerged work (merge.ts
+// unmergedWork asks it); null for any other state or none read.
 export function unmergedPr(task: TaskRow): string | null {
-  if (task.merged_at || reviewedPr(task)) return null;
+  if (task.merged_at) return null;
   const s = taskPrStatus(task)?.status;
   if (!s) return null;
   if (s.state !== PrState.open && s.state !== PrState.draft) return null;

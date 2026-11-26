@@ -145,7 +145,6 @@ describe("read model", () => {
       prStatus: (r) => r.prStatus(withPr.id),
       taskPr: (r) => [r.taskPr(plain), r.taskPr(withPr), r.taskPr(bare)],
       taskPrStatus: (r) => [r.taskPrStatus(plain), r.taskPrStatus(bare)],
-      unmergedPr: (r) => [r.unmergedPr(plain), r.unmergedPr(bare)],
       briefEditable: (r) => r.briefEditable(plain.id),
       proposals: (r) => r.proposals(plain.id),
       project: (r) => r.project(project.id),

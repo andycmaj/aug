@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { linkPr } from "../src/feedback";
-import { prChip, prLine, REVIEW_LINK_BY, REVIEW_LINK_TITLE, taskPr, unmergedPr } from "../src/pr";
+import { prChip, prLine, taskPr, unmergedPr } from "../src/pr";
 import * as store from "../src/store";
 import { Kind, type PrStatusRow } from "../src/types";
 import { freshHome } from "./support/helpers";
@@ -128,7 +128,7 @@ describe("words for it", () => {
 // One GitHub answer per rung of the ladder, read the way the poller reads
 // it: the batch query's node, then the row, then the rail's chip.
 
-describe("whether done is early", () => {
+describe("what an open PR says at done", () => {
   const PR = "https://github.com/acme/ledger/pull/230";
   function withPr(state: PrStatusRow["state"], patch: Partial<PrStatusRow> = {}) {
     const t = issueTask();
@@ -163,7 +163,7 @@ describe("whether done is early", () => {
     );
   });
 
-  test("merged, closed, or a local merge: nothing to ask", () => {
+  test("merged, closed, or a local merge: no words", () => {
     expect(unmergedPr(withPr("merged"))).toBeNull();
     expect(unmergedPr(withPr("closed"))).toBeNull();
     const local = withPr("open");
@@ -171,16 +171,10 @@ describe("whether done is early", () => {
     expect(unmergedPr(store.getTask(local.id)!)).toBeNull();
   });
 
-  test("no PR, or one not read yet: nothing to ask", () => {
+  test("no PR, or one not read yet: no words", () => {
     expect(unmergedPr(issueTask())).toBeNull();
     const t = issueTask();
     linkPr(t.id, PR);
-    expect(unmergedPr(store.getTask(t.id)!)).toBeNull();
-  });
-
-  test("a PR the owner was asked to review is done when the review is", () => {
-    const t = withPr("open");
-    store.addTaskLink(t.id, PR, REVIEW_LINK_TITLE, REVIEW_LINK_BY);
     expect(unmergedPr(store.getTask(t.id)!)).toBeNull();
   });
 });
