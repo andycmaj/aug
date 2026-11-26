@@ -196,6 +196,13 @@ export class FakeMux implements Mux {
     return this.merged.get(branch) ?? null;
   }
 
+  // Commits each branch has past the base; one not set, git cannot say.
+  ahead = new Map<string, number>();
+
+  async branchAhead(_repoPath: string, branch: string): Promise<number | null> {
+    return this.ahead.get(branch) ?? null;
+  }
+
   // A branch's tip is what the test says of it: setting merged is the refs
   // moving.
   async mergeKeys(_repoPath: string, branches: string[]): Promise<Map<string, string> | null> {

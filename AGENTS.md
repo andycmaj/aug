@@ -71,7 +71,15 @@ other way (a new package gets a line in its `ALLOWED`).
   run demo|sim`, the dev launcher, the compiled binary; `riker tools ...` is
   riker-tools) and `src/riker-tools.ts`; `script/riker.ts` is the dev launcher
   (`bun dev`: runs from anywhere, restarts on `RESTART_CODE`) and
-  `script/compile.ts` builds `dist/riker`. The entry tells core where
+  `script/compile.ts` builds `dist/riker` (`--all`: `dist/riker-<os>-<arch>`
+  for macOS and Linux on arm64 and x64). A compiled binary cannot hand
+  another process a script inside it, so it runs its own scripts as
+  subcommands of itself (`scriptArgv`, `core/self.ts`: `riker tools`,
+  `riker demo-agent`). Releases are `.github/workflows/riker-release.yml`,
+  run by hand: `script/version.ts` bumps the root package.json (what
+  `riker --version` says, `core/version.ts`) and tags vX.Y.Z, the binaries
+  go up as the release's assets (`mise use -g github:andycmaj/riker`), and
+  the opentui-apps site is told when `SITE_DISPATCH_TOKEN` is set. The entry tells core where
   riker-tools is (`setToolsEntry`, `core/self.ts`); core never reaches up for
   it. Run from a linked worktree, it names the main checkout's copy
   (`lastingEntry`), since briefs and hooks outlive the worktree;

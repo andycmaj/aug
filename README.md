@@ -11,9 +11,11 @@ Docs: [how Riker is built](https://andycmaj.github.io/riker/architecture.html)
 ## Try it
 
 ```sh
-bun install
-bun run demo        # a fictional morning: no network, no AI, nothing sends
+mise use -g github:andycmaj/riker   # the binary from the latest release
+riker --demo        # a fictional morning: no network, no AI, nothing sends
 ```
+
+From a checkout: `bun install`, then `bun run demo`.
 
 The demo runs the real interface on seeded GitHub and Slack work. The brain
 answers from canned lines, Send says it is the demo, and a coding agent is a
@@ -62,13 +64,13 @@ task, an FYI, or held for you.
 
 ## Run it for real
 
-Requirements: [bun](https://bun.sh), the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI (logged in),
+Requirements: [bun](https://bun.sh) (from a checkout only), the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI (logged in),
 [`gh`](https://cli.github.com/) (logged in), [tmux](https://github.com/tmux/tmux)
 3.3a or newer (3.7 for live updates), and [worktrunk](https://worktrunk.dev) (`wt`) for coding tasks.
 
 ```sh
 export SLACK_TOKEN=xoxp-...   # optional: a Slack *user* token
-bun dev                       # or: bun packages/cli/script/riker.ts
+riker                         # the release binary; from a checkout: bun dev
 ```
 
 - **GitHub** uses your `gh` login. The inbox is your participating

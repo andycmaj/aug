@@ -1,0 +1,156 @@
+# Cuts a Riker release by hand (Actions > Riker Release > Run workflow on
+# main): bumps the root package.json, tags vX.Y.Z, builds a binary for each
+# of macOS and Linux on arm64 and x64, attaches them to the GitHub release
+# and publishes it. `mise use -g github:andycmaj/riker` installs from those
+# assets.
+name: Riker Release
+run-name: "release ${{ inputs.version || inputs.bump }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump major, minor, or patch"
+        required: false
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      version:
+        description: "Override version (optional, e.g. 1.2.3)"
+        required: false
+        type: string
+
+concurrency: ${{ github.workflow }}
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Setup git committer
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - id: version
+        run: bun run packages/cli/script/version.ts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RIKER_BUMP: ${{ inputs.bump }}
+          RIKER_VERSION: ${{ inputs.version }}
+
+  build:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - run: bun install --frozen-lockfile
+
+      # Every target is cross-compiled here; compile.ts installs the other
+      # platforms' native packages first.
+      - name: Build cross-platform binaries
+        run: bun run compile --all
+
+      # The binary for this runner starts and says the tagged version.
+      - name: Check the linux-x64 binary
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          said=$(dist/riker-linux-x64 --version)
+          echo "riker --version: $said"
+          test "$said" = "$VERSION"
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: riker-binaries
+          path: |
+            dist/riker-darwin-arm64
+            dist/riker-darwin-x64
+            dist/riker-linux-arm64
+            dist/riker-linux-x64
+          if-no-files-found: error
+
+  publish:
+    needs:
+      - version
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: riker-binaries
+          path: dist/
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Attach binaries to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          chmod +x dist/riker-*
+          gh release upload "$TAG" dist/riker-darwin-arm64 dist/riker-darwin-x64 dist/riker-linux-arm64 dist/riker-linux-x64 --clobber
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          generated=$(gh release view "$TAG" --json body -q .body)
+          {
+            bun run packages/cli/script/install-notes.ts "$REPO"
+            echo
+            echo "$generated"
+          } > "$RUNNER_TEMP/release-notes.md"
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md" --draft=false
+
+      # Tells the project website (andycmaj/opentui-app) to re-record Riker's
+      # demo and keybindings from the new release. Needs a fine-grained PAT
+      # with Contents: read and write on andycmaj/opentui-app in the
+      # SITE_DISPATCH_TOKEN secret; skipped until that is set.
+      - name: Notify the website
+        env:
+          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "SITE_DISPATCH_TOKEN not set; skipping"
+            exit 0
+          fi
+          gh api repos/andycmaj/opentui-app/dispatches \
+            -f event_type=app-released \
+            -f "client_payload[app]=riker" \
+            -f "client_payload[version]=$TAG"

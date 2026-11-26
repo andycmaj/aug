@@ -27,6 +27,7 @@ import { holdForStart, taskClosed, taskDropped, taskReopened } from "./lifecycle
 import { localDay, MAX_WINS, readFolds, writeFolds } from "./rail";
 import type { RikerConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
+import { unmergedWork, type NotMerged } from "./merge";
 import * as projects from "./projects";
 import { applyProjectDoc, renderProjectDoc } from "./project-doc";
 import { Drafts, editPending, sendPending } from "./outbound";
@@ -297,6 +298,12 @@ export class Desk {
       await this.cannotAsync(`stop ${store.taskRef(taskId)}`, "it stopped an agent: s starts it again", () =>
         this.drivers.for(task).stop(task),
       );
+  }
+
+  // What is not merged yet, for the owner's yes before done.
+  async unmergedWork(taskId: number): Promise<NotMerged | null> {
+    const task = store.getTask(taskId);
+    return task ? unmergedWork(this.config(), task) : null;
   }
 
   // Mark done: the task closes first, then its agent's leavings go (a

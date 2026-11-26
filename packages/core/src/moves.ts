@@ -22,7 +22,6 @@ import {
   timerRef,
 } from "./timers";
 import { findProject, projectLine } from "./lookup";
-import { unmergedPr } from "./pr";
 import { actionNamed, actionsFor, ActionVia } from "./task-actions";
 import { mux } from "./mux";
 import { checkLink } from "./links";
@@ -328,12 +327,13 @@ export const MOVES: Record<string, MoveSpec> = {
     help: "Mark the task done",
     task: true,
     args: {},
-    // The owner's d asks first when the PR is not merged; the Assistant
-    // moves on the owner's words, so it closes and says so for them to hear.
+    // The owner's d asks first when the work is not merged; the Assistant
+    // moves on the owner's words, so it closes, and names what its PR or
+    // branch says is not merged for the owner to hear.
     async run(desk, task) {
-      const unmerged = unmergedPr(task!);
+      const why = (await desk.unmergedWork(task!.id))?.why;
       const r = await desk.close(task!.id);
-      const warnings = [...(unmerged ? [`${unmerged}; reopen undoes it`] : []), ...r.warnings];
+      const warnings = [...(why ? [`${why}; reopen undoes it`] : []), ...r.warnings];
       return warnings.length
         ? `${ref(task)} marked done; ${warnings.join("; ")}`
         : `${ref(task)} marked done`;

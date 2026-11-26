@@ -146,6 +146,10 @@ export interface Mux {
   // it landed in, false if it has not, null when git cannot say (no such
   // branch, no reflog to tell where it started).
   branchMerged(repoPath: string, branch: string): Promise<string | false | null>;
+  // How many of the branch's commits are not in the base (the local one or
+  // origin's, whichever is ahead), null when git cannot say. A squash merge
+  // still counts its commits: ask branchMerged first.
+  branchAhead(repoPath: string, branch: string): Promise<number | null>;
   // What branchMerged's answer rests on, per branch, in one cheap read: the
   // base's name and tips and the branch's tip. Same key, same answer; a
   // branch with no tip is left out (branchMerged would say null). Null when
@@ -826,6 +830,18 @@ export class TmuxMux implements Mux {
     if (!squash) return false;
     const cherry = await git("cherry", baseTip, squash);
     return cherry?.startsWith("-") ? into : false;
+  }
+
+  async branchAhead(repoPath: string, branch: string): Promise<number | null> {
+    const git = gitIn(repoPath);
+    const read = await baseTips(git, [branch]);
+    const tip = read?.tips.get(branch);
+    if (!read || !tip || (!read.local && !read.remote)) return null;
+    let baseTip = (read.local ?? read.remote)!;
+    if (read.local && read.remote && read.local !== read.remote)
+      if ((await git("merge-base", "--is-ancestor", read.local, read.remote)) !== null) baseTip = read.remote;
+    const count = await git("rev-list", "--count", `${baseTip}..${tip}`);
+    return count === null ? null : Number(count);
   }
 
   async mergeKeys(repoPath: string, branches: string[]): Promise<Map<string, string> | null> {

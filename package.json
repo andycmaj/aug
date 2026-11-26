@@ -1,6 +1,6 @@
 {
   "name": "@riker/root",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Your first officer, in a terminal: triages GitHub and Slack, drafts your replies, and runs your crew of Claude agents, their tasks, projects and worktrees. Nothing goes out until you approve it. Built on OpenTUI Solid.",
   "type": "module",
   "private": true,
