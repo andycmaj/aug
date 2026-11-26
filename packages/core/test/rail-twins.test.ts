@@ -95,7 +95,9 @@ describe("a Win or watched task under its header and in its project", () => {
     // Every row has its own key, so the cursor can tell them apart.
     expect(new Set(items.map((i) => i.key)).size).toBe(items.length);
     for (const i of items) {
-      if (i.type !== "task" || i.task.kind === Kind.home) continue;
+      if (i.type !== "task" || i.task.kind === Kind.home) {
+        continue;
+      }
       // Rows in the project nest under it; copies do not, and fold with
       // nothing.
       expect(i.group).toBe(i.copy ? null : project.id);
@@ -217,8 +219,9 @@ describe("a Win or watched task under its header and in its project", () => {
     const order = flattenRail(railNow([win.id, both.id])).map((i) => i.key);
     // Each step moves to a different row: a duplicate key would stop the
     // cursor on it (indexOf finds the first).
-    for (let i = 0; i < order.length; i++)
+    for (let i = 0; i < order.length; i++) {
       expect(order.indexOf(order[i])).toBe(i);
+    }
   });
 
   test("search finds each task once, at its own row", () => {
@@ -226,8 +229,9 @@ describe("a Win or watched task under its header and in its project", () => {
     const rail = railNow([win.id, both.id]);
     const docs = searchIndex(rail, { messages: new Map(), turns: new Map() });
     const keys = docs.map((d) => d.item.key);
-    for (const id of [win.id, watched.id, both.id])
+    for (const id of [win.id, watched.id, both.id]) {
       expect(keys.filter((k) => baseKey(k) === `t${id}`)).toEqual([`t${id}`]);
+    }
     expect(docs.find((d) => d.item.key === `t${both.id}`)?.section).toBe(
       "Tasks",
     );

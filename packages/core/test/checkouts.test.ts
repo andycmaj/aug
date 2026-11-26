@@ -5,23 +5,39 @@ import { join } from "node:path";
 import { githubRepo, inspect, parseRemotes, scan } from "../src/checkouts";
 
 function git(cwd: string, ...args: string[]): void {
-  const r = Bun.spawnSync(["git", ...args], { cwd, stdout: "ignore", stderr: "pipe" });
-  if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
+  const r = Bun.spawnSync(["git", ...args], {
+    cwd,
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  if (r.exitCode !== 0) {
+    throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
+  }
 }
 
 function checkout(path: string, remotes: Record<string, string> = {}): string {
   mkdirSync(path, { recursive: true });
   git(path, "init", "-q", "-b", "main");
-  for (const [name, url] of Object.entries(remotes)) git(path, "remote", "add", name, url);
+  for (const [name, url] of Object.entries(remotes)) {
+    git(path, "remote", "add", name, url);
+  }
   return path;
 }
 
 describe("remote URLs", () => {
   test("every GitHub form names owner/repo; other hosts name nothing", () => {
-    expect(githubRepo("https://github.com/andycmaj/aug.git")).toBe("andycmaj/aug");
-    expect(githubRepo("https://github.com/andycmaj/codediff.nvim")).toBe("andycmaj/codediff.nvim");
-    expect(githubRepo("git@github.com:andycmaj/botany")).toBe("andycmaj/botany");
-    expect(githubRepo("ssh://git@github.com:22/acme/api.git/")).toBe("acme/api");
+    expect(githubRepo("https://github.com/andycmaj/aug.git")).toBe(
+      "andycmaj/aug",
+    );
+    expect(githubRepo("https://github.com/andycmaj/codediff.nvim")).toBe(
+      "andycmaj/codediff.nvim",
+    );
+    expect(githubRepo("git@github.com:andycmaj/botany")).toBe(
+      "andycmaj/botany",
+    );
+    expect(githubRepo("ssh://git@github.com:22/acme/api.git/")).toBe(
+      "acme/api",
+    );
     expect(githubRepo("git@github-work:acme/api.git")).toBe("acme/api");
     expect(githubRepo("https://user:tok@github.com/acme/api")).toBe("acme/api");
     expect(githubRepo("https://gitlab.com/acme/api.git")).toBeNull();
@@ -55,15 +71,34 @@ describe("on disk", () => {
       upstream: "git@github.com:acme/api.git",
       origin: "https://github.com/me/api.git",
     });
-    git(join(root, "acme", "api"), "commit", "-q", "--allow-empty", "-m", "first");
-    git(join(root, "acme", "api"), "worktree", "add", "-q", join(root, "acme", "api.fix"), "-b", "fix");
+    git(
+      join(root, "acme", "api"),
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "first",
+    );
+    git(
+      join(root, "acme", "api"),
+      "worktree",
+      "add",
+      "-q",
+      join(root, "acme", "api.fix"),
+      "-b",
+      "fix",
+    );
     checkout(join(root, "acme", "web"), { origin: "git@github.com:acme/web" });
     mkdirSync(join(root, "acme", "web", "packages", "ui"), { recursive: true });
     checkout(join(root, "solo"));
     mkdirSync(join(root, "plain"));
     writeFileSync(join(root, "notes.txt"), "");
-    checkout(join(root, "acme", "web", "node_modules", "dep"), { origin: "https://github.com/x/dep" });
-    checkout(join(root, "deep", "a", "b", "c"), { origin: "https://github.com/x/deep" });
+    checkout(join(root, "acme", "web", "node_modules", "dep"), {
+      origin: "https://github.com/x/dep",
+    });
+    checkout(join(root, "deep", "a", "b", "c"), {
+      origin: "https://github.com/x/deep",
+    });
   });
 
   test("a checkout names its GitHub repos, origin first", () => {
@@ -71,7 +106,10 @@ describe("on disk", () => {
       kind: "checkout",
       repos: ["me/api", "acme/api"],
     });
-    expect(inspect(join(root, "solo"))).toEqual({ kind: "checkout", repos: [] });
+    expect(inspect(join(root, "solo"))).toEqual({
+      kind: "checkout",
+      repos: [],
+    });
   });
 
   test("a worktree points at its main checkout; a subfolder at its top", () => {
@@ -99,6 +137,8 @@ describe("on disk", () => {
       { path: join(root, "solo"), repos: [] },
     ]);
     const deeper = await scan([root], 4);
-    expect(deeper.map((f) => f.path)).toContain(join(root, "deep", "a", "b", "c"));
+    expect(deeper.map((f) => f.path)).toContain(
+      join(root, "deep", "a", "b", "c"),
+    );
   });
 });

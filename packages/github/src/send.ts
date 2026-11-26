@@ -18,7 +18,9 @@ export async function githubSend(
   try {
     return await sendVia(client, action, config);
   } catch (err) {
-    if (err instanceof SendError) throw err;
+    if (err instanceof SendError) {
+      throw err;
+    }
     throw new SendError(errorMessage(err));
   }
 }
@@ -31,7 +33,11 @@ async function sendVia(
   const owner = { owner: true };
   const gh = (args: string[]) => client.cli(args, owner);
   const comment = () =>
-    client.api(`repos/${action.repo}/issues/${action.number}/comments`, { body: action.body }, owner);
+    client.api(
+      `repos/${action.repo}/issues/${action.number}/comments`,
+      { body: action.body },
+      owner,
+    );
   const ref = `${action.repo}#${action.number}`;
   switch (action.close) {
     case "approve":

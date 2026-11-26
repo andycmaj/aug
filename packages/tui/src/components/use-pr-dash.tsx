@@ -20,13 +20,18 @@ export function usePrDash() {
   const { showToast } = useToast();
 
   function closeOthers(keep: number | null) {
-    for (const t of terminals.list())
-      if (t.kind === "ghdash" && t.taskId !== keep) terminals.close(t.id);
+    for (const t of terminals.list()) {
+      if (t.kind === "ghdash" && t.taskId !== keep) {
+        terminals.close(t.id);
+      }
+    }
   }
 
   function togglePrDash(task: TaskRow): false | void {
     const pr = taskPr(task);
-    if (!pr) return false;
+    if (!pr) {
+      return false;
+    }
     const id = prDashId(task.id);
     if (terminals.get(id)?.running) {
       terminals.close(id);
@@ -53,10 +58,16 @@ export function usePrDash() {
         // Gone already: closed from here (the key, the selection moving on), or
         // a newer one runs under the same id.
         const state = terminals.get(id);
-        if (!state || state.running) return;
+        if (!state || state.running) {
+          return;
+        }
         terminals.close(id);
-        if (code) showToast(`ghdash exited ${code}`, 4000, "error");
-        if (riker.selectedKey() === `t${task.id}`) setActivePane("canvas");
+        if (code) {
+          showToast(`ghdash exited ${code}`, 4000, "error");
+        }
+        if (riker.selectedKey() === `t${task.id}`) {
+          setActivePane("canvas");
+        }
       },
     });
     setTimeout(() => setActivePane("canvas"), 0);

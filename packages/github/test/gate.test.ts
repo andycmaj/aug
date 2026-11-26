@@ -17,8 +17,9 @@ describe("what went wrong", () => {
       "gh: API rate limit exceeded for user ID 1. (HTTP 403)",
       "You have exceeded a secondary rate limit. Please wait a few minutes",
       "HTTP 429: Too Many Requests",
-    ])
+    ]) {
       expect(ghTrouble(said)).toBe("rate_limit");
+    }
   });
 
   test("server errors and dropped connections pass", () => {
@@ -27,8 +28,9 @@ describe("what went wrong", () => {
       "HTTP 503: No server is currently available to service your request.",
       'Post "https://api.github.com/graphql": read tcp: connection reset by peer',
       "net/http: TLS handshake timeout",
-    ])
+    ]) {
       expect(ghTrouble(said)).toBe("transient");
+    }
     expect(ghTrouble("Could not resolve to a PullRequest")).toBe("other");
   });
 });
@@ -45,7 +47,9 @@ describe("the gate", () => {
     expect(gate.backoff()).toBeNull();
     expect(gate.failed("502") - c.t).toBe(240_000);
     expect(gate.failed("502") - c.t).toBe(480_000);
-    for (let i = 0; i < 10; i++) gate.failed("502");
+    for (let i = 0; i < 10; i++) {
+      gate.failed("502");
+    }
     expect(gate.failed("502") - c.t).toBe(BACKOFF_CAP_MS);
     expect(gate.backoff()?.error).toBe("502");
     gate.succeeded();
@@ -82,9 +86,13 @@ describe("when a rate limit ends", () => {
   });
   test("a secondary limit (budget left) waits a few minutes", () => {
     const limits = { resources: { core: { remaining: 3000, reset: 5_000 } } };
-    expect(limitedUntil(GhBudget.rest, limits, now)).toBe(now + SECONDARY_PAUSE_MS);
+    expect(limitedUntil(GhBudget.rest, limits, now)).toBe(
+      now + SECONDARY_PAUSE_MS,
+    );
   });
   test("no answer waits longer", () => {
-    expect(limitedUntil(GhBudget.rest, null, now)).toBe(now + UNKNOWN_RESET_PAUSE_MS);
+    expect(limitedUntil(GhBudget.rest, null, now)).toBe(
+      now + UNKNOWN_RESET_PAUSE_MS,
+    );
   });
 });

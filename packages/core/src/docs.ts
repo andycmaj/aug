@@ -65,7 +65,8 @@ export const DOC_CLASS: Record<DocName, DocClass> = {
 };
 
 export const DOC_PURPOSE: Record<DocName, string> = {
-  "PERSONA.md": "red lines that outrank everything, and how Riker speaks to you",
+  "PERSONA.md":
+    "red lines that outrank everything, and how Riker speaks to you",
   "JOB.md": "what your job is; weighs importance, never intent",
   "STYLE.md": "your voice in the drafts Riker writes for you",
   "TRIAGE.md": "what makes something a task, a reply, a watch or an FYI",
@@ -137,7 +138,9 @@ export function ensureDocs(): void {
   ensureHome();
   for (const name of Object.values(DocName)) {
     const file = docPath(name);
-    if (!existsSync(file)) writeFileSync(file, shippedText(name));
+    if (!existsSync(file)) {
+      writeFileSync(file, shippedText(name));
+    }
   }
 }
 
@@ -162,7 +165,9 @@ export function trashDir(): string {
 // A copy of the file as it is now, before Riker writes over it.
 export function trashDoc(name: string, at = new Date()): string | null {
   const file = docPath(name);
-  if (!existsSync(file)) return null;
+  if (!existsSync(file)) {
+    return null;
+  }
   mkdirSync(trashDir(), { recursive: true });
   const stamp = at.toISOString().replace(/[:.]/g, "-");
   const copy = join(trashDir(), `${name.replace(/\.md$/, "")}.${stamp}.md`);
@@ -171,7 +176,9 @@ export function trashDoc(name: string, at = new Date()): string | null {
 }
 
 export function pruneTrash(at = new Date()): number {
-  if (!existsSync(trashDir())) return 0;
+  if (!existsSync(trashDir())) {
+    return 0;
+  }
   let pruned = 0;
   for (const entry of readdirSync(trashDir())) {
     const file = join(trashDir(), entry);
@@ -241,8 +248,12 @@ export function learnedInUse(text = readDoc(DocName.learned)): string {
   const out: string[] = [];
   let skipping = false;
   for (const line of learnedSections(text)) {
-    if (line.startsWith("## ")) skipping = WATCHING.test(line);
-    if (!skipping) out.push(line);
+    if (line.startsWith("## ")) {
+      skipping = WATCHING.test(line);
+    }
+    if (!skipping) {
+      out.push(line);
+    }
   }
   const body = out.join("\n").trim();
   return body ? `${LEARNED_HEADER}\n\n${body}` : LEARNED_HEADER;
@@ -254,15 +265,24 @@ export function withLearnedSections(text: string): string {
   let lines = text.split("\n");
   for (const section of [...LEARNED_SECTIONS, "Watching"]) {
     const heading = `## ${section}`;
-    if (lines.some((l) => l.trim() === heading)) continue;
+    if (lines.some((l) => l.trim() === heading)) {
+      continue;
+    }
     const watching = lines.findIndex((l) => WATCHING.test(l));
-    const at = section === "Watching" || watching === -1 ? lines.length : watching;
+    const at =
+      section === "Watching" || watching === -1 ? lines.length : watching;
     const before = lines.slice(0, at);
-    while (before.length && before[before.length - 1].trim() === "")
+    while (before.length && before[before.length - 1].trim() === "") {
       before.pop();
+    }
     lines = [...before, "", heading, "", ...lines.slice(at)];
   }
-  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+  return (
+    lines
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trimEnd() + "\n"
+  );
 }
 
 const SEEN = /seen:\s*(\d{4}-\d{2}-\d{2})/;
@@ -277,11 +297,16 @@ export function staleWatching(
   const stale: string[] = [];
   let watching = false;
   const kept = text.split("\n").filter((line) => {
-    if (line.startsWith("## ")) watching = WATCHING.test(line);
-    if (!watching || !line.startsWith("- ")) return true;
-    const seen = line.match(SEEN)?.[1];
-    if (!seen || at.getTime() - Date.parse(seen) <= days * 86400000)
+    if (line.startsWith("## ")) {
+      watching = WATCHING.test(line);
+    }
+    if (!watching || !line.startsWith("- ")) {
       return true;
+    }
+    const seen = line.match(SEEN)?.[1];
+    if (!seen || at.getTime() - Date.parse(seen) <= days * 86400000) {
+      return true;
+    }
     stale.push(line);
     return false;
   });
@@ -307,7 +332,9 @@ export function archiveLearned(
   at = new Date(),
 ): void {
   const kept = lines.map((l) => l.trim()).filter(Boolean);
-  if (kept.length === 0) return;
+  if (kept.length === 0) {
+    return;
+  }
   ensureHome();
   const file = docPath(ARCHIVE);
   const top = existsSync(file)

@@ -5,11 +5,22 @@
 import { ENV_FLAG, envName, NAME, TOOLS_NAME } from "./brand";
 import { toolsMissing } from "./self";
 import { homedir } from "node:os";
-import { codingCwd, codingLaunch, dropLaunchFiles, type CodingLaunch } from "./agents";
+import {
+  codingCwd,
+  codingLaunch,
+  dropLaunchFiles,
+  type CodingLaunch,
+} from "./agents";
 import type { RikerConfig } from "./config";
 import { EndReason, sessionEnded, sessionStarted } from "./lifecycle";
 import { logger } from "./log";
-import { mux, VIEWER_PREFIX, viewerMayHang, type MuxSession, type MuxState } from "./mux";
+import {
+  mux,
+  VIEWER_PREFIX,
+  viewerMayHang,
+  type MuxSession,
+  type MuxState,
+} from "./mux";
 import { paths } from "./paths";
 import { checkMapped, pathNeed, repoPath, type PathNeed } from "./repos";
 import * as store from "./store";
@@ -37,8 +48,14 @@ export function slug(text: string, max = 40): string {
 
 // Never take over a session you made: an untagged name in use gets a suffix.
 export function freeSessionName(base: string, taken: Set<string>): string {
-  if (!taken.has(base)) return base;
-  for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
+  if (!taken.has(base)) {
+    return base;
+  }
+  for (let n = 2; ; n++) {
+    if (!taken.has(`${base}-${n}`)) {
+      return `${base}-${n}`;
+    }
+  }
 }
 
 // The env contract: every command Riker spawns for a task carries these, so
@@ -65,11 +82,14 @@ function liveSessionFor(state: MuxState, projectId: number): MuxSession | null {
   );
 }
 
-export async function createProject(config: RikerConfig, opts: {
-  name: string;
-  repo?: string | null;
-  solo?: boolean;
-}): Promise<ProjectRow> {
+export async function createProject(
+  config: RikerConfig,
+  opts: {
+    name: string;
+    repo?: string | null;
+    solo?: boolean;
+  },
+): Promise<ProjectRow> {
   const state = await mux().state();
   const name = freeSessionName(
     slug(opts.name),
@@ -87,7 +107,9 @@ export async function createProject(config: RikerConfig, opts: {
     await mux().tagSession(session.id, project.id);
   } catch (err) {
     store.deleteProject(project.id);
-    await mux().killSession(session.id).catch(() => {});
+    await mux()
+      .killSession(session.id)
+      .catch(() => {});
     throw err;
   }
   log.info("project created", { project: project.id, session: session.name });
@@ -103,9 +125,12 @@ export async function adoptableSessions(): Promise<MuxSession[]> {
 export async function adoptSession(sessionId: string): Promise<ProjectRow> {
   const state = await mux().state();
   const session = state.sessions.find((s) => s.id === sessionId);
-  if (!session) throw new Error(`no tmux session ${sessionId}`);
-  if (session.projectId !== null)
+  if (!session) {
+    throw new Error(`no tmux session ${sessionId}`);
+  }
+  if (session.projectId !== null) {
     throw new Error(`${session.name} is already a project`);
+  }
   const project = store.createProject({
     name: session.name,
     tmuxSession: session.name,
@@ -128,8 +153,9 @@ async function ensureSession(
   const state = await mux().state();
   const live = liveSessionFor(state, project.id);
   if (live) {
-    if (live.name !== project.tmux_session)
+    if (live.name !== project.tmux_session) {
       store.updateProject(project.id, { tmux_session: live.name });
+    }
     return live;
   }
   const name = freeSessionName(
@@ -158,7 +184,12 @@ export interface StartOptions {
 }
 
 export type StartResult =
-  | { type: "started"; session: SessionRow; windowId: string; project: ProjectRow }
+  | {
+      type: "started";
+      session: SessionRow;
+      windowId: string;
+      project: ProjectRow;
+    }
   | { type: "needs-path"; need: PathNeed }
   | { type: "failed"; error: string };
 
@@ -172,20 +203,29 @@ export async function startTask(
   opts: StartOptions = {},
 ): Promise<StartResult> {
   let task = store.getTask(taskId);
-  if (!task) return { type: "failed", error: `no task ${taskId}` };
+  if (!task) {
+    return { type: "failed", error: `no task ${taskId}` };
+  }
   // The brief and hooks name riker-tools; an agent handed a path that is gone
   // fails every call, and the owner never sees why.
   const gone = toolsMissing();
-  if (gone)
+  if (gone) {
     return {
       type: "failed",
       error: `${TOOLS_NAME} is gone (${gone}): restart ${NAME} from a checkout that has it`,
     };
+  }
   task = dropGoneWorktree(task);
   const problem =
-    task.repo && !opts.noWorktree && !task.worktree ? checkMapped(config, task.repo) : null;
-  if (task.repo && problem)
-    return { type: "needs-path", need: await pathNeed(config, task.repo, problem) };
+    task.repo && !opts.noWorktree && !task.worktree
+      ? checkMapped(config, task.repo)
+      : null;
+  if (task.repo && problem) {
+    return {
+      type: "needs-path",
+      need: await pathNeed(config, task.repo, problem),
+    };
+  }
   const path = repoPath(config, task.repo);
 
   try {
@@ -205,22 +245,35 @@ export async function startTask(
     const latest = store.latestSession(task.id);
     const existing = await liveWindow(task.id);
     if (existing && latest?.kind === SessionKind.tmux && !latest.ended_at) {
-      if (opts.note) await typeLine(existing, opts.note);
+      if (opts.note) {
+        await typeLine(existing, opts.note);
+      }
       return { type: "started", session: latest, windowId: existing, project };
     }
-    if (existing) await mux().killWindow(existing);
+    if (existing) {
+      await mux().killWindow(existing);
+    }
 
     let cwd = task.worktree;
     let branch = task.branch;
     if (!cwd && path && !opts.noWorktree) {
       branch = opts.branch ?? task.branch ?? defaultBranch(task);
       // pr:N and branches that exist are switched to; anything else is new.
-      const made = await makeWorktree(config, task, project, path, branch, !(await branchThere(path, branch)));
+      const made = await makeWorktree(
+        config,
+        task,
+        project,
+        path,
+        branch,
+        !(await branchThere(path, branch)),
+      );
       cwd = made.path;
       branch = made.branch;
     }
     // A worktree an action made before the project existed (ensureCheckout).
-    if (cwd && task.repo) store.addProjectRepo(project.id, task.repo);
+    if (cwd && task.repo) {
+      store.addProjectRepo(project.id, task.repo);
+    }
     task = store.getTask(task.id)!;
 
     let launch = codingLaunch(config, task, {
@@ -228,7 +281,9 @@ export async function startTask(
       note: opts.note,
     });
     launch = { ...launch, cwd: cwd ?? codingCwd(config, task) };
-    if (opts.launchOverride) launch = opts.launchOverride(task, launch);
+    if (opts.launchOverride) {
+      launch = opts.launchOverride(task, launch);
+    }
     const window = await mux().newWindow({
       sessionId: session.id,
       name: branch ?? store.taskRef(task.id),
@@ -242,14 +297,22 @@ export async function startTask(
     return { type: "started", session: row, windowId: window.id, project };
   } catch (err) {
     log.error("start failed", { task: taskId, err });
-    return { type: "failed", error: err instanceof Error ? err.message : String(err) };
+    return {
+      type: "failed",
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
 // A worktree removed by hand (or with its repo moved) is made again on
 // the same branch, rather than claude starting in a folder that is gone.
 function dropGoneWorktree(task: TaskRow): TaskRow {
-  if (!task.worktree || mux().inspectCheckout(task.worktree).kind !== "missing") return task;
+  if (
+    !task.worktree ||
+    mux().inspectCheckout(task.worktree).kind !== "missing"
+  ) {
+    return task;
+  }
   store.addTurn({
     taskId: task.id,
     role: TurnRole.trigger,
@@ -260,7 +323,9 @@ function dropGoneWorktree(task: TaskRow): TaskRow {
 }
 
 function branchThere(path: string, branch: string): Promise<boolean> {
-  return branch.startsWith("pr:") ? Promise.resolve(true) : mux().branchExists(path, branch);
+  return branch.startsWith("pr:")
+    ? Promise.resolve(true)
+    : mux().branchExists(path, branch);
 }
 
 async function makeWorktree(
@@ -280,7 +345,9 @@ async function makeWorktree(
   });
   const out = { path: made.path, branch: made.branch ?? branch };
   store.updateTask(task.id, { branch: out.branch, worktree: out.path });
-  if (project && task.repo) store.addProjectRepo(project.id, task.repo);
+  if (project && task.repo) {
+    store.addProjectRepo(project.id, task.repo);
+  }
   return out;
 }
 
@@ -293,23 +360,43 @@ export type CheckoutResult =
 // started: what an action that reads the change needs (the guide on a
 // review that just arrived). Only a branch that exists (pr:N, or one already
 // pushed or made) is checked out; a new one would hold no change to read.
-export async function ensureCheckout(config: RikerConfig, taskId: number): Promise<CheckoutResult> {
+export async function ensureCheckout(
+  config: RikerConfig,
+  taskId: number,
+): Promise<CheckoutResult> {
   let task = store.getTask(taskId);
-  if (!task) return { type: "failed", error: `no task ${taskId}` };
+  if (!task) {
+    return { type: "failed", error: `no task ${taskId}` };
+  }
   task = dropGoneWorktree(task);
-  if (task.worktree) return { type: "ready", task };
-  if (!task.repo) return { type: "failed", error: `${store.taskRef(taskId)} has no repo to check out` };
+  if (task.worktree) {
+    return { type: "ready", task };
+  }
+  if (!task.repo) {
+    return {
+      type: "failed",
+      error: `${store.taskRef(taskId)} has no repo to check out`,
+    };
+  }
   const problem = checkMapped(config, task.repo);
-  if (problem) return { type: "needs-path", need: await pathNeed(config, task.repo, problem) };
+  if (problem) {
+    return {
+      type: "needs-path",
+      need: await pathNeed(config, task.repo, problem),
+    };
+  }
   const path = repoPath(config, task.repo);
-  if (!path) return { type: "failed", error: `${task.repo} has no checkout` };
+  if (!path) {
+    return { type: "failed", error: `${task.repo} has no checkout` };
+  }
   const branch = task.branch ?? defaultBranch(task);
   try {
-    if (!(await branchThere(path, branch)))
+    if (!(await branchThere(path, branch))) {
       return {
         type: "failed",
         error: `nothing to review yet: ${task.repo} has no branch ${branch} (start the agent first)`,
       };
+    }
     const project = task.project_id ? store.getProject(task.project_id) : null;
     const made = await makeWorktree(config, task, project, path, branch, false);
     store.addTurn({
@@ -321,7 +408,10 @@ export async function ensureCheckout(config: RikerConfig, taskId: number): Promi
     return { type: "ready", task: store.getTask(taskId)! };
   } catch (err) {
     log.error("checkout failed", { task: taskId, err });
-    return { type: "failed", error: err instanceof Error ? err.message : String(err) };
+    return {
+      type: "failed",
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -361,7 +451,9 @@ export async function liveWindow(taskId: number): Promise<string | null> {
 // is left behind, and a line typed there would run as a command.
 export async function claudeWindow(taskId: number): Promise<string | null> {
   const latest = store.latestSession(taskId);
-  if (latest?.kind !== SessionKind.tmux || latest.ended_at) return null;
+  if (latest?.kind !== SessionKind.tmux || latest.ended_at) {
+    return null;
+  }
   return liveWindow(taskId);
 }
 
@@ -375,7 +467,9 @@ export async function endedElsewhere(
   paneId: string | undefined,
 ): Promise<boolean> {
   const window = store.getSession(sessionId)?.tmux_window;
-  if (!paneId || !window) return false;
+  if (!paneId || !window) {
+    return false;
+  }
   const panes = await mux().windowPanes(window);
   return panes !== null && !panes.includes(paneId);
 }
@@ -387,7 +481,9 @@ function typeLine(windowId: string, text: string): Promise<void> {
 
 export async function tell(taskId: number, text: string): Promise<boolean> {
   const window = await claudeWindow(taskId);
-  if (!window) return false;
+  if (!window) {
+    return false;
+  }
   await typeLine(window, text);
   return true;
 }
@@ -396,8 +492,9 @@ export async function tell(taskId: number, text: string): Promise<boolean> {
 // fresh window.
 export async function stopTask(taskId: number): Promise<void> {
   const state = await mux().state();
-  for (const w of state.windows.filter((w) => w.taskId === taskId))
+  for (const w of state.windows.filter((w) => w.taskId === taskId)) {
     await mux().killWindow(w.id);
+  }
   endTmuxSessions(taskId, EndReason.stop);
   dropLaunchFiles(taskId);
 }
@@ -416,7 +513,9 @@ export async function closeTask(
 ): Promise<CloseResult> {
   const task = store.getTask(taskId);
   const result: CloseResult = { warnings: [], archived: false };
-  if (!task) return result;
+  if (!task) {
+    return result;
+  }
   const state = await mux().state();
   for (const w of state.windows.filter((w) => w.taskId === taskId)) {
     try {
@@ -460,12 +559,16 @@ export async function closeTask(
 export function projectIsEmpty(projectId: number): boolean {
   return store
     .tasksForProject(projectId)
-    .every((t) => t.status === TaskStatus.done || t.status === TaskStatus.dropped);
+    .every(
+      (t) => t.status === TaskStatus.done || t.status === TaskStatus.dropped,
+    );
 }
 
 export async function archiveProject(projectId: number): Promise<void> {
   const project = store.getProject(projectId);
-  if (!project) return;
+  if (!project) {
+    return;
+  }
   await archive(project, await mux().state());
 }
 
@@ -475,14 +578,17 @@ async function archive(project: ProjectRow, state: MuxState): Promise<void> {
   const live = liveSessionFor(state, project.id);
   if (live) {
     try {
-      for (const w of state.windows.filter((w) => w.sessionId === live.id))
+      for (const w of state.windows.filter((w) => w.sessionId === live.id)) {
         await mux().killWindow(w.id);
+      }
       await mux().killSession(live.id);
     } catch (err) {
       log.warn("kill session failed", { project: project.id, err });
     }
   }
-  for (const task of store.tasksForProject(project.id)) endTmuxSessions(task.id);
+  for (const task of store.tasksForProject(project.id)) {
+    endTmuxSessions(task.id);
+  }
   store.archiveProject(project.id);
 }
 
@@ -496,12 +602,15 @@ export async function takeWindow(
 ): Promise<void> {
   const task = store.getTask(taskId);
   const project = task?.project_id ? store.getProject(task.project_id) : null;
-  if (!project) throw new Error(`${store.taskRef(taskId)} has no project`);
+  if (!project) {
+    throw new Error(`${store.taskRef(taskId)} has no project`);
+  }
   const session = await ensureSession(config, project);
   await mux().tagWindow(windowId, taskId);
   const window = (await mux().state()).windows.find((w) => w.id === windowId);
-  if (window && window.sessionId !== session.id)
+  if (window && window.sessionId !== session.id) {
     await mux().moveWindow(windowId, window.sessionId, session.id);
+  }
 }
 
 // Moving a task keeps its claude running: the window moves with it.
@@ -512,16 +621,22 @@ export async function moveTask(
 ): Promise<void> {
   const task = store.getTask(taskId);
   const target = store.getProject(projectId);
-  if (!task || !target) return;
+  if (!task || !target) {
+    return;
+  }
   const from = task.project_id ? store.getProject(task.project_id) : null;
   const session = await ensureSession(config, target);
   const state = await mux().state();
-  for (const w of state.windows.filter((w) => w.taskId === taskId))
+  for (const w of state.windows.filter((w) => w.taskId === taskId)) {
     await mux().moveWindow(w.id, w.sessionId, session.id);
+  }
   store.updateTask(taskId, { project_id: projectId });
-  if (task.repo) store.addProjectRepo(projectId, task.repo);
-  if (from?.solo && store.tasksForProject(from.id).length === 0)
+  if (task.repo) {
+    store.addProjectRepo(projectId, task.repo);
+  }
+  if (from?.solo && store.tasksForProject(from.id).length === 0) {
     await archive(from, await mux().state());
+  }
 }
 
 // Why Riker has no client of the agents' server to move: it is not in tmux,
@@ -536,7 +651,10 @@ export type NoJump = (typeof NoJump)[keyof typeof NoJump];
 
 // What a jump did: moved your client, found no window, or (Riker not in a
 // client of this server) why, and the line to run in a terminal of your own.
-export type Jump = "jumped" | "gone" | { attach: string; why: NoJump; socket?: string };
+export type Jump =
+  | "jumped"
+  | "gone"
+  | { attach: string; why: NoJump; socket?: string };
 
 // switch-client moves the client Riker runs in. Outside tmux (or on another
 // server) there is none, and tmux would move whichever client it likes.
@@ -544,8 +662,14 @@ async function jumpTo(sessionId: string, windowId?: string): Promise<Jump> {
   const host = await mux().hostServer();
   if (host.at !== "here") {
     const attach = mux().attachCommand(sessionId, windowId);
-    if (host.at === "none") return { attach, why: NoJump.outside };
-    return { attach, why: host.lost ? NoJump.lost : NoJump.elsewhere, socket: host.socket };
+    if (host.at === "none") {
+      return { attach, why: NoJump.outside };
+    }
+    return {
+      attach,
+      why: host.lost ? NoJump.lost : NoJump.elsewhere,
+      socket: host.socket,
+    };
   }
   await mux().switchClient(sessionId, windowId);
   return "jumped";
@@ -554,13 +678,17 @@ async function jumpTo(sessionId: string, windowId?: string): Promise<Jump> {
 export async function jump(taskId: number): Promise<Jump> {
   const state = await mux().state();
   const window = state.windows.find((w) => w.taskId === taskId);
-  if (!window) return "gone";
+  if (!window) {
+    return "gone";
+  }
   return jumpTo(window.sessionId, window.id);
 }
 
 export async function nudge(taskId: number, text: string): Promise<boolean> {
   const window = await liveWindow(taskId);
-  if (!window) return false;
+  if (!window) {
+    return false;
+  }
   await mux().sendLine(window, text);
   return true;
 }
@@ -572,7 +700,9 @@ export async function jumpToProject(
   projectId: number,
 ): Promise<Jump> {
   const project = store.getProject(projectId);
-  if (!project) return "gone";
+  if (!project) {
+    return "gone";
+  }
   const session = await ensureSession(config, project);
   return jumpTo(session.id);
 }
@@ -586,20 +716,26 @@ export type Viewer = { argv: string[]; warning?: string } | { refused: string };
 export async function viewerArgv(taskId: number): Promise<Viewer | null> {
   const state = await mux().state();
   const window = state.windows.find((w) => w.taskId === taskId);
-  if (!window) return null;
+  if (!window) {
+    return null;
+  }
   // Riker started in a pane of this very window would embed itself.
-  if (window.id === (await mux().hostWindow()))
+  if (window.id === (await mux().hostWindow())) {
     return {
       refused: `Riker is running in ${store.taskRef(taskId)}'s own tmux window, so it can't show it here. Run riker from another window.`,
     };
+  }
   // Strays land in the tagged project session, not whichever session listed it.
   const projectId = store.getTask(taskId)?.project_id;
   const session =
-    (projectId ? liveSessionFor(state, projectId) : null)?.id ?? window.sessionId;
+    (projectId ? liveSessionFor(state, projectId) : null)?.id ??
+    window.sessionId;
   const argv = mux().viewerArgv(viewerName(taskId), session, window.id);
   log.debug("viewer", { task: taskId, argv: argv.join(" ") });
   const version = await mux().version();
-  if (!viewerMayHang(version)) return { argv };
+  if (!viewerMayHang(version)) {
+    return { argv };
+  }
   log.warn("tmux may hang", { version });
   return {
     argv,
@@ -616,12 +752,18 @@ function endTmuxSessions(
   reason: string = EndReason.window,
 ): void {
   store.batch(() => {
-    for (const s of store.sessionsForTask(taskId))
-      if (s.kind === SessionKind.tmux && !s.ended_at) markGone(s, reason);
+    for (const s of store.sessionsForTask(taskId)) {
+      if (s.kind === SessionKind.tmux && !s.ended_at) {
+        markGone(s, reason);
+      }
+    }
   });
 }
 
-function markGone(session: SessionRow, reason: string = EndReason.window): void {
+function markGone(
+  session: SessionRow,
+  reason: string = EndReason.window,
+): void {
   sessionEnded({ taskId: session.task_id, sessionId: session.id }, reason);
 }
 
@@ -657,12 +799,17 @@ export async function reconcile(): Promise<void> {
   const state = await mux().state({ strict: true });
   const windows = new Set(state.windows.map((w) => w.id));
   for (const s of store.liveSessions()) {
-    if (s.kind !== SessionKind.tmux) continue;
-    if (!s.tmux_window || !windows.has(s.tmux_window)) markGone(s);
+    if (s.kind !== SessionKind.tmux) {
+      continue;
+    }
+    if (!s.tmux_window || !windows.has(s.tmux_window)) {
+      markGone(s);
+    }
   }
   for (const project of store.listProjects()) {
     const live = liveSessionFor(state, project.id);
-    if (live && live.name !== project.tmux_session)
+    if (live && live.name !== project.tmux_session) {
       store.updateProject(project.id, { tmux_session: live.name });
+    }
   }
 }

@@ -33,7 +33,11 @@ import { fakeBrain, freshHome, withLimit, config } from "./support/helpers";
 // where it goes read from that message.
 const reply: DraftKind = {
   type: "test_reply",
-  build: (message, answer) => ({ type: "test_reply", to: message.author_name, text: answer.text }),
+  build: (message, answer) => ({
+    type: "test_reply",
+    to: message.author_name,
+    text: answer.text,
+  }),
   describe: (a) => `reply to ${String(a.to)}`,
   text: (a) => String(a.text),
   withText: (a, text) => ({ ...a, text }),
@@ -90,7 +94,11 @@ describe("general agent turns", () => {
     expect(turn.role).toBe(TurnRole.agent);
     expect(turn.did).toContain("42 seats");
     const pending = store.pendingAction(taskId)!;
-    expect(pending.action).toEqual({ type: "test_reply", to: "Ruth", text: "42 seats." });
+    expect(pending.action).toEqual({
+      type: "test_reply",
+      to: "Ruth",
+      text: "42 seats.",
+    });
     expect(store.getTask(taskId)!.agent_state).toBe(AgentState.ready);
     // read-only tools, denied without asking
     expect(calls[0].allow).toContain("Bash(gh pr view:*)");
@@ -156,8 +164,11 @@ describe("coding agent", () => {
     expect(launch.argv[0]).toBe("claude");
     expect(launch.argv).toContain("--settings");
     expect(launch.env.RIKER_TASK_ID).toBe(String(t.id));
-    const brief = launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1]!;
-    expect(readFileSync(brief, "utf8")).toContain(`## The task\n${store.taskRef(t.id)}: Fix export`);
+    const brief =
+      launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1]!;
+    expect(readFileSync(brief, "utf8")).toContain(
+      `## The task\n${store.taskRef(t.id)}: Fix export`,
+    );
     const hooks = hookSettings().hooks as Record<string, unknown>;
     expect(Object.keys(hooks)).toEqual([
       "UserPromptSubmit",
@@ -181,21 +192,28 @@ describe("coding agent", () => {
     const note = "look at the parser first ".repeat(400);
     const launch = codingLaunch(config(), t, { note });
     expect(launch.argv.join(" ").length).toBeLessThan(4000);
-    const brief = launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1]!;
-    expect(readFileSync(brief, "utf8")).toContain("+ a changed line\n".repeat(10000));
+    const brief =
+      launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1]!;
+    expect(readFileSync(brief, "utf8")).toContain(
+      "+ a changed line\n".repeat(10000),
+    );
     // Only the owner reads them: the brief carries the task's private context.
     expect(statSync(brief).mode & 0o777).toBe(0o600);
     expect(statSync(dirname(brief)).mode & 0o777).toBe(0o700);
     const first = launch.argv.at(-1)!;
     const file = /read (\S+) first/.exec(first)?.[1];
     expect(file && readFileSync(file, "utf8")).toBe(note);
-    expect(first.startsWith(`Work ${store.taskRef(t.id)}: Review #12.`)).toBe(true);
+    expect(first.startsWith(`Work ${store.taskRef(t.id)}: Review #12.`)).toBe(
+      true,
+    );
 
     // A short note is typed as it is; a resume says only the note.
     const short = codingLaunch(config(), t, { note: "parser first" });
     expect(short.argv.at(-1)).toContain("Note from the owner: parser first");
     const resumed = codingLaunch(config(), t, { resume: "s-1", note });
-    expect(resumed.argv.at(-1)).toMatch(/^The owner left you a note too long to type here: read \S+ first\.$/);
+    expect(resumed.argv.at(-1)).toMatch(
+      /^The owner left you a note too long to type here: read \S+ first\.$/,
+    );
   });
 
   test("hooks move the agent through its states; done writes it up", () => {
@@ -245,7 +263,11 @@ describe("turn signals", () => {
   beforeEach(() => freshHome());
 
   function live() {
-    const t = store.createTask({ title: "x", kind: Kind.coding, channel: "owner" });
+    const t = store.createTask({
+      title: "x",
+      kind: Kind.coding,
+      channel: "owner",
+    });
     store.createSession({
       id: "s1",
       taskId: t.id,
@@ -262,13 +284,24 @@ describe("turn signals", () => {
     handleHook("stop", {}, env);
     handleHook(
       "notification",
-      { message: "Claude is waiting for your input", notification_type: "idle_prompt" },
+      {
+        message: "Claude is waiting for your input",
+        notification_type: "idle_prompt",
+      },
       env,
     );
     expect(store.getTask(env.taskId)!.agent_state).toBe(AgentState.idle);
-    handleHook("notification", { message: "Claude is waiting for your input" }, env);
+    handleHook(
+      "notification",
+      { message: "Claude is waiting for your input" },
+      env,
+    );
     expect(store.getTask(env.taskId)!.agent_state).toBe(AgentState.idle);
-    handleHook("notification", { message: "Claude needs your permission to use Bash" }, env);
+    handleHook(
+      "notification",
+      { message: "Claude needs your permission to use Bash" },
+      env,
+    );
     expect(store.getTask(env.taskId)!.agent_state).toBe(AgentState.waiting);
   });
 
@@ -279,8 +312,18 @@ describe("turn signals", () => {
       path,
       [
         JSON.stringify({ type: "user", message: { content: "go" } }),
-        JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Which branch, **main** or dev?**" }] } }),
-        JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "x" }] } }),
+        JSON.stringify({
+          type: "assistant",
+          message: {
+            content: [
+              { type: "text", text: "Which branch, **main** or dev?**" },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "tool_use", name: "x" }] },
+        }),
       ].join("\n"),
     );
     handleHook("stop", { transcript_path: path }, env);
@@ -316,12 +359,17 @@ describe("artifact links", () => {
   });
 
   test("a published artifact or a new doc is linked to the task once", () => {
-    const t = store.createTask({ title: "Write up", kind: Kind.coding, channel: "owner" });
+    const t = store.createTask({
+      title: "Write up",
+      kind: Kind.coding,
+      channel: "owner",
+    });
     const env = { taskId: t.id, sessionId: "s1" };
     const publish = {
       tool_name: "Artifact",
       tool_input: { file_path: "/tmp/scratch/release-notes.html", icon: "doc" },
-      tool_response: "Published https://claude.ai/code/artifact/0b7c-41aa. This session now watches it.",
+      tool_response:
+        "Published https://claude.ai/code/artifact/0b7c-41aa. This session now watches it.",
     };
     handleHook("made", publish, env);
     expect(linked(t.id)).toEqual([
@@ -329,7 +377,12 @@ describe("artifact links", () => {
     ]);
 
     // A republish leaves a title someone set alone.
-    store.addTaskLink(t.id, "https://claude.ai/code/artifact/0b7c-41aa", "Release notes", "you");
+    store.addTaskLink(
+      t.id,
+      "https://claude.ai/code/artifact/0b7c-41aa",
+      "Release notes",
+      "you",
+    );
     handleHook("made", publish, env);
     expect(linked(t.id)).toEqual([
       ["Release notes", "https://claude.ai/code/artifact/0b7c-41aa"],
@@ -339,24 +392,51 @@ describe("artifact links", () => {
       "made",
       {
         tool_name: "mcp__claude_ai_Claude_Docs__batch",
-        tool_input: { container: { kind: "project", create: { name: "Q3 plan" } }, batch: [] },
-        tool_response: [{ type: "text", text: '{"ok":true,"link":"https://claude.ai/artifact/9f3e"}' }],
+        tool_input: {
+          container: { kind: "project", create: { name: "Q3 plan" } },
+          batch: [],
+        },
+        tool_response: [
+          {
+            type: "text",
+            text: '{"ok":true,"link":"https://claude.ai/artifact/9f3e"}',
+          },
+        ],
       },
       env,
     );
-    expect(linked(t.id).at(-1)).toEqual(["Q3 plan", "https://claude.ai/artifact/9f3e"]);
+    expect(linked(t.id).at(-1)).toEqual([
+      "Q3 plan",
+      "https://claude.ai/artifact/9f3e",
+    ]);
   });
 
   test("reads, listings and asset uploads link nothing", () => {
-    const listing = "https://claude.ai/code/artifact/aaa https://claude.ai/code/artifact/bbb";
+    const listing =
+      "https://claude.ai/code/artifact/aaa https://claude.ai/code/artifact/bbb";
     for (const tool_input of [
       { action: "list" },
       { action: "read", url: "https://claude.ai/code/artifact/aaa" },
-      { url: "https://claude.ai/code/artifact/aaa", file_path: "a.png", asset: true },
-    ])
-      expect(artifactLink({ tool_name: "Artifact", tool_input, tool_response: listing })).toBeNull();
+      {
+        url: "https://claude.ai/code/artifact/aaa",
+        file_path: "a.png",
+        asset: true,
+      },
+    ]) {
+      expect(
+        artifactLink({
+          tool_name: "Artifact",
+          tool_input,
+          tool_response: listing,
+        }),
+      ).toBeNull();
+    }
     expect(
-      artifactLink({ tool_name: "Artifact", tool_input: {}, tool_response: "Publish refused" }),
+      artifactLink({
+        tool_name: "Artifact",
+        tool_input: {},
+        tool_response: "Publish refused",
+      }),
     ).toBeNull();
   });
 
@@ -364,7 +444,11 @@ describe("artifact links", () => {
     expect(
       artifactLink({
         tool_name: "Artifact",
-        tool_input: { url: "https://claude.ai/code/artifact/ccc", file_path: "x.html", title: "Dash" },
+        tool_input: {
+          url: "https://claude.ai/code/artifact/ccc",
+          file_path: "x.html",
+          title: "Dash",
+        },
         tool_response: "copied from https://claude.ai/code/artifact/ddd",
       }),
     ).toEqual({ url: "https://claude.ai/code/artifact/ccc", title: "Dash" });
@@ -411,7 +495,11 @@ describe("brain stream", () => {
 
   test("the context is the last top-level request's tokens, not the turn's sum", () => {
     const acc: StreamAcc = { text: "", result: null, sessionId: null };
-    const request = (read: number, write: number, parent: string | null = null) =>
+    const request = (
+      read: number,
+      write: number,
+      parent: string | null = null,
+    ) =>
       parseStreamLine(
         JSON.stringify({
           type: "assistant",
@@ -444,7 +532,12 @@ describe("brain stream", () => {
         type: "assistant",
         message: {
           content: [
-            { type: "tool_use", id: "t1", name: "mcp__x__batch", input: { a: 1 } },
+            {
+              type: "tool_use",
+              id: "t1",
+              name: "mcp__x__batch",
+              input: { a: 1 },
+            },
           ],
         },
       }),
@@ -462,7 +555,9 @@ describe("brain stream", () => {
       JSON.stringify({
         type: "user",
         message: {
-          content: [{ type: "tool_result", tool_use_id: "t1", content: "done" }],
+          content: [
+            { type: "tool_result", tool_use_id: "t1", content: "done" },
+          ],
         },
       }),
       undefined,
@@ -559,8 +654,7 @@ describe("learning", () => {
   });
 });
 
-describe("ingest", () => {
-});
+describe("ingest", () => {});
 
 describe("claude.ai connectors", () => {
   test("a call with no MCP rule loads no MCP server", () => {
@@ -569,7 +663,10 @@ describe("claude.ai connectors", () => {
       "--strict-mcp-config",
     );
     expect(
-      claudeArgs({ prompt: "x", allow: ["Read", "mcp__claude_ai_Slack__slack_read_thread"] }),
+      claudeArgs({
+        prompt: "x",
+        allow: ["Read", "mcp__claude_ai_Slack__slack_read_thread"],
+      }),
     ).not.toContain("--strict-mcp-config");
   });
 });

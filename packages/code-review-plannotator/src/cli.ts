@@ -11,7 +11,13 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { claudeAsk } from "./ask";
 import { BATCH_CHARS } from "./batches";
-import { freePort, postComments, saveGuide, snapshot, writeFindings } from "./guide";
+import {
+  freePort,
+  postComments,
+  saveGuide,
+  snapshot,
+  writeFindings,
+} from "./guide";
 import { setGuideLog } from "./log";
 import { review } from "./review";
 
@@ -58,14 +64,24 @@ if (values.help || positionals[0] !== "review") {
   process.stdout.write(USAGE);
   process.exit(values.help ? 0 : 1);
 }
-if (values.open && values["no-plannotator"]) fail("--open needs Plannotator: drop --no-plannotator");
+if (values.open && values["no-plannotator"]) {
+  fail("--open needs Plannotator: drop --no-plannotator");
+}
 
 const cwd = resolve(values.cwd ?? ".");
 const out = resolve(values.out ?? join(cwd, ".code-review"));
-const batchChars = values["batch-chars"] ? Number(values["batch-chars"]) : undefined;
-if (batchChars !== undefined && !(batchChars > 0)) fail("--batch-chars wants a positive number");
-if (!values.quiet)
-  setGuideLog({ warn: (msg, fields) => process.stderr.write(`warn: ${msg} ${JSON.stringify(fields ?? {})}\n`) });
+const batchChars = values["batch-chars"]
+  ? Number(values["batch-chars"])
+  : undefined;
+if (batchChars !== undefined && !(batchChars > 0)) {
+  fail("--batch-chars wants a positive number");
+}
+if (!values.quiet) {
+  setGuideLog({
+    warn: (msg, fields) =>
+      process.stderr.write(`warn: ${msg} ${JSON.stringify(fields ?? {})}\n`),
+  });
+}
 
 const claude = claudeAsk({ cwd, model: values.model, claude: values.claude });
 const ran = await review({
@@ -84,17 +100,35 @@ if ("error" in ran) {
     mkdirSync(out, { recursive: true });
     writeFileSync(join(out, "answer.txt"), ran.answer);
   }
-  fail(`no review: ${ran.error}${ran.answer ? ` (the answer is in ${join(out, "answer.txt")})` : ""}`);
+  fail(
+    `no review: ${ran.error}${ran.answer ? ` (the answer is in ${join(out, "answer.txt")})` : ""}`,
+  );
 }
 
 let id = "";
 if (values["no-plannotator"]) {
   mkdirSync(out, { recursive: true });
-  writeFileSync(join(out, "guide.json"), `${JSON.stringify(snapshot(ran.guide, ran.patch), null, 2)}\n`);
-  writeFindings(out, { id, title: ran.guide.title, base: ran.patch.base, findings: ran.findings });
+  writeFileSync(
+    join(out, "guide.json"),
+    `${JSON.stringify(snapshot(ran.guide, ran.patch), null, 2)}\n`,
+  );
+  writeFindings(out, {
+    id,
+    title: ran.guide.title,
+    base: ran.patch.base,
+    findings: ran.findings,
+  });
 } else {
-  const saved = await saveGuide({ guide: ran.answered, cwd, dir: out, patch: ran.patch, pr: values.pr });
-  if ("error" in saved) fail(saved.error);
+  const saved = await saveGuide({
+    guide: ran.answered,
+    cwd,
+    dir: out,
+    patch: ran.patch,
+    pr: values.pr,
+  });
+  if ("error" in saved) {
+    fail(saved.error);
+  }
   id = saved.id;
 }
 
@@ -141,9 +175,15 @@ if (values.open) {
   const proc = Bun.spawn(["plannotator", "review", "--base", ran.patch.base], {
     cwd,
     stdio: ["inherit", "inherit", "inherit"],
-    env: { ...process.env, PLANNOTATOR_UPDATE_CHECK: "0", PLANNOTATOR_PORT: String(port) },
+    env: {
+      ...process.env,
+      PLANNOTATOR_UPDATE_CHECK: "0",
+      PLANNOTATOR_PORT: String(port),
+    },
   });
   const posted = await postComments(port, ran.comments);
-  if ("error" in posted) process.stderr.write(`comments not posted: ${posted.error}\n`);
+  if ("error" in posted) {
+    process.stderr.write(`comments not posted: ${posted.error}\n`);
+  }
   process.exit(await proc.exited);
 }

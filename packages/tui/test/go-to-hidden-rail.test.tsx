@@ -13,7 +13,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 async function boot() {
@@ -36,7 +38,9 @@ async function boot() {
   };
   const goTo = async (words: string) => {
     await press("\\", { ctrl: true });
-    for (const c of words) setup.mockInput.pressKey(c);
+    for (const c of words) {
+      setup.mockInput.pressKey(c);
+    }
     setup.mockInput.pressEnter();
     await settle();
   };
@@ -68,7 +72,9 @@ for (const hidden of [false, true]) {
   const rail = hidden ? "hidden" : "shown";
   test(`go to a project from the chat box keeps a pane focused (rail ${rail})`, async () => {
     const { press, goTo, renderer, frame } = await boot();
-    if (hidden) await press("e", { ctrl: true });
+    if (hidden) {
+      await press("e", { ctrl: true });
+    }
     await press("tab");
     await press("tab");
     await goTo("ledger fixes");

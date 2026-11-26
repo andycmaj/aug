@@ -19,7 +19,9 @@ export function legacyHome(): string {
 // The default home, while aug's ~/.aug is still a folder of its own (not yet
 // moved and linked by core/migrate-home.ts).
 export function homeUnmoved(): boolean {
-  if (rikerHome() !== defaultHome()) return false;
+  if (rikerHome() !== defaultHome()) {
+    return false;
+  }
   try {
     return lstatSync(legacyHome()).isDirectory();
   } catch {
@@ -31,7 +33,9 @@ export function homeUnmoved(): boolean {
 // name it (installed hooks, the statusline block): a home named .riker was
 // the .aug beside it (core/migrate-home.ts); any other home kept its path.
 export function homeAliases(home = rikerHome()): string[] {
-  return basename(home) === HOME_DIR ? [home, join(dirname(home), LEGACY.homeDir)] : [home];
+  return basename(home) === HOME_DIR
+    ? [home, join(dirname(home), LEGACY.homeDir)]
+    : [home];
 }
 
 // An agent aug started has AUG_HOME=~/.aug, which is now a link to the
@@ -51,7 +55,8 @@ export const paths = {
   work: (taskId: number) => join(rikerHome(), "work", String(taskId)),
   // What a coding start hands claude in files (its brief, a long note):
   // tmux refuses a command line past about 16KB.
-  launch: (taskId: number) => join(rikerHome(), "work", String(taskId), "launch"),
+  launch: (taskId: number) =>
+    join(rikerHome(), "work", String(taskId), "launch"),
   drafts: () => join(rikerHome(), "drafts"),
   // Where the Assistant writes a whole doc before `move propose_doc --file`:
   // a doc's Markdown headings cannot go on a Bash line (see propose_doc).
@@ -64,7 +69,12 @@ export const paths = {
 };
 
 export function ensureHome(): void {
-  for (const dir of [paths.home(), paths.docs(), paths.drafts(), paths.docDrafts()]) {
+  for (const dir of [
+    paths.home(),
+    paths.docs(),
+    paths.drafts(),
+    paths.docDrafts(),
+  ]) {
     mkdirSync(dir, { recursive: true });
   }
 }

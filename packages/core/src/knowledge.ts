@@ -87,7 +87,8 @@ const BODY_CHARS = 1500;
 
 // Paths an entry cites: a/b.ts, packages/core/src/x.ts. Not URLs (the scheme
 // stops the match) and not absolute or home paths, which are not a repo's.
-const PATH = /(?:^|[\s`'"(\[])((?:[\w.-]+\/)+[\w-][\w.-]*\.[A-Za-z]{1,5})(?=$|[\s`'"),:;\].])/g;
+const PATH =
+  /(?:^|[\s`'"(\[])((?:[\w.-]+\/)+[\w-][\w.-]*\.[A-Za-z]{1,5})(?=$|[\s`'"),:;\].])/g;
 
 export function citedPaths(text: string): string[] {
   return [...new Set([...text.matchAll(PATH)].map((m) => m[1]))];
@@ -116,7 +117,13 @@ export function gitFiles(): RepoFiles {
       seen.set(
         path,
         run.exitCode === 0
-          ? new Set(run.stdout.toString().split("\n").filter(Boolean).map((f) => basename(f)))
+          ? new Set(
+              run.stdout
+                .toString()
+                .split("\n")
+                .filter(Boolean)
+                .map((f) => basename(f)),
+            )
           : null,
       );
     }
@@ -135,16 +142,23 @@ export function entryFacts(
   const facts: string[] = [];
   const taskId = entryTask(entry);
   const task = taskId ? store.getTask(taskId) : null;
-  if (taskId && !task) facts.push(`its task ${store.taskRef(taskId)} no longer exists`);
-  if (task?.status === TaskStatus.dropped)
+  if (taskId && !task) {
+    facts.push(`its task ${store.taskRef(taskId)} no longer exists`);
+  }
+  if (task?.status === TaskStatus.dropped) {
     facts.push(`its task ${store.taskRef(task.id)} was dropped`);
+  }
   const path = repoPath(config, task?.repo ?? null);
   const tracked = path ? files(expandHome(path)) : null;
   if (tracked) {
     const gone = citedPaths(`${entry.title}\n${entry.body}`).filter(
       (p) => !tracked.has(basename(p)),
     );
-    if (gone.length) facts.push(`files it cites are no longer in ${task!.repo}: ${gone.join(", ")}`);
+    if (gone.length) {
+      facts.push(
+        `files it cites are no longer in ${task!.repo}: ${gone.join(", ")}`,
+      );
+    }
   }
   return facts;
 }
@@ -178,42 +192,61 @@ function isPlan(value: unknown): value is Partial<KnowledgePlan> {
 
 // The model's plan held to the live entries: a merge of fewer than two, an
 // unknown id or one already claimed by another step is dropped.
-export function checkPlan(answer: unknown, live: KnowledgeRow[]): KnowledgePlan {
+export function checkPlan(
+  answer: unknown,
+  live: KnowledgeRow[],
+): KnowledgePlan {
   const ids = new Set(live.map((e) => e.id));
   const used = new Set<number>();
   const claim = (list: number[]) => {
-    if (list.some((id) => !ids.has(id) || used.has(id))) return false;
-    for (const id of list) used.add(id);
+    if (list.some((id) => !ids.has(id) || used.has(id))) {
+      return false;
+    }
+    for (const id of list) {
+      used.add(id);
+    }
     return true;
   };
   const plan: KnowledgePlan = { merge: [], retire: [] };
-  if (!isPlan(answer)) return plan;
+  if (!isPlan(answer)) {
+    return plan;
+  }
   for (const m of answer.merge ?? []) {
     const list = [...new Set(m.ids ?? [])];
-    if (list.length < 2 || !m.body?.trim() || !m.title?.trim()) continue;
-    if (!claim(list)) continue;
+    if (list.length < 2 || !m.body?.trim() || !m.title?.trim()) {
+      continue;
+    }
+    if (!claim(list)) {
+      continue;
+    }
     plan.merge.push({
       ids: list,
-      topic: (m.topic || live.find((e) => e.id === list[0])!.topic).trim().toLowerCase(),
+      topic: (m.topic || live.find((e) => e.id === list[0])!.topic)
+        .trim()
+        .toLowerCase(),
       title: m.title.trim(),
       body: m.body.trim(),
       reason: m.reason?.trim() ?? "",
     });
   }
   for (const r of answer.retire ?? []) {
-    if (!claim([r.id])) continue;
+    if (!claim([r.id])) {
+      continue;
+    }
     plan.retire.push({ id: r.id, reason: r.reason?.trim() ?? "" });
   }
   return plan;
 }
 
-export const planEmpty = (p: KnowledgePlan) => p.merge.length === 0 && p.retire.length === 0;
+export const planEmpty = (p: KnowledgePlan) =>
+  p.merge.length === 0 && p.retire.length === 0;
 
 export function parsePlan(json: string): KnowledgePlan {
   try {
     const value = JSON.parse(json) as unknown;
-    if (isPlan(value))
+    if (isPlan(value)) {
       return { merge: value.merge ?? [], retire: value.retire ?? [] };
+    }
   } catch {}
   return { merge: [], retire: [] };
 }
@@ -226,9 +259,12 @@ export function planIds(plan: KnowledgePlan): number[] {
 export function planReason(plan: KnowledgePlan): string {
   return [
     ...plan.merge.map(
-      (m) => `Merge ${m.ids.map((id) => `#${id}`).join(", ")} into "${m.title}"${m.reason ? `: ${m.reason}` : ""}`,
+      (m) =>
+        `Merge ${m.ids.map((id) => `#${id}`).join(", ")} into "${m.title}"${m.reason ? `: ${m.reason}` : ""}`,
     ),
-    ...plan.retire.map((r) => `Retire #${r.id}${r.reason ? `: ${r.reason}` : ""}`),
+    ...plan.retire.map(
+      (r) => `Retire #${r.id}${r.reason ? `: ${r.reason}` : ""}`,
+    ),
   ].join("\n");
 }
 
@@ -262,13 +298,19 @@ export function snapshot(plan: KnowledgePlan): string {
   return JSON.stringify(rows);
 }
 
-function entryText(e: Pick<KnowledgeRow, "topic" | "title" | "body">, id: string): string {
+function entryText(
+  e: Pick<KnowledgeRow, "topic" | "title" | "body">,
+  id: string,
+): string {
   return `## ${id} [${e.topic}] ${e.title}\n\n${e.body.trimEnd()}\n`;
 }
 
 // The review's two sides, as Markdown: the entries the plan touches, and what
 // stands in their place after it (a merge's one entry; a retired one gone).
-export function reviewTexts(plan: KnowledgePlan): { yours: string; proposed: string } {
+export function reviewTexts(plan: KnowledgePlan): {
+  yours: string;
+  proposed: string;
+} {
   const live = (id: number) => store.getKnowledge(id);
   const yours = planIds(plan)
     .map(live)
@@ -276,14 +318,19 @@ export function reviewTexts(plan: KnowledgePlan): { yours: string; proposed: str
     .map((e) => entryText(e, `#${e.id}`))
     .join("\n");
   const proposed = plan.merge
-    .map((m) => entryText(m, `new (merges ${m.ids.map((id) => `#${id}`).join(", ")})`))
+    .map((m) =>
+      entryText(m, `new (merges ${m.ids.map((id) => `#${id}`).join(", ")})`),
+    )
     .join("\n");
   return { yours, proposed };
 }
 
 // Accept: each step whose entries are all still live is done; one whose
 // entries were retired since is skipped.
-export function applyPlan(plan: KnowledgePlan, at = new Date()): { done: number; skipped: number } {
+export function applyPlan(
+  plan: KnowledgePlan,
+  at = new Date(),
+): { done: number; skipped: number } {
   const isLive = (id: number) => {
     const e = store.getKnowledge(id);
     return e !== null && e.retired_at === null;
@@ -301,7 +348,9 @@ export function applyPlan(plan: KnowledgePlan, at = new Date()): { done: number;
       m.body,
       `riker (merged ${m.ids.map((id) => `#${id}`).join(", ")} on ${at.toISOString().slice(0, 10)})`,
     );
-    for (const id of m.ids) store.retireKnowledge(id, `merged into #${merged.id}`, merged.id);
+    for (const id of m.ids) {
+      store.retireKnowledge(id, `merged into #${merged.id}`, merged.id);
+    }
     done++;
   }
   for (const r of plan.retire) {

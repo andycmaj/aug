@@ -16,7 +16,12 @@ import {
   type Renderable,
 } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
-import { useFocus, useKeyPassthrough, useScope, useTheme } from "@andycmaj/opentui-app";
+import {
+  useFocus,
+  useKeyPassthrough,
+  useScope,
+  useTheme,
+} from "@andycmaj/opentui-app";
 import { Commands } from "../commands";
 import { useTerminals } from "../context/terminals";
 import { encodeKey } from "../terminal/key-encode";
@@ -36,14 +41,18 @@ export function TermView(props: {
   let host: BoxRenderable | undefined;
   createEffect(() => {
     const id = props.id;
-    if (!host) return;
+    if (!host) {
+      return;
+    }
     const release = terminals.adopt(id, host);
     onCleanup(release);
   });
   // Tracks the list too: a session opened after mount still gets its veil.
   createEffect(() => {
     const id = props.id;
-    if (!terminals.get(id)) return;
+    if (!terminals.get(id)) {
+      return;
+    }
     terminals.veil(id, props.veiled?.() ?? false);
     onCleanup(() => terminals.veil(id, false));
   });
@@ -69,7 +78,9 @@ const CTRL_BRACKET = "\x1b";
 
 function within(node: Renderable | null, target: Renderable): boolean {
   for (let n: Renderable | null = node; n; n = n.parent) {
-    if (n === target) return true;
+    if (n === target) {
+      return true;
+    }
   }
   return false;
 }
@@ -92,13 +103,17 @@ export function TerminalHost(props: {
     "terminal",
     (event) => {
       const bytes = encodeKey(event);
-      if (bytes) terminals.write(props.id, bytes);
+      if (bytes) {
+        terminals.write(props.id, bytes);
+      }
     },
     { target: props.pane, enabled: () => running() && props.attached() },
   );
 
   createEffect(() => {
-    if (!running() || !props.attached()) return;
+    if (!running() || !props.attached()) {
+      return;
+    }
     onCleanup(terminals.claimKeys(props.id));
   });
 
@@ -107,9 +122,15 @@ export function TerminalHost(props: {
   const renderer = useRenderer();
   const onPaste = (event: PasteEvent) => {
     const pane = props.pane();
-    if (!pane || !running() || !props.attached()) return;
-    if (!within(renderer.currentFocusedRenderable, pane)) return;
-    if (event.metadata?.kind === "binary") return;
+    if (!pane || !running() || !props.attached()) {
+      return;
+    }
+    if (!within(renderer.currentFocusedRenderable, pane)) {
+      return;
+    }
+    if (event.metadata?.kind === "binary") {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     terminals.paste(props.id, decodePasteBytes(event.bytes));
@@ -132,22 +153,30 @@ export function TerminalHost(props: {
       // Detach, then decline: the key falls through to the shell's own
       // layer, which goes back (or Home) as from anywhere else.
       [Commands.TERMINAL_BACK]: () => {
-        if (!props.onJump) return terminals.write(props.id, CTRL_O);
+        if (!props.onJump) {
+          return terminals.write(props.id, CTRL_O);
+        }
         props.onDetach();
         return false;
       },
       [Commands.TERMINAL_KITTY_BACK]: () => {
-        if (!props.onJump) return terminals.write(props.id, CTRL_BRACKET);
+        if (!props.onJump) {
+          return terminals.write(props.id, CTRL_BRACKET);
+        }
         props.onDetach();
         return false;
       },
       [Commands.GO_HOME]: () => {
-        if (!props.onJump) return terminals.write(props.id, CTRL_A);
+        if (!props.onJump) {
+          return terminals.write(props.id, CTRL_A);
+        }
         props.onDetach();
         return false;
       },
       [Commands.TERMINAL_JUMP]: () => {
-        if (!props.onJump) return terminals.write(props.id, CTRL_T);
+        if (!props.onJump) {
+          return terminals.write(props.id, CTRL_T);
+        }
         props.onDetach();
         props.onJump();
       },
@@ -155,7 +184,9 @@ export function TerminalHost(props: {
       // Showing the rail focuses it, which would detach: put focus back in
       // the same batch, so the agent never loses the keys in between.
       [Commands.SIDEBAR_TOGGLE]: () => {
-        if (!props.onJump) return terminals.write(props.id, CTRL_E);
+        if (!props.onJump) {
+          return terminals.write(props.id, CTRL_E);
+        }
         const pane = focus.activePane;
         batch(() => {
           toggleSidebar();
@@ -174,14 +205,18 @@ export function TerminalHost(props: {
   };
   const status = createMemo(() => {
     const s = state();
-    if (!s) return { text: "no session", color: theme.textMuted };
-    if (!s.running && s.link.phase === "failed")
+    if (!s) {
+      return { text: "no session", color: theme.textMuted };
+    }
+    if (!s.running && s.link.phase === "failed") {
       return { text: s.link.reason ?? "failed", color: theme.error };
-    if (!s.running)
+    }
+    if (!s.running) {
       return {
         text: `exited ${s.exitCode ?? "?"}`,
         color: s.exitCode === 0 ? theme.textMuted : theme.error,
       };
+    }
     return props.attached()
       ? { text: "attached", color: theme.success }
       : { text: "detached · enter attach", color: theme.warning };
@@ -205,7 +240,9 @@ export function TerminalHost(props: {
               <span>[</span>
               <LinkMark link={l()} />
               <span style={{ fg: theme.textMuted }}>
-                {l().phase === "failed" ? ` ${l().reason ?? "failed"}` : " connecting"}
+                {l().phase === "failed"
+                  ? ` ${l().reason ?? "failed"}`
+                  : " connecting"}
               </span>
               <span>]</span>
             </text>

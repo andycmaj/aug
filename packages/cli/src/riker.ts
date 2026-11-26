@@ -4,9 +4,16 @@
 // binary (core/self.ts), and the demo's stand-in agent is `riker demo-agent`.
 
 import { fileURLToPath } from "node:url";
-import { DEMO_AGENT_SUBCOMMAND, lastingEntry, setToolsEntry, TOOLS_SUBCOMMAND } from "@riker/core/self";
+import {
+  DEMO_AGENT_SUBCOMMAND,
+  lastingEntry,
+  setToolsEntry,
+  TOOLS_SUBCOMMAND,
+} from "@riker/core/self";
 
-setToolsEntry(lastingEntry(fileURLToPath(new URL("./riker-tools.ts", import.meta.url))));
+setToolsEntry(
+  lastingEntry(fileURLToPath(new URL("./riker-tools.ts", import.meta.url))),
+);
 
 if (process.argv[2] === TOOLS_SUBCOMMAND) {
   process.argv.splice(2, 1);

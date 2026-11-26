@@ -153,7 +153,9 @@ export function statePath(home: string): string {
 }
 
 export function loadState(file: string): SimState {
-  if (!existsSync(file)) return emptyState();
+  if (!existsSync(file)) {
+    return emptyState();
+  }
   return {
     ...emptyState(),
     ...(JSON.parse(readFileSync(file, "utf8")) as Partial<SimState>),
@@ -259,7 +261,9 @@ function notFound(path: string): Error {
 
 export function answerRest(s: SimState, path: string): unknown {
   const [route, query = ""] = path.replace(`${API}/`, "").split("?");
-  if (route === "user") return { login: s.me };
+  if (route === "user") {
+    return { login: s.me };
+  }
   if (route === "rate_limit") {
     const reset = Math.floor(Date.now() / 1000) + 3600;
     return {
@@ -277,44 +281,62 @@ export function answerRest(s: SimState, path: string): unknown {
       .map((n) => toNotification(s, n));
   }
   const prefix = `repos/${s.repo}/`;
-  if (!route.startsWith(prefix)) throw notFound(path);
+  if (!route.startsWith(prefix)) {
+    throw notFound(path);
+  }
   const rest = route.slice(prefix.length).split("/");
   const num = (i: number) => Number(rest[i]);
   const pull = (n: number) => {
     const p = s.pulls.find((x) => x.number === n);
-    if (!p) throw notFound(path);
+    if (!p) {
+      throw notFound(path);
+    }
     return p;
   };
   const comment = (id: number) => {
     const c = s.comments.find((x) => x.id === id);
-    if (!c) throw notFound(path);
+    if (!c) {
+      throw notFound(path);
+    }
     return toComment(s, c);
   };
   const [a, b, c, d] = rest;
-  if ((a === "issues" || a === "pulls") && b === "comments" && c)
+  if ((a === "issues" || a === "pulls") && b === "comments" && c) {
     return comment(num(2));
-  if (a === "pulls" && b && !c) return toPull(s, pull(num(1)));
-  if (a === "issues" && b && !c) return toPull(s, pull(num(1)));
+  }
+  if (a === "pulls" && b && !c) {
+    return toPull(s, pull(num(1)));
+  }
+  if (a === "issues" && b && !c) {
+    return toPull(s, pull(num(1)));
+  }
   if (a === "pulls" && c === "reviews") {
     const p = pull(num(1));
-    if (!d) return p.reviews.map((r) => toReview(s, p.number, r));
+    if (!d) {
+      return p.reviews.map((r) => toReview(s, p.number, r));
+    }
     const r = p.reviews.find((x) => x.id === num(3));
-    if (!r) throw notFound(path);
+    if (!r) {
+      throw notFound(path);
+    }
     return toReview(s, p.number, r);
   }
-  if (a === "pulls" && c === "comments")
+  if (a === "pulls" && c === "comments") {
     return s.comments
       .filter((x) => x.pr === num(1) && x.review)
       .map((x) => toComment(s, x));
-  if (a === "issues" && c === "comments")
+  }
+  if (a === "issues" && c === "comments") {
     return s.comments
       .filter((x) => x.pr === num(1) && !x.review)
       .map((x) => toComment(s, x));
-  if (a === "pulls" && c === "files")
+  }
+  if (a === "pulls" && c === "files") {
     return pull(num(1)).files.map((filename) => ({
       filename,
       status: "modified",
     }));
+  }
   throw notFound(path);
 }
 
@@ -329,11 +351,18 @@ export function simApi(file: string): GhApi {
 // change request counts, a comment does not.
 export function reviewDecision(p: SimPull): string {
   const last = new Map<string, ReviewState>();
-  for (const r of p.reviews)
-    if (r.state !== ReviewState.commented) last.set(r.user, r.state);
+  for (const r of p.reviews) {
+    if (r.state !== ReviewState.commented) {
+      last.set(r.user, r.state);
+    }
+  }
   const verdicts = [...last.values()];
-  if (verdicts.includes(ReviewState.changes)) return "CHANGES_REQUESTED";
-  if (verdicts.includes(ReviewState.approved)) return "APPROVED";
+  if (verdicts.includes(ReviewState.changes)) {
+    return "CHANGES_REQUESTED";
+  }
+  if (verdicts.includes(ReviewState.approved)) {
+    return "APPROVED";
+  }
   return "REVIEW_REQUIRED";
 }
 
@@ -391,11 +420,12 @@ export function answerGraphql(s: SimState, prs: PrRef[]): GqlAnswer {
     }
     const p = s.pulls.find((x) => x.number === pr.number);
     data[alias] = { pullRequest: p ? toGqlPr(p) : null };
-    if (!p)
+    if (!p) {
       errors.push({
         message: `Could not resolve to a PullRequest with the number of ${pr.number}.`,
         path: [alias, "pullRequest"],
       });
+    }
   });
   return { data, ...(errors.length ? { errors } : {}) };
 }
@@ -412,7 +442,9 @@ export function simReviews(file: string): ReviewSource {
     async context(pr) {
       const s = loadState(file);
       const p = s.pulls.find((x) => x.number === pr.number);
-      if (!p) throw new Error(`${pr.repo}#${pr.number} is not in the sim`);
+      if (!p) {
+        throw new Error(`${pr.repo}#${pr.number} is not in the sim`);
+      }
       const threads = s.comments.filter((c) => c.pr === p.number && c.path);
       return readReviewContext(pr, {
         viewer: { login: s.me },
@@ -423,7 +455,12 @@ export function simReviews(file: string): ReviewSource {
             author: { login: p.author },
             closingIssuesReferences: { nodes: [] },
             reviews: {
-              nodes: p.reviews.map((r) => ({ author: { login: r.user }, state: r.state, submittedAt: r.at, commit: null })),
+              nodes: p.reviews.map((r) => ({
+                author: { login: r.user },
+                state: r.state,
+                submittedAt: r.at,
+                commit: null,
+              })),
             },
             reviewThreads: {
               nodes: threads.map((c) => ({
@@ -431,7 +468,9 @@ export function simReviews(file: string): ReviewSource {
                 isOutdated: false,
                 path: c.path!,
                 line: c.line ?? null,
-                comments: { nodes: [{ author: { login: c.user }, body: c.body }] },
+                comments: {
+                  nodes: [{ author: { login: c.user }, body: c.body }],
+                },
               })),
             },
           },

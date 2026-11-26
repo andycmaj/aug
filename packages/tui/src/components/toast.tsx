@@ -38,8 +38,12 @@ export function errorHint(
   attached: boolean,
 ): string {
   const parts = [attached ? "ctrl+] then esc dismiss" : "esc dismiss"];
-  if (error.times > 1) parts.unshift(`×${error.times}`);
-  if (waiting > 0) parts.push(`${waiting} more`);
+  if (error.times > 1) {
+    parts.unshift(`×${error.times}`);
+  }
+  if (waiting > 0) {
+    parts.push(`${waiting} more`);
+  }
   return parts.join(" · ");
 }
 

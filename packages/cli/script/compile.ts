@@ -35,10 +35,14 @@ const dist = join(root, "dist");
 // bun installs only this machine's: a cross build needs the rest on disk to
 // embed. ghostty-opentui ships every platform's .node in its own package.
 // Without a package name this leaves package.json and bun.lock alone.
-if (all) await $`bun install ${"--os=*"} ${"--cpu=*"}`;
+if (all) {
+  await $`bun install ${"--os=*"} ${"--cpu=*"}`;
+}
 
 // opentui's tree-sitter parser runs in a worker, loaded by path at runtime.
-const parserWorker = realpathSync(join(root, "node_modules/@opentui/core/parser.worker.js"));
+const parserWorker = realpathSync(
+  join(root, "node_modules/@opentui/core/parser.worker.js"),
+);
 
 async function build(os: string, arch: string, outfile: string): Promise<void> {
   const result = await Bun.build({
@@ -57,7 +61,9 @@ async function build(os: string, arch: string, outfile: string): Promise<void> {
   });
   if (!result.success) {
     console.error(`build failed for ${os}-${arch}:`);
-    for (const log of result.logs) console.error(log);
+    for (const log of result.logs) {
+      console.error(log);
+    }
     process.exit(1);
   }
   console.log(`built ${outfile}`);
@@ -66,7 +72,9 @@ async function build(os: string, arch: string, outfile: string): Promise<void> {
 if (all) {
   rmSync(dist, { recursive: true, force: true });
   mkdirSync(dist, { recursive: true });
-  for (const t of TARGETS) await build(t.os, t.arch, join(dist, `riker-${t.os}-${t.arch}`));
+  for (const t of TARGETS) {
+    await build(t.os, t.arch, join(dist, `riker-${t.os}-${t.arch}`));
+  }
 } else {
   await build(process.platform, process.arch, join(dist, "riker"));
 }

@@ -86,10 +86,11 @@ function target(s: SimState, n: number | undefined): SimPull {
     n === undefined
       ? [...s.pulls].reverse().find((x) => x.state === PullState.open)
       : s.pulls.find((x) => x.number === n);
-  if (!p)
+  if (!p) {
     throw new Error(
       n === undefined ? "no open PR: open one with pr-open" : `no PR #${n}`,
     );
+  }
   return p;
 }
 
@@ -102,16 +103,23 @@ function notify(
   latest: string | null,
   reason?: string,
 ): void {
-  if (by === s.me) return;
+  if (by === s.me) {
+    return;
+  }
   const why = reason ?? p.subscribed;
-  if (!why) return;
+  if (!why) {
+    return;
+  }
   p.subscribed ??= why;
   const at = now();
   const id = String(1000 + p.number);
   const existing = s.notifications.find((n) => n.id === id);
   const next = { id, pr: p.number, reason: why, updatedAt: at, latest };
-  if (existing) Object.assign(existing, next);
-  else s.notifications.push(next);
+  if (existing) {
+    Object.assign(existing, next);
+  } else {
+    s.notifications.push(next);
+  }
 }
 
 function touch(p: SimPull): void {
@@ -127,9 +135,12 @@ function openPr(
   const author = mine ? s.me : (e.by ?? "bob");
   const reviewer = e.team ? null : (e.reviewer ?? (mine ? "alice" : s.me));
   let head = mine && s.work ? s.work.branch : `sim/pr-${number}`;
-  if (!mine && s.checkout && s.commits.length)
+  if (!mine && s.checkout && s.commits.length) {
     makeBranch(s.checkout, head, s.commits, number - 1, s.base);
-  if (!s.checkout) head = mine ? "sim/work" : head;
+  }
+  if (!s.checkout) {
+    head = mine ? "sim/work" : head;
+  }
   const diff = s.checkout
     ? diffLines(s.checkout, s.base, head)
     : { files: [], lines: [] };
@@ -163,8 +174,9 @@ function openPr(
   };
   s.pulls.push(p);
   // GitHub tells the owner of a team's ask too, when they are on it.
-  if (reviewer === s.me || e.team)
+  if (reviewer === s.me || e.team) {
     notify(s, p, author, pullApi(s, number), "review_requested");
+  }
   return {
     said: `#${number} opened by ${author}, review asked of ${e.team ? `team ${e.team}` : reviewer}${mine ? ` (head ${head})` : ""}`,
     opened: p,
@@ -185,7 +197,9 @@ function comment(
       ? `@${s.me} can you take a look at this?`
       : "Thanks, one question on the approach.");
   s.comments.push({ id, pr: p.number, user: by, body, at: now() });
-  if (by === s.me) p.subscribed ??= "comment";
+  if (by === s.me) {
+    p.subscribed ??= "comment";
+  }
   touch(p);
   notify(s, p, by, issueCommentApi(s, id), mention ? "mention" : undefined);
   return {
@@ -255,7 +269,7 @@ function ci(s: SimState, e: Extract<SimEvent, { type: "ci" }>): Applied {
           conclusion: e.result === "pass" ? "SUCCESS" : "FAILURE",
         },
   );
-  if (!p.checks.length)
+  if (!p.checks.length) {
     p.checks = [
       {
         name: "test",
@@ -263,6 +277,7 @@ function ci(s: SimState, e: Extract<SimEvent, { type: "ci" }>): Applied {
         conclusion: e.result === "pass" ? "SUCCESS" : "FAILURE",
       },
     ];
+  }
   touch(p);
   return { said: `CI on #${p.number}: ${e.result}` };
 }
@@ -279,10 +294,15 @@ function push(s: SimState, e: Extract<SimEvent, { type: "push" }>): Applied {
   return { said: `pushed to #${p.number}: CI running again` };
 }
 
-function rerequest(s: SimState, e: Extract<SimEvent, { type: "rerequest" }>): Applied {
+function rerequest(
+  s: SimState,
+  e: Extract<SimEvent, { type: "rerequest" }>,
+): Applied {
   const p = target(s, e.pr);
   const by = e.by ?? p.author;
-  if (!p.requested.includes(s.me)) p.requested.push(s.me);
+  if (!p.requested.includes(s.me)) {
+    p.requested.push(s.me);
+  }
   touch(p);
   notify(s, p, by, pullApi(s, p.number), "review_requested");
   return { said: `${by} asked your review of #${p.number} again` };
@@ -411,10 +431,11 @@ export async function playScenario(
   } = {},
 ): Promise<void> {
   const scenario = SCENARIOS[name];
-  if (!scenario)
+  if (!scenario) {
     throw new Error(
       `no scenario "${name}" (one of ${Object.keys(SCENARIOS).join(", ")})`,
     );
+  }
   for (const step of scenario.steps) {
     await sleep(step.wait * (opts.speed ?? 1));
     const done = applyToFile(file, step.event);

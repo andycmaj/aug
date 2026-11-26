@@ -66,22 +66,31 @@ const FAILED = new Set([
 ]);
 
 function rollup(checks: GhPrView["statusCheckRollup"]): PrChecks {
-  if (!checks?.length) return PrChecks.none;
+  if (!checks?.length) {
+    return PrChecks.none;
+  }
   let pending = false;
   for (const c of checks) {
     // A check run has status + conclusion; a commit status has state.
     const verdict = c.conclusion ?? c.state ?? "";
-    if (FAILED.has(verdict)) return PrChecks.fail;
+    if (FAILED.has(verdict)) {
+      return PrChecks.fail;
+    }
     const done =
       c.__typename === "StatusContext"
         ? c.state !== "PENDING" && c.state !== "EXPECTED"
         : c.status === "COMPLETED";
-    if (!done) pending = true;
+    if (!done) {
+      pending = true;
+    }
   }
   return pending ? PrChecks.pending : PrChecks.pass;
 }
 
-type QueueFields = Pick<PrStatusRow, "queue" | "queue_position" | "queue_reason">;
+type QueueFields = Pick<
+  PrStatusRow,
+  "queue" | "queue_position" | "queue_reason"
+>;
 
 const NOT_QUEUED: QueueFields = {
   queue: PrQueue.none,
@@ -94,19 +103,22 @@ const NOT_QUEUED: QueueFields = {
 // the PR is back to its checks and reviews.
 function readQueue(view: GhPrView): QueueFields {
   const entry = view.mergeQueueEntry;
-  if (entry || view.isInMergeQueue)
+  if (entry || view.isInMergeQueue) {
     return {
-      queue:
-        entry?.state === "UNMERGEABLE" ? PrQueue.failing : PrQueue.queued,
+      queue: entry?.state === "UNMERGEABLE" ? PrQueue.failing : PrQueue.queued,
       queue_position: entry?.position ?? null,
       queue_reason: null,
     };
+  }
   const last = view.lastQueueEvent;
-  if (last?.__typename !== "RemovedFromMergeQueueEvent") return NOT_QUEUED;
+  if (last?.__typename !== "RemovedFromMergeQueueEvent") {
+    return NOT_QUEUED;
+  }
   const at = Date.parse(last.createdAt ?? "");
   const pushed = Date.parse(view.headCommittedAt ?? "");
-  if (Number.isFinite(at) && Number.isFinite(pushed) && pushed > at)
+  if (Number.isFinite(at) && Number.isFinite(pushed) && pushed > at) {
     return NOT_QUEUED;
+  }
   return {
     queue: PrQueue.removed,
     queue_position: null,
@@ -193,11 +205,10 @@ export function prBatchQuery(prs: PrRef[]): string {
 
 // The raw shapes, exported so the offline simulator (@riker/fixtures sim)
 // builds its answers against them and cannot drift from what is parsed.
-export interface GqlPr
-  extends Omit<
-    GhPrView,
-    "statusCheckRollup" | "lastQueueEvent" | "headCommittedAt"
-  > {
+export interface GqlPr extends Omit<
+  GhPrView,
+  "statusCheckRollup" | "lastQueueEvent" | "headCommittedAt"
+> {
   timelineItems?: { nodes?: GhQueueEvent[] } | null;
   commits?: {
     nodes?: {
@@ -220,7 +231,10 @@ export function readPrBatch(prs: PrRef[], answer: GqlAnswer): PrBatch {
   const errors = answer.errors ?? [];
   const data = answer.data;
   if (!data) {
-    const said = errors.map((e) => e.message).filter(Boolean).join("; ");
+    const said = errors
+      .map((e) => e.message)
+      .filter(Boolean)
+      .join("; ");
     throw new Error(said || "GitHub answered with no data");
   }
   const views = new Map<string, GhPrView | Error>();
@@ -250,8 +264,12 @@ export function readPrBatch(prs: PrRef[], answer: GqlAnswer): PrBatch {
 // one PR errs (deleted, private) still answers for the rest.
 export function prBatchVia(client: GithubClient): PrFetch {
   return async (prs) => {
-    const answer = (await client.graphql(prBatchQuery(prs))) as GqlAnswer | null;
-    if (!answer) throw new Error("GitHub answered with nothing");
+    const answer = (await client.graphql(
+      prBatchQuery(prs),
+    )) as GqlAnswer | null;
+    if (!answer) {
+      throw new Error("GitHub answered with nothing");
+    }
     return readPrBatch(prs, answer);
   };
 }
@@ -273,10 +291,16 @@ export async function refreshPrStatus(
   fetch: PrFetch,
 ): Promise<PrStatusRow | null> {
   const pr = taskPr(task);
-  if (!pr) return null;
+  if (!pr) {
+    return null;
+  }
   const got = (await fetch([pr])).views.get(pr.url);
-  if (!got) throw new Error("not found");
-  if (got instanceof Error) throw got;
+  if (!got) {
+    throw new Error("not found");
+  }
+  if (got instanceof Error) {
+    throw got;
+  }
   return setFromView(task, pr, got);
 }
 
@@ -286,19 +310,27 @@ const CLOSED_EVERY_MS = 30 * 60_000;
 // Work still in front of the owner, whose PR can still change. A merged PR
 // is read once more only if the task now points at another PR.
 function wantsRefresh(task: TaskRow): PrRef | null {
-  if (task.status !== TaskStatus.open && task.status !== TaskStatus.later)
+  if (task.status !== TaskStatus.open && task.status !== TaskStatus.later) {
     return null;
+  }
   const pr = taskPr(task);
-  if (!pr) return null;
+  if (!pr) {
+    return null;
+  }
   const last = store.prStatus(task.id);
-  if (!last || last.url !== pr.url) return pr;
-  if (last.state === PrState.merged) return null;
+  if (!last || last.url !== pr.url) {
+    return pr;
+  }
+  if (last.state === PrState.merged) {
+    return null;
+  }
   if (
     last.state === PrState.closed &&
     !last.error &&
     Date.now() - Date.parse(last.fetched_at) < CLOSED_EVERY_MS
-  )
+  ) {
     return null;
+  }
   return pr;
 }
 
@@ -342,7 +374,9 @@ export async function refreshPrStatuses(
   const byUrl = new Map<string, { pr: PrRef; tasks: TaskRow[] }>();
   for (const task of store.listTasks()) {
     const pr = wantsRefresh(task);
-    if (!pr) continue;
+    if (!pr) {
+      continue;
+    }
     if (gate && !gate.prAllowed(pr.url)) {
       out.skipped++;
       continue;
@@ -373,11 +407,16 @@ export async function refreshPrStatuses(
       }
       out.failed += chunk.length;
       out.error = message;
-      for (const c of chunk)
-        for (const t of c.tasks) store.markPrStale(t.id, message);
+      for (const c of chunk) {
+        for (const t of c.tasks) {
+          store.markPrStale(t.id, message);
+        }
+      }
       continue;
     }
-    if (batch.budget) out.budget = batch.budget;
+    if (batch.budget) {
+      out.budget = batch.budget;
+    }
     for (const { pr, tasks } of chunk) {
       const got = batch.views.get(pr.url) ?? new Error("not in the answer");
       if (got instanceof Error) {
@@ -385,11 +424,15 @@ export async function refreshPrStatuses(
         out.failed++;
         out.error = got.message;
         gate?.prFailed(pr.url);
-        for (const t of tasks) store.markPrStale(t.id, got.message);
+        for (const t of tasks) {
+          store.markPrStale(t.id, got.message);
+        }
         continue;
       }
       gate?.prSucceeded(pr.url);
-      for (const t of tasks) setFromView(t, pr, got);
+      for (const t of tasks) {
+        setFromView(t, pr, got);
+      }
       out.ok++;
     }
   }
@@ -419,7 +462,9 @@ export async function refreshPrEndRest(
     : pull.state === "closed"
       ? PrState.closed
       : null;
-  if (!state) return false;
+  if (!state) {
+    return false;
+  }
   const last = store.prStatus(task.id);
   const kept = last?.url === pr.url ? last : null;
   store.setPrStatus({

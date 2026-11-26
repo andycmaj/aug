@@ -168,7 +168,11 @@ describe("refreshing", () => {
     const t = issueTask();
     linkPr(t.id, "https://github.com/acme/ledger/pull/230");
     await refreshPrStatuses({
-      fetch: byUrl(async () => ({ state: "OPEN", baseRefName: "stack-2-parser", statusCheckRollup: [] })),
+      fetch: byUrl(async () => ({
+        state: "OPEN",
+        baseRefName: "stack-2-parser",
+        statusCheckRollup: [],
+      })),
     });
     expect(store.prStatus(t.id)?.base).toBe("stack-2-parser");
     await refreshPrStatuses({
@@ -176,7 +180,10 @@ describe("refreshing", () => {
         throw new Error("HTTP 502");
       }),
     });
-    expect(store.prStatus(t.id)).toMatchObject({ base: "stack-2-parser", error: "HTTP 502" });
+    expect(store.prStatus(t.id)).toMatchObject({
+      base: "stack-2-parser",
+      error: "HTTP 502",
+    });
   });
 
   test("a merged PR is not asked again; a failing one keeps being asked", async () => {
@@ -218,7 +225,9 @@ describe("refreshing", () => {
     const b = prTask(2);
     const r = await refreshPrStatuses({
       fetch: byUrl(async (url) => {
-        if (url.endsWith("/1")) throw new Error("no auth");
+        if (url.endsWith("/1")) {
+          throw new Error("no auth");
+        }
         return { state: "OPEN" };
       }),
     });
@@ -228,7 +237,9 @@ describe("refreshing", () => {
   });
 
   test("all of them in one call, not one call each", async () => {
-    for (let n = 1; n <= 30; n++) prTask(n);
+    for (let n = 1; n <= 30; n++) {
+      prTask(n);
+    }
     const calls: string[][] = [];
     const r = await refreshPrStatuses({
       fetch: byUrl(async () => ({ state: "OPEN" }), null, calls),
@@ -245,7 +256,9 @@ describe("refreshing", () => {
     expect(prChip(store.prStatus(t.id)!).text).toBe("#7 ✓ approved");
     const r = await refreshPrStatuses({
       fetch: async () => {
-        throw new Error("HTTP 502: Bad Gateway (https://api.github.com/graphql)");
+        throw new Error(
+          "HTTP 502: Bad Gateway (https://api.github.com/graphql)",
+        );
       },
     });
     expect(r).toMatchObject({ asked: 1, ok: 0, failed: 1, limited: null });
@@ -253,19 +266,26 @@ describe("refreshing", () => {
     const row = store.prStatus(t.id)!;
     expect(row.review).toBe("approved");
     expect(row.error).toContain("502");
-    expect(prChip(row)).toEqual({ text: "#7 ✓ approved · stale", tone: "muted" });
+    expect(prChip(row)).toEqual({
+      text: "#7 ✓ approved · stale",
+      tone: "muted",
+    });
     expect(prLine(row)).toContain("stale, last read failed: HTTP 502");
     await refreshPrStatuses({ fetch: byUrl(async () => ({ state: "OPEN" })) });
     expect(store.prStatus(t.id)!.error).toBeNull();
   });
 
   test("a rate limit stops the round: no more calls after it", async () => {
-    for (let n = 1; n <= 30; n++) prTask(n);
+    for (let n = 1; n <= 30; n++) {
+      prTask(n);
+    }
     let calls = 0;
     const r = await refreshPrStatuses({
       fetch: async () => {
         calls++;
-        throw new Error("GraphQL: API rate limit already exceeded for user ID 1.");
+        throw new Error(
+          "GraphQL: API rate limit already exceeded for user ID 1.",
+        );
       },
     });
     expect(calls).toBe(1);
@@ -274,7 +294,9 @@ describe("refreshing", () => {
   });
 
   test("under the reserve, the round leaves the rest for later", async () => {
-    for (let n = 1; n <= 30; n++) prTask(n);
+    for (let n = 1; n <= 30; n++) {
+      prTask(n);
+    }
     const calls: string[][] = [];
     const budget = { remaining: 40, resetAt: "2026-11-16T18:00:00Z" };
     const r = await refreshPrStatuses({
@@ -296,7 +318,9 @@ describe("refreshing", () => {
     const asked: string[] = [];
     const fetch = byUrl(async (url) => {
       asked.push(url);
-      if (url.endsWith("/1")) throw new Error("Could not resolve to a PullRequest");
+      if (url.endsWith("/1")) {
+        throw new Error("Could not resolve to a PullRequest");
+      }
       return { state: "OPEN" };
     });
     await refreshPrStatuses({ fetch, gate });
@@ -313,14 +337,22 @@ describe("refreshing", () => {
 
 describe("one GraphQL query for a batch", () => {
   const refs = [
-    { repo: "acme/ledger", number: 1, url: "https://github.com/acme/ledger/pull/1" },
+    {
+      repo: "acme/ledger",
+      number: 1,
+      url: "https://github.com/acme/ledger/pull/1",
+    },
     { repo: "acme/web", number: 9, url: "https://github.com/acme/web/pull/9" },
   ];
 
   test("an alias per PR, and the budget asked for free", () => {
     const q = prBatchQuery(refs);
-    expect(q).toContain('p0: repository(owner: "acme", name: "ledger") { pullRequest(number: 1)');
-    expect(q).toContain('p1: repository(owner: "acme", name: "web") { pullRequest(number: 9)');
+    expect(q).toContain(
+      'p0: repository(owner: "acme", name: "ledger") { pullRequest(number: 1)',
+    );
+    expect(q).toContain(
+      'p1: repository(owner: "acme", name: "web") { pullRequest(number: 9)',
+    );
     expect(q).toContain("rateLimit { remaining resetAt }");
     expect(q).toContain("baseRefName");
   });
@@ -340,7 +372,11 @@ describe("one GraphQL query for a batch", () => {
                     statusCheckRollup: {
                       contexts: {
                         nodes: [
-                          { __typename: "CheckRun", status: "COMPLETED", conclusion: "FAILURE" },
+                          {
+                            __typename: "CheckRun",
+                            status: "COMPLETED",
+                            conclusion: "FAILURE",
+                          },
                         ],
                       },
                     },
@@ -352,7 +388,12 @@ describe("one GraphQL query for a batch", () => {
         },
         p1: { pullRequest: null },
       },
-      errors: [{ message: "Could not resolve to a PullRequest", path: ["p1", "pullRequest"] }],
+      errors: [
+        {
+          message: "Could not resolve to a PullRequest",
+          path: ["p1", "pullRequest"],
+        },
+      ],
     });
     expect(batch.budget?.remaining).toBe(4800);
     expect(readPrView(batch.views.get(refs[0].url) as GhPrView)).toMatchObject({
@@ -501,7 +542,11 @@ describe("the merge status ladder, from GitHub's answer", () => {
     ],
     [
       "merged",
-      { state: "MERGED", reviewDecision: "APPROVED", ...removed("2026-11-18T11:00:00Z", null) },
+      {
+        state: "MERGED",
+        reviewDecision: "APPROVED",
+        ...removed("2026-11-18T11:00:00Z", null),
+      },
       "#219 merged",
       "accent",
     ],
@@ -513,10 +558,11 @@ describe("the merge status ladder, from GitHub's answer", () => {
     ],
   ];
 
-  for (const [name, patch, text, tone, checks] of ladder)
+  for (const [name, patch, text, tone, checks] of ladder) {
     test(name, () => {
       expect(prChip(read(node(patch, checks)))).toEqual({ text, tone });
     });
+  }
 
   test("the queue's fields are asked for in the same query", () => {
     const q = prBatchQuery([ref]);
@@ -528,7 +574,10 @@ describe("the merge status ladder, from GitHub's answer", () => {
 
   test("the queue is a phase of review: the lane and header say it", () => {
     const queued = read(
-      node({ isInMergeQueue: true, mergeQueueEntry: { position: 2, state: "QUEUED" } }),
+      node({
+        isInMergeQueue: true,
+        mergeQueueEntry: { position: 2, state: "QUEUED" },
+      }),
     );
     expect(queued).toMatchObject({ queue: "queued", queue_position: 2 });
     expect(prQueueWord(queued)).toBe("in merge queue");
@@ -536,7 +585,10 @@ describe("the merge status ladder, from GitHub's answer", () => {
       "PR acme/ledger#219 · open · in merge queue, position 2 · checks pass · review required",
     );
     const out = read(node(removed("2026-11-18T11:00:00Z", "Merge conflict")));
-    expect(out).toMatchObject({ queue: "removed", queue_reason: "Merge conflict" });
+    expect(out).toMatchObject({
+      queue: "removed",
+      queue_reason: "Merge conflict",
+    });
     expect(prQueueWord(out)).toBe("out of merge queue");
     expect(prLine(out)).toContain("removed from merge queue: merge conflict");
     const merged = read(node({ state: "MERGED", isInMergeQueue: false }));
@@ -553,13 +605,23 @@ describe("the merge status ladder, from GitHub's answer", () => {
         return batch.views.get(ref.url) as GhPrView;
       });
     await refreshPrStatuses({
-      fetch: fetch(node({ isInMergeQueue: true, mergeQueueEntry: { position: 1, state: "MERGEABLE" } })),
+      fetch: fetch(
+        node({
+          isInMergeQueue: true,
+          mergeQueueEntry: { position: 1, state: "MERGEABLE" },
+        }),
+      ),
     });
-    expect(store.prStatus(t.id)).toMatchObject({ queue: "queued", queue_position: 1 });
+    expect(store.prStatus(t.id)).toMatchObject({
+      queue: "queued",
+      queue_position: 1,
+    });
     let woke = 0;
     const off = store.onChange(() => woke++);
     await refreshPrStatuses({
-      fetch: fetch(node(removed("2026-11-18T11:00:00Z", "Failed status checks"))),
+      fetch: fetch(
+        node(removed("2026-11-18T11:00:00Z", "Failed status checks")),
+      ),
     });
     off();
     expect(woke).toBe(1);

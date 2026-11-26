@@ -15,7 +15,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 async function boot() {
@@ -42,7 +44,9 @@ async function boot() {
       setup.mockInput.pressTab();
       await settle();
     }
-    for (const c of words) setup.mockInput.pressKey(c);
+    for (const c of words) {
+      setup.mockInput.pressKey(c);
+    }
     await settle();
   };
   const goTo = async (words: string, toggles = 0) => {
@@ -62,11 +66,17 @@ async function boot() {
   return { press, tab, escape, open, goTo, frame, engine };
 }
 
-const footer = (frame: string) => frame.split("\n").filter((l) => l.includes("? help")).join("\n");
+const footer = (frame: string) =>
+  frame
+    .split("\n")
+    .filter((l) => l.includes("? help"))
+    .join("\n");
 
 test("x drops a task; go to finds it; d reopens it", async () => {
   const { press, goTo, frame } = await boot();
-  const badge = store.listTasks().find((t) => t.title.startsWith("Badge printer"))!;
+  const badge = store
+    .listTasks()
+    .find((t) => t.title.startsWith("Badge printer"))!;
   await goTo("badge printer");
   await press("x");
   expect(store.getTask(badge.id)!.status).toBe(TaskStatus.dropped);
@@ -82,7 +92,9 @@ test("x drops a task; go to finds it; d reopens it", async () => {
 
 test("go to hides done work until tab shows it, and keeps the choice", async () => {
   const { tab, escape, open, frame } = await boot();
-  const badge = store.listTasks().find((t) => t.title.startsWith("Badge printer"))!;
+  const badge = store
+    .listTasks()
+    .find((t) => t.title.startsWith("Badge printer"))!;
   store.updateTask(badge.id, {
     status: TaskStatus.dropped,
     closed_at: new Date().toISOString(),

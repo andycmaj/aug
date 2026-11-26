@@ -50,7 +50,9 @@ const NOTE_TEXT_MAX = 1000;
 const NOTES_PER_FILE_MAX = 20;
 
 // The JSON object in the skill's answer: a ```json fence, or the whole text.
-function jsonIn(text: string): { value: Record<string, unknown> } | { error: string } {
+function jsonIn(
+  text: string,
+): { value: Record<string, unknown> } | { error: string } {
   const fenced = /```(?:json)?\s*\n([\s\S]*?)\n```/.exec(text);
   const raw = (fenced?.[1] ?? text).trim();
   let value: unknown;
@@ -59,26 +61,45 @@ function jsonIn(text: string): { value: Record<string, unknown> } | { error: str
   } catch (err) {
     return { error: `the answer is not JSON: ${errorMessage(err)}` };
   }
-  return isRecord(value) ? { value } : { error: "the answer is not a JSON object" };
+  return isRecord(value)
+    ? { value }
+    : { error: "the answer is not a JSON object" };
 }
 
 function parseDiffs(list: unknown): GuideDiff[] {
   return (Array.isArray(list) ? list : []).filter(isRecord).map((d) => ({
     file: str(d.file),
     summary: str(d.summary),
-    notes: (Array.isArray(d.notes) ? d.notes : []).filter(isRecord).flatMap((n) => {
-      const lineStart = Number(n.lineStart);
-      const lineEnd = Number(n.lineEnd ?? n.lineStart);
-      const text = str(n.text).slice(0, NOTE_TEXT_MAX);
-      if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || !text) return [];
-      return [{ lineStart, lineEnd, ...(n.side === "old" ? { side: "old" as const } : {}), text }];
-    }),
+    notes: (Array.isArray(d.notes) ? d.notes : [])
+      .filter(isRecord)
+      .flatMap((n) => {
+        const lineStart = Number(n.lineStart);
+        const lineEnd = Number(n.lineEnd ?? n.lineStart);
+        const text = str(n.text).slice(0, NOTE_TEXT_MAX);
+        if (
+          !Number.isInteger(lineStart) ||
+          !Number.isInteger(lineEnd) ||
+          !text
+        ) {
+          return [];
+        }
+        return [
+          {
+            lineStart,
+            lineEnd,
+            ...(n.side === "old" ? { side: "old" as const } : {}),
+            text,
+          },
+        ];
+      }),
   }));
 }
 
 export function parseGuide(text: string): Guide | { error: string } {
   const read = jsonIn(text);
-  if ("error" in read) return { error: read.error.replace("the answer", "the guide") };
+  if ("error" in read) {
+    return { error: read.error.replace("the answer", "the guide") };
+  }
   const value = read.value;
   const sections = Array.isArray(value.sections) ? value.sections : [];
   const guide: Guide = {
@@ -89,18 +110,27 @@ export function parseGuide(text: string): Guide | { error: string } {
       overview: str(s.overview),
       diffs: parseDiffs(s.diffs),
     })),
-    unplacedFiles: (Array.isArray(value.unplacedFiles) ? value.unplacedFiles : []).map(str),
+    unplacedFiles: (Array.isArray(value.unplacedFiles)
+      ? value.unplacedFiles
+      : []
+    ).map(str),
   };
-  if (guide.sections.length === 0) return { error: "the guide has no chapters" };
+  if (guide.sections.length === 0) {
+    return { error: "the guide has no chapters" };
+  }
   return guide;
 }
 
 // A batch's answer (job notes): each of its files' summary and notes.
 export function parseBatchNotes(text: string): GuideDiff[] | { error: string } {
   const read = jsonIn(text);
-  if ("error" in read) return read;
+  if ("error" in read) {
+    return read;
+  }
   const value = read.value;
-  if (!Array.isArray(value.files)) return { error: "the answer has no files list" };
+  if (!Array.isArray(value.files)) {
+    return { error: "the answer has no files list" };
+  }
   return parseDiffs(value.files).filter((d) => d.file);
 }
 
@@ -126,11 +156,17 @@ export interface Patch {
 export function patchFor(cwd: string, base: string): Patch | { error: string } {
   for (const b of base === "main" ? ["main", "master"] : [base]) {
     const mb = mergeBase(cwd, b);
-    if (!mb) continue;
+    if (!mb) {
+      continue;
+    }
     const diff = git(cwd, ["diff", "--no-color", "--no-ext-diff", mb.sha]);
-    if (!diff.ok) return { error: `git diff failed: ${diff.out}` };
+    if (!diff.ok) {
+      return { error: `git diff failed: ${diff.out}` };
+    }
     const text = diff.out + untracked(cwd);
-    if (!text.trim()) return { error: `no change against ${mb.ref}` };
+    if (!text.trim()) {
+      return { error: `no change against ${mb.ref}` };
+    }
     return { text, mergeBase: mb.sha, base: mb.ref };
   }
   return { error: `no merge base with ${base} in ${cwd}` };
@@ -139,17 +175,28 @@ export function patchFor(cwd: string, base: string): Patch | { error: string } {
 // The branch's base: `origin/<base>` when the remote has moved on past the
 // local branch (a local main nobody pulled would put others' merged work in
 // the change), else the local one.
-function mergeBase(cwd: string, base: string): { ref: string; sha: string } | null {
+function mergeBase(
+  cwd: string,
+  base: string,
+): { ref: string; sha: string } | null {
   const local = git(cwd, ["merge-base", base, "HEAD"]);
   const remoteRef = `origin/${base}`;
-  const remote =
-    git(cwd, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remoteRef}`]).ok
-      ? git(cwd, ["merge-base", remoteRef, "HEAD"])
-      : null;
+  const remote = git(cwd, [
+    "rev-parse",
+    "--verify",
+    "--quiet",
+    `refs/remotes/${remoteRef}`,
+  ]).ok
+    ? git(cwd, ["merge-base", remoteRef, "HEAD"])
+    : null;
   const l = local.ok ? local.out.trim() : null;
   const r = remote?.ok ? remote.out.trim() : null;
-  if (r && (!l || (l !== r && git(cwd, ["merge-base", "--is-ancestor", l, r]).ok)))
+  if (
+    r &&
+    (!l || (l !== r && git(cwd, ["merge-base", "--is-ancestor", l, r]).ok))
+  ) {
     return { ref: remoteRef, sha: r };
+  }
   return l ? { ref: base, sha: l } : null;
 }
 
@@ -160,7 +207,9 @@ const UNTRACKED_MAX = 50;
 
 function untracked(cwd: string): string {
   const list = git(cwd, ["ls-files", "--others", "--exclude-standard"]);
-  if (!list.ok) return "";
+  if (!list.ok) {
+    return "";
+  }
   return list.out
     .split("\n")
     .filter(Boolean)
@@ -168,7 +217,18 @@ function untracked(cwd: string): string {
     .map((file) => {
       // Exit 1 means "they differ", which is the point.
       const r = Bun.spawnSync(
-        ["git", "-C", cwd, "diff", "--no-color", "--no-ext-diff", "--no-index", "--", "/dev/null", file],
+        [
+          "git",
+          "-C",
+          cwd,
+          "diff",
+          "--no-color",
+          "--no-ext-diff",
+          "--no-index",
+          "--",
+          "/dev/null",
+          file,
+        ],
         { stdout: "pipe", stderr: "pipe" },
       );
       return r.stdout.toString();
@@ -177,8 +237,12 @@ function untracked(cwd: string): string {
 }
 
 function git(cwd: string, args: string[]): { ok: boolean; out: string } {
-  const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
-  const out = r.exitCode === 0 ? r.stdout.toString() : r.stderr.toString().trim();
+  const r = Bun.spawnSync(["git", "-C", cwd, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const out =
+    r.exitCode === 0 ? r.stdout.toString() : r.stderr.toString().trim();
   return { ok: r.exitCode === 0, out };
 }
 
@@ -219,7 +283,12 @@ export function patchHunks(patch: string): Map<string, FileHunks> {
 export function fitGuide(
   guide: Guide,
   patch: string,
-): { guide: Guide; findings: Finding[]; lines: string[]; comments: ReviewComment[] } {
+): {
+  guide: Guide;
+  findings: Finding[];
+  lines: string[];
+  comments: ReviewComment[];
+} {
   const hunks = patchHunks(patch);
   const placed = new Set<string>();
   const findings: Finding[] = [];
@@ -229,18 +298,28 @@ export function fitGuide(
     const diffs: GuideDiff[] = [];
     for (const diff of section.diffs) {
       const file = hunks.get(diff.file);
-      if (!file || placed.has(diff.file)) continue;
+      if (!file || placed.has(diff.file)) {
+        continue;
+      }
       placed.add(diff.file);
       const notes = (diff.notes ?? []).slice(0, NOTES_PER_FILE_MAX);
       const pinned: GuideNote[] = [];
       for (const n of notes) {
         findings.push({ file: diff.file, note: n });
         lines.push(`- \`${diff.file}\` ${lineWord(n)}: ${n.text}`);
-        if (insideOneHunk(n, file)) pinned.push(n);
+        if (insideOneHunk(n, file)) {
+          pinned.push(n);
+        }
       }
-      diffs.push({ file: diff.file, summary: diff.summary, ...(pinned.length ? { notes: pinned } : {}) });
+      diffs.push({
+        file: diff.file,
+        summary: diff.summary,
+        ...(pinned.length ? { notes: pinned } : {}),
+      });
     }
-    if (diffs.length > 0) sections.push({ ...section, diffs });
+    if (diffs.length > 0) {
+      sections.push({ ...section, diffs });
+    }
   }
   const unplaced = [...hunks.keys()].filter((f) => !placed.has(f));
   return {
@@ -270,21 +349,31 @@ export function reviewComments(
   let dropped = 0;
   for (const { file, note } of findings) {
     const fileHunks = hunks.get(file);
-    if (!fileHunks) dropped++;
-    else if (insideOneHunk(note, fileHunks)) comments.push(lineComment(file, note));
-    else comments.push(fileComment(file, note));
+    if (!fileHunks) {
+      dropped++;
+    } else if (insideOneHunk(note, fileHunks)) {
+      comments.push(lineComment(file, note));
+    } else {
+      comments.push(fileComment(file, note));
+    }
   }
   return { comments, dropped };
 }
 
 function lineWord(n: GuideNote): string {
-  const span = n.lineEnd > n.lineStart ? `L${n.lineStart}-L${n.lineEnd}` : `L${n.lineStart}`;
+  const span =
+    n.lineEnd > n.lineStart
+      ? `L${n.lineStart}-L${n.lineEnd}`
+      : `L${n.lineStart}`;
   return n.side === "old" ? `${span} (removed)` : span;
 }
 
 function insideOneHunk(n: GuideNote, file: FileHunks): boolean {
   const ranges = n.side === "old" ? file.old : file.new;
-  return n.lineEnd >= n.lineStart && ranges.some(([s, e]) => n.lineStart >= s && n.lineEnd <= e);
+  return (
+    n.lineEnd >= n.lineStart &&
+    ranges.some(([s, e]) => n.lineStart >= s && n.lineEnd <= e)
+  );
 }
 
 // ── review comments ───────────────────────────────────────────────────────
@@ -344,10 +433,16 @@ function fileComment(filePath: string, n: GuideNote): ReviewComment {
 // A port nothing listens on, for the review the caller opens
 // (PLANNOTATOR_PORT), so it knows where to post.
 export function freePort(): number {
-  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () => new Response(),
+  });
   const port = server.port;
   void server.stop(true);
-  if (port === undefined) throw new Error("no free port");
+  if (port === undefined) {
+    throw new Error("no free port");
+  }
   return port;
 }
 
@@ -358,7 +453,9 @@ export async function postComments(
   comments: ReviewComment[],
   opts: { waitMs?: number; everyMs?: number } = {},
 ): Promise<{ ok: true } | { error: string }> {
-  if (comments.length === 0) return { ok: true };
+  if (comments.length === 0) {
+    return { ok: true };
+  }
   const deadline = Date.now() + (opts.waitMs ?? 60_000);
   const base = `http://127.0.0.1:${port}`;
   let last = "Plannotator did not answer";
@@ -367,7 +464,9 @@ export async function postComments(
       // The port was free when it was picked; make sure Plannotator is the
       // one that took it before handing it the findings.
       const diff = await fetch(`${base}/api/diff`);
-      const body: unknown = diff.ok ? await diff.json().catch(() => null) : null;
+      const body: unknown = diff.ok
+        ? await diff.json().catch(() => null)
+        : null;
       if (!isRecord(body) || typeof body.rawPatch !== "string") {
         last = `port ${port} is not a Plannotator review`;
         log.warn("comments not posted", { port, error: last });
@@ -376,17 +475,28 @@ export async function postComments(
       // Our comments from before (a review reused, a draft brought back)
       // go first, so the findings are there once.
       for (const source of [COMMENT_SOURCE, LEGACY_COMMENT_SOURCE]) {
-        const cleared = await fetch(`${base}/api/external-annotations?source=${source}`, {
-          method: "DELETE",
-        });
-        if (!cleared.ok) log.warn("old comments not cleared", { port, source, status: cleared.status });
+        const cleared = await fetch(
+          `${base}/api/external-annotations?source=${source}`,
+          {
+            method: "DELETE",
+          },
+        );
+        if (!cleared.ok) {
+          log.warn("old comments not cleared", {
+            port,
+            source,
+            status: cleared.status,
+          });
+        }
       }
       const res = await fetch(`${base}/api/external-annotations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ annotations: comments }),
       });
-      if (res.ok) return { ok: true };
+      if (res.ok) {
+        return { ok: true };
+      }
       // It is up and refused them: trying again will not help.
       last = `Plannotator refused the comments (${res.status}): ${(await res.text()).slice(0, 200)}`;
       log.warn("comments refused", { port, error: last });
@@ -416,23 +526,39 @@ export function snapshot(guide: Guide, patch: Patch): Record<string, unknown> {
 
 export interface GuideTool {
   // `plannotator guide import --snapshot`: the saved guide's id.
-  save(file: string, cwd: string, pr?: string): Promise<{ id: string } | { error: string }>;
+  save(
+    file: string,
+    cwd: string,
+    pr?: string,
+  ): Promise<{ id: string } | { error: string }>;
 }
 
 const plannotator: GuideTool = {
   async save(file, cwd, pr) {
     const bin = Bun.which("plannotator");
-    if (!bin) return { error: "plannotator is not on PATH" };
+    if (!bin) {
+      return { error: "plannotator is not on PATH" };
+    }
     const proc = Bun.spawn(
       [bin, "guide", "import", "--snapshot", file, ...(pr ? ["--pr", pr] : [])],
-      { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, PLANNOTATOR_UPDATE_CHECK: "0" } },
+      {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, PLANNOTATOR_UPDATE_CHECK: "0" },
+      },
     );
     const [out, err, code] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
       proc.exited,
     ]);
-    if (code !== 0) return { error: (err || out).trim().split("\n").pop() || `plannotator exited ${code}` };
+    if (code !== 0) {
+      return {
+        error:
+          (err || out).trim().split("\n").pop() || `plannotator exited ${code}`,
+      };
+    }
     const id = out.trim().split("\n")[0]?.trim();
     return id ? { id } : { error: "plannotator printed no guide id" };
   },
@@ -472,22 +598,44 @@ export function writeFindings(dir: string, kept: SavedFindings): void {
 
 export function readFindings(dir: string): SavedFindings | null {
   const file = join(dir, FINDINGS_FILE);
-  if (!existsSync(file)) return null;
+  if (!existsSync(file)) {
+    return null;
+  }
   try {
     const value: unknown = JSON.parse(readFileSync(file, "utf8"));
-    if (!isRecord(value) || !Array.isArray(value.findings)) return null;
+    if (!isRecord(value) || !Array.isArray(value.findings)) {
+      return null;
+    }
     return {
       id: str(value.id),
       title: str(value.title),
       base: str(value.base) || "main",
       findings: value.findings.filter(isRecord).flatMap((f) => {
         const n = isRecord(f.note) ? f.note : null;
-        if (!n || typeof f.file !== "string") return [];
+        if (!n || typeof f.file !== "string") {
+          return [];
+        }
         const lineStart = Number(n.lineStart);
         const lineEnd = Number(n.lineEnd);
         const text = str(n.text);
-        if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || !text) return [];
-        return [{ file: f.file, note: { lineStart, lineEnd, ...(n.side === "old" ? { side: "old" as const } : {}), text } }];
+        if (
+          !Number.isInteger(lineStart) ||
+          !Number.isInteger(lineEnd) ||
+          !text
+        ) {
+          return [];
+        }
+        return [
+          {
+            file: f.file,
+            note: {
+              lineStart,
+              lineEnd,
+              ...(n.side === "old" ? { side: "old" as const } : {}),
+              text,
+            },
+          },
+        ];
       }),
     };
   } catch (err) {
@@ -511,7 +659,9 @@ export async function saveGuide(opts: {
   const patch = opts.patch;
   opts.progress?.({ stage: GuideStage.fitting });
   const { guide, findings, lines, comments } = fitGuide(parsed, patch.text);
-  if (guide.sections.length === 0) return { error: "no chapter of the guide names a file in the change" };
+  if (guide.sections.length === 0) {
+    return { error: "no chapter of the guide names a file in the change" };
+  }
   mkdirSync(opts.dir, { recursive: true });
   const file = join(opts.dir, "guide.json");
   writeFileSync(file, `${JSON.stringify(snapshot(guide, patch), null, 2)}\n`);
@@ -521,7 +671,12 @@ export async function saveGuide(opts: {
     log.warn("guide import failed", { file, error: saved.error });
     return { error: `plannotator did not take the guide: ${saved.error}` };
   }
-  writeFindings(opts.dir, { id: saved.id, title: guide.title, base: patch.base, findings });
+  writeFindings(opts.dir, {
+    id: saved.id,
+    title: guide.title,
+    base: patch.base,
+    findings,
+  });
   return { id: saved.id, file, guide, findings, lines, comments, patch };
 }
 
@@ -558,7 +713,9 @@ export function numberedPatch(text: string): string {
       out.push(`${col(oldLine++)} ${col(newLine++)} ${line}`);
       oldLeft--;
       newLeft--;
-    } else out.push(line); // "\ No newline at end of file"
+    } else {
+      out.push(line); // "\ No newline at end of file"
+    }
   }
   return out.join("\n");
 }
@@ -567,7 +724,15 @@ export function numberedPatch(text: string): string {
 // pass on: an approval, or a review closed without feedback.
 export function reviewNotes(text: string): string | null {
   const notes = text.trim();
-  if (!notes) return null;
-  if (/^(The user approved|Review session closed without feedback)\.?$/i.test(notes)) return null;
+  if (!notes) {
+    return null;
+  }
+  if (
+    /^(The user approved|Review session closed without feedback)\.?$/i.test(
+      notes,
+    )
+  ) {
+    return null;
+  }
   return notes;
 }

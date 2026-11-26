@@ -5,5 +5,7 @@
 import { createContext, useContext, type Accessor } from "solid-js";
 import { motionOn } from "@riker/core/link-state";
 
-export const MotionContext = createContext<Accessor<boolean>>(() => motionOn({}));
+export const MotionContext = createContext<Accessor<boolean>>(() =>
+  motionOn({}),
+);
 export const useMotion = () => useContext(MotionContext);

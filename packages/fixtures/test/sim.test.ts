@@ -29,11 +29,7 @@ import {
   repoRoot,
   type SimCheckout,
 } from "../src/sim/checkout";
-import {
-  applyEvent,
-  SCENARIOS,
-  type SimEvent,
-} from "../src/sim/events";
+import { applyEvent, SCENARIOS, type SimEvent } from "../src/sim/events";
 import {
   emptyState,
   saveState,
@@ -45,7 +41,11 @@ import {
 } from "../src/sim/github";
 import { linkOpened } from "../src/sim/link";
 import { FakeMux } from "@riker/core/test/support/fake-mux";
-import { fakeBrain, freshHome, testConfig } from "@riker/core/test/support/helpers";
+import {
+  fakeBrain,
+  freshHome,
+  testConfig,
+} from "@riker/core/test/support/helpers";
 
 let checkout: SimCheckout;
 let file: string;
@@ -70,7 +70,9 @@ function simState(over: Partial<SimState> = {}): SimState {
 
 // Apply events and write the file the fakes read.
 function happen(s: SimState, ...events: SimEvent[]): SimState {
-  for (const e of events) applyEvent(s, e);
+  for (const e of events) {
+    applyEvent(s, e);
+  }
   saveState(file, s);
   return s;
 }
@@ -83,7 +85,9 @@ const ref = (n: number): PrRef => ({
 
 async function status(n: number) {
   const got = (await simPrFetch(file)([ref(n)])).views.get(ref(n).url);
-  if (!got || got instanceof Error) throw got ?? new Error("missing");
+  if (!got || got instanceof Error) {
+    throw got ?? new Error("missing");
+  }
   return readPrView(got);
 }
 
@@ -263,8 +267,9 @@ describe("the engine on the sim", () => {
   test("every scenario plays", () => {
     for (const [name, scenario] of Object.entries(SCENARIOS)) {
       const s = simState();
-      for (const step of scenario.steps)
+      for (const step of scenario.steps) {
         expect(() => applyEvent(s, step.event), name).not.toThrow();
+      }
     }
   });
 });
@@ -273,26 +278,76 @@ describe("a reviewer's PR", () => {
   test("is one commit's change over main, not every commit since", () => {
     const s = happen(simState(), { type: "pr-open", by: "bob" });
     const p = s.pulls[0]!;
-    const subject = Bun.spawnSync(["git", "-C", checkout.path, "log", "-1", "--format=%s", p.head]).stdout.toString().trim();
+    const subject = Bun.spawnSync([
+      "git",
+      "-C",
+      checkout.path,
+      "log",
+      "-1",
+      "--format=%s",
+      p.head,
+    ])
+      .stdout.toString()
+      .trim();
     const sha = checkout.commits.find(
-      (c) => Bun.spawnSync(["git", "-C", checkout.path, "log", "-1", "--format=%s", c]).stdout.toString().trim() === subject,
+      (c) =>
+        Bun.spawnSync([
+          "git",
+          "-C",
+          checkout.path,
+          "log",
+          "-1",
+          "--format=%s",
+          c,
+        ])
+          .stdout.toString()
+          .trim() === subject,
     )!;
-    const own = Bun.spawnSync(["git", "-C", checkout.path, "diff", "--name-only", `${sha}^1`, sha])
+    const own = Bun.spawnSync([
+      "git",
+      "-C",
+      checkout.path,
+      "diff",
+      "--name-only",
+      `${sha}^1`,
+      sha,
+    ])
       .stdout.toString()
       .split("\n")
       .filter(Boolean)
       .sort();
     expect([...p.files].sort()).toEqual(own);
-    const parents = Bun.spawnSync(["git", "-C", checkout.path, "log", "-1", "--format=%P", p.head])
+    const parents = Bun.spawnSync([
+      "git",
+      "-C",
+      checkout.path,
+      "log",
+      "-1",
+      "--format=%P",
+      p.head,
+    ])
       .stdout.toString()
       .trim();
-    const main = Bun.spawnSync(["git", "-C", checkout.path, "rev-parse", "main"]).stdout.toString().trim();
+    const main = Bun.spawnSync([
+      "git",
+      "-C",
+      checkout.path,
+      "rev-parse",
+      "main",
+    ])
+      .stdout.toString()
+      .trim();
     expect(parents).toBe(main);
   });
 
   test("the guide reads its words and threads from the sim", async () => {
     const { simReviews } = await import("../src/sim/github");
-    const s = happen(simState(), { type: "pr-open", by: "bob", title: "Tidy up", body: "Shorter words." });
+    const s = happen(simState(), {
+      type: "pr-open",
+      by: "bob",
+      title: "Tidy up",
+      body: "Shorter words.",
+    });
     happen(s, { type: "review", by: "carol", verdict: "changes", comments: 1 });
     const read = await simReviews(file).context(ref(1));
     expect(read.lastReviewed).toBeNull();

@@ -77,7 +77,9 @@ function IncomingTurn(props: { turn: TurnRow; width: number }) {
   );
   const where = () => {
     const m = message();
-    if (!m) return props.turn.author;
+    if (!m) {
+      return props.turn.author;
+    }
     return `${CHANNEL_WORD[m.channel]} · ${m.author_name} · ${m.title}`;
   };
   return (
@@ -103,9 +105,7 @@ function IncomingTurn(props: { turn: TurnRow; width: number }) {
 function AgentTurn(props: { turn: TurnRow; latest: boolean; width: number }) {
   const theme = useTheme();
   const riker = useRiker();
-  const steps = createMemo(
-    () => turnSteps(props.turn),
-  );
+  const steps = createMemo(() => turnSteps(props.turn));
   const running = () => props.turn.status === "running";
   const refusals = createMemo(() => refusalLines(steps()));
   const files = createMemo(() => parseFiles(props.turn.files));
@@ -287,15 +287,22 @@ export function ActionTurn(props: { turn: TurnRow; width: number }) {
         <Show
           when={running()}
           fallback={
-            <span style={{ fg: theme.textMuted }}>{`ran ${duration(props.turn.started_at, props.turn.finished_at, riker.now())}`}</span>
+            <span
+              style={{ fg: theme.textMuted }}
+            >{`ran ${duration(props.turn.started_at, props.turn.finished_at, riker.now())}`}</span>
           }
         >
-          <span style={{ fg: theme.info }}>{`${riker.spinner()} running ${liveRan()}`}</span>
+          <span
+            style={{ fg: theme.info }}
+          >{`${riker.spinner()} running ${liveRan()}`}</span>
         </Show>
       </text>
       {/* Where a staged run (the guide) is: above its steps, which scroll. */}
       <Show when={running() && props.turn.progress}>
-        <text fg={theme.info} wrapMode="word">{`▸ ${props.turn.progress ?? ""}`}</text>
+        <text
+          fg={theme.info}
+          wrapMode="word"
+        >{`▸ ${props.turn.progress ?? ""}`}</text>
       </Show>
       <Switch>
         <Match when={running()}>
@@ -308,7 +315,10 @@ export function ActionTurn(props: { turn: TurnRow; width: number }) {
             {props.turn.body}
           </text>
           <Show when={props.turn.progress}>
-            <text fg={theme.textMuted} wrapMode="word">{`stopped at: ${props.turn.progress ?? ""}`}</text>
+            <text
+              fg={theme.textMuted}
+              wrapMode="word"
+            >{`stopped at: ${props.turn.progress ?? ""}`}</text>
           </Show>
         </Match>
         <Match when={true}>
@@ -316,7 +326,10 @@ export function ActionTurn(props: { turn: TurnRow; width: number }) {
             when={props.turn.body.trim()}
             fallback={<text fg={theme.textMuted}>(it gave no answer)</text>}
           >
-            <Markdown text={props.turn.body} width={Math.max(20, props.width - 4)} />
+            <Markdown
+              text={props.turn.body}
+              width={Math.max(20, props.width - 4)}
+            />
           </Show>
           <Show when={files().length > 0}>
             <WhatItMade files={files()} width={props.width - 4} />
@@ -324,7 +337,11 @@ export function ActionTurn(props: { turn: TurnRow; width: number }) {
         </Match>
       </Switch>
       <For each={refusals()}>
-        {(line) => <text fg={theme.warning} wrapMode="word">{line}</text>}
+        {(line) => (
+          <text fg={theme.warning} wrapMode="word">
+            {line}
+          </text>
+        )}
       </For>
     </box>
   );

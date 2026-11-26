@@ -14,36 +14,59 @@ export type Mention =
 // Words match the name, best when they are all of it or begin it.
 function nameScore(name: string, q: string): number | null {
   const text = name.toLowerCase();
-  if (text === q) return 0;
-  if (text.startsWith(q)) return 1;
-  if (text.split(/[^a-z0-9]+/).some((w) => w.startsWith(q))) return 2;
-  if (text.includes(q)) return 3;
+  if (text === q) {
+    return 0;
+  }
+  if (text.startsWith(q)) {
+    return 1;
+  }
+  if (text.split(/[^a-z0-9]+/).some((w) => w.startsWith(q))) {
+    return 2;
+  }
+  if (text.includes(q)) {
+    return 3;
+  }
   // Scattered letters only mean something once there are a few of them.
-  if (q.length < 3) return null;
+  if (q.length < 3) {
+    return null;
+  }
   let at = 0;
-  for (const ch of text) if (ch === q[at]) at++;
+  for (const ch of text) {
+    if (ch === q[at]) {
+      at++;
+    }
+  }
   return at === q.length ? 4 : null;
 }
 
 // A number matches a task's ref and nothing else. "riker" alone may be a ref
 // on its way or the start of a project's name; the name ranks first.
 function mentionScore(m: Mention, query: string): number | null {
-  if (!query) return 0;
+  if (!query) {
+    return 0;
+  }
   if (m.type === "project") {
     const q = query.toLowerCase();
-    return /^((riker|aug)-?)?\d+$/.test(q) ? null : nameScore(m.project.name, q);
+    return /^((riker|aug)-?)?\d+$/.test(q)
+      ? null
+      : nameScore(m.project.name, q);
   }
   const q = query.toLowerCase().replace(/^(riker|aug)-?/, "");
-  if (!q) return 2;
-  if (/^\d+$/.test(q))
+  if (!q) {
+    return 2;
+  }
+  if (/^\d+$/.test(q)) {
     return String(m.task.id).startsWith(q.replace(/^0+/, "") || "0") ? 0 : null;
+  }
   return nameScore(m.task.title, q);
 }
 
 // What `@` puts in the text. A project's name loses what `mentionAt` would
 // stop at; findProject ignores punctuation, so the ref still finds it.
 export function mentionRef(m: Mention): string {
-  if (m.type === "task") return store.taskRef(m.task.id);
+  if (m.type === "task") {
+    return store.taskRef(m.task.id);
+  }
   return (
     m.project.name.replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "") ||
     m.project.tmux_session
@@ -77,7 +100,9 @@ export function mentionAt(
   before: string,
 ): { start: number; query: string } | null {
   const m = before.match(/(?:^|\s)@([\w-]*)$/);
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   return { start: before.length - m[1].length - 1, query: m[1] };
 }
 
@@ -85,7 +110,11 @@ export function mentionAt(
 // what the owner typed.
 export function mentionedTasks(text: string): TaskRow[] {
   const ids = new Set<number>();
-  for (const m of text.matchAll(new RegExp(`@?\\b${REF_WORD}-(\\d{1,6})\\b`, "gi"))) ids.add(Number(m[1]));
+  for (const m of text.matchAll(
+    new RegExp(`@?\\b${REF_WORD}-(\\d{1,6})\\b`, "gi"),
+  )) {
+    ids.add(Number(m[1]));
+  }
   return [...ids]
     .map((id) => store.getTask(id))
     .filter((t): t is TaskRow => Boolean(t));
@@ -96,7 +125,9 @@ export function mentionedProjects(text: string): ProjectRow[] {
   const found = new Map<number, ProjectRow>();
   for (const m of text.matchAll(/(?:^|\s)@([\w-]+)/g)) {
     const project = findProject(m[1]);
-    if (project) found.set(project.id, project);
+    if (project) {
+      found.set(project.id, project);
+    }
   }
   return [...found.values()];
 }

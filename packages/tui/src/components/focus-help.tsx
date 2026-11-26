@@ -27,8 +27,11 @@ function mergeByDesc(rows: HelpRow[]): HelpRow[] {
   const out: HelpRow[] = [];
   for (const row of rows) {
     const same = out.find((r) => r.desc === row.desc);
-    if (same) same.keys = `${same.keys}/${row.keys}`;
-    else out.push({ ...row });
+    if (same) {
+      same.keys = `${same.keys}/${row.keys}`;
+    } else {
+      out.push({ ...row });
+    }
   }
   return out.map((r) => ({ ...r, keys: digitRange(r.keys) }));
 }

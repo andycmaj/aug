@@ -44,9 +44,13 @@ function fakeProc(
     };
     async function* lines(): AsyncGenerator<string> {
       while (!closed || pending.length) {
-        if (!pending.length) await new Promise<void>((r) => (wake = r));
+        if (!pending.length) {
+          await new Promise<void>((r) => (wake = r));
+        }
         wake = null;
-        while (pending.length) yield pending.shift()!;
+        while (pending.length) {
+          yield pending.shift()!;
+        }
       }
     }
     return {
@@ -61,13 +65,16 @@ function fakeProc(
           );
         }
         const steps = rounds.shift() ?? [];
-        for (const tools of steps)
+        for (const tools of steps) {
           push(
             JSON.stringify({
               type: "assistant",
-              message: { content: tools.map((name) => ({ type: "tool_use", name })) },
+              message: {
+                content: tools.map((name) => ({ type: "tool_use", name })),
+              },
             }),
           );
+        }
         push(
           JSON.stringify({
             type: "result",
@@ -87,22 +94,55 @@ function fakeProc(
 
 // The claude.ai Slack connector's real tool list.
 const CLAUDE_AI_SLACK = [
-  "add_list_record", "add_reaction", "complete_file_upload", "create_canvas", "create_conversation",
-  "create_list", "get_file_upload_url", "get_reactions", "list_channel_members", "list_user_channels",
-  "read_canvas", "read_channel", "read_file", "read_list", "read_thread", "read_user_profile",
-  "schedule_message", "search_channels", "search_emojis", "search_public", "search_public_and_private",
-  "search_users", "send_message_draft", "send_message", "update_canvas", "update_list", "update_list_record",
+  "add_list_record",
+  "add_reaction",
+  "complete_file_upload",
+  "create_canvas",
+  "create_conversation",
+  "create_list",
+  "get_file_upload_url",
+  "get_reactions",
+  "list_channel_members",
+  "list_user_channels",
+  "read_canvas",
+  "read_channel",
+  "read_file",
+  "read_list",
+  "read_thread",
+  "read_user_profile",
+  "schedule_message",
+  "search_channels",
+  "search_emojis",
+  "search_public",
+  "search_public_and_private",
+  "search_users",
+  "send_message_draft",
+  "send_message",
+  "update_canvas",
+  "update_list",
+  "update_list_record",
 ].map((t) => `mcp__claude_ai_Slack__slack_${t}`);
 
 describe("tool discovery", () => {
   test("the claude.ai connector: plain send, reads stay reads", () => {
     const t = discoverSlackTools(CLAUDE_AI_SLACK)!;
     expect(t.send).toBe("mcp__claude_ai_Slack__slack_send_message");
-    const short = (names: string[]) => names.map((n) => n.replace("mcp__claude_ai_Slack__slack_", "")).sort();
+    const short = (names: string[]) =>
+      names.map((n) => n.replace("mcp__claude_ai_Slack__slack_", "")).sort();
     expect(short(t.write)).toEqual([
-      "add_list_record", "add_reaction", "complete_file_upload", "create_canvas", "create_conversation",
-      "create_list", "get_file_upload_url", "schedule_message", "send_message", "send_message_draft",
-      "update_canvas", "update_list", "update_list_record",
+      "add_list_record",
+      "add_reaction",
+      "complete_file_upload",
+      "create_canvas",
+      "create_conversation",
+      "create_list",
+      "get_file_upload_url",
+      "schedule_message",
+      "send_message",
+      "send_message_draft",
+      "update_canvas",
+      "update_list",
+      "update_list_record",
     ]);
     expect(short(t.read)).toContain("get_reactions");
     expect(short(t.read)).toContain("search_public_and_private");
@@ -327,8 +367,18 @@ describe("claude-mcp transport", () => {
 describe("slack's section", () => {
   test("its model is read from brain.slackModel in a file written before it moved", () => {
     expect(slackConfig.of(mergeConfig({})).model).toBe("haiku");
-    expect(slackConfig.of(mergeConfig({ brain: { slackModel: "sonnet" } } as never)).model).toBe("sonnet");
-    expect(slackConfig.of(mergeConfig({ slack: { model: "opus" }, brain: { slackModel: "sonnet" } } as never)).model).toBe("opus");
+    expect(
+      slackConfig.of(mergeConfig({ brain: { slackModel: "sonnet" } } as never))
+        .model,
+    ).toBe("sonnet");
+    expect(
+      slackConfig.of(
+        mergeConfig({
+          slack: { model: "opus" },
+          brain: { slackModel: "sonnet" },
+        } as never),
+      ).model,
+    ).toBe("opus");
   });
 });
 
@@ -339,8 +389,9 @@ describe("transport selection", () => {
     expect(slackConfig.of(mcp).pollSeconds).toBe(180);
     expect(slackTransport(mcp).kind).toBe("claude-mcp");
     expect(
-      slackConfig.of(mergeConfig({ slack: { transport: "claude-mcp", pollSeconds: 90 } }))
-        .pollSeconds,
+      slackConfig.of(
+        mergeConfig({ slack: { transport: "claude-mcp", pollSeconds: 90 } }),
+      ).pollSeconds,
     ).toBe(90);
   });
 

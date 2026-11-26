@@ -78,14 +78,17 @@ function ref(task: TaskRow | null): string {
 // Another task named in an argument (--on RIKER-0012).
 function taskArg(value: string): number {
   const id = store.parseTaskRef(value);
-  if (!id || !store.getTask(id)) throw new MoveError(`no task ${value}`);
+  if (!id || !store.getTask(id)) {
+    throw new MoveError(`no task ${value}`);
+  }
   return id;
 }
 
 function remindDays(value: string): number {
   const days = Number(value);
-  if (!Number.isFinite(days) || days < 1)
+  if (!Number.isFinite(days) || days < 1) {
     throw new MoveError(`days must be a number from 1: got ${value}`);
+  }
   return days;
 }
 
@@ -94,7 +97,9 @@ function timerArg<T>(fn: () => T): T {
   try {
     return fn();
   } catch (err) {
-    if (err instanceof TimerError) throw new MoveError(err.message);
+    if (err instanceof TimerError) {
+      throw new MoveError(err.message);
+    }
     throw err;
   }
 }
@@ -104,8 +109,9 @@ const KINDS = [Kind.general, Kind.coding, Kind.reply, Kind.task] as const;
 
 function kindNamed(name: string): Kind {
   const kind = KINDS.find((k) => k === name.trim());
-  if (!kind)
+  if (!kind) {
     throw new MoveError(`kind must be ${KINDS.join(" | ")}: got ${name}`);
+  }
   return kind;
 }
 
@@ -115,7 +121,9 @@ function noiseRule(args: Record<string, string>): NoiseRule {
   const rule: NoiseRule = { reason: args.reason.trim() };
   for (const field of ["author", "title", "body"] as const) {
     const pattern = args[field]?.trim();
-    if (!pattern) continue;
+    if (!pattern) {
+      continue;
+    }
     try {
       new RegExp(pattern, "i");
     } catch {
@@ -125,19 +133,23 @@ function noiseRule(args: Record<string, string>): NoiseRule {
   }
   const channel = args.channel?.trim();
   if (channel) {
-    if (channel !== "github" && channel !== "slack")
+    if (channel !== "github" && channel !== "slack") {
       throw new MoveError(`channel must be github | slack: got ${channel}`);
+    }
     rule.channel = channel;
   }
   const reasons = (args.github_reason ?? "")
     .split(",")
     .map((r) => r.trim())
     .filter(Boolean);
-  if (reasons.length) rule.githubReason = reasons;
-  if (!rule.author && !rule.title && !rule.body && !rule.githubReason)
+  if (reasons.length) {
+    rule.githubReason = reasons;
+  }
+  if (!rule.author && !rule.title && !rule.body && !rule.githubReason) {
     throw new MoveError(
       "noise needs a pattern: --author, --title, --body or --github_reason",
     );
+  }
   return rule;
 }
 
@@ -155,8 +167,9 @@ function docDraftFile(given: string): string {
     throw new MoveError(`no such file: ${given} (write it to ${dir} first)`);
   }
   const rel = relative(dir, file);
-  if (!rel || rel.startsWith("..") || isAbsolute(rel))
+  if (!rel || rel.startsWith("..") || isAbsolute(rel)) {
     throw new MoveError(`the file must be in ${dir}: got ${given}`);
+  }
   return file;
 }
 
@@ -169,12 +182,17 @@ function briefText(
   inline: string,
 ): { text: string | null; drop(): void } {
   const given = args[inline]?.trim() ? args[inline] : null;
-  if (given !== null && args.file?.trim())
+  if (given !== null && args.file?.trim()) {
     throw new MoveError(`give --${inline} or --file, not both`);
-  if (!args.file?.trim()) return { text: given, drop() {} };
+  }
+  if (!args.file?.trim()) {
+    return { text: given, drop() {} };
+  }
   const file = docDraftFile(args.file.trim());
   const text = readFileSync(file, "utf8");
-  if (!text.trim()) throw new MoveError("the brief file is empty");
+  if (!text.trim()) {
+    throw new MoveError("the brief file is empty");
+  }
   return { text, drop: () => rmSync(file, { force: true }) };
 }
 
@@ -190,13 +208,17 @@ export const BRIEF_STYLE =
 function switchValue(v: string | undefined): SwitchValue {
   const known = Object.values(SwitchValue) as string[];
   const to = v?.trim().toLowerCase() ?? "";
-  if (!known.includes(to)) throw new MoveError(`say on, off or default, not ${v ?? "nothing"}`);
+  if (!known.includes(to)) {
+    throw new MoveError(`say on, off or default, not ${v ?? "nothing"}`);
+  }
   return to as SwitchValue;
 }
 
 function projectNamed(name: string): ProjectRow {
   const project = findProject(name);
-  if (project?.status === ProjectStatus.active) return project;
+  if (project?.status === ProjectStatus.active) {
+    return project;
+  }
   const active = store
     .listProjects()
     .filter((p) => p.status === ProjectStatus.active)
@@ -210,7 +232,9 @@ function projectNamed(name: string): ProjectRow {
 function goalNamed(ref: string, project?: ProjectRow | null): GoalRow {
   const id = store.parseGoalRef(ref);
   const goal = id ? store.getGoal(id) : null;
-  if (goal && (!project || goal.project_id === project.id)) return goal;
+  if (goal && (!project || goal.project_id === project.id)) {
+    return goal;
+  }
   const where = project ?? (goal ? store.getProject(goal.project_id) : null);
   const goals = where ? store.goalsForProject(where.id) : [];
   throw new MoveError(
@@ -218,7 +242,11 @@ function goalNamed(ref: string, project?: ProjectRow | null): GoalRow {
   );
 }
 
-const GOAL_STATUSES = [GoalStatus.open, GoalStatus.met, GoalStatus.dropped] as const;
+const GOAL_STATUSES = [
+  GoalStatus.open,
+  GoalStatus.met,
+  GoalStatus.dropped,
+] as const;
 
 function checkRepo(repo: string): string {
   try {
@@ -231,26 +259,38 @@ function checkRepo(repo: string): string {
 // A web address, or a file on disk that opens in $EDITOR (core/links.ts).
 function checkUrl(url: string): string {
   const out = checkLink(url);
-  if (out instanceof Error) throw new MoveError(out.message);
+  if (out instanceof Error) {
+    throw new MoveError(out.message);
+  }
   return out;
 }
 
 // --path, --clone, --rename and --anyway answer "needs path". --path never
 // moves a repo whose checkout is still good: a path an agent passes may be
 // its own worktree, which goes.
-async function answerPath(desk: Desk, repo: string, args: Record<string, string>): Promise<void> {
+async function answerPath(
+  desk: Desk,
+  repo: string,
+  args: Record<string, string>,
+): Promise<void> {
   try {
     if (args.rename) {
       desk.renameRepo(repo, args.rename);
       return;
     }
     if (args.clone === "yes") {
-      if (repos.checkMapped(desk.config(), repo)) await desk.cloneRepo(repo);
+      if (repos.checkMapped(desk.config(), repo)) {
+        await desk.cloneRepo(repo);
+      }
       return;
     }
-    if (args.path && repos.checkMapped(desk.config(), repo)) desk.mapRepo(repo, args.path);
+    if (args.path && repos.checkMapped(desk.config(), repo)) {
+      desk.mapRepo(repo, args.path);
+    }
     const path = repos.repoPath(desk.config(), repo);
-    if (args.anyway === "yes" && path) desk.allowMismatch(repo, path);
+    if (args.anyway === "yes" && path) {
+      desk.allowMismatch(repo, path);
+    }
   } catch (err) {
     throw new MoveError(err instanceof Error ? err.message : String(err));
   }
@@ -259,7 +299,8 @@ async function answerPath(desk: Desk, repo: string, args: Record<string, string>
 function pathWords(need: repos.PathNeed): string {
   const { repo, problem } = need;
   const found = need.candidates.map(
-    (c) => `${repos.tildePath(c.path)}${c.guess ? " (folder name only, no GitHub remote)" : ""}`,
+    (c) =>
+      `${repos.tildePath(c.path)}${c.guess ? " (folder name only, no GitHub remote)" : ""}`,
   );
   const fix = repos.problemFix(problem);
   const options = [
@@ -287,17 +328,25 @@ async function start(
   task: TaskRow,
   args: Record<string, string>,
 ): Promise<string> {
-  if (args.repo) desk.setTaskRepo(task.id, checkRepo(args.repo));
+  if (args.repo) {
+    desk.setTaskRepo(task.id, checkRepo(args.repo));
+  }
   const repo = store.getTask(task.id)?.repo ?? null;
-  if (repo) await answerPath(desk, repo, args);
+  if (repo) {
+    await answerPath(desk, repo, args);
+  }
   const opts = {
     note: args.note || undefined,
     branch: args.branch?.trim() || undefined,
     noWorktree: args.scratch === "yes",
   };
   let result = await desk.startAgent(task.id, opts);
-  if (result.type === "needs" && result.need.what === "branch")
-    result = await desk.startAgent(task.id, { ...opts, branch: result.need.suggested });
+  if (result.type === "needs" && result.need.what === "branch") {
+    result = await desk.startAgent(task.id, {
+      ...opts,
+      branch: result.need.suggested,
+    });
+  }
   switch (result.type) {
     case "started":
       return result.project
@@ -333,7 +382,10 @@ export const MOVES: Record<string, MoveSpec> = {
     async run(desk, task) {
       const why = (await desk.unmergedWork(task!.id))?.why;
       const r = await desk.close(task!.id);
-      const warnings = [...(why ? [`${why}; reopen undoes it`] : []), ...r.warnings];
+      const warnings = [
+        ...(why ? [`${why}; reopen undoes it`] : []),
+        ...r.warnings,
+      ];
       return warnings.length
         ? `${ref(task)} marked done; ${warnings.join("; ")}`
         : `${ref(task)} marked done`;
@@ -357,21 +409,27 @@ export const MOVES: Record<string, MoveSpec> = {
       note: { help: "what to do when it comes due", required: true },
     },
     run(desk, task, args) {
-      if (!args.in?.trim() === !args.at?.trim())
+      if (!args.in?.trim() === !args.at?.trim()) {
         throw new MoveError("followup needs --in or --at, not both");
+      }
       const at = timerArg(() =>
-        args.in?.trim() ? parseIn(args.in, new Date()) : parseAt(args.at!, new Date()),
+        args.in?.trim()
+          ? parseIn(args.in, new Date())
+          : parseAt(args.at!, new Date()),
       );
       const timer = desk.followup(task!.id, at, args.note);
       return `${timerRef(timer.id)}: ${ref(task)} ${timerLine(timer, new Date())}`;
     },
   },
   schedule: {
-    help: "Wake a task on a rule, every time it comes round: daily, weekdays or day names, and a time (\"weekdays 09:00\", \"mon,thu 14:30\"). --task puts it on a task; --brief makes a task for it",
+    help: 'Wake a task on a rule, every time it comes round: daily, weekdays or day names, and a time ("weekdays 09:00", "mon,thu 14:30"). --task puts it on a task; --brief makes a task for it',
     task: false,
     positional: "rule",
     args: {
-      rule: { help: "days and a local time: daily 7am, weekdays 09:00, mon,thu 14:30", required: true },
+      rule: {
+        help: "days and a local time: daily 7am, weekdays 09:00, mon,thu 14:30",
+        required: true,
+      },
       task: { help: "the task it wakes (RIKER-0012)" },
       brief: { help: "or what to do each time: a new task is made for it" },
       title: { help: "with --brief: the new task's title" },
@@ -379,24 +437,40 @@ export const MOVES: Record<string, MoveSpec> = {
       note: { help: "what to do each time (default: the brief)" },
     },
     run(desk, _task, args, by) {
-      if (!args.task?.trim() === !args.brief?.trim())
+      if (!args.task?.trim() === !args.brief?.trim()) {
         throw new MoveError("schedule needs --task or --brief, not both");
+      }
       const rule = timerArg(() => describeRule(args.rule));
       let task = args.task?.trim() ? store.getTask(taskArg(args.task)) : null;
-      if (task?.kind === Kind.home) throw new MoveError(`${args.task} is Home, not a task`);
+      if (task?.kind === Kind.home) {
+        throw new MoveError(`${args.task} is Home, not a task`);
+      }
       if (!task) {
         const brief = args.brief.trim();
         const project = args.project ? projectNamed(args.project) : null;
         task = store.batch(() => {
-          const made = desk.newTask(args.title?.trim() || head(brief, 60), Kind.general, brief, {
-            projectId: project?.id ?? null,
+          const made = desk.newTask(
+            args.title?.trim() || head(brief, 60),
+            Kind.general,
+            brief,
+            {
+              projectId: project?.id ?? null,
+            },
+          );
+          store.addTurn({
+            taskId: made.id,
+            role: TurnRole.trigger,
+            body: `Made by ${by} to run ${rule}`,
           });
-          store.addTurn({ taskId: made.id, role: TurnRole.trigger, body: `Made by ${by} to run ${rule}` });
           return made;
         });
       }
       const timer = timerArg(() =>
-        desk.schedule(task.id, args.rule, args.note?.trim() || (args.brief?.trim() ?? "")),
+        desk.schedule(
+          task.id,
+          args.rule,
+          args.note?.trim() || (args.brief?.trim() ?? ""),
+        ),
       );
       return `${timerRef(timer.id)}: ${ref(task)} ${timerLine(timer, new Date())}`;
     },
@@ -407,12 +481,15 @@ export const MOVES: Record<string, MoveSpec> = {
     args: { timer: { help: "the one to cancel (T3); default all of them" } },
     run(desk, task, args) {
       const id = args.timer?.trim() ? parseTimerRef(args.timer) : undefined;
-      if (id === null) throw new MoveError(`no timer ${args.timer}: timers are T3`);
+      if (id === null) {
+        throw new MoveError(`no timer ${args.timer}: timers are T3`);
+      }
       const gone = desk.unschedule(task!.id, id);
-      if (gone.length === 0)
+      if (gone.length === 0) {
         throw new MoveError(
           `${ref(task)} has no ${id ? `timer ${timerRef(id)}` : "follow-ups or schedules"}`,
         );
+      }
       return `cancelled ${gone.map((t) => timerRef(t.id)).join(", ")} on ${ref(task)}`;
     },
   },
@@ -441,9 +518,15 @@ export const MOVES: Record<string, MoveSpec> = {
       note: { help: "a note for the agent" },
       repo: { help: "coding: the owner/repo to work in" },
       path: { help: "coding: where that repo is checked out" },
-      clone: { help: "coding: yes = gh repo clone it into the first repo root" },
-      rename: { help: "coding: the repo's real owner/repo, when its checkout's remote names another" },
-      anyway: { help: "coding: yes = use the checkout though its remote names another repo" },
+      clone: {
+        help: "coding: yes = gh repo clone it into the first repo root",
+      },
+      rename: {
+        help: "coding: the repo's real owner/repo, when its checkout's remote names another",
+      },
+      anyway: {
+        help: "coding: yes = use the checkout though its remote names another repo",
+      },
       branch: { help: "coding: the branch (new, existing, or pr:N)" },
       scratch: { help: "coding: yes = a scratch folder, no worktree" },
     },
@@ -522,10 +605,11 @@ export const MOVES: Record<string, MoveSpec> = {
     args: { level: { help: PRIORITIES.join(" | "), required: true } },
     run(desk, task, args) {
       const level = PRIORITIES.find((p) => p === args.level);
-      if (!level)
+      if (!level) {
         throw new MoveError(
           `level must be ${PRIORITIES.join(" | ")}: got ${args.level}`,
         );
+      }
       desk.setPriority(task!.id, level);
       return `${ref(task)} is ${level}`;
     },
@@ -548,10 +632,14 @@ export const MOVES: Record<string, MoveSpec> = {
       title: { help: "a short title", required: true },
       kind: { help: `${KINDS.join(" | ")} (default general)` },
       brief: { help: "what is to be done, with what the agent needs to know" },
-      file: { help: "or the brief in a file you wrote in Riker's drafts/docs folder" },
+      file: {
+        help: "or the brief in a file you wrote in Riker's drafts/docs folder",
+      },
       project: { help: "the project it belongs to" },
       repo: { help: "coding: owner/repo (default: the project's first repo)" },
-      goal: { help: "the project goal it works toward (G3); puts it in that project" },
+      goal: {
+        help: "the project goal it works toward (G3); puts it in that project",
+      },
       from: {
         help: "the task this comes out of (RIKER-0012); it hears back. An agent's defaults to its own",
       },
@@ -562,7 +650,8 @@ export const MOVES: Record<string, MoveSpec> = {
       const kind = args.kind ? kindNamed(args.kind) : Kind.general;
       const named = args.project ? projectNamed(args.project) : null;
       const goal = args.goal?.trim() ? goalNamed(args.goal, named) : null;
-      const project = named ?? (goal ? store.getProject(goal.project_id) : null);
+      const project =
+        named ?? (goal ? store.getProject(goal.project_id) : null);
       const repo = args.repo
         ? checkRepo(args.repo)
         : kind === Kind.coding && project
@@ -573,36 +662,47 @@ export const MOVES: Record<string, MoveSpec> = {
         ? store.parseTaskRef(args.from)
         : (agentTask(by) ?? askingManager(by)?.id ?? null);
       const from = fromId ? store.getTask(fromId) : null;
-      if (args.from && !from) throw new MoveError(`no task ${args.from}`);
+      if (args.from && !from) {
+        throw new MoveError(`no task ${args.from}`);
+      }
       const task = store.batch(() => {
-        const made = desk.newTask(args.title.trim(), kind, brief.text?.trim() ?? "", {
-          projectId: project?.id ?? null,
-          repo,
-          fromTaskId: from?.id ?? null,
-          goalId: goal?.id ?? null,
-        });
-        if (remind !== null) desk.remind(made.id, remind, by);
+        const made = desk.newTask(
+          args.title.trim(),
+          kind,
+          brief.text?.trim() ?? "",
+          {
+            projectId: project?.id ?? null,
+            repo,
+            fromTaskId: from?.id ?? null,
+            goalId: goal?.id ?? null,
+          },
+        );
+        if (remind !== null) {
+          desk.remind(made.id, remind, by);
+        }
         store.addTurn({
           taskId: made.id,
           role: TurnRole.trigger,
-          body: from
-            ? `Made from ${ref(from)} by ${by}`
-            : `Made by ${by}`,
+          body: from ? `Made from ${ref(from)} by ${by}` : `Made by ${by}`,
         });
-        if (from)
+        if (from) {
           store.addTurn({
             taskId: from.id,
             role: TurnRole.trigger,
             body: `${by} made ${ref(made)} (${kind}${project ? ` in ${project.name}` : ""}): ${made.title}`,
           });
+        }
         return made;
       });
       brief.drop();
       // A task in a project with goals but naming none is said back, so the
       // caller can place it.
-      const open = project && !goal
-        ? store.goalsForProject(project.id).filter((g) => g.status === GoalStatus.open)
-        : [];
+      const open =
+        project && !goal
+          ? store
+              .goalsForProject(project.id)
+              .filter((g) => g.status === GoalStatus.open)
+          : [];
       return [
         `${ref(task)} made (${kind}${project ? ` in project ${project.name}` : ""}${goal ? ` for ${store.goalRef(goal.id)}` : ""}${repo ? `, repo ${repo}` : ""})${remind !== null ? `, put away until ${store.getTask(task.id)?.remind_at?.slice(0, 10)}` : ""}`,
         open.length
@@ -631,24 +731,33 @@ export const MOVES: Record<string, MoveSpec> = {
     async run(desk, task, args) {
       const offered = actionsFor(desk.config(), task!);
       const name = args.name?.trim();
-      if (!name)
+      if (!name) {
         return offered.length
           ? `actions on ${ref(task)}: ${offered.map((a) => `${a.name} (${a.title})`).join("; ")}`
           : `no action applies to ${ref(task)}`;
-      if (actionNamed(desk.config(), name)?.via === ActionVia.pane)
+      }
+      if (actionNamed(desk.config(), name)?.via === ActionVia.pane) {
         throw new MoveError(`${name} needs the TUI: press . on ${ref(task)}`);
+      }
       const ready = await desk.prepareAction(task!.id, name);
-      if (ready.type === "failed") throw new MoveError(ready.error);
-      if (ready.type === "needs")
+      if (ready.type === "failed") {
+        throw new MoveError(ready.error);
+      }
+      if (ready.type === "needs") {
         throw new MoveError(
           `needs a path: ${ready.need.repo} has no checkout to make its worktree from (move repo ${ready.need.repo} --path <dir>, or --clone yes)`,
         );
+      }
       const started = desk.runAction(task!.id, name);
-      if ("error" in started) throw new MoveError(started.error);
+      if ("error" in started) {
+        throw new MoveError(started.error);
+      }
       // Not awaited: moves run one at a time, and an action takes minutes.
       void started.done.then(
-        (r) => log.info("action from a move", { task: task!.id, name, ok: r.ok }),
-        (err) => log.error("action from a move threw", { task: task!.id, name, err }),
+        (r) =>
+          log.info("action from a move", { task: task!.id, name, ok: r.ok }),
+        (err) =>
+          log.error("action from a move threw", { task: task!.id, name, err }),
       );
       return `started ${name} on ${ref(task)}: its answer lands in the task's chat when done (. on the task, Read, shows it over a live agent)`;
     },
@@ -658,15 +767,20 @@ export const MOVES: Record<string, MoveSpec> = {
     task: true,
     args: {
       text: { help: "the whole new brief" },
-      file: { help: "or the brief in a file you wrote in Riker's drafts/docs folder" },
+      file: {
+        help: "or the brief in a file you wrote in Riker's drafts/docs folder",
+      },
     },
     run(desk, task, args) {
-      if (!desk.briefEditable(task!.id))
+      if (!desk.briefEditable(task!.id)) {
         throw new MoveError(
           `${ref(task)}'s agent already started from its brief: tell it what changed instead`,
         );
+      }
       const brief = briefText(args, "text");
-      if (brief.text === null) throw new MoveError("brief needs --text or --file");
+      if (brief.text === null) {
+        throw new MoveError("brief needs --text or --file");
+      }
       desk.editBrief(task!.id, brief.text);
       brief.drop();
       return `${ref(task)}'s brief rewritten`;
@@ -706,12 +820,16 @@ export const MOVES: Record<string, MoveSpec> = {
   block_on: {
     help: "Mark the task blocked by another task; it hears when that one is done",
     task: true,
-    args: { on: { help: "the task it waits for (RIKER-0000)", required: true } },
+    args: {
+      on: { help: "the task it waits for (RIKER-0000)", required: true },
+    },
     run(desk, task, args, by) {
       try {
         return desk.blockOn(task!.id, taskArg(args.on), by);
       } catch (err) {
-        if (err instanceof MoveError) throw err;
+        if (err instanceof MoveError) {
+          throw err;
+        }
         throw new MoveError(err instanceof Error ? err.message : String(err));
       }
     },
@@ -721,7 +839,10 @@ export const MOVES: Record<string, MoveSpec> = {
     task: true,
     args: { on: { help: "the task it waited for (RIKER-0000)" } },
     run(desk, task, args) {
-      return desk.unblock(task!.id, args.on?.trim() ? taskArg(args.on) : undefined);
+      return desk.unblock(
+        task!.id,
+        args.on?.trim() ? taskArg(args.on) : undefined,
+      );
     },
   },
   win: {
@@ -730,7 +851,9 @@ export const MOVES: Record<string, MoveSpec> = {
     args: { off: { help: "yes: unpin it" } },
     run(desk, task, args) {
       const said = desk.setWin(task!.id, args.off?.trim() !== "yes");
-      if (!said.ok) throw new MoveError(said.text);
+      if (!said.ok) {
+        throw new MoveError(said.text);
+      }
       return said.text;
     },
   },
@@ -768,7 +891,10 @@ export const MOVES: Record<string, MoveSpec> = {
     task: true,
     positional: "url",
     args: {
-      url: { help: "the http(s) URL, or a file's absolute path", required: true },
+      url: {
+        help: "the http(s) URL, or a file's absolute path",
+        required: true,
+      },
       title: { help: "what it is, in a few words" },
     },
     run(desk, task, args, by) {
@@ -807,8 +933,9 @@ export const MOVES: Record<string, MoveSpec> = {
     },
     async run(desk, _task, args) {
       const taken = findProject(args.name);
-      if (taken?.status === ProjectStatus.active)
+      if (taken?.status === ProjectStatus.active) {
         throw new MoveError(`there is already a project ${taken.name}`);
+      }
       const repo = args.repo ? checkRepo(args.repo) : null;
       const project = await desk.createProject(args.name.trim(), repo);
       return `made ${projectLine(project)}`;
@@ -819,16 +946,19 @@ export const MOVES: Record<string, MoveSpec> = {
     task: false,
     positional: "claude",
     args: {
-      claude: { help: "the stray: its id, tmux pane (%12), tmux session name or pid" },
+      claude: {
+        help: "the stray: its id, tmux pane (%12), tmux session name or pid",
+      },
       project: { help: "the project it joins", required: true },
     },
     async run(desk, _task, args) {
       const project = projectNamed(args.project);
       const strays = await desk.strays();
-      if (!args.claude?.trim())
+      if (!args.claude?.trim()) {
         return strays.length
           ? `strays: ${strays.map((s) => `${strayRef(s)} (${strayLabel(s)})`).join("; ")}. Pass --claude <id>.`
           : "no stray claudes running";
+      }
       let stray: Stray;
       try {
         stray = matchStray(strays, args.claude);
@@ -853,10 +983,15 @@ export const MOVES: Record<string, MoveSpec> = {
     async run(desk, _task, args) {
       const project = projectNamed(args.project);
       const repo = checkRepo(args.repo);
-      if (args.remove === "yes") desk.removeProjectRepo(project.id, repo);
-      else store.addProjectRepo(project.id, repo);
+      if (args.remove === "yes") {
+        desk.removeProjectRepo(project.id, repo);
+      } else {
+        store.addProjectRepo(project.id, repo);
+      }
       const line = projectLine(store.getProject(project.id) ?? project);
-      if (args.remove === "yes" || !repos.checkMapped(desk.config(), repo)) return line;
+      if (args.remove === "yes" || !repos.checkMapped(desk.config(), repo)) {
+        return line;
+      }
       const found = await repos.candidates(desk.config(), repo);
       return `${line}. ${repo} has no good checkout${found.length ? `; found at ${found.map((c) => repos.tildePath(c.path)).join(", ")} (map one with: repo ${repo} --path <it>)` : ` (map it with: repo ${repo} --path <checkout>, or --clone yes)`}`;
     },
@@ -868,9 +1003,15 @@ export const MOVES: Record<string, MoveSpec> = {
     args: {
       repo: { help: "owner/repo", required: true },
       path: { help: "its checkout" },
-      clone: { help: "yes = gh repo clone it (to --path, or the first repo root)" },
-      rename: { help: "its new owner/repo, in config, projects and open tasks" },
-      anyway: { help: "yes = use its checkout though the remote names another repo" },
+      clone: {
+        help: "yes = gh repo clone it (to --path, or the first repo root)",
+      },
+      rename: {
+        help: "its new owner/repo, in config, projects and open tasks",
+      },
+      anyway: {
+        help: "yes = use its checkout though the remote names another repo",
+      },
       remove: { help: "yes = forget its path (the checkout stays on disk)" },
     },
     async run(desk, _task, args) {
@@ -880,15 +1021,24 @@ export const MOVES: Record<string, MoveSpec> = {
           desk.unmapRepo(repo);
           return `${repo}: path forgotten`;
         }
-        if (args.rename) repo = desk.renameRepo(repo, args.rename);
-        if (args.clone === "yes") await desk.cloneRepo(repo, args.path);
-        else if (args.path) desk.mapRepo(repo, args.path);
+        if (args.rename) {
+          repo = desk.renameRepo(repo, args.rename);
+        }
+        if (args.clone === "yes") {
+          await desk.cloneRepo(repo, args.path);
+        } else if (args.path) {
+          desk.mapRepo(repo, args.path);
+        }
         const path = repos.repoPath(desk.config(), repo);
-        if (args.anyway === "yes" && path) desk.allowMismatch(repo, path);
+        if (args.anyway === "yes" && path) {
+          desk.allowMismatch(repo, path);
+        }
       } catch (err) {
         throw new MoveError(err instanceof Error ? err.message : String(err));
       }
-      const state = (await desk.repoReport()).repos.find((r) => r.repo === repo);
+      const state = (await desk.repoReport()).repos.find(
+        (r) => r.repo === repo,
+      );
       return state ? repos.repoStateLine(state) : `${repo}: no path`;
     },
   },
@@ -904,11 +1054,14 @@ export const MOVES: Record<string, MoveSpec> = {
       const project = projectNamed(args.project);
       const open = store
         .tasksForProject(project.id)
-        .filter((t) => t.status === TaskStatus.open || t.status === TaskStatus.later);
-      if (open.length && args.force !== "yes")
+        .filter(
+          (t) => t.status === TaskStatus.open || t.status === TaskStatus.later,
+        );
+      if (open.length && args.force !== "yes") {
         throw new MoveError(
           `${project.name} has ${open.length} open task${open.length === 1 ? "" : "s"} (${open.map((t) => ref(t)).join(", ")}); archiving ends their agents. Ask the owner, then pass --force yes.`,
         );
+      }
       await desk.archiveProject(project.id);
       return `archived ${project.name}`;
     },
@@ -923,9 +1076,14 @@ export const MOVES: Record<string, MoveSpec> = {
         store.updateTask(task!.id, { goal_id: null });
         return `${ref(task)} works toward no goal`;
       }
-      const project = task!.project_id ? store.getProject(task!.project_id) : null;
-      if (!project)
-        throw new MoveError(`${ref(task)} is in no project: move it into one first`);
+      const project = task!.project_id
+        ? store.getProject(task!.project_id)
+        : null;
+      if (!project) {
+        throw new MoveError(
+          `${ref(task)} is in no project: move it into one first`,
+        );
+      }
       const goal = goalNamed(args.goal, project);
       store.updateTask(task!.id, { goal_id: goal.id });
       return `${ref(task)} works toward ${store.goalRef(goal.id)}: ${goal.title}`;
@@ -965,7 +1123,9 @@ export const MOVES: Record<string, MoveSpec> = {
     args: {},
     run(desk, task, _args, by) {
       const made = desk.promoteManager(task!.id, by);
-      if (!made.ok) throw new MoveError(made.why);
+      if (!made.ok) {
+        throw new MoveError(made.why);
+      }
       return `${ref(task)} is ${made.project.name}'s manager now: talk to it on the project's row`;
     },
   },
@@ -976,7 +1136,9 @@ export const MOVES: Record<string, MoveSpec> = {
     args: {
       project: { help: "the project's name", required: true },
       to: { help: "on | off | default", required: true },
-      stories: { help: "yes: set the default for its tasks' stories, not its journal" },
+      stories: {
+        help: "yes: set the default for its tasks' stories, not its journal",
+      },
     },
     run(desk, _task, args) {
       const project = projectNamed(args.project);
@@ -990,7 +1152,10 @@ export const MOVES: Record<string, MoveSpec> = {
     positional: "project",
     args: {
       project: { help: "the project's name", required: true },
-      url: { help: "the http(s) URL, or a file's absolute path", required: true },
+      url: {
+        help: "the http(s) URL, or a file's absolute path",
+        required: true,
+      },
       title: { help: "what it is, in a few words" },
     },
     run(_engine, _task, args, by) {
@@ -1052,12 +1217,15 @@ export const MOVES: Record<string, MoveSpec> = {
       const status = args.status?.trim()
         ? GOAL_STATUSES.find((s) => s === args.status.trim())
         : undefined;
-      if (args.status?.trim() && !status)
+      if (args.status?.trim() && !status) {
         throw new MoveError(
           `status must be ${GOAL_STATUSES.join(" | ")}: got ${args.status}`,
         );
+      }
       const title = args.title?.trim() || undefined;
-      if (!status && !title) throw new MoveError("goal_set needs --status or --title");
+      if (!status && !title) {
+        throw new MoveError("goal_set needs --status or --title");
+      }
       store.updateGoal(goal.id, { status, title });
       const now = store.getGoal(goal.id)!;
       return `${store.goalRef(now.id)} [${now.status}] ${now.title}`;
@@ -1076,26 +1244,40 @@ export const MOVES: Record<string, MoveSpec> = {
     task: false,
     args: {
       doc: { help: "PERSONA | JOB | STYLE", required: true },
-      file: { help: "the file you wrote the whole doc to, in Riker's drafts/docs folder" },
+      file: {
+        help: "the file you wrote the whole doc to, in Riker's drafts/docs folder",
+      },
       text: { help: "the whole doc inline (no Markdown headings: use --file)" },
       reason: { help: "one line: why" },
     },
     run(_desk, _task, args) {
       const doc = docNamed(args.doc);
-      if (doc !== DocName.persona && doc !== DocName.job && doc !== DocName.style)
-        throw new MoveError(`doc must be PERSONA | JOB | STYLE: got ${args.doc}`);
-      if (!args.file?.trim() === !args.text?.trim())
+      if (
+        doc !== DocName.persona &&
+        doc !== DocName.job &&
+        doc !== DocName.style
+      ) {
+        throw new MoveError(
+          `doc must be PERSONA | JOB | STYLE: got ${args.doc}`,
+        );
+      }
+      if (!args.file?.trim() === !args.text?.trim()) {
         throw new MoveError("propose_doc needs --file or --text, not both");
+      }
       const file = args.file?.trim() ? docDraftFile(args.file.trim()) : null;
       const text = file ? readFileSync(file, "utf8") : args.text;
-      if (!text.trim()) throw new MoveError("the doc is empty");
+      if (!text.trim()) {
+        throw new MoveError("the doc is empty");
+      }
       const p = propose({
         doc,
         source: ProposalSource.onboard,
         proposed: text.trimEnd() + "\n",
         reason: args.reason ?? "",
       });
-      if (file) rmSync(file, { force: true });
+      if (file) {
+        rmSync(file, { force: true });
+      }
       return `${doc} proposed on ${store.taskRef(p.task_id)}: the owner reviews it there`;
     },
   },
@@ -1140,7 +1322,9 @@ export const managerAsker = (manager: TaskRow): string =>
   `manager ${store.taskRef(manager.id)}`;
 
 export function askingManager(by: string): TaskRow | null {
-  if (!by.startsWith("manager ")) return null;
+  if (!by.startsWith("manager ")) {
+    return null;
+  }
   const id = store.parseTaskRef(by.slice("manager ".length));
   const task = id ? store.getTask(id) : null;
   return task?.kind === Kind.manager && task.project_id !== null ? task : null;
@@ -1168,33 +1352,43 @@ function managerRefuses(
   args: Record<string, string>,
 ): string | null {
   const project = store.getProject(manager.project_id ?? 0);
-  if (!project) return "this manager's project is gone";
-  if (MANAGER_DENIED.has(verb))
+  if (!project) {
+    return "this manager's project is gone";
+  }
+  if (MANAGER_DENIED.has(verb)) {
     return `${verb} is the owner's move: ask them to make it in Home`;
+  }
   const outside = (t: TaskRow) =>
     t.project_id !== project.id && t.from_task_id !== manager.id;
-  if (task?.id === manager.id) return "that is you, the manager, not a task";
-  if (task && outside(task))
+  if (task?.id === manager.id) {
+    return "that is you, the manager, not a task";
+  }
+  if (task && outside(task)) {
     return `${ref(task)} is not in ${project.name}: a manager changes only its project's tasks`;
+  }
   // schedule names its task with --task.
   if (!spec.task && args.task?.trim()) {
     const id = store.parseTaskRef(args.task);
     const named = id ? store.getTask(id) : null;
-    if (named && outside(named))
+    if (named && outside(named)) {
       return `${ref(named)} is not in ${project.name}: a manager changes only its project's tasks`;
+    }
   }
   // Moving a task out of the project is its to do; any other project named
   // must be its own.
   if ("project" in spec.args && verb !== "project") {
-    if (!args.project?.trim()) args.project = project.name;
-    else if (findProject(args.project)?.id !== project.id)
+    if (!args.project?.trim()) {
+      args.project = project.name;
+    } else if (findProject(args.project)?.id !== project.id) {
       return `a manager works only in ${project.name}`;
+    }
   }
   if (verb === "goal_set") {
     const id = store.parseGoalRef(args.goal ?? "");
     const goal = id ? store.getGoal(id) : null;
-    if (goal && goal.project_id !== project.id)
+    if (goal && goal.project_id !== project.id) {
       return `${args.goal} is not ${project.name}'s goal`;
+    }
   }
   return null;
 }
@@ -1218,70 +1412,89 @@ export async function runMove(
   by = "you",
 ): Promise<MoveOutcome> {
   const spec = MOVES[verb];
-  if (!spec)
+  if (!spec) {
     return {
       ok: false,
       result: `no move ${verb}: moves are ${Object.keys(MOVES).join(", ")}`,
     };
+  }
   let task: TaskRow | null = null;
   if (spec.task) {
     const id = args.task ? store.parseTaskRef(args.task) : null;
     task = id ? store.getTask(id) : null;
-    if (!task)
+    if (!task) {
       return {
         ok: false,
-        result: args.task ? `no task ${args.task}` : `${verb} needs --task RIKER-0000`,
+        result: args.task
+          ? `no task ${args.task}`
+          : `${verb} needs --task RIKER-0000`,
       };
-    if (task.kind === Kind.home)
+    }
+    if (task.kind === Kind.home) {
       return { ok: false, result: `${args.task} is Home, not a task` };
+    }
     // A manager is talked to, or stopped mid-turn; it is not work to move.
-    if (task.kind === Kind.manager && verb !== "tell" && verb !== "stop")
+    if (task.kind === Kind.manager && verb !== "tell" && verb !== "stop") {
       return {
         ok: false,
         result: `${args.task} is ${store.getProject(task.project_id ?? 0)?.name ?? "a project"}'s manager, not a task: tell it, or stop it`,
       };
+    }
   }
   const manager = askingManager(by);
   if (manager) {
     const refused = managerRefuses(manager, verb, spec, task, args);
-    if (refused) return { ok: false, result: refused };
+    if (refused) {
+      return { ok: false, result: refused };
+    }
   }
   const own = agentTask(by);
   if (own !== null) {
     const allowed =
       store.getTask(own)?.kind === Kind.system ? INTERVIEW_MOVES : AGENT_MOVES;
-    if (!allowed.has(verb))
-      return { ok: false, result: `${verb} is the owner's move: say what you need under Next steps` };
-    if (task && task.id !== own && task.from_task_id !== own)
+    if (!allowed.has(verb)) {
+      return {
+        ok: false,
+        result: `${verb} is the owner's move: say what you need under Next steps`,
+      };
+    }
+    if (task && task.id !== own && task.from_task_id !== own) {
       return {
         ok: false,
         result: `an agent changes only its own task (${store.taskRef(own)}), or one it made`,
       };
+    }
   }
   const missing = Object.entries(spec.args)
     .filter(([name, arg]) => arg.required && !args[name]?.trim())
     .map(([name]) => `--${name}`);
-  if (missing.length)
+  if (missing.length) {
     return { ok: false, result: `${verb} needs ${missing.join(", ")}` };
+  }
   // A plugin may hold it for the owner's own yes (from Slack, work is
   // started or ended only on a yes there).
   const held = desk.guardMove(verb, args, by);
-  if (held !== null) return { ok: true, result: held };
+  if (held !== null) {
+    return { ok: true, result: held };
+  }
   try {
     // Every move is kept for ctrl+z: one the desk did not record (a tell, a
     // goal, a repo) is kept as one it cannot undo.
     const { value, recorded } = await desk.undos.asMove(by, async () =>
       spec.run(desk, task, args, by),
     );
-    if (!recorded)
+    if (!recorded) {
       desk.undos.cannot(
         `${verb}${task ? ` ${ref(task)}` : ""}`,
         "it is not a move ctrl+z takes back",
         by,
       );
+    }
     return { ok: true, result: value };
   } catch (err) {
-    if (err instanceof MoveError) return { ok: false, result: err.message };
+    if (err instanceof MoveError) {
+      return { ok: false, result: err.message };
+    }
     log.error("move failed", { verb, err });
     return {
       ok: false,
@@ -1301,7 +1514,9 @@ export async function drainMoves(desk: Desk, at = Date.now()): Promise<number> {
       store.abandonMove(move.id, "expired: riker was not running to make it");
       continue;
     }
-    if (!store.claimMove(move.id)) continue;
+    if (!store.claimMove(move.id)) {
+      continue;
+    }
     const args = JSON.parse(move.args) as Record<string, string>;
     const outcome = await runMove(desk, move.verb, args, move.asked_by);
     log.info("move", {
@@ -1334,18 +1549,29 @@ export async function waitForMove(
   const start = Date.now();
   for (;;) {
     const move = store.getMove(id);
-    if (!move) throw new Error(`move ${id} is gone`);
-    if (move.status === MoveStatus.done || move.status === MoveStatus.failed)
+    if (!move) {
+      throw new Error(`move ${id} is gone`);
+    }
+    if (move.status === MoveStatus.done || move.status === MoveStatus.failed) {
       return move;
+    }
     const waited = Date.now() - start;
     // Losing the race to abandon means the engine claimed it just now: keep
     // waiting, and sleep like any other poll rather than spin.
     if (move.status === MoveStatus.pending && waited > pickupMs) {
-      if (store.abandonMove(id, "riker did not pick it up: is riker running?"))
+      if (
+        store.abandonMove(id, "riker did not pick it up: is riker running?")
+      ) {
         return store.getMove(id)!;
+      }
     }
-    if (waited > pickupMs + runMs)
-      return { ...move, status: MoveStatus.failed, result: "still running: check riker" };
+    if (waited > pickupMs + runMs) {
+      return {
+        ...move,
+        status: MoveStatus.failed,
+        result: "still running: check riker",
+      };
+    }
     await Bun.sleep(pollMs);
   }
 }

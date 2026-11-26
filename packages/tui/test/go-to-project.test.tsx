@@ -13,7 +13,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 async function openGoTo(words: string) {
@@ -32,7 +34,9 @@ async function openGoTo(words: string) {
   await settle();
   setup.mockInput.pressKey("\\", { ctrl: true });
   await settle();
-  for (const c of words) setup.mockInput.pressKey(c);
+  for (const c of words) {
+    setup.mockInput.pressKey(c);
+  }
   await settle();
   // Inside the modal's frame: the rail shows behind it and names projects
   // itself.

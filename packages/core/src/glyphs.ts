@@ -26,9 +26,16 @@ function hasNerdFont(dir: string, depth: number): boolean {
     return false;
   }
   for (const e of entries) {
-    if (NERD_FILE.test(e.name)) return true;
-    if (depth > 0 && e.isDirectory() && hasNerdFont(join(dir, e.name), depth - 1))
+    if (NERD_FILE.test(e.name)) {
       return true;
+    }
+    if (
+      depth > 0 &&
+      e.isDirectory() &&
+      hasNerdFont(join(dir, e.name), depth - 1)
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -37,7 +44,9 @@ let installed: boolean | null = null;
 
 // Read once per process: rows ask on every render.
 export function nerdFontInstalled(dirs = FONT_DIRS): boolean {
-  if (dirs !== FONT_DIRS) return dirs.some((d) => hasNerdFont(d, 2));
+  if (dirs !== FONT_DIRS) {
+    return dirs.some((d) => hasNerdFont(d, 2));
+  }
   installed ??= FONT_DIRS.some((d) => hasNerdFont(d, 2));
   return installed;
 }

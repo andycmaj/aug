@@ -39,7 +39,11 @@ import {
   type TaskRow,
 } from "@riker/core/types";
 
-import type { ProjectPick, TriageEffect, TriageOutcome } from "@riker/core/plugins";
+import type {
+  ProjectPick,
+  TriageEffect,
+  TriageOutcome,
+} from "@riker/core/plugins";
 
 export type { ProjectPick, TriageEffect, TriageOutcome };
 
@@ -206,18 +210,31 @@ export function pickProject(
   const projects = projectCandidates();
   if (repo) {
     const owners = projects.filter((p) => projectRepos(p).includes(repo));
-    if (owners.length === 1)
-      return { projectId: owners[0]!.id, reason: `${repo} is in project ${owners[0]!.name}` };
+    if (owners.length === 1) {
+      return {
+        projectId: owners[0]!.id,
+        reason: `${repo} is in project ${owners[0]!.name}`,
+      };
+    }
   }
   const name = named?.trim().toLowerCase();
   if (name) {
     const match = projects.find((p) => p.name.toLowerCase() === name);
-    if (match) return { projectId: match.id, reason: `the model filed it under ${match.name}` };
+    if (match) {
+      return {
+        projectId: match.id,
+        reason: `the model filed it under ${match.name}`,
+      };
+    }
   }
-  if (!projects.length) return { projectId: null, reason: "no projects" };
+  if (!projects.length) {
+    return { projectId: null, reason: "no projects" };
+  }
   return {
     projectId: null,
-    reason: name ? `the model named "${named}", not a project` : "no project matched",
+    reason: name
+      ? `the model named "${named}", not a project`
+      : "no project matched",
   };
 }
 
@@ -230,15 +247,24 @@ export function noiseReason(
   const meta = messageMeta(message);
   const githubReason = meta.channel === "github" ? meta.reason : null;
   for (const rule of rules) {
-    if (rule.channel && rule.channel !== message.channel) continue;
+    if (rule.channel && rule.channel !== message.channel) {
+      continue;
+    }
     if (
       rule.githubReason &&
       !(githubReason && rule.githubReason.includes(githubReason))
-    )
+    ) {
       continue;
-    if (!matches(rule.author, message.author, rule)) continue;
-    if (!matches(rule.title, message.title, rule)) continue;
-    if (!matches(rule.body, message.body, rule)) continue;
+    }
+    if (!matches(rule.author, message.author, rule)) {
+      continue;
+    }
+    if (!matches(rule.title, message.title, rule)) {
+      continue;
+    }
+    if (!matches(rule.body, message.body, rule)) {
+      continue;
+    }
     return rule.reason;
   }
   return null;
@@ -251,7 +277,9 @@ function matches(
   text: string,
   rule: NoiseRule,
 ): boolean {
-  if (pattern === undefined) return true;
+  if (pattern === undefined) {
+    return true;
+  }
   try {
     return new RegExp(pattern, "i").test(text);
   } catch (error) {
@@ -269,11 +297,17 @@ function matches(
 // the threading rules below attach its reviews and CI to the task.
 export function linkByBranch(message: MessageRow): number | null {
   const meta = messageMeta(message);
-  if (meta.channel !== "github" || !meta.repo || !meta.head) return null;
+  if (meta.channel !== "github" || !meta.repo || !meta.head) {
+    return null;
+  }
   const task = store.taskForBranch(meta.repo, meta.head);
-  if (!task || task.thread_key === message.thread_key) return null;
+  if (!task || task.thread_key === message.thread_key) {
+    return null;
+  }
   store.linkThread(task.id, message.thread_key);
-  if (!task.url && message.url) store.updateTask(task.id, { url: message.url });
+  if (!task.url && message.url) {
+    store.updateTask(task.id, { url: message.url });
+  }
   return task.id;
 }
 
@@ -337,7 +371,9 @@ const ownMessage: TriageRule = {
 const greeting: TriageRule = {
   name: "greeting",
   handle: ({ message }) => {
-    if (!OPENER.test(message.body.trim())) return pass("more than a greeting");
+    if (!OPENER.test(message.body.trim())) {
+      return pass("more than a greeting");
+    }
     store.fileMessage(message.id, null, "a greeting; waits for the ask", null);
     store.markMessageRead(message.id);
     return ok({
@@ -353,7 +389,9 @@ const noise: TriageRule = {
   name: "noise",
   handle: ({ message, config }) => {
     const reason = noiseReason(message, config.triage.noise);
-    return reason ? ok(fileFyi(message, reason)) : pass("no noise filter matches");
+    return reason
+      ? ok(fileFyi(message, reason))
+      : pass("no noise filter matches");
   },
 };
 
@@ -392,11 +430,17 @@ const reviewAsk: TriageRule = {
   name: "review ask",
   handle: async (i) => {
     const pr = prOf(i.message);
-    if (!pr) return pass("not a pull request");
+    if (!pr) {
+      return pass("not a pull request");
+    }
     const yours = reviewIsYours(i.message, i.config.triage.reviewTeams);
-    if (!yours.ok) return pass(yours.error);
+    if (!yours.ok) {
+      return pass(yours.error);
+    }
     const j = await i.judged();
-    return ok(createReview(i.message, pr, j.ok ? j.value : null, yours.value, i.config));
+    return ok(
+      createReview(i.message, pr, j.ok ? j.value : null, yours.value, i.config),
+    );
   },
 };
 
@@ -406,9 +450,13 @@ const reviewAsk: TriageRule = {
 const othersReview: TriageRule = {
   name: "others' review",
   handle: ({ message, config }) => {
-    if (!prOf(message)) return pass("not a pull request");
+    if (!prOf(message)) {
+      return pass("not a pull request");
+    }
     const whose = reviewForOthers(message, config.triage.reviewTeams);
-    return whose ? ok(fileFyi(message, whose)) : pass("not known to be someone else's");
+    return whose
+      ? ok(fileFyi(message, whose))
+      : pass("not known to be someone else's");
   },
 };
 
@@ -418,7 +466,9 @@ const unjudged: TriageRule = {
   name: "unjudged",
   handle: async ({ message, judged }) => {
     const j = await judged();
-    if (j.ok) return pass(`the model answered: ${j.value.verdict}`);
+    if (j.ok) {
+      return pass(`the model answered: ${j.value.verdict}`);
+    }
     const reason = `awaiting AI triage (${j.error})`;
     store.fileMessage(message.id, Verdict.fyi, reason, null);
     return ok({ verdict: "failed", taskId: null, reason, effects: [] });
@@ -429,12 +479,18 @@ const unjudged: TriageRule = {
 const sameAsk: TriageRule = {
   name: "same ask",
   handle: async (i) => {
-    if (!i.dm) return pass("not a DM");
-    if (!i.openOnThread) return pass("no open ask in this DM");
+    if (!i.dm) {
+      return pass("not a DM");
+    }
+    if (!i.openOnThread) {
+      return pass("no open ask in this DM");
+    }
     const j = await i.judged();
     return j.ok && j.value.same_ask
       ? ok(attach(i.message, i.openOnThread, i.config))
-      : pass(`the model says a new ask, not ${store.taskRef(i.openOnThread.id)}`);
+      : pass(
+          `the model says a new ask, not ${store.taskRef(i.openOnThread.id)}`,
+        );
   },
 };
 
@@ -468,16 +524,24 @@ export function escalation(
 ): string | null {
   const meta = messageMeta(message);
   if (meta.channel === "slack") {
-    if (meta.dm && rules.slack.includes("dm")) return "a DM to you";
-    if (meta.mention && rules.slack.includes("mention")) return "mentions you";
+    if (meta.dm && rules.slack.includes("dm")) {
+      return "a DM to you";
+    }
+    if (meta.mention && rules.slack.includes("mention")) {
+      return "mentions you";
+    }
     return null;
   }
-  if (meta.channel !== "github") return "not from GitHub or Slack";
+  if (meta.channel !== "github") {
+    return "not from GitHub or Slack";
+  }
   const reason = meta.reason ?? "";
   if (reason === "review_requested" && meta.requested) {
     // GitHub says "review requested" for a team you are on too; the PR says
     // whom it asked.
-    if (meta.requested.me) return GITHUB_WHY.review_requested!;
+    if (meta.requested.me) {
+      return GITHUB_WHY.review_requested!;
+    }
     const team = meta.requested.teams.find((t) => watchedTeam(t, teams));
     return team ? `review requested of ${team}` : null;
   }
@@ -490,11 +554,18 @@ export function escalation(
 
 function whyHeld(message: MessageRow): string {
   const meta = messageMeta(message);
-  if (meta.channel === "slack") return "not a DM to you or a mention of you";
-  if (meta.channel !== "github") return "no escalation rule";
-  if (meta.reason === "review_requested" && meta.requested)
+  if (meta.channel === "slack") {
+    return "not a DM to you or a mention of you";
+  }
+  if (meta.channel !== "github") {
+    return "no escalation rule";
+  }
+  if (meta.reason === "review_requested" && meta.requested) {
     return `review requested of ${meta.requested.teams.join(", ") || "someone else"}, not a team in triage.reviewTeams`;
-  if (meta.reason === "team_mention") return "mentions a team not in triage.reviewTeams";
+  }
+  if (meta.reason === "team_mention") {
+    return "mentions a team not in triage.reviewTeams";
+  }
   return `GitHub says ${meta.reason ?? "nothing"}, which you do not escalate`;
 }
 
@@ -503,11 +574,22 @@ function whyHeld(message: MessageRow): string {
 const escalate: TriageRule = {
   name: "escalation",
   handle: async ({ message, judged, config }) => {
-    const why = escalation(message, config.triage.escalate, config.triage.reviewTeams);
-    if (why) return pass(`${why}: it becomes a task`);
+    const why = escalation(
+      message,
+      config.triage.escalate,
+      config.triage.reviewTeams,
+    );
+    if (why) {
+      return pass(`${why}: it becomes a task`);
+    }
     const j = await judged();
     const reason = whyHeld(message);
-    store.fileMessage(message.id, j.ok ? j.value.verdict : null, `${HELD}${reason}`, null);
+    store.fileMessage(
+      message.id,
+      j.ok ? j.value.verdict : null,
+      `${HELD}${reason}`,
+      null,
+    );
     return ok({ verdict: "held", taskId: null, reason, effects: [] });
   },
 };
@@ -560,18 +642,31 @@ export async function runChain(
     const result = await rule.handle(item);
     if (!result.ok) {
       const why = typeof result.error === "string" ? "" : result.error.why;
-      steps.push({ rule: rule.name, decision: StepDecision.pass, reason: why, at: at() });
+      steps.push({
+        rule: rule.name,
+        decision: StepDecision.pass,
+        reason: why,
+        at: at(),
+      });
       continue;
     }
     const outcome = result.value;
-    steps.push({ rule: rule.name, decision: StepDecision.claim, reason: outcome.reason, at: at() });
-    if (outcome.project)
+    steps.push({
+      rule: rule.name,
+      decision: StepDecision.claim,
+      reason: outcome.reason,
+      at: at(),
+    });
+    if (outcome.project) {
       steps.push({
         rule: PROJECT_STEP,
-        decision: outcome.project.projectId ? StepDecision.claim : StepDecision.pass,
+        decision: outcome.project.projectId
+          ? StepDecision.claim
+          : StepDecision.pass,
         reason: outcome.project.reason,
         at: at(),
       });
+    }
     return { rule: rule.name, outcome, steps };
   }
   throw new Error(`no triage rule claimed message ${item.message.id}`);
@@ -590,7 +685,10 @@ export async function triage(
   deps: TriageDeps,
 ): Promise<TriageOutcome> {
   const item = inbound(message, deps.config);
-  const { rule, outcome, steps } = await runChain(deps.rules ?? TRIAGE_RULES, item);
+  const { rule, outcome, steps } = await runChain(
+    deps.rules ?? TRIAGE_RULES,
+    item,
+  );
   const asked = item.asked();
   const batched = deps.batch ?? [];
   store.batch(() => {
@@ -599,22 +697,34 @@ export async function triage(
       input: {
         dm: item.dm,
         fromMe: Boolean(message.from_me),
-        openOnThread: item.openOnThread ? store.taskRef(item.openOnThread.id) : null,
-        lastOnThread: item.lastOnThread ? store.taskRef(item.lastOnThread.id) : null,
+        openOnThread: item.openOnThread
+          ? store.taskRef(item.openOnThread.id)
+          : null,
+        lastOnThread: item.lastOnThread
+          ? store.taskRef(item.lastOnThread.id)
+          : null,
         ...(batched.length ? { batch: batched.map((m) => m.id) } : {}),
       },
       verdict: asked ? (asked.ok ? asked.value : { error: asked.error }) : null,
       rule,
       outcome: outcome.verdict,
       taskId: outcome.taskId,
-      projectId: outcome.taskId ? (store.getTask(outcome.taskId)?.project_id ?? null) : null,
+      projectId: outcome.taskId
+        ? (store.getTask(outcome.taskId)?.project_id ?? null)
+        : null,
       reason: outcome.reason,
       steps,
     });
     store.settleMessage(message.id, settledState(outcome));
-    for (const other of batched) followLead(other, message.id, outcome);
+    for (const other of batched) {
+      followLead(other, message.id, outcome);
+    }
   });
-  logger("triage").debug("routed", { message: message.id, rule, batch: batched.length });
+  logger("triage").debug("routed", {
+    message: message.id,
+    rule,
+    batch: batched.length,
+  });
   return outcome;
 }
 
@@ -627,11 +737,19 @@ export const BATCH_RULE = "batch";
 // A message triaged together with a later one on its thread goes where that
 // one went: its text was part of what the chain read, so it is filed the
 // same way and its run says with which.
-function followLead(other: MessageRow, leadId: number, outcome: TriageOutcome): void {
+function followLead(
+  other: MessageRow,
+  leadId: number,
+  outcome: TriageOutcome,
+): void {
   const lead = store.getMessage(leadId);
-  if (!lead) return;
+  if (!lead) {
+    return;
+  }
   store.fileMessage(other.id, lead.verdict, lead.reason, lead.task_id);
-  if (lead.read_at) store.markMessageRead(other.id);
+  if (lead.read_at) {
+    store.markMessageRead(other.id);
+  }
   const reason = `triaged with message ${leadId}, later on this thread`;
   store.addTriageRun({
     messageId: other.id,
@@ -640,10 +758,17 @@ function followLead(other: MessageRow, leadId: number, outcome: TriageOutcome): 
     rule: BATCH_RULE,
     outcome: outcome.verdict,
     taskId: lead.task_id,
-    projectId: lead.task_id ? (store.getTask(lead.task_id)?.project_id ?? null) : null,
+    projectId: lead.task_id
+      ? (store.getTask(lead.task_id)?.project_id ?? null)
+      : null,
     reason,
     steps: [
-      { rule: BATCH_RULE, decision: StepDecision.claim, reason, at: new Date().toISOString() },
+      {
+        rule: BATCH_RULE,
+        decision: StepDecision.claim,
+        reason,
+        at: new Date().toISOString(),
+      },
     ],
   });
   store.settleMessage(other.id, settledState(outcome));
@@ -815,10 +940,14 @@ export function taskFromHeld(
 // The model's verdict from the newest triage run that asked for one.
 export function heldVerdict(messageId: number): VerdictAnswer | null {
   for (const run of store.triageRunsFor(messageId)) {
-    if (!run.verdict) continue;
+    if (!run.verdict) {
+      continue;
+    }
     try {
       const v = JSON.parse(run.verdict) as Partial<VerdictAnswer>;
-      if (v.verdict && v.verdict !== Verdict.fyi && v.title) return v as VerdictAnswer;
+      if (v.verdict && v.verdict !== Verdict.fyi && v.title) {
+        return v as VerdictAnswer;
+      }
     } catch {
       // An unreadable run is skipped.
     }
@@ -837,7 +966,9 @@ function createFromVerdict(
     answer.verdict === Verdict.watch
       ? null
       : (requestedPr(message) ?? prFromUrl(answer.review_pr));
-  if (pr) return createReview(message, pr, answer, answer.reason, config);
+  if (pr) {
+    return createReview(message, pr, answer, answer.reason, config);
+  }
   const kind: Kind =
     answer.verdict === Verdict.watch ? Kind.task : (answer.verdict as Kind);
   const meta = messageMeta(message);
@@ -867,7 +998,9 @@ function createFromVerdict(
       messageId: message.id,
       startedAt: message.received_at,
     });
-    if (kind === Kind.coding) holdForStart(created.id);
+    if (kind === Kind.coding) {
+      holdForStart(created.id);
+    }
     return created;
   });
   const effects: TriageEffect[] =
@@ -899,14 +1032,22 @@ export interface ReviewPr {
 
 export function prFromUrl(url: string | null | undefined): ReviewPr | null {
   const pr = url ? parsePrUrl(url) : null;
-  return pr && { ...pr, url: `https://github.com/${pr.repo}/pull/${pr.number}` };
+  return (
+    pr && { ...pr, url: `https://github.com/${pr.repo}/pull/${pr.number}` }
+  );
 }
 
 // The pull request a GitHub notification is about.
 function prOf(message: MessageRow): ReviewPr | null {
   const meta = messageMeta(message);
-  if (meta.channel !== "github" || meta.type !== "PullRequest" || !meta.repo || !meta.number)
+  if (
+    meta.channel !== "github" ||
+    meta.type !== "PullRequest" ||
+    !meta.repo ||
+    !meta.number
+  ) {
     return null;
+  }
   return (
     prFromUrl(message.url) ?? {
       repo: meta.repo,
@@ -919,7 +1060,9 @@ function prOf(message: MessageRow): ReviewPr | null {
 // The pull request a GitHub review request is about.
 export function requestedPr(message: MessageRow): ReviewPr | null {
   const meta = messageMeta(message);
-  return meta.channel === "github" && meta.reason === "review_requested" ? prOf(message) : null;
+  return meta.channel === "github" && meta.reason === "review_requested"
+    ? prOf(message)
+    : null;
 }
 
 // "org/slug" names one team, a bare slug that team in any org.
@@ -946,24 +1089,35 @@ export function reviewIsYours(
   watched: readonly string[],
 ): Result<string, string> {
   const meta = messageMeta(message) as GithubMeta;
-  if (meta.reason === "mention") return ok("you were tagged on the PR");
+  if (meta.reason === "mention") {
+    return ok("you were tagged on the PR");
+  }
   if (meta.reason === "team_mention") {
     const tagged = taggedTeams(message.body);
     const team = tagged.find((t) => watchedTeam(t, watched));
-    if (team) return ok(`${team} was tagged on the PR, a team you watch`);
+    if (team) {
+      return ok(`${team} was tagged on the PR, a team you watch`);
+    }
     return err(
       tagged.length
         ? `tagged ${tagged.join(", ")}, not a team you watch`
         : "a team was tagged, but not in this comment",
     );
   }
-  if (meta.reason !== "review_requested")
+  if (meta.reason !== "review_requested") {
     return err(`${meta.reason ?? "no reason"}: not a review ask or a tag`);
+  }
   const asked = meta.requested;
-  if (!asked) return err("who was asked is not known");
-  if (asked.me) return ok("a review requested from you");
+  if (!asked) {
+    return err("who was asked is not known");
+  }
+  if (asked.me) {
+    return ok("a review requested from you");
+  }
   const team = asked.teams.find((t) => watchedTeam(t, watched));
-  if (team) return ok(`a review requested from ${team}, a team you watch`);
+  if (team) {
+    return ok(`a review requested from ${team}, a team you watch`);
+  }
   return err(
     asked.teams.length
       ? `asked of ${asked.teams.join(", ")}, not a team you watch`
@@ -981,12 +1135,18 @@ export function reviewForOthers(
   const meta = messageMeta(message) as GithubMeta;
   if (meta.reason === "team_mention") {
     const tagged = taggedTeams(message.body);
-    if (!tagged.length || tagged.some((t) => watchedTeam(t, watched))) return null;
+    if (!tagged.length || tagged.some((t) => watchedTeam(t, watched))) {
+      return null;
+    }
     return `tagged ${tagged.join(", ")}, not a team you watch`;
   }
-  if (meta.reason !== "review_requested" || !meta.requested) return null;
+  if (meta.reason !== "review_requested" || !meta.requested) {
+    return null;
+  }
   const { me, teams } = meta.requested;
-  if (me || !teams.length || teams.some((t) => watchedTeam(t, watched))) return null;
+  if (me || !teams.length || teams.some((t) => watchedTeam(t, watched))) {
+    return null;
+  }
   return `review requested of ${teams.join(", ")}, not a team you watch`;
 }
 
@@ -1009,12 +1169,19 @@ function joinReview(
   config: TriageConfig,
 ): TriageOutcome {
   const outcome = attach(message, task, config);
-  if (message.thread_key !== prThread)
+  if (message.thread_key !== prThread) {
     store.batch(() => {
       store.linkThread(task.id, message.thread_key);
-      if (message.url)
-        store.addTaskLink(task.id, message.url, "where the review was asked", "triage");
+      if (message.url) {
+        store.addTaskLink(
+          task.id,
+          message.url,
+          "where the review was asked",
+          "triage",
+        );
+      }
     });
+  }
   return outcome;
 }
 
@@ -1034,8 +1201,11 @@ function createReview(
   // a closed one back.
   const last = store.lastTaskForThread(prThread);
   const existing =
-    store.openTaskForThread(prThread) ?? (last?.status === TaskStatus.done ? last : null);
-  if (existing) return joinReview(message, existing, prThread, config);
+    store.openTaskForThread(prThread) ??
+    (last?.status === TaskStatus.done ? last : null);
+  if (existing) {
+    return joinReview(message, existing, prThread, config);
+  }
   const project = pickProject(pr.repo, answer?.project);
   const task = store.batch(() => {
     const created = store.createTask({
@@ -1059,8 +1229,14 @@ function createReview(
     // reviews and CI come back here, and the ask stays a link.
     if (message.thread_key !== prThread) {
       store.linkThread(created.id, prThread);
-      if (message.url)
-        store.addTaskLink(created.id, message.url, "where the review was asked", "triage");
+      if (message.url) {
+        store.addTaskLink(
+          created.id,
+          message.url,
+          "where the review was asked",
+          "triage",
+        );
+      }
     }
     store.fileMessage(message.id, Verdict.coding, reason, created.id);
     store.addTurn({
@@ -1071,22 +1247,24 @@ function createReview(
       messageId: message.id,
       startedAt: message.received_at,
     });
-    if (!config.repos[pr.repo])
+    if (!config.repos[pr.repo]) {
       store.addTurn({
         taskId: created.id,
         role: TurnRole.trigger,
         body: `${pr.repo} has no checkout mapped. Start asks where it is (one found on disk, or a fresh clone); or map it first with \`move repo ${pr.repo} --path <dir>\` or \`--clone yes\`.`,
         startedAt: message.received_at,
       });
+    }
     // Offered, never run: a guide spends money, so it waits for the owner.
     const offer = guideOffer(config, created);
-    if (offer)
+    if (offer) {
       store.addTurn({
         taskId: created.id,
         role: TurnRole.trigger,
         body: offer,
         startedAt: message.received_at,
       });
+    }
     holdForStart(created.id);
     return created;
   });

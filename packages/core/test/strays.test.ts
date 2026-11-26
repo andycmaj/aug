@@ -53,9 +53,19 @@ beforeEach(() => {
 afterEach(() => setStraySource(null));
 
 // One of your own tmux sessions, a claude running in its window.
-async function ownSession(name: string, pid: number, status = "busy"): Promise<ClaudeProcess> {
+async function ownSession(
+  name: string,
+  pid: number,
+  status = "busy",
+): Promise<ClaudeProcess> {
   const session = await fake.newSession(name);
-  const w = await fake.newWindow({ sessionId: session.id, name: "claude", cwd: "/", env: {}, argv: [] });
+  const w = await fake.newWindow({
+    sessionId: session.id,
+    name: "claude",
+    cwd: "/",
+    env: {},
+    argv: [],
+  });
   fake.panePids.set(w.id, pid - 1);
   const claude = {
     pid,
@@ -93,15 +103,22 @@ describe("Claude's session files", () => {
   test("a claude outside tmux has no pane; print runs, Riker's own and junk are skipped", () => {
     const base = { pid: 1, sessionId: "s", cwd: "/x" };
     expect(parseClaudeProcess(JSON.stringify(base))?.pane).toBeNull();
-    expect(parseClaudeProcess(JSON.stringify({ ...base, kind: "print" }))).toBeNull();
-    expect(parseClaudeProcess(JSON.stringify({ ...base, entrypoint: "riker" }))).toBeNull();
+    expect(
+      parseClaudeProcess(JSON.stringify({ ...base, kind: "print" })),
+    ).toBeNull();
+    expect(
+      parseClaudeProcess(JSON.stringify({ ...base, entrypoint: "riker" })),
+    ).toBeNull();
     expect(parseClaudeProcess(JSON.stringify({ pid: 1 }))).toBeNull();
     expect(parseClaudeProcess("{nope")).toBeNull();
   });
 
   test("reads every json in the folder, and nothing from a folder that is not there", () => {
     const dir = mkdtempSync(join(tmpdir(), "claude-sessions-"));
-    writeFileSync(join(dir, "1.json"), JSON.stringify({ pid: 1, sessionId: "a", cwd: "/a" }));
+    writeFileSync(
+      join(dir, "1.json"),
+      JSON.stringify({ pid: 1, sessionId: "a", cwd: "/a" }),
+    );
     writeFileSync(join(dir, "1.abc.key"), "secret");
     writeFileSync(join(dir, "2.json"), "{");
     expect(readClaudeProcesses(dir).map((c) => c.sessionId)).toEqual(["a"]);
@@ -110,8 +127,13 @@ describe("Claude's session files", () => {
 
   test("only a name you gave the claude is kept", () => {
     const base = { pid: 1, sessionId: "s", cwd: "/x", name: "beanstream-00" };
-    expect(parseClaudeProcess(JSON.stringify({ ...base, nameSource: "derived" }))?.name).toBeNull();
-    expect(parseClaudeProcess(JSON.stringify({ ...base, nameSource: "user" }))?.name).toBe("beanstream-00");
+    expect(
+      parseClaudeProcess(JSON.stringify({ ...base, nameSource: "derived" }))
+        ?.name,
+    ).toBeNull();
+    expect(
+      parseClaudeProcess(JSON.stringify({ ...base, nameSource: "user" }))?.name,
+    ).toBe("beanstream-00");
   });
 });
 
@@ -122,14 +144,27 @@ describe("finding strays", () => {
     dead.add(gone.pid);
     const known = await ownSession("known", 301);
     const project = await createProject(config(), { name: "Riker" });
-    const task = store.createTask({ title: "x", kind: Kind.coding, channel: "owner", projectId: project.id });
-    store.createSession({ id: known.sessionId, taskId: task.id, kind: SessionKind.tmux, cwd: "/", startedBy: "riker" });
+    const task = store.createTask({
+      title: "x",
+      kind: Kind.coding,
+      channel: "owner",
+      projectId: project.id,
+    });
+    store.createSession({
+      id: known.sessionId,
+      taskId: task.id,
+      kind: SessionKind.tmux,
+      cwd: "/",
+      startedBy: "riker",
+    });
     const host = await ownSession("host", 401);
     fake.host = host.pane;
     const tagged = await ownSession("tagged", 501);
     await fake.tagWindow(tagged.pane!, task.id);
 
-    expect((await findStrays()).map((s) => s.claude.sessionId)).toEqual([mine.sessionId]);
+    expect((await findStrays()).map((s) => s.claude.sessionId)).toEqual([
+      mine.sessionId,
+    ]);
   });
 
   test("a pane id from another tmux server is not this one's pane", async () => {
@@ -165,7 +200,9 @@ describe("adopting a stray", () => {
     expect(task.worktree).toBe("/src/beanstream");
     const window = fake.windows.find((w) => w.id === claude.pane)!;
     expect(window.taskId).toBe(task.id);
-    expect(window.sessionId).toBe(fake.sessions.find((s) => s.projectId === project.id)!.id);
+    expect(window.sessionId).toBe(
+      fake.sessions.find((s) => s.projectId === project.id)!.id,
+    );
     const session = store.getSession(claude.sessionId)!;
     expect(session.tmux_window).toBe(claude.pane);
     expect(session.ended_at).toBeNull();
@@ -177,10 +214,19 @@ describe("adopting a stray", () => {
   test("its hooks then reach the task through the project session", async () => {
     const claude = await ownSession("beanstream", 101);
     const project = await createProject(config(), { name: "Ledger" });
-    const task = await engine.desk.adoptStray((await findStrays())[0], project.id);
-    const env = await adoptHook("stop", { session_id: claude.sessionId }, claude.pane!);
+    const task = await engine.desk.adoptStray(
+      (await findStrays())[0],
+      project.id,
+    );
+    const env = await adoptHook(
+      "stop",
+      { session_id: claude.sessionId },
+      claude.pane!,
+    );
     expect(env).toEqual({ taskId: task.id, sessionId: claude.sessionId });
-    expect(store.listTasks().filter((t) => t.kind === Kind.coding)).toHaveLength(1);
+    expect(
+      store.listTasks().filter((t) => t.kind === Kind.coding),
+    ).toHaveLength(1);
   });
 
   test("the main checkout's branch is not the task's", async () => {
@@ -188,16 +234,32 @@ describe("adopting a stray", () => {
     setStraySource({ ...source, git: () => shared });
     await ownSession("beanstream", 101);
     const project = await createProject(config(), { name: "Ledger" });
-    const task = await engine.desk.adoptStray((await findStrays())[0], project.id);
+    const task = await engine.desk.adoptStray(
+      (await findStrays())[0],
+      project.id,
+    );
     expect(task.title).toBe("beanstream");
     expect(task.branch).toBeNull();
   });
 
   test("a claude outside tmux is saved, so Start resumes it in the project", async () => {
-    setStraySource({ ...source, git: () => ({ ...git, branch: "main", worktree: false }) });
-    claudes.push({ pid: 9, sessionId: "term-session", cwd: "/src/ledger", pane: null, name: "ledger export", status: "busy" });
+    setStraySource({
+      ...source,
+      git: () => ({ ...git, branch: "main", worktree: false }),
+    });
+    claudes.push({
+      pid: 9,
+      sessionId: "term-session",
+      cwd: "/src/ledger",
+      pane: null,
+      name: "ledger export",
+      status: "busy",
+    });
     const project = await createProject(config(), { name: "Ledger" });
-    const task = await engine.desk.adoptStray((await findStrays())[0], project.id);
+    const task = await engine.desk.adoptStray(
+      (await findStrays())[0],
+      project.id,
+    );
     expect(task.title).toBe("ledger export");
     expect(task.agent_state).toBe(AgentState.stopped);
 
@@ -207,7 +269,9 @@ describe("adopting a stray", () => {
     const window = fake.windows.find((w) => w.taskId === task.id)!;
     expect(window.cwd).toBe("/src/ledger");
     expect(window.argv).toContain("--resume");
-    expect(window.argv[window.argv.indexOf("--resume") + 1]).toBe("term-session");
+    expect(window.argv[window.argv.indexOf("--resume") + 1]).toBe(
+      "term-session",
+    );
   });
 
   test("a window that cannot be taken leaves no task behind", async () => {
@@ -216,7 +280,11 @@ describe("adopting a stray", () => {
     const [stray] = await findStrays();
     fake.windows = [];
     await expect(engine.desk.adoptStray(stray, project.id)).rejects.toThrow();
-    expect(store.listTasks().filter((t) => t.status === TaskStatus.open && t.kind === Kind.coding)).toEqual([]);
+    expect(
+      store
+        .listTasks()
+        .filter((t) => t.status === TaskStatus.open && t.kind === Kind.coding),
+    ).toEqual([]);
   });
 });
 
@@ -226,21 +294,41 @@ describe("the adopt move", () => {
     await createProject(config(), { name: "Ledger" });
     const list = store.enqueueMove("adopt", { project: "Ledger" }, "you");
     await engine.drainMoves();
-    expect(store.getMove(list.id)!.result).toStartWith("strays: beanstre (beanstream:claude");
+    expect(store.getMove(list.id)!.result).toStartWith(
+      "strays: beanstre (beanstream:claude",
+    );
 
-    const move = store.enqueueMove("adopt", { project: "Ledger", claude: "beanstream" }, "you");
+    const move = store.enqueueMove(
+      "adopt",
+      { project: "Ledger", claude: "beanstream" },
+      "you",
+    );
     await engine.drainMoves();
     const row = store.getMove(move.id)!;
-    expect(row.result).toMatch(/^adopted beanstream:claude .* as RIKER-\d+ in Ledger/);
+    expect(row.result).toMatch(
+      /^adopted beanstream:claude .* as RIKER-\d+ in Ledger/,
+    );
   });
 
   test("an agent cannot adopt, and an unknown claude says which there are", async () => {
     await ownSession("beanstream", 101);
     await createProject(config(), { name: "Ledger" });
-    const byAgent = store.enqueueMove("adopt", { project: "Ledger", claude: "beanstream" }, "agent RIKER-0001");
-    const unknown = store.enqueueMove("adopt", { project: "Ledger", claude: "nope" }, "you");
+    const byAgent = store.enqueueMove(
+      "adopt",
+      { project: "Ledger", claude: "beanstream" },
+      "agent RIKER-0001",
+    );
+    const unknown = store.enqueueMove(
+      "adopt",
+      { project: "Ledger", claude: "nope" },
+      "you",
+    );
     await engine.drainMoves();
-    expect(store.getMove(byAgent.id)!.result).toStartWith("adopt is the owner's move");
-    expect(store.getMove(unknown.id)!.result).toStartWith("no stray claude nope. Strays: beanstre");
+    expect(store.getMove(byAgent.id)!.result).toStartWith(
+      "adopt is the owner's move",
+    );
+    expect(store.getMove(unknown.id)!.result).toStartWith(
+      "no stray claude nope. Strays: beanstre",
+    );
   });
 });

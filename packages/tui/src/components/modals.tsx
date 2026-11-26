@@ -51,7 +51,9 @@ export function PromptModal(props: {
       ]}
       commands={{
         [ModalCommands.MODAL_SELECT]: () => {
-          if (!value.trim()) return;
+          if (!value.trim()) {
+            return;
+          }
           props.onClose();
           props.onSubmit(value.trim());
         },
@@ -98,8 +100,16 @@ export function ChoiceModal(props: {
   // selection, so the modal never grows past the screen.
   const shown = () => {
     const total = props.choices.length;
-    if (total <= CHOICES_SHOWN) return { start: 0, end: total };
-    const start = Math.max(0, Math.min(total - CHOICES_SHOWN, selected() - Math.floor(CHOICES_SHOWN / 2)));
+    if (total <= CHOICES_SHOWN) {
+      return { start: 0, end: total };
+    }
+    const start = Math.max(
+      0,
+      Math.min(
+        total - CHOICES_SHOWN,
+        selected() - Math.floor(CHOICES_SHOWN / 2),
+      ),
+    );
     return { start, end: start + CHOICES_SHOWN };
   };
   const bindings: BindingSpec[] = [
@@ -174,7 +184,9 @@ export function ChoiceModal(props: {
           }}
         </For>
         <Show when={shown().end < props.choices.length}>
-          <text fg={theme.textMuted}>{`  ↓ ${props.choices.length - shown().end} more`}</text>
+          <text
+            fg={theme.textMuted}
+          >{`  ↓ ${props.choices.length - shown().end} more`}</text>
         </Show>
       </box>
     </Modal>
@@ -281,15 +293,17 @@ export function StatusModal(props: {
                     style={{ fg: theme.textMuted }}
                   >{`  ${link().phase}${s.at ? ` · ${dayClock(s.at)}` : ""}`}</span>
                 </text>
-                <text fg={theme.textMuted} wrapMode="word">{`  ${detail()}`}</text>
+                <text
+                  fg={theme.textMuted}
+                  wrapMode="word"
+                >{`  ${detail()}`}</text>
               </box>
             );
           }}
         </For>
-        <text
-          fg={theme.textMuted}
-          wrapMode="word"
-        >{hints()}</text>
+        <text fg={theme.textMuted} wrapMode="word">
+          {hints()}
+        </text>
       </box>
     </Modal>
   );
@@ -332,11 +346,15 @@ export function InfoModal(props: {
     const next = Math.max(0, Math.min(rows().length - 1, selected() + d));
     setSelected(next);
     const line = rows()[next]?.line ?? 0;
-    if (!scrollRef) return;
+    if (!scrollRef) {
+      return;
+    }
     // Up past the top shows the row's section title too.
-    if (line - 1 < scrollRef.scrollTop) scrollRef.scrollTo(Math.max(0, line - 2));
-    else if (line >= scrollRef.scrollTop + height())
+    if (line - 1 < scrollRef.scrollTop) {
+      scrollRef.scrollTo(Math.max(0, line - 2));
+    } else if (line >= scrollRef.scrollTop + height()) {
       scrollRef.scrollTo(line - height() + 1);
+    }
   };
   return (
     <Modal
@@ -354,12 +372,17 @@ export function InfoModal(props: {
         [ModalCommands.MODAL_UP]: () => move(-1),
         [ModalCommands.MODAL_SELECT]: () => {
           const target = rows()[selected()]?.open;
-          if (target) props.onOpen(target);
-          else props.onClose();
+          if (target) {
+            props.onOpen(target);
+          } else {
+            props.onClose();
+          }
         },
         "info.copy": () => {
           const row = rows()[selected()];
-          if (!row) return;
+          if (!row) {
+            return;
+          }
           void copyToClipboard(row.value).then((ok) =>
             props.onCopied(row.label, ok),
           );
@@ -436,7 +459,9 @@ export function ActionAnswerModal(props: {
 }) {
   const riker = useRiker();
   const dims = useTerminalDimensions();
-  const turn = createMemo(() => riker.turns(props.taskId).find((t) => t.id === props.turnId));
+  const turn = createMemo(() =>
+    riker.turns(props.taskId).find((t) => t.id === props.turnId),
+  );
   const width = () => Math.min(100, dims().width - 8);
   const height = () => Math.max(6, dims().height - 12);
   let scrollRef: ScrollBoxRenderable | undefined;
@@ -460,7 +485,9 @@ export function ActionAnswerModal(props: {
         "answer.page": () => scrollRef?.scrollBy(0.8, "viewport"),
         "answer.copy": () => {
           const body = turn()?.body;
-          if (body) void copyToClipboard(body).then(props.onCopied);
+          if (body) {
+            void copyToClipboard(body).then(props.onCopied);
+          }
         },
       }}
     >
@@ -511,12 +538,21 @@ export function ReaderModal(props: {
   const scroll = (by: number) => scrollRef?.scrollBy(by);
   const links = () => props.links?.() ?? [];
   const keys = () =>
-    ["j/k", "space page", links().length ? `1-${Math.min(9, links().length)} open` : null, "c copy", props.onEdit ? "e edit" : null, "esc"]
+    [
+      "j/k",
+      "space page",
+      links().length ? `1-${Math.min(9, links().length)} open` : null,
+      "c copy",
+      props.onEdit ? "e edit" : null,
+      "esc",
+    ]
       .filter(Boolean)
       .join(" · ");
   const openNth = (n: number) => {
     const link = links()[n - 1];
-    if (!link || !props.onOpen) return false;
+    if (!link || !props.onOpen) {
+      return false;
+    }
     props.onOpen(link.url);
   };
   const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -532,7 +568,11 @@ export function ReaderModal(props: {
         { key: "c", cmd: "reader.copy", desc: "copy it" },
         { key: "y", cmd: "reader.copy", desc: "copy it" },
         { key: "e", cmd: "reader.edit", desc: "open it in $EDITOR" },
-        ...DIGITS.map((n) => ({ key: String(n), cmd: `reader.open.${n}`, desc: `open link ${n}` })),
+        ...DIGITS.map((n) => ({
+          key: String(n),
+          cmd: `reader.open.${n}`,
+          desc: `open link ${n}`,
+        })),
       ]}
       commands={{
         [ModalCommands.MODAL_DOWN]: () => scroll(2),
@@ -541,13 +581,19 @@ export function ReaderModal(props: {
         "reader.page": () => scrollRef?.scrollBy(0.8, "viewport"),
         "reader.copy": () => {
           const text = props.text();
-          if (text) void copyToClipboard(text).then(props.onCopied);
+          if (text) {
+            void copyToClipboard(text).then(props.onCopied);
+          }
         },
         "reader.edit": () => {
-          if (!props.onEdit) return false;
+          if (!props.onEdit) {
+            return false;
+          }
           props.onEdit();
         },
-        ...Object.fromEntries(DIGITS.map((n) => [`reader.open.${n}`, () => openNth(n)])),
+        ...Object.fromEntries(
+          DIGITS.map((n) => [`reader.open.${n}`, () => openNth(n)]),
+        ),
       }}
     >
       <ModalHeader title={props.title} hint={keys()} />
@@ -569,9 +615,18 @@ export function ReaderModal(props: {
             <For each={links()}>
               {(link, i) => (
                 <text wrapMode="none">
-                  <span style={{ fg: i() < 9 ? theme.primary : theme.textMuted }}>{`${i() < 9 ? i() + 1 : "·"}  `}</span>
-                  <span style={{ fg: theme.text }}>{truncate(link.label, Math.max(10, Math.floor(width() / 2)))}</span>
-                  <span style={{ fg: theme.textMuted }}>{`  ${truncate(link.url, Math.max(10, width() - link.label.length - 12))}`}</span>
+                  <span
+                    style={{ fg: i() < 9 ? theme.primary : theme.textMuted }}
+                  >{`${i() < 9 ? i() + 1 : "·"}  `}</span>
+                  <span style={{ fg: theme.text }}>
+                    {truncate(
+                      link.label,
+                      Math.max(10, Math.floor(width() / 2)),
+                    )}
+                  </span>
+                  <span
+                    style={{ fg: theme.textMuted }}
+                  >{`  ${truncate(link.url, Math.max(10, width() - link.label.length - 12))}`}</span>
                 </text>
               )}
             </For>
@@ -579,7 +634,11 @@ export function ReaderModal(props: {
         </Show>
         <Show
           when={props.text()?.trim()}
-          fallback={<text fg={theme.textMuted} wrapMode="word">{props.empty}</text>}
+          fallback={
+            <text fg={theme.textMuted} wrapMode="word">
+              {props.empty}
+            </text>
+          }
         >
           <Markdown text={props.text() ?? ""} width={width() - 4} />
         </Show>
@@ -651,7 +710,9 @@ export function SearchModal(props: {
     ...goToList(docs(), nav.filter(), recentKeys, riker.searchShowsDone()),
   ]);
   const pick = (hit: SearchHit | null | undefined) => {
-    if (hit === undefined) return false;
+    if (hit === undefined) {
+      return false;
+    }
     props.onClose();
     props.onPick(hit ? hit.item.key : INBOX_KEY);
   };
@@ -688,16 +749,14 @@ export function SearchModal(props: {
       >
         <Show
           when={hits().length > 0}
-          fallback={
-            <text fg={theme.textMuted}>Nothing matches</text>
-          }
+          fallback={<text fg={theme.textMuted}>Nothing matches</text>}
         >
           <For each={hits()}>
             {(hit, i) => {
               const on = () => i() === nav.selected();
               const fg = () =>
                 on() ? contrastingForeground(theme.primary) : undefined;
-              if (!hit)
+              if (!hit) {
                 return (
                   <box
                     flexDirection="row"
@@ -706,19 +765,30 @@ export function SearchModal(props: {
                     paddingRight={1}
                     backgroundColor={on() ? theme.primary : undefined}
                   >
-                    <text width={SEARCH_TAG_WIDTH} flexShrink={0} fg={fg() ?? theme.accent}>
+                    <text
+                      width={SEARCH_TAG_WIDTH}
+                      flexShrink={0}
+                      fg={fg() ?? theme.accent}
+                    >
                       board
                     </text>
                     <box flexGrow={1} flexShrink={1} overflow="hidden">
-                      <text wrapMode="none" fg={fg() ?? theme.text} attributes={on() ? 1 : 0}>
+                      <text
+                        wrapMode="none"
+                        fg={fg() ?? theme.text}
+                        attributes={on() ? 1 : 0}
+                      >
                         Inbox
                       </text>
                     </box>
                     <text flexShrink={0} fg={fg() ?? theme.textMuted}>
-                      {riker.inboxCount() ? `${riker.inboxCount()} need you` : "messages and ideas"}
+                      {riker.inboxCount()
+                        ? `${riker.inboxCount()} need you`
+                        : "messages and ideas"}
                     </text>
                   </box>
                 );
+              }
               const project = () =>
                 hit.item.type === "task" && hit.item.task.project_id
                   ? projectChip(riker.project(hit.item.task.project_id))
@@ -731,7 +801,11 @@ export function SearchModal(props: {
                   paddingRight={1}
                   backgroundColor={on() ? theme.primary : undefined}
                 >
-                  <text width={SEARCH_TAG_WIDTH} flexShrink={0} fg={fg() ?? theme.accent}>
+                  <text
+                    width={SEARCH_TAG_WIDTH}
+                    flexShrink={0}
+                    fg={fg() ?? theme.accent}
+                  >
                     {searchTag(hit.item)}
                   </text>
                   {/* A long title is cut here, not over the hint. */}

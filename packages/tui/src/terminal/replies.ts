@@ -26,10 +26,11 @@ const QUERY =
 export function terminalReplies(output: string, ctx: ReplyContext): string {
   let replies = "";
   for (const m of output.matchAll(QUERY)) {
-    if (m[2] === "6")
+    if (m[2] === "6") {
       replies += `\x1b[${m[1]}${ctx.cursor[1] + 1};${ctx.cursor[0] + 1}R`;
-    else if (m[2] === "5") replies += "\x1b[0n";
-    else if (m[3] !== undefined && m[4] === undefined && m[0].endsWith("c")) {
+    } else if (m[2] === "5") {
+      replies += "\x1b[0n";
+    } else if (m[3] !== undefined && m[4] === undefined && m[0].endsWith("c")) {
       replies += m[3] === ">" ? "\x1b[>0;10;0c" : "\x1b[?62;22c";
     } else if (m[4]) {
       const color = m[4] === "10" ? ctx.foreground : ctx.background;

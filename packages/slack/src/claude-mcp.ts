@@ -8,7 +8,11 @@
 // Sending is a separate one-shot call per Send press, whose only tool is the
 // send tool and whose only input is the owner's approved words.
 
-import { think, tokenUsage, type StreamEvent as BrainEvent } from "@riker/core/brain";
+import {
+  think,
+  tokenUsage,
+  type StreamEvent as BrainEvent,
+} from "@riker/core/brain";
 import { logger } from "@riker/core/log";
 import { claudeEnv } from "@riker/core/self";
 import { recordSpend } from "@riker/core/spend";
@@ -32,7 +36,9 @@ export function splitMcpTool(
   name: string,
 ): { server: string; tool: string } | null {
   const parts = name.split("__");
-  if (parts[0] !== "mcp" || parts.length < 3) return null;
+  if (parts[0] !== "mcp" || parts.length < 3) {
+    return null;
+  }
   return { server: parts[1], tool: parts.slice(2).join("__") };
 }
 
@@ -56,11 +62,15 @@ export function discoverSlackTools(
   const servers = new Map<string, string[]>();
   for (const name of tools) {
     const split = splitMcpTool(name);
-    if (!split || !want(split.server)) continue;
+    if (!split || !want(split.server)) {
+      continue;
+    }
     servers.set(split.server, [...(servers.get(split.server) ?? []), name]);
   }
   const [server, names] = [...servers.entries()][0] ?? [];
-  if (!server || !names) return null;
+  if (!server || !names) {
+    return null;
+  }
   const write = names.filter((n) =>
     WRITE_TOOL.test(splitMcpTool(n)?.tool ?? n),
   );
@@ -109,11 +119,13 @@ export const realSpawn: SpawnFn = (argv) => {
         nl = buffer.indexOf("\n");
       }
     }
-    if (buffer.trim()) yield buffer;
+    if (buffer.trim()) {
+      yield buffer;
+    }
   }
   return {
     write: (line) => {
-      proc.stdin.write(line);
+      void proc.stdin.write(line);
       void proc.stdin.flush();
     },
     lines: lines(),
@@ -191,7 +203,9 @@ export class PersistentClaude {
           this.waiting = null;
           this.turns++;
           // A bounded context: start fresh every maxTurns.
-          if (this.turns >= this.opts.maxTurns) this.stop();
+          if (this.turns >= this.opts.maxTurns) {
+            this.stop();
+          }
           resolve(r);
         },
         reject: (e) => {
@@ -204,7 +218,9 @@ export class PersistentClaude {
   }
 
   private ensure(): ProcLike {
-    if (this.proc) return this.proc;
+    if (this.proc) {
+      return this.proc;
+    }
     const proc = (this.opts.spawn ?? realSpawn)(this.argv());
     this.proc = proc;
     this.turns = 0;
@@ -225,12 +241,15 @@ export class PersistentClaude {
             this.init = event;
             log.debug("session init", { tools: event.tools?.length ?? 0 });
           }
-          if (event.type === "assistant")
+          if (event.type === "assistant") {
             calls += (event.message?.content ?? []).filter(
               (c) => c.type === "tool_use" && c.name !== ANSWER_TOOL,
             ).length;
+          }
           if (event.type === "result") {
-            if (this.proc === proc) this.record(event);
+            if (this.proc === proc) {
+              this.record(event);
+            }
             log.trace("turn result", {
               isError: event.is_error === true,
               text: (event.result ?? "").slice(0, 500),
@@ -252,7 +271,9 @@ export class PersistentClaude {
           turns: this.turns,
           midTurn: !!this.waiting,
         });
-        if (this.proc === proc) this.proc = null;
+        if (this.proc === proc) {
+          this.proc = null;
+        }
         this.waiting?.reject(new Error("the Slack session ended"));
       }
     })();
@@ -263,7 +284,9 @@ export class PersistentClaude {
     const total = event.total_cost_usd;
     const turnCost =
       total === undefined ? undefined : Math.max(0, total - this.costSoFar);
-    if (total !== undefined) this.costSoFar = total;
+    if (total !== undefined) {
+      this.costSoFar = total;
+    }
     recordSpend({ role: SpendRole.slack }, this.opts.model, {
       costUsd: turnCost,
       usage: tokenUsage(event),
@@ -301,8 +324,9 @@ export async function listTools(spawn: SpawnFn = realSpawn): Promise<string[]> {
     for await (const line of proc.lines) {
       try {
         const event = JSON.parse(line) as StreamEvent;
-        if (event.type === "system" && event.subtype === "init")
+        if (event.type === "system" && event.subtype === "init") {
           return event.tools ?? [];
+        }
       } catch {
         continue;
       }
@@ -486,15 +510,18 @@ export class ClaudeMcpTransport implements SlackTransport {
 
   // The Slack MCP's tools, found once (the remote reads with them too).
   async slackTools(): Promise<SlackTools> {
-    if (this.tools) return this.tools;
+    if (this.tools) {
+      return this.tools;
+    }
     const list =
       this.options.listTools ?? (() => listTools(this.options.spawn));
     // A claude.ai connector can still be connecting when the session's init
     // event arrives: look a few times before saying there is none.
     let found: SlackTools | null = null;
     for (let attempt = 0; attempt < DISCOVER_ATTEMPTS && !found; attempt++) {
-      if (attempt > 0)
+      if (attempt > 0) {
         await new Promise((r) => setTimeout(r, this.options.retryMs ?? 2000));
+      }
       found = discoverSlackTools(await list(), this.options.server);
       log.debug("tool discovery", { attempt, found: found?.server ?? null });
     }
@@ -569,8 +596,9 @@ export class ClaudeMcpTransport implements SlackTransport {
       messages?: PolledMessage[];
       newest_ts?: string;
     } | null;
-    if (!answer || !Array.isArray(answer.messages))
+    if (!answer || !Array.isArray(answer.messages)) {
       throw new Error("the Slack session returned no messages list");
+    }
     let newest = maxTs(since, answer.newest_ts || undefined);
     const messages = answer.messages
       .filter(
@@ -589,8 +617,9 @@ export class ClaudeMcpTransport implements SlackTransport {
   }
 
   sendArgs(tools: SlackTools): { allow: string[]; disallow: string[] } {
-    if (!tools.send)
+    if (!tools.send) {
       throw new Error(`the ${tools.server} MCP has no send tool`);
+    }
     return {
       allow: [tools.send],
       disallow: tools.write.filter((t) => t !== tools.send).concat(tools.read),
@@ -603,7 +632,9 @@ export class ClaudeMcpTransport implements SlackTransport {
   }
 
   // One post; the ts is the model's report of it, when it gave one.
-  async post(action: SlackReply): Promise<{ ts: string | null; server: string }> {
+  async post(
+    action: SlackReply,
+  ): Promise<{ ts: string | null; server: string }> {
     const tools = await this.slackTools();
     const { allow, disallow } = this.sendArgs(tools);
     const result = await think({

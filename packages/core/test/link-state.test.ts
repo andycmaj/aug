@@ -78,7 +78,10 @@ describe("LinkTracker", () => {
     time.advance(14_999);
     expect(t.link.phase).toBe(LinkPhase.connecting);
     time.advance(1);
-    expect(t.link).toMatchObject({ phase: "failed", reason: "no answer after 15s" });
+    expect(t.link).toMatchObject({
+      phase: "failed",
+      reason: "no answer after 15s",
+    });
     expect(phases()).toEqual(["connecting", "failed"]);
   });
 
@@ -118,7 +121,10 @@ describe("LinkTracker", () => {
   });
 });
 
-const status = (state: ConnectorStatus["state"], detail = ""): ConnectorStatus => ({
+const status = (
+  state: ConnectorStatus["state"],
+  detail = "",
+): ConnectorStatus => ({
   state,
   detail,
   at: null,
@@ -127,35 +133,54 @@ const status = (state: ConnectorStatus["state"], detail = ""): ConnectorStatus =
 describe("a connector's status as a link", () => {
   function run(states: ConnectorStatus[]): LinkPhase[] {
     const { t, phases } = tracker(30_000);
-    for (const s of states) t.apply(s);
+    for (const s of states) {
+      t.apply(s);
+    }
     return phases();
   }
 
   test("first poll connects, a refresh poll stays connected", () => {
     expect(
-      run([status("off", "not started"), status("polling"), status("ok", "3 new"), status("polling"), status("ok")]),
+      run([
+        status("off", "not started"),
+        status("polling"),
+        status("ok", "3 new"),
+        status("polling"),
+        status("ok"),
+      ]),
     ).toEqual(["off", "connecting", "connected"]);
   });
 
   test("a failed poll fails, a retry is connecting again", () => {
-    expect(run([status("polling"), status("error", "gh: rate limited until 10:42"), status("polling")])).toEqual([
-      "connecting",
-      "failed",
-      "connecting",
-    ]);
+    expect(
+      run([
+        status("polling"),
+        status("error", "gh: rate limited until 10:42"),
+        status("polling"),
+      ]),
+    ).toEqual(["connecting", "failed", "connecting"]);
   });
 
   test("a poll that hangs fails at the timeout and recovers when it answers", () => {
     const { t, time, seen } = tracker(30_000);
     t.apply(status("polling"));
     time.advance(30_000);
-    expect(t.link).toMatchObject({ phase: "failed", reason: "no answer after 30s" });
+    expect(t.link).toMatchObject({
+      phase: "failed",
+      reason: "no answer after 30s",
+    });
     t.apply(status("ok"));
-    expect(seen.map((l) => l.phase)).toEqual(["connecting", "failed", "connected"]);
+    expect(seen.map((l) => l.phase)).toEqual([
+      "connecting",
+      "failed",
+      "connected",
+    ]);
   });
 
   test("off says why", () => {
-    expect(foldConnector(null, status("off", "disabled in config"), 0)).toMatchObject({
+    expect(
+      foldConnector(null, status("off", "disabled in config"), 0),
+    ).toMatchObject({
       phase: "off",
       reason: "disabled in config",
     });
@@ -170,21 +195,43 @@ describe("a connector's status as a link", () => {
 describe("marks", () => {
   test("connecting animates through its frames, still without motion", () => {
     const link = { phase: LinkPhase.connecting };
-    expect(LINK_FRAMES.map((_, i) => linkMark(link, i, true).mark)).toEqual([...LINK_FRAMES]);
+    expect(LINK_FRAMES.map((_, i) => linkMark(link, i, true).mark)).toEqual([
+      ...LINK_FRAMES,
+    ]);
     expect(linkMark(link, 3, false).mark).toBe(LINK_STILL);
     expect(linkMark(link, 0, true).tone).toBe("info");
   });
 
   test("settled phases have one mark and tone each", () => {
-    expect(linkMark({ phase: "connected" }, 2, true)).toEqual({ mark: "●", tone: "success", word: "connected" });
-    expect(linkMark({ phase: "failed" }, 2, true)).toEqual({ mark: "✕", tone: "error", word: "failed" });
-    expect(linkMark({ phase: "off" }, 2, true)).toEqual({ mark: "○", tone: "muted", word: "off" });
+    expect(linkMark({ phase: "connected" }, 2, true)).toEqual({
+      mark: "●",
+      tone: "success",
+      word: "connected",
+    });
+    expect(linkMark({ phase: "failed" }, 2, true)).toEqual({
+      mark: "✕",
+      tone: "error",
+      word: "failed",
+    });
+    expect(linkMark({ phase: "off" }, 2, true)).toEqual({
+      mark: "○",
+      tone: "muted",
+      word: "off",
+    });
   });
 
   test("no connecting mark is a rail mark or the working spinner", () => {
-    const rail = new Set(Object.values(LANE_META).flatMap((m) => [m.mark, m.nerdMark ?? ""]));
-    const braille = (c: string) => c.codePointAt(0)! >= 0x2800 && c.codePointAt(0)! <= 0x28ff;
-    for (const mark of [...LINK_FRAMES, LINK_STILL, LINK_MARKS.connected, LINK_MARKS.failed]) {
+    const rail = new Set(
+      Object.values(LANE_META).flatMap((m) => [m.mark, m.nerdMark ?? ""]),
+    );
+    const braille = (c: string) =>
+      c.codePointAt(0)! >= 0x2800 && c.codePointAt(0)! <= 0x28ff;
+    for (const mark of [
+      ...LINK_FRAMES,
+      LINK_STILL,
+      LINK_MARKS.connected,
+      LINK_MARKS.failed,
+    ]) {
       expect(rail.has(mark)).toBe(false);
       expect(braille(mark)).toBe(false);
     }

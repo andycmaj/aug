@@ -85,7 +85,9 @@ export function changed(): void {
     pending = true;
     return;
   }
-  for (const listener of listeners) listener();
+  for (const listener of listeners) {
+    listener();
+  }
 }
 
 // Many writes, one notification: a poll that files ten messages redraws once.
@@ -135,12 +137,21 @@ function patchRow<Row extends object>(
   touch?: string,
 ): void {
   const keys = Object.keys(patch) as (keyof Row & string)[];
-  if (keys.length === 0) return;
+  if (keys.length === 0) {
+    return;
+  }
   const sets = keys.map((k) => `${k} = ?`).join(", ");
   const values = keys.map((k) => patch[k] ?? null) as SQLQueryBindings[];
-  if (touch)
-    run(`UPDATE ${table} SET ${sets}, ${touch} = ? WHERE id = ?`, ...values, now(), id);
-  else run(`UPDATE ${table} SET ${sets} WHERE id = ?`, ...values, id);
+  if (touch) {
+    run(
+      `UPDATE ${table} SET ${sets}, ${touch} = ? WHERE id = ?`,
+      ...values,
+      now(),
+      id,
+    );
+  } else {
+    run(`UPDATE ${table} SET ${sets} WHERE id = ?`, ...values, id);
+  }
 }
 
 // ── tasks ────────────────────────────────────────────────────────────────
@@ -246,7 +257,9 @@ export function managerOf(projectId: number): TaskRow | null {
 // Made the first time the owner talks to the project.
 export function ensureManager(projectId: number): TaskRow {
   const found = managerOf(projectId);
-  if (found) return found;
+  if (found) {
+    return found;
+  }
   const project = getProject(projectId);
   return createTask({
     title: `${project?.name ?? "Project"} manager`,
@@ -330,7 +343,9 @@ export function removeTaskLink(taskId: number, url: string): boolean {
     taskId,
     url,
   );
-  if (!had) return false;
+  if (!had) {
+    return false;
+  }
   run("DELETE FROM task_links WHERE id = ?", had.id);
   return true;
 }
@@ -373,21 +388,21 @@ export function setPrStatus(row: PrStatusRow): void {
   const had = prStatus(row.task_id);
   const same =
     had !== null &&
-    ([
-      "repo",
-      "number",
-      "url",
-      "state",
-      "checks",
-      "review",
-      "mergeable",
-      "queue",
-      "queue_position",
-      "queue_reason",
-      "error",
-    ] as const).every(
-      (k) => had[k] === row[k],
-    );
+    (
+      [
+        "repo",
+        "number",
+        "url",
+        "state",
+        "checks",
+        "review",
+        "mergeable",
+        "queue",
+        "queue_position",
+        "queue_reason",
+        "error",
+      ] as const
+    ).every((k) => had[k] === row[k]);
   const sql = `INSERT INTO pr_status (task_id, repo, number, url, state, checks, review, mergeable,
        queue, queue_position, queue_reason, fetched_at, error, base)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -412,8 +427,13 @@ export function setPrStatus(row: PrStatusRow): void {
     row.error,
     row.base ?? null,
   ];
-  if (same) db().query(sql).run(...params);
-  else run(sql, ...params);
+  if (same) {
+    db()
+      .query(sql)
+      .run(...params);
+  } else {
+    run(sql, ...params);
+  }
 }
 
 // The last read failed: what the row says is kept, and marked stale. A row
@@ -481,14 +501,26 @@ export interface DocumentSources {
   }[];
   threads: { task_id: number; thread_key: string; linked_at: string }[];
   made: { task_id: number; files: string; started_at: string }[];
-  notes: { task_id: number | null; author: string; body: string; created_at: string }[];
-  messages: { task_id: number; author_name: string; body: string; received_at: string }[];
+  notes: {
+    task_id: number | null;
+    author: string;
+    body: string;
+    created_at: string;
+  }[];
+  messages: {
+    task_id: number;
+    author_name: string;
+    body: string;
+    received_at: string;
+  }[];
 }
 
 export function documentSources(): DocumentSources {
   return {
     taskLinks: all<TaskLinkRow>("SELECT * FROM task_links ORDER BY id"),
-    projectLinks: all<ProjectLinkRow>("SELECT * FROM project_links ORDER BY id"),
+    projectLinks: all<ProjectLinkRow>(
+      "SELECT * FROM project_links ORDER BY id",
+    ),
     projects: all("SELECT id, name, status FROM projects ORDER BY id"),
     tasks: all(
       `SELECT id, title, url, project_id, created_at FROM tasks WHERE ${WORK} ORDER BY id`,
@@ -522,17 +554,25 @@ export function updateProject(id: number, patch: ProjectPatch): void {
 
 export function addProjectRepo(id: number, repo: string): void {
   const project = getProject(id);
-  if (!project) return;
+  if (!project) {
+    return;
+  }
   const repos = projectRepos(project);
-  if (repos.includes(repo)) return;
+  if (repos.includes(repo)) {
+    return;
+  }
   updateProject(id, { repos: JSON.stringify([...repos, repo]) });
 }
 
 export function removeProjectRepo(id: number, repo: string): void {
   const project = getProject(id);
-  if (!project) return;
+  if (!project) {
+    return;
+  }
   const repos = projectRepos(project);
-  if (!repos.includes(repo)) return;
+  if (!repos.includes(repo)) {
+    return;
+  }
   updateProject(id, { repos: JSON.stringify(repos.filter((r) => r !== repo)) });
 }
 
@@ -581,7 +621,9 @@ export function removeProjectLink(projectId: number, url: string): boolean {
     projectId,
     url,
   );
-  if (!had) return false;
+  if (!had) {
+    return false;
+  }
   run("DELETE FROM project_links WHERE id = ?", had.id);
   return true;
 }
@@ -616,7 +658,9 @@ export function updateGoal(
   patch: Partial<Pick<GoalRow, "title" | "status">>,
 ): void {
   const next: Partial<GoalRow> = {};
-  if (patch.title !== undefined) next.title = patch.title;
+  if (patch.title !== undefined) {
+    next.title = patch.title;
+  }
   if (patch.status !== undefined) {
     next.status = patch.status;
     next.met_at = patch.status === GoalStatus.met ? now() : null;
@@ -646,7 +690,9 @@ export function insertMessage(m: NewMessage): MessageRow | null {
     "SELECT id FROM messages WHERE external_id = ?",
     m.externalId,
   );
-  if (exists) return null;
+  if (exists) {
+    return null;
+  }
   const id = run(
     `INSERT INTO messages (channel, external_id, thread_key, author, author_name, title, body, url, received_at, from_me, meta)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -684,10 +730,15 @@ export function messagesForTasks(taskIds: number[]): Map<number, MessageRow[]> {
     JSON.stringify(taskIds),
   );
   for (const m of rows) {
-    if (m.task_id === null) continue;
+    if (m.task_id === null) {
+      continue;
+    }
     const list = out.get(m.task_id);
-    if (list) list.push(m);
-    else out.set(m.task_id, [m]);
+    if (list) {
+      list.push(m);
+    } else {
+      out.set(m.task_id, [m]);
+    }
   }
   return out;
 }
@@ -792,16 +843,25 @@ export function settleMessage(
   state: MessageState,
   nextAt: string | null = null,
 ): void {
-  run("UPDATE messages SET state = ?, next_at = ? WHERE id = ?", state, nextAt, id);
+  run(
+    "UPDATE messages SET state = ?, next_at = ? WHERE id = ?",
+    state,
+    nextAt,
+    id,
+  );
 }
 
 // At start: a message claimed by a Riker that died is new again. One Riker
 // runs per home, so every claim left is stale.
 export function resetTriaging(): number {
   const rows = db()
-    .query("UPDATE messages SET state = 'new' WHERE state = 'triaging' RETURNING id")
+    .query(
+      "UPDATE messages SET state = 'new' WHERE state = 'triaging' RETURNING id",
+    )
     .all();
-  if (rows.length) changed();
+  if (rows.length) {
+    changed();
+  }
   return rows.length;
 }
 
@@ -845,7 +905,9 @@ export function pendingTurns(taskId: number): TurnRow[] {
 }
 
 export function setPending(turnIds: number[], pending: boolean): void {
-  if (turnIds.length === 0) return;
+  if (turnIds.length === 0) {
+    return;
+  }
   run(
     `UPDATE turns SET pending = ? WHERE id IN (${turnIds.map(() => "?").join(", ")})`,
     pending ? 1 : 0,
@@ -871,8 +933,11 @@ export function turnsForTasks(taskIds: number[]): Map<number, SearchTurn[]> {
   );
   for (const t of rows) {
     const list = out.get(t.task_id);
-    if (list) list.push(t);
-    else out.set(t.task_id, [t]);
+    if (list) {
+      list.push(t);
+    } else {
+      out.set(t.task_id, [t]);
+    }
   }
   return out;
 }
@@ -899,7 +964,9 @@ export function updateTurn(id: number, patch: TurnPatch): void {
 // retires the older pending ones.
 export function setTurnAction(turnId: number, action: DraftAction): void {
   const turn = getTurn(turnId);
-  if (!turn) return;
+  if (!turn) {
+    return;
+  }
   batch(() => {
     run(
       "UPDATE turns SET action_state = ? WHERE task_id = ? AND action_state = ? AND id != ?",
@@ -922,7 +989,9 @@ export function pendingAction(
     "SELECT * FROM turns WHERE task_id = ? AND action_state = 'pending' ORDER BY id DESC LIMIT 1",
     taskId,
   );
-  if (!turn?.action) return null;
+  if (!turn?.action) {
+    return null;
+  }
   return { turn, action: JSON.parse(turn.action) as DraftAction };
 }
 
@@ -1096,7 +1165,9 @@ export function markNotesRead(reader: string): void {
   batch(() => {
     for (const note of notes) {
       const readBy = noteReadBy(note);
-      if (note.author === reader || readBy.includes(reader)) continue;
+      if (note.author === reader || readBy.includes(reader)) {
+        continue;
+      }
       run(
         "UPDATE notes SET read_by = ? WHERE id = ?",
         JSON.stringify([...readBy, reader]),
@@ -1186,7 +1257,11 @@ export function ideasSince(since: string): IdeaRow[] {
 }
 
 export function ideaTasked(id: number, taskId: number): void {
-  run("UPDATE ideas SET status = 'tasked', made_task_id = ? WHERE id = ?", taskId, id);
+  run(
+    "UPDATE ideas SET status = 'tasked', made_task_id = ? WHERE id = ?",
+    taskId,
+    id,
+  );
 }
 
 export function setIdeaStatus(id: number, status: IdeaStatus): void {
@@ -1250,10 +1325,17 @@ export function openProposals(): DocProposalRow[] {
 
 export function reviseProposal(
   id: number,
-  fields: { proposed: string; reason?: string; absorbs?: string[]; base?: string },
+  fields: {
+    proposed: string;
+    reason?: string;
+    absorbs?: string[];
+    base?: string;
+  },
 ): void {
   const current = getProposal(id);
-  if (!current) return;
+  if (!current) {
+    return;
+  }
   run(
     "UPDATE doc_proposals SET proposed = ?, reason = ?, absorbs = ?, base = ?, updated_at = ? WHERE id = ?",
     fields.proposed,
@@ -1295,7 +1377,9 @@ export function addTriageRun(r: NewTriageRun): TriageRunRow {
       "INSERT INTO triage_runs (message_id, input, verdict, rule, outcome, task_id, project_id, reason, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       r.messageId,
       JSON.stringify(r.input),
-      r.verdict === null || r.verdict === undefined ? null : JSON.stringify(r.verdict),
+      r.verdict === null || r.verdict === undefined
+        ? null
+        : JSON.stringify(r.verdict),
       r.rule,
       r.outcome,
       r.taskId,
@@ -1402,7 +1486,11 @@ export function kvSet(key: string, value: string): void {
 // ── task actions an event ran ───────────────────────────────────────────
 
 // True for the first claim of (task, action, event); false ever after.
-export function claimActionRun(taskId: number, action: string, event: string): boolean {
+export function claimActionRun(
+  taskId: number,
+  action: string,
+  event: string,
+): boolean {
   const won = db()
     .query(
       "INSERT OR IGNORE INTO action_runs (task_id, action, event, at) VALUES (?, ?, ?, ?) RETURNING task_id",
@@ -1413,9 +1501,15 @@ export function claimActionRun(taskId: number, action: string, event: string): b
 
 // A claimed run that never ran (the spend cap, a skill not found): the
 // event may run it again.
-export function releaseActionRun(taskId: number, action: string, event: string): void {
+export function releaseActionRun(
+  taskId: number,
+  action: string,
+  event: string,
+): void {
   db()
-    .query("DELETE FROM action_runs WHERE task_id = ? AND action = ? AND event = ?")
+    .query(
+      "DELETE FROM action_runs WHERE task_id = ? AND action = ? AND event = ?",
+    )
     .run(taskId, action, event);
 }
 
@@ -1423,12 +1517,16 @@ export function releaseActionRun(taskId: number, action: string, event: string):
 // action triggers.
 export function taskEventsAfter(id: number): TaskEventRow[] {
   return db()
-    .query<TaskEventRow, [number]>("SELECT * FROM task_events WHERE id > ? ORDER BY id LIMIT 200")
+    .query<TaskEventRow, [number]>(
+      "SELECT * FROM task_events WHERE id > ? ORDER BY id LIMIT 200",
+    )
     .all(id);
 }
 
 export function lastTaskEventId(): number {
-  return one<{ id: number | null }>("SELECT MAX(id) AS id FROM task_events")?.id ?? 0;
+  return (
+    one<{ id: number | null }>("SELECT MAX(id) AS id FROM task_events")?.id ?? 0
+  );
 }
 
 // ── spend (core/spend.ts decides; this keeps the rows) ───────────────────
@@ -1465,11 +1563,13 @@ const SPEND_SUMS =
   "COALESCE(SUM(cost_usd), 0) AS cost, COUNT(*) AS calls, COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens), 0) AS tokens";
 
 export function spendOn(day: string): SpendTotal {
-  return one<SpendTotal>(`SELECT ${SPEND_SUMS} FROM spend WHERE day = ?`, day) ?? {
-    cost: 0,
-    calls: 0,
-    tokens: 0,
-  };
+  return (
+    one<SpendTotal>(`SELECT ${SPEND_SUMS} FROM spend WHERE day = ?`, day) ?? {
+      cost: 0,
+      calls: 0,
+      tokens: 0,
+    }
+  );
 }
 
 export function spendByRole(day: string): SpendByRole[] {
@@ -1497,16 +1597,25 @@ export function spendByTask(from: string, limit = 10): SpendByTask[] {
 }
 
 export function taskSpend(taskId: number): SpendTotal {
-  return one<SpendTotal>(`SELECT ${SPEND_SUMS} FROM spend WHERE task_id = ?`, taskId) ?? {
-    cost: 0,
-    calls: 0,
-    tokens: 0,
-  };
+  return (
+    one<SpendTotal>(
+      `SELECT ${SPEND_SUMS} FROM spend WHERE task_id = ?`,
+      taskId,
+    ) ?? {
+      cost: 0,
+      calls: 0,
+      tokens: 0,
+    }
+  );
 }
 
 // ── blockers and wins ────────────────────────────────────────────────────
 
-export function addBlocker(taskId: number, blockerId: number, by: string): void {
+export function addBlocker(
+  taskId: number,
+  blockerId: number,
+  by: string,
+): void {
   run(
     "INSERT OR IGNORE INTO task_blockers (task_id, blocker_id, by, created_at) VALUES (?, ?, ?, ?)",
     taskId,
@@ -1518,14 +1627,15 @@ export function addBlocker(taskId: number, blockerId: number, by: string): void 
 
 // No blocker: all of them.
 export function removeBlocker(taskId: number, blockerId?: number): void {
-  if (blockerId === undefined)
+  if (blockerId === undefined) {
     run("DELETE FROM task_blockers WHERE task_id = ?", taskId);
-  else
+  } else {
     run(
       "DELETE FROM task_blockers WHERE task_id = ? AND blocker_id = ?",
       taskId,
       blockerId,
     );
+  }
 }
 
 export function blockersOf(taskId: number): number[] {
@@ -1547,8 +1657,9 @@ export function allBlockers(): Map<number, number[]> {
   const out = new Map<number, number[]>();
   for (const r of all<{ task_id: number; blocker_id: number }>(
     "SELECT task_id, blocker_id FROM task_blockers ORDER BY created_at, blocker_id",
-  ))
+  )) {
     out.set(r.task_id, [...(out.get(r.task_id) ?? []), r.blocker_id]);
+  }
   return out;
 }
 
@@ -1605,7 +1716,11 @@ export function turnCountsBetween(
   );
 }
 
-export function turnsForTaskBetween(taskId: number, from: string, to: string): TurnRow[] {
+export function turnsForTaskBetween(
+  taskId: number,
+  from: string,
+  to: string,
+): TurnRow[] {
   return all<TurnRow>(
     "SELECT * FROM turns WHERE task_id = ? AND started_at >= ? AND started_at < ? ORDER BY started_at, id",
     taskId,
@@ -1623,11 +1738,17 @@ export function movesBetween(from: string, to: string): MoveRow[] {
 }
 
 export function taskSpendOn(taskId: number, day: string): SpendTotal {
-  return one<SpendTotal>(`SELECT ${SPEND_SUMS} FROM spend WHERE task_id = ? AND day = ?`, taskId, day) ?? {
-    cost: 0,
-    calls: 0,
-    tokens: 0,
-  };
+  return (
+    one<SpendTotal>(
+      `SELECT ${SPEND_SUMS} FROM spend WHERE task_id = ? AND day = ?`,
+      taskId,
+      day,
+    ) ?? {
+      cost: 0,
+      calls: 0,
+      tokens: 0,
+    }
+  );
 }
 
 // Task id -> its PR's last read state, for every task with one.
@@ -1648,7 +1769,9 @@ export function tellFromTask(
   what: string,
   result: string | null,
 ): void {
-  if (!task.from_task_id || !getTask(task.from_task_id)) return;
+  if (!task.from_task_id || !getTask(task.from_task_id)) {
+    return;
+  }
   addTurn({
     taskId: task.from_task_id,
     role: TurnRole.trigger,
@@ -1737,10 +1860,16 @@ export function dueTimers(at: string): TimerRow[] {
 
 // A fired timer: done, or (a schedule) due again at its next time.
 export function firedTimer(id: number, at: string, next: string | null): void {
-  if (next)
-    run("UPDATE timers SET due_at = ?, fired_at = ? WHERE id = ?", next, at, id);
-  else
+  if (next) {
+    run(
+      "UPDATE timers SET due_at = ?, fired_at = ? WHERE id = ?",
+      next,
+      at,
+      id,
+    );
+  } else {
     run("UPDATE timers SET state = 'done', fired_at = ? WHERE id = ?", at, id);
+  }
 }
 
 export function setTimerState(id: number, state: TimerState): void {
@@ -1764,19 +1893,26 @@ export function silenceTimers(taskId: number): number {
     "SELECT id FROM messages WHERE channel = 'timer' AND task_id = ? AND read_at IS NULL",
     taskId,
   );
-  for (const { id } of ids) markMessageRead(id);
+  for (const { id } of ids) {
+    markMessageRead(id);
+  }
   return ids.length;
 }
 
 // Cancels a task's pending timers of these kinds; returns how many.
-export function cancelTimers(taskId: number, kinds: readonly TimerKind[]): number {
+export function cancelTimers(
+  taskId: number,
+  kinds: readonly TimerKind[],
+): number {
   const ids = all<{ id: number }>(
     `SELECT id FROM timers WHERE task_id = ? AND state = 'pending'
      AND kind IN (SELECT value FROM json_each(?))`,
     taskId,
     JSON.stringify(kinds),
   );
-  for (const { id } of ids) setTimerState(id, TimerState.cancelled);
+  for (const { id } of ids) {
+    setTimerState(id, TimerState.cancelled);
+  }
   return ids.length;
 }
 
@@ -1881,7 +2017,10 @@ export function digestsForSession(sessionId: string): DigestRow[] {
 }
 
 // The session's end before event `beforeId`: where its next run began.
-export function sessionEndedBefore(sessionId: string, beforeId: number): TaskEventRow | null {
+export function sessionEndedBefore(
+  sessionId: string,
+  beforeId: number,
+): TaskEventRow | null {
   return one<TaskEventRow>(
     "SELECT * FROM task_events WHERE kind = 'ended' AND detail = ? AND id < ? ORDER BY id DESC LIMIT 1",
     sessionId,

@@ -36,7 +36,10 @@ const VERB_WORDS: Record<string, string> = {
 
 // The move in the owner's words: "stop the agent on RIKER-0012 (fix the
 // flaky test)".
-export function describeMove(verb: string, args: Record<string, string>): string {
+export function describeMove(
+  verb: string,
+  args: Record<string, string>,
+): string {
   const words = VERB_WORDS[verb] ?? verb;
   if (args.task) {
     const id = store.parseTaskRef(args.task);
@@ -44,8 +47,9 @@ export function describeMove(verb: string, args: Record<string, string>): string
     const ref = task ? store.taskRef(task.id) : args.task;
     return `${words} ${ref}${task ? ` (${task.title})` : ""}`;
   }
-  if (args.project)
+  if (args.project) {
     return `${words} ${args.project}${args.force === "yes" ? " with its open tasks" : ""}`;
+  }
   return words;
 }
 
@@ -63,9 +67,7 @@ export interface Pending {
 }
 
 function live(list: Pending[], at = Date.now()): Pending[] {
-  return list.filter(
-    (p) => at - Date.parse(p.at) < CONFIRM_MINUTES * 60_000,
-  );
+  return list.filter((p) => at - Date.parse(p.at) < CONFIRM_MINUTES * 60_000);
 }
 
 // Every read drops what has expired, so a stale yes finds nothing.
@@ -84,10 +86,7 @@ function save(list: Pending[]): void {
 
 // Held instead of run: the line the Assistant reads back as the move's
 // result. Asking again for the same move replaces the hold.
-export function holdForYes(
-  verb: string,
-  args: Record<string, string>,
-): string {
+export function holdForYes(verb: string, args: Record<string, string>): string {
   const home = store.homeTask();
   const running = store
     .turnsForTask(home.id)
@@ -114,12 +113,18 @@ export function bindToThread(turnId: number, threadTs: string): Pending[] {
   const list = pendingConfirms();
   const bound: Pending[] = [];
   for (const p of list) {
-    if (p.threadTs) continue;
-    if (p.turnId !== null && p.turnId !== turnId) continue;
+    if (p.threadTs) {
+      continue;
+    }
+    if (p.turnId !== null && p.turnId !== turnId) {
+      continue;
+    }
     p.threadTs = threadTs;
     bound.push(p);
   }
-  if (bound.length) save(list);
+  if (bound.length) {
+    save(list);
+  }
   return bound;
 }
 
@@ -127,7 +132,9 @@ export function bindToThread(turnId: number, threadTs: string): Pending[] {
 export function takeForThread(threadTs: string): Pending[] {
   const list = pendingConfirms();
   const taken = list.filter((p) => p.threadTs === threadTs);
-  if (taken.length) save(list.filter((p) => p.threadTs !== threadTs));
+  if (taken.length) {
+    save(list.filter((p) => p.threadTs !== threadTs));
+  }
   return taken;
 }
 

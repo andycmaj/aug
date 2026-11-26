@@ -90,28 +90,44 @@ const PART_WORDS: Partial<Record<Part, string>> = {
 
 export function snapshot(taskId: number, day: string): TaskSnap | null {
   const task = store.getTask(taskId);
-  if (!task) return null;
-  const fields = Object.fromEntries(FIELDS.map((f) => [f, task[f]])) as Pick<TaskRow, Field>;
+  if (!task) {
+    return null;
+  }
+  const fields = Object.fromEntries(FIELDS.map((f) => [f, task[f]])) as Pick<
+    TaskRow,
+    Field
+  >;
   return {
     fields,
-    held: task.agent_state === AgentState.queued && task.queue_reason === HELD_FOR_START,
+    held:
+      task.agent_state === AgentState.queued &&
+      task.queue_reason === HELD_FOR_START,
     blockers: store.blockersOf(taskId),
     dependents: store.dependentsOf(taskId),
     win: store.winsOn(day).includes(taskId),
     links: store
       .linksForTask(taskId)
       .map((l) => ({ url: l.url, title: l.title, added_by: l.added_by })),
-    messages: store
-      .messagesForTask(taskId)
-      .map((m) => ({ id: m.id, verdict: m.verdict, reason: m.reason, task_id: m.task_id })),
-    timers: store
-      .timersForTask(taskId)
-      .map((t) => ({ id: t.id, kind: t.kind, due_at: t.due_at, rule: t.rule, note: t.note })),
+    messages: store.messagesForTask(taskId).map((m) => ({
+      id: m.id,
+      verdict: m.verdict,
+      reason: m.reason,
+      task_id: m.task_id,
+    })),
+    timers: store.timersForTask(taskId).map((t) => ({
+      id: t.id,
+      kind: t.kind,
+      due_at: t.due_at,
+      rule: t.rule,
+      note: t.note,
+    })),
   };
 }
 
 function partOf(snap: TaskSnap, part: Part): unknown {
-  return part in snap.fields ? snap.fields[part as Field] : snap[part as keyof TaskSnap];
+  return part in snap.fields
+    ? snap.fields[part as Field]
+    : snap[part as keyof TaskSnap];
 }
 
 function same(a: unknown, b: unknown): boolean {
@@ -160,13 +176,19 @@ export function taskDraft(
   before: TaskSnap | null,
 ): UndoDraft | null {
   const after = snapshot(taskId, day);
-  if (!before || !after) return null;
+  if (!before || !after) {
+    return null;
+  }
   const parts = changed(before, after);
-  return parts.length ? { type: "task", what, taskId, day, before, after, parts } : null;
+  return parts.length
+    ? { type: "task", what, taskId, day, before, after, parts }
+    : null;
 }
 
 export function label(entry: UndoEntry | UndoDraft): string {
-  return entry.type === "task" ? `${entry.what} ${store.taskRef(entry.taskId)}` : entry.what;
+  return entry.type === "task"
+    ? `${entry.what} ${store.taskRef(entry.taskId)}`
+    : entry.what;
 }
 
 interface Frame {
@@ -200,7 +222,10 @@ export class UndoStack {
   // A move asked through the move bus: who asked, and whether a desk method
   // recorded it. A task's own agent moves in the background; ctrl+z is the
   // owner's and the Assistant's moves, so an agent's are never kept.
-  async asMove<T>(by: string, fn: () => Promise<T>): Promise<{ value: T; recorded: boolean }> {
+  async asMove<T>(
+    by: string,
+    fn: () => Promise<T>,
+  ): Promise<{ value: T; recorded: boolean }> {
     const frame: Frame = { by, recorded: false, inside: false };
     const value = await this.scope.run(frame, fn);
     return { value, recorded: frame.recorded };
@@ -210,20 +235,39 @@ export class UndoStack {
   // The scope rides through awaits, so two moves at once never mix.
   track<T>(fn: () => T, draft: (value: T) => UndoDraft | null): T {
     const outer = this.scope.getStore();
-    if (outer?.inside) return fn();
-    const frame: Frame = { by: outer?.by ?? "you", recorded: false, inside: true };
+    if (outer?.inside) {
+      return fn();
+    }
+    const frame: Frame = {
+      by: outer?.by ?? "you",
+      recorded: false,
+      inside: true,
+    };
     const value = this.scope.run(frame, fn);
-    if (outer) outer.recorded = true;
+    if (outer) {
+      outer.recorded = true;
+    }
     this.keep(frame.by, draft(value));
     return value;
   }
 
-  async trackAsync<T>(fn: () => Promise<T>, draft: (value: T) => UndoDraft | null): Promise<T> {
+  async trackAsync<T>(
+    fn: () => Promise<T>,
+    draft: (value: T) => UndoDraft | null,
+  ): Promise<T> {
     const outer = this.scope.getStore();
-    if (outer?.inside) return fn();
-    const frame: Frame = { by: outer?.by ?? "you", recorded: false, inside: true };
+    if (outer?.inside) {
+      return fn();
+    }
+    const frame: Frame = {
+      by: outer?.by ?? "you",
+      recorded: false,
+      inside: true,
+    };
     const value = await this.scope.run(frame, fn);
-    if (outer) outer.recorded = true;
+    if (outer) {
+      outer.recorded = true;
+    }
     this.keep(frame.by, draft(value));
     return value;
   }
@@ -234,14 +278,22 @@ export class UndoStack {
   }
 
   // A move that went through no desk method: it cannot be undone.
-  cannot(what: string, why: string, by = this.scope.getStore()?.by ?? "you"): void {
+  cannot(
+    what: string,
+    why: string,
+    by = this.scope.getStore()?.by ?? "you",
+  ): void {
     this.keep(by, { type: "cannot", what, why });
   }
 
   private keep(by: string, draft: UndoDraft | null): void {
-    if (!draft || by.startsWith("agent ")) return;
+    if (!draft || by.startsWith("agent ")) {
+      return;
+    }
     this.entries.push({ ...draft, by } as UndoEntry);
-    if (this.entries.length > this.depth) this.entries.shift();
+    if (this.entries.length > this.depth) {
+      this.entries.shift();
+    }
   }
 }
 
@@ -261,25 +313,45 @@ function words(parts: Part[]): string {
 // Puts back what the newest move changed. Refused, with why, when it cannot
 // be undone or the task changed since; either way it leaves the stack, so
 // the next ctrl+z reaches the move before it.
-export async function revert(config: RikerConfig, entry: UndoEntry): Promise<UndoResult> {
+export async function revert(
+  config: RikerConfig,
+  entry: UndoEntry,
+): Promise<UndoResult> {
   const name = label(entry);
-  if (entry.type === "cannot")
-    return { ok: false, text: `Can't undo ${name}${whose(entry)}: ${entry.why}` };
+  if (entry.type === "cannot") {
+    return {
+      ok: false,
+      text: `Can't undo ${name}${whose(entry)}: ${entry.why}`,
+    };
+  }
   const ref = store.taskRef(entry.taskId);
   const now = snapshot(entry.taskId, entry.day);
-  if (!now) return { ok: false, text: `Can't undo ${name}: ${ref} is gone` };
-  const stale = entry.parts.filter((p) => !same(partOf(now, p), partOf(entry.after, p)));
-  if (stale.length)
+  if (!now) {
+    return { ok: false, text: `Can't undo ${name}: ${ref} is gone` };
+  }
+  const stale = entry.parts.filter(
+    (p) => !same(partOf(now, p), partOf(entry.after, p)),
+  );
+  if (stale.length) {
     return {
       ok: false,
       text: `Can't undo ${name}: ${ref}'s ${words(stale)} changed since`,
     };
+  }
   const { before } = entry;
   const has = (p: Part) => entry.parts.includes(p);
-  if (has("summary") && !briefEditable(entry.taskId))
-    return { ok: false, text: `Can't undo ${name}: its agent already started from that brief` };
-  if (has("win") && before.win && store.winsOn(entry.day).length >= MAX_WINS)
-    return { ok: false, text: `Can't undo ${name}: that day has ${MAX_WINS} Wins` };
+  if (has("summary") && !briefEditable(entry.taskId)) {
+    return {
+      ok: false,
+      text: `Can't undo ${name}: its agent already started from that brief`,
+    };
+  }
+  if (has("win") && before.win && store.winsOn(entry.day).length >= MAX_WINS) {
+    return {
+      ok: false,
+      text: `Can't undo ${name}: that day has ${MAX_WINS} Wins`,
+    };
+  }
 
   // A window follows its project: moved back the way it came.
   const task = store.getTask(entry.taskId)!;
@@ -287,32 +359,50 @@ export async function revert(config: RikerConfig, entry: UndoEntry): Promise<Und
     has("project_id") &&
     before.fields.project_id !== null &&
     store.latestSession(task.id)?.kind === SessionKind.tmux
-  )
+  ) {
     await projects.moveTask(config, task.id, before.fields.project_id);
+  }
 
   store.batch(() => {
     const fields = FIELDS.filter((f) => has(f));
-    if (fields.length)
+    if (fields.length) {
       store.updateTask(
         task.id,
-        Object.fromEntries(fields.map((f) => [f, before.fields[f]])) as Partial<TaskRow>,
+        Object.fromEntries(
+          fields.map((f) => [f, before.fields[f]]),
+        ) as Partial<TaskRow>,
       );
+    }
     if (has("held")) {
-      if (before.held) holdForStart(task.id);
-      else holdReleased(task.id);
+      if (before.held) {
+        holdForStart(task.id);
+      } else {
+        holdReleased(task.id);
+      }
     }
     if (has("blockers")) {
-      for (const id of now.blockers)
-        if (!before.blockers.includes(id)) store.removeBlocker(task.id, id);
-      for (const id of before.blockers)
-        if (!now.blockers.includes(id) && store.getTask(id)) store.addBlocker(task.id, id, entry.by);
+      for (const id of now.blockers) {
+        if (!before.blockers.includes(id)) {
+          store.removeBlocker(task.id, id);
+        }
+      }
+      for (const id of before.blockers) {
+        if (!now.blockers.includes(id) && store.getTask(id)) {
+          store.addBlocker(task.id, id, entry.by);
+        }
+      }
     }
     if (has("dependents")) {
-      for (const id of now.dependents)
-        if (!before.dependents.includes(id)) store.removeBlocker(id, task.id);
+      for (const id of now.dependents) {
+        if (!before.dependents.includes(id)) {
+          store.removeBlocker(id, task.id);
+        }
+      }
       for (const id of before.dependents) {
         const dependent = store.getTask(id);
-        if (now.dependents.includes(id) || !dependent || isClosed(dependent)) continue;
+        if (now.dependents.includes(id) || !dependent || isClosed(dependent)) {
+          continue;
+        }
         store.addBlocker(id, task.id, entry.by);
         store.addTurn({
           taskId: id,
@@ -322,36 +412,60 @@ export async function revert(config: RikerConfig, entry: UndoEntry): Promise<Und
       }
     }
     if (has("win")) {
-      if (before.win) store.addWin(entry.day, task.id);
-      else store.removeWin(entry.day, task.id);
+      if (before.win) {
+        store.addWin(entry.day, task.id);
+      } else {
+        store.removeWin(entry.day, task.id);
+      }
     }
     if (has("links")) {
       const kept = new Set(before.links.map((l) => l.url));
-      for (const l of now.links) if (!kept.has(l.url)) store.removeTaskLink(task.id, l.url);
+      for (const l of now.links) {
+        if (!kept.has(l.url)) {
+          store.removeTaskLink(task.id, l.url);
+        }
+      }
       const had = new Set(now.links.map((l) => l.url));
-      for (const l of before.links)
-        if (!had.has(l.url)) store.addTaskLink(task.id, l.url, l.title, l.added_by);
+      for (const l of before.links) {
+        if (!had.has(l.url)) {
+          store.addTaskLink(task.id, l.url, l.title, l.added_by);
+        }
+      }
     }
     // Ignore refiled its messages as FYI: each goes back under the task, as
     // triage filed it, unless something filed it again since.
     if (has("messages")) {
       const kept = new Set(now.messages.map((m) => m.id));
       for (const m of before.messages) {
-        if (kept.has(m.id)) continue;
+        if (kept.has(m.id)) {
+          continue;
+        }
         const row = store.getMessage(m.id);
-        if (row && row.task_id === null) store.fileMessage(m.id, m.verdict, m.reason, m.task_id);
+        if (row && row.task_id === null) {
+          store.fileMessage(m.id, m.verdict, m.reason, m.task_id);
+        }
       }
     }
     // A timer the move set is cancelled; one it cancelled is pending again.
     if (has("timers")) {
       const kept = new Set(before.timers.map((t) => t.id));
-      for (const t of now.timers)
-        if (!kept.has(t.id)) store.setTimerState(t.id, TimerState.cancelled);
+      for (const t of now.timers) {
+        if (!kept.has(t.id)) {
+          store.setTimerState(t.id, TimerState.cancelled);
+        }
+      }
       const had = new Set(now.timers.map((t) => t.id));
-      for (const t of before.timers)
-        if (!had.has(t.id)) store.setTimerState(t.id, TimerState.pending);
+      for (const t of before.timers) {
+        if (!had.has(t.id)) {
+          store.setTimerState(t.id, TimerState.pending);
+        }
+      }
     }
-    store.addTurn({ taskId: task.id, role: TurnRole.trigger, body: `Undone: ${entry.what}` });
+    store.addTurn({
+      taskId: task.id,
+      role: TurnRole.trigger,
+      body: `Undone: ${entry.what}`,
+    });
   });
 
   // Marking done closed a coding agent's window; reopening does not bring it

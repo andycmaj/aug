@@ -67,9 +67,14 @@ export function linkMark(
 const REASON_MAX = 40;
 
 // The first line of a detail, cut to fit a status line.
-export function shortReason(detail: string | null | undefined, max = REASON_MAX): string | null {
+export function shortReason(
+  detail: string | null | undefined,
+  max = REASON_MAX,
+): string | null {
   const line = (detail ?? "").split("\n")[0].trim();
-  if (!line) return null;
+  if (!line) {
+    return null;
+  }
   return line.length <= max ? line : `${line.slice(0, max - 1)}…`;
 }
 
@@ -80,18 +85,28 @@ export function motionOn(
   config: Pick<RikerConfig, "motion">,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
-  if (config.motion === false) return false;
+  if (config.motion === false) {
+    return false;
+  }
   const flag = envVar("MOTION", env)?.toLowerCase();
-  if (flag === "0" || flag === "off" || flag === "false") return false;
+  if (flag === "0" || flag === "off" || flag === "false") {
+    return false;
+  }
   return env.NODE_ENV !== "test";
 }
 
 // A connector's status (core/plugins.ts) as a link. A poll on a line that is
 // already connected is a refresh, not a reconnect, so it stays connected; a
 // poll after a failure or before any answer is connecting.
-export function foldConnector(prev: Link | null, status: ConnectorStatus, now: number): Link {
+export function foldConnector(
+  prev: Link | null,
+  status: ConnectorStatus,
+  now: number,
+): Link {
   const at = (phase: LinkPhase, reason: string | null): Link =>
-    prev && prev.phase === phase && prev.reason === reason ? prev : { phase, reason, since: now };
+    prev && prev.phase === phase && prev.reason === reason
+      ? prev
+      : { phase, reason, since: now };
   switch (status.state) {
     case "off":
       return at(LinkPhase.off, shortReason(status.detail));
@@ -100,8 +115,12 @@ export function foldConnector(prev: Link | null, status: ConnectorStatus, now: n
     case "error":
       return at(LinkPhase.failed, shortReason(status.detail) ?? "failed");
     case "polling":
-      if (prev?.phase === LinkPhase.connected) return prev;
-      return prev?.phase === LinkPhase.connecting ? prev : { phase: LinkPhase.connecting, reason: null, since: now };
+      if (prev?.phase === LinkPhase.connected) {
+        return prev;
+      }
+      return prev?.phase === LinkPhase.connecting
+        ? prev
+        : { phase: LinkPhase.connecting, reason: null, since: now };
   }
 }
 
@@ -144,7 +163,9 @@ export class LinkTracker {
   }
 
   connecting(): void {
-    if (this.current.phase === LinkPhase.connecting) return;
+    if (this.current.phase === LinkPhase.connecting) {
+      return;
+    }
     this.set({ phase: LinkPhase.connecting, reason: null, since: this.now() });
   }
 
@@ -153,11 +174,19 @@ export class LinkTracker {
   }
 
   failed(reason: string): void {
-    this.set({ phase: LinkPhase.failed, reason: shortReason(reason) ?? "failed", since: this.now() });
+    this.set({
+      phase: LinkPhase.failed,
+      reason: shortReason(reason) ?? "failed",
+      since: this.now(),
+    });
   }
 
   off(reason: string | null = null): void {
-    this.set({ phase: LinkPhase.off, reason: shortReason(reason), since: this.now() });
+    this.set({
+      phase: LinkPhase.off,
+      reason: shortReason(reason),
+      since: this.now(),
+    });
   }
 
   // A connector's status, folded as foldConnector does.
@@ -170,20 +199,36 @@ export class LinkTracker {
   }
 
   private set(next: Link): void {
-    if (next === this.current) return;
-    const same = next.phase === this.current.phase && next.reason === this.current.reason;
-    if (next.phase !== LinkPhase.connecting || this.current.phase !== LinkPhase.connecting) this.disarm();
+    if (next === this.current) {
+      return;
+    }
+    const same =
+      next.phase === this.current.phase && next.reason === this.current.reason;
+    if (
+      next.phase !== LinkPhase.connecting ||
+      this.current.phase !== LinkPhase.connecting
+    ) {
+      this.disarm();
+    }
     this.current = next;
-    if (next.phase === LinkPhase.connecting && !this.cancel) this.arm();
-    if (!same) this.options.onChange(next);
+    if (next.phase === LinkPhase.connecting && !this.cancel) {
+      this.arm();
+    }
+    if (!same) {
+      this.options.onChange(next);
+    }
   }
 
   private arm(): void {
     const timeout = this.options.timeoutMs;
-    if (timeout === null) return;
+    if (timeout === null) {
+      return;
+    }
     this.cancel = this.schedule(() => {
       this.cancel = null;
-      if (this.current.phase === LinkPhase.connecting) this.failed(`no answer after ${seconds(timeout)}`);
+      if (this.current.phase === LinkPhase.connecting) {
+        this.failed(`no answer after ${seconds(timeout)}`);
+      }
     }, timeout);
   }
 

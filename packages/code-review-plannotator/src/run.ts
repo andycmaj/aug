@@ -17,7 +17,10 @@ import {
 import type { BatchPlan, FilePatch } from "./batches";
 import { GuideStage, type GuideProgress } from "./progress";
 
-export type GuideAsk = (prompt: string, label: string) => Promise<{ text: string; denied: string[] }>;
+export type GuideAsk = (
+  prompt: string,
+  label: string,
+) => Promise<{ text: string; denied: string[] }>;
 
 export interface GuideRun {
   guide: Guide;
@@ -40,10 +43,7 @@ function counts(f: FilePatch): string {
 }
 
 // Every changed file, one line each, with where it is.
-function indexLines(
-  plan: BatchPlan,
-  mark: (f: FilePatch) => string,
-): string {
+function indexLines(plan: BatchPlan, mark: (f: FilePatch) => string): string {
   return plan.all
     .map((f) => {
       const why = plan.lockfiles.includes(f.file)
@@ -75,10 +75,21 @@ export async function reviewInBatches(opts: {
   const progress = opts.progress ?? (() => {});
   const denied: string[] = [];
   const gaps = plan.tooLarge.length
-    ? [`Not reviewed, too large for one call: ${plan.tooLarge.map((f) => `\`${f}\``).join(", ")}.`]
+    ? [
+        `Not reviewed, too large for one call: ${plan.tooLarge.map((f) => `\`${f}\``).join(", ")}.`,
+      ]
     : [];
-  if (plan.batches.length === 0) return { error: "nothing in the change to review (only lock files or files too large)" };
-  progress({ stage: GuideStage.read, files: plan.all.length, batches: plan.batches.length });
+  if (plan.batches.length === 0) {
+    return {
+      error:
+        "nothing in the change to review (only lock files or files too large)",
+    };
+  }
+  progress({
+    stage: GuideStage.read,
+    files: plan.all.length,
+    batches: plan.batches.length,
+  });
 
   if (plan.batches.length === 1) {
     progress({ stage: GuideStage.whole });
@@ -97,7 +108,9 @@ export async function reviewInBatches(opts: {
     );
     denied.push(...answer.denied);
     const guide = parseGuide(answer.text);
-    if ("error" in guide) return { error: guide.error, answer: answer.text };
+    if ("error" in guide) {
+      return { error: guide.error, answer: answer.text };
+    }
     return { guide, denied, gaps, calls: 1 };
   }
 
@@ -109,7 +122,8 @@ export async function reviewInBatches(opts: {
   plan.batches.forEach((b, k) => b.forEach((f) => batchOf.set(f.file, k + 1)));
   let done = 0;
   let sent = 0;
-  const tell = () => progress({ stage: GuideStage.batches, done, running: sent - done, of: n });
+  const tell = () =>
+    progress({ stage: GuideStage.batches, done, running: sent - done, of: n });
   const one = async (k: number) => {
     const batch = plan.batches[k]!;
     const mine = new Set(batch.map((f) => f.file));
@@ -120,7 +134,9 @@ export async function reviewInBatches(opts: {
         `This batch's files, their diffs in full below. ${NUMBERS} Review only these files; Read any other file when a finding needs it.`,
         "",
         "Every changed file:",
-        indexLines(plan, (f) => (mine.has(f.file) ? " in this batch" : ` batch ${batchOf.get(f.file)}`)),
+        indexLines(plan, (f) =>
+          mine.has(f.file) ? " in this batch" : ` batch ${batchOf.get(f.file)}`,
+        ),
         "",
         diffs(batch),
       ].join("\n"),
@@ -129,8 +145,14 @@ export async function reviewInBatches(opts: {
     denied.push(...answer.denied);
     const parsed = parseBatchNotes(answer.text);
     const got = "error" in parsed ? [] : parsed.filter((d) => mine.has(d.file));
-    for (const d of got) reviewed.set(d.file, d);
-    for (const f of batch) if (!reviewed.has(f.file)) unanswered.push(f.file);
+    for (const d of got) {
+      reviewed.set(d.file, d);
+    }
+    for (const f of batch) {
+      if (!reviewed.has(f.file)) {
+        unanswered.push(f.file);
+      }
+    }
   };
   for (let k = 0; k < n; k += CONCURRENCY) {
     const chunk = plan.batches.slice(k, k + CONCURRENCY);
@@ -145,8 +167,11 @@ export async function reviewInBatches(opts: {
       ),
     );
   }
-  if (unanswered.length)
-    gaps.push(`No review came back for ${unanswered.map((f) => `\`${f}\``).join(", ")}.`);
+  if (unanswered.length) {
+    gaps.push(
+      `No review came back for ${unanswered.map((f) => `\`${f}\``).join(", ")}.`,
+    );
+  }
 
   // Job chapters, from the index and the summaries.
   progress({ stage: GuideStage.chapters, of: n });
@@ -167,12 +192,23 @@ export async function reviewInBatches(opts: {
   );
   denied.push(...answer.denied);
   const chapters = parseGuide(answer.text);
-  const shown = plan.all.filter((f) => !plan.lockfiles.includes(f.file) && !plan.tooLarge.includes(f.file));
+  const shown = plan.all.filter(
+    (f) => !plan.lockfiles.includes(f.file) && !plan.tooLarge.includes(f.file),
+  );
   let guide: Guide;
   if ("error" in chapters) {
-    gaps.push(`The chapters were not written (${chapters.error}): every file is in one.`);
-    guide = { title: "Guided review", intent: "", sections: [{ title: "Changes", overview: "", diffs: [] }], unplacedFiles: [] };
-  } else guide = chapters;
+    gaps.push(
+      `The chapters were not written (${chapters.error}): every file is in one.`,
+    );
+    guide = {
+      title: "Guided review",
+      intent: "",
+      sections: [{ title: "Changes", overview: "", diffs: [] }],
+      unplacedFiles: [],
+    };
+  } else {
+    guide = chapters;
+  }
 
   // The batches' notes laid into the chapters; a reviewed file no chapter
   // named goes in a last one, so its notes are kept.
@@ -180,22 +216,35 @@ export async function reviewInBatches(opts: {
   const sections = guide.sections.map((s) => ({
     ...s,
     diffs: s.diffs.flatMap((d) => {
-      if (placed.has(d.file)) return [];
+      if (placed.has(d.file)) {
+        return [];
+      }
       placed.add(d.file);
       const r = reviewed.get(d.file);
-      return [{ file: d.file, summary: r?.summary || d.summary, ...(r?.notes?.length ? { notes: r.notes } : {}) }];
+      return [
+        {
+          file: d.file,
+          summary: r?.summary || d.summary,
+          ...(r?.notes?.length ? { notes: r.notes } : {}),
+        },
+      ];
     }),
   }));
   const left = shown.filter((f) => !placed.has(f.file));
-  if (left.length)
+  if (left.length) {
     sections.push({
       title: "Other changes",
       overview: "",
       diffs: left.map((f) => {
         const r = reviewed.get(f.file);
-        return { file: f.file, summary: r?.summary ?? "", ...(r?.notes?.length ? { notes: r.notes } : {}) };
+        return {
+          file: f.file,
+          summary: r?.summary ?? "",
+          ...(r?.notes?.length ? { notes: r.notes } : {}),
+        };
       }),
     });
+  }
   return {
     guide: { ...guide, sections: sections.filter((s) => s.diffs.length > 0) },
     denied,

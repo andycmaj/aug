@@ -32,7 +32,9 @@ function moveHomeFirst(): void {
     console.error(`${CMD}: cannot move aug's home: ${moved.refuse}`);
     process.exit(1);
   }
-  if (!moved.skip) console.log(moved.steps.join("\n"));
+  if (!moved.skip) {
+    console.log(moved.steps.join("\n"));
+  }
 }
 
 // Hooks in your user settings, so Riker picks up claudes you start by hand in
@@ -44,14 +46,20 @@ const hooks = defineCommand({
   },
   subCommands: {
     install: defineCommand({
-      meta: { name: "install", description: "Add Riker's hooks to your Claude settings" },
+      meta: {
+        name: "install",
+        description: "Add Riker's hooks to your Claude settings",
+      },
       run() {
         moveHomeFirst();
         console.log(`riker hooks added to ${installHooks()}`);
       },
     }),
     uninstall: defineCommand({
-      meta: { name: "uninstall", description: "Remove Riker's hooks from your Claude settings" },
+      meta: {
+        name: "uninstall",
+        description: "Remove Riker's hooks from your Claude settings",
+      },
       run() {
         moveHomeFirst();
         console.log(
@@ -62,7 +70,10 @@ const hooks = defineCommand({
       },
     }),
     status: defineCommand({
-      meta: { name: "status", description: "Whether Riker's hooks are installed" },
+      meta: {
+        name: "status",
+        description: "Whether Riker's hooks are installed",
+      },
       run() {
         console.log(
           hooksInstalled()
@@ -95,17 +106,24 @@ const install = defineCommand({
     description: `Set up what riker adds to your tools: ${Object.keys(INSTALLS).join(", ")} (all when none named)`,
   },
   args: {
-    check: { type: "boolean", description: "say what is installed, change nothing" },
+    check: {
+      type: "boolean",
+      description: "say what is installed, change nothing",
+    },
   },
   run({ args }) {
     const names = chosen(args._.map(String));
-    if (!args.check) moveHomeFirst();
+    if (!args.check) {
+      moveHomeFirst();
+    }
     for (const name of names) {
       const item = INSTALLS[name];
       const state = installState(name);
       if (args.check) {
         const why = item.unavailable();
-        console.log(`${name}: ${state}${why ? ` (${why})` : ""} · ${item.help}`);
+        console.log(
+          `${name}: ${state}${why ? ` (${why})` : ""} · ${item.help}`,
+        );
         continue;
       }
       if (state === InstallState.unavailable) {
@@ -116,7 +134,9 @@ const install = defineCommand({
         console.log(`${name}: up to date`);
         continue;
       }
-      console.log(`${name}: ${state === InstallState.stale ? "updated" : "installed"}`);
+      console.log(
+        `${name}: ${state === InstallState.stale ? "updated" : "installed"}`,
+      );
       console.log(indent(item.install()));
     }
   },
@@ -132,7 +152,11 @@ const uninstall = defineCommand({
     moveHomeFirst();
     for (const name of names) {
       const removed = INSTALLS[name].uninstall();
-      console.log(removed ? `${name}: removed\n${indent(removed)}` : `${name}: nothing to remove`);
+      console.log(
+        removed
+          ? `${name}: removed\n${indent(removed)}`
+          : `${name}: nothing to remove`,
+      );
     }
   },
 });
@@ -141,11 +165,20 @@ const uninstall = defineCommand({
 const sim = defineCommand({
   meta: {
     name: "sim",
-    description: "Run on a scratch home against an offline, simulated GitHub (bun run sim:do makes things happen)",
+    description:
+      "Run on a scratch home against an offline, simulated GitHub (bun run sim:do makes things happen)",
   },
   args: {
-    scenario: { type: "positional", required: false, description: "play one: review-cycle, review-ask" },
-    brain: { type: "string", default: "fake", description: "fake (canned, free) | haiku (real claude, cheap)" },
+    scenario: {
+      type: "positional",
+      required: false,
+      description: "play one: review-cycle, review-ask",
+    },
+    brain: {
+      type: "string",
+      default: "fake",
+      description: "fake (canned, free) | haiku (real claude, cheap)",
+    },
   },
   run({ args }) {
     const brain = args.brain === "haiku" ? "haiku" : "fake";
@@ -153,7 +186,12 @@ const sim = defineCommand({
       console.error(`riker sim: --brain is fake or haiku, not ${args.brain}`);
       process.exit(2);
     }
-    config = { sim: { brain, scenario: args.scenario ? String(args.scenario) : undefined } };
+    config = {
+      sim: {
+        brain,
+        scenario: args.scenario ? String(args.scenario) : undefined,
+      },
+    };
   },
 });
 
@@ -162,25 +200,37 @@ const sim = defineCommand({
 const migrate = defineCommand({
   meta: {
     name: "migrate",
-    description: "Move aug's home (~/.aug) to Riker's (~/.riker), as a start does",
+    description:
+      "Move aug's home (~/.aug) to Riker's (~/.riker), as a start does",
   },
   args: {
-    check: { type: "boolean", description: "say what it would do, change nothing" },
+    check: {
+      type: "boolean",
+      description: "say what it would do, change nothing",
+    },
   },
   async run({ args }) {
     const done = args.check ? planHomeMigration() : migrateHome();
-    if (done.skip) console.log(`nothing to do: ${done.skip}`);
-    else if (done.refuse) {
+    if (done.skip) {
+      console.log(`nothing to do: ${done.skip}`);
+    } else if (done.refuse) {
       console.error(`${CMD}: ${done.refuse}`);
       process.exit(1);
-    } else console.log(done.steps.join("\n"));
-    if (done.refuse) return;
+    } else {
+      console.log(done.steps.join("\n"));
+    }
+    if (done.refuse) {
+      return;
+    }
     // Windows aug tagged get Riker's tags too (the engine also does this at
     // each start).
-    if (args.check) console.log("copy @aug_* tags on live tmux windows to @riker_*");
-    else {
+    if (args.check) {
+      console.log("copy @aug_* tags on live tmux windows to @riker_*");
+    } else {
       setMux(new TmuxMux(loadConfig().tmuxSocket));
-      console.log(`tmux: tagged ${await copyLegacyTags()} sessions and windows`);
+      console.log(
+        `tmux: tagged ${await copyLegacyTags()} sessions and windows`,
+      );
     }
   },
 });
@@ -203,7 +253,9 @@ const main = defineCommand({
   },
   run({ args, rawArgs }) {
     // citty runs this after a subcommand too; a subcommand is not the TUI.
-    if (rawArgs[0] && rawArgs[0] in SUBCOMMANDS) return;
+    if (rawArgs[0] && rawArgs[0] in SUBCOMMANDS) {
+      return;
+    }
     config = {
       fixture: args.demo ? "demo" : envVar("FIXTURE") || undefined,
     };
@@ -213,6 +265,8 @@ const main = defineCommand({
 export async function parseCLI(): Promise<CLIConfig> {
   await runMain(main);
   // citty prints --help/--version without calling run() and without exiting.
-  if (!config) process.exit(0);
+  if (!config) {
+    process.exit(0);
+  }
   return config;
 }

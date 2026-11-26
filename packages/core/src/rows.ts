@@ -3,7 +3,15 @@
 // the database.
 
 import { REF_PREFIX, refNumber } from "./brand";
-import { TaskStatus, TurnRole, TurnStatus, type NoteRow, type ProjectRow, type TaskRow, type TurnRow } from "./types";
+import {
+  TaskStatus,
+  TurnRole,
+  TurnStatus,
+  type NoteRow,
+  type ProjectRow,
+  type TaskRow,
+  type TurnRow,
+} from "./types";
 
 export function taskRef(id: number): string {
   return `${REF_PREFIX}${String(id).padStart(4, "0")}`;
@@ -50,12 +58,19 @@ export function noteReadBy(note: NoteRow): string[] {
 // Each action's last answer on a task, newest first: what the owner can
 // read again where the Canvas shows the agent instead of the chat. A pane
 // action's turn says only where it opened, so `skip` leaves those out.
-export function actionAnswers(turns: TurnRow[], skip: (name: string) => boolean = () => false): TurnRow[] {
+export function actionAnswers(
+  turns: TurnRow[],
+  skip: (name: string) => boolean = () => false,
+): TurnRow[] {
   const seen = new Set<string>();
   const answers: TurnRow[] = [];
   for (const turn of [...turns].reverse()) {
-    if (turn.role !== TurnRole.action || turn.status !== TurnStatus.done) continue;
-    if (!turn.body.trim() || seen.has(turn.author) || skip(turn.author)) continue;
+    if (turn.role !== TurnRole.action || turn.status !== TurnStatus.done) {
+      continue;
+    }
+    if (!turn.body.trim() || seen.has(turn.author) || skip(turn.author)) {
+      continue;
+    }
     seen.add(turn.author);
     answers.push(turn);
   }
@@ -72,13 +87,29 @@ export function actionRailWord(
   turn: TurnRow | undefined,
   now: Date,
 ): { text: string; running: boolean; failed: boolean } | null {
-  if (!turn) return null;
+  if (!turn) {
+    return null;
+  }
   const name = turn.author || "action";
-  if (turn.status === TurnStatus.running)
-    return { text: `${name}: ${turn.progress ?? "running"}`, running: true, failed: false };
-  if (!turn.finished_at || now.getTime() - Date.parse(turn.finished_at) > ACTION_SHOWN_MS) return null;
+  if (turn.status === TurnStatus.running) {
+    return {
+      text: `${name}: ${turn.progress ?? "running"}`,
+      running: true,
+      failed: false,
+    };
+  }
+  if (
+    !turn.finished_at ||
+    now.getTime() - Date.parse(turn.finished_at) > ACTION_SHOWN_MS
+  ) {
+    return null;
+  }
   const failed = turn.status === TurnStatus.failed;
-  return { text: `${name} ${failed ? "failed" : "done"}`, running: false, failed };
+  return {
+    text: `${name} ${failed ? "failed" : "done"}`,
+    running: false,
+    failed,
+  };
 }
 
 // What a story or journal reader lists to open, numbered: the task's PR,
@@ -97,10 +128,18 @@ export function docLinks(parts: {
 }): DocLink[] {
   const short = (u: string) => u.replace(/^(https?|file):\/\//, "");
   const all: DocLink[] = [
-    ...(parts.pr ? [{ label: `PR ${parts.pr.repo}#${parts.pr.number}`, url: parts.pr.url }] : []),
+    ...(parts.pr
+      ? [{ label: `PR ${parts.pr.repo}#${parts.pr.number}`, url: parts.pr.url }]
+      : []),
     ...(parts.source ? [{ label: "thread", url: parts.source }] : []),
-    ...(parts.task ?? []).map((l) => ({ label: l.title ?? short(l.url), url: l.url })),
-    ...(parts.project ?? []).map((l) => ({ label: `${l.title ?? short(l.url)} (project)`, url: l.url })),
+    ...(parts.task ?? []).map((l) => ({
+      label: l.title ?? short(l.url),
+      url: l.url,
+    })),
+    ...(parts.project ?? []).map((l) => ({
+      label: `${l.title ?? short(l.url)} (project)`,
+      url: l.url,
+    })),
   ];
   const seen = new Set<string>();
   return all.filter((l) => !seen.has(l.url) && Boolean(seen.add(l.url)));

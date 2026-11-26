@@ -27,7 +27,15 @@ import {
 import { parseTaskRef, taskRef } from "@riker/core/rows";
 import type { HelpCtx } from "../keymap";
 import type { Actions, Dialogs } from "./actions";
-import { askSearch, ExpandList, FilterPills, listCursor, selColor, when, type ListEntry } from "./expand-list";
+import {
+  askSearch,
+  ExpandList,
+  FilterPills,
+  listCursor,
+  selColor,
+  when,
+  type ListEntry,
+} from "./expand-list";
 import { ChoiceModal, PromptModal } from "./modals";
 import { useToast } from "../context/toast";
 
@@ -40,38 +48,57 @@ const [grouped, setGrouped] = createSignal(false);
 const [query, setQuery] = createSignal("");
 const cursor = listCursor();
 
-export function useDocsTab(opts: { active: () => boolean; actions: Actions; dialogs: Dialogs }) {
+export function useDocsTab(opts: {
+  active: () => boolean;
+  actions: Actions;
+  dialogs: Dialogs;
+}) {
   const riker = useRiker();
   const { showToast } = useToast();
   const all = createMemo(() => (opts.active() ? riker.documents() : []));
   const shown = createMemo(() =>
-    all().filter((r) => inKind(r, kind()) && inProject(r, project()) && matchesDoc(r, query())),
+    all().filter(
+      (r) =>
+        inKind(r, kind()) && inProject(r, project()) && matchesDoc(r, query()),
+    ),
   );
   const projectName = (id: number | null) =>
     id === null ? "No project" : (riker.project(id)?.name ?? `project ${id}`);
   // Grouped, the cursor walks the rows in the order they are drawn.
   const groups = createMemo(() => {
-    if (!grouped()) return null;
+    if (!grouped()) {
+      return null;
+    }
     const by = new Map<number | null, DocRow[]>();
     for (const r of shown()) {
       const g = groupOf(r);
       by.set(g, [...(by.get(g) ?? []), r]);
     }
     // Newest group first; rows already newest first.
-    return [...by.entries()].sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : 0));
+    return [...by.entries()].sort(([a], [b]) =>
+      a === null ? 1 : b === null ? -1 : 0,
+    );
   });
-  const rows = createMemo(() => groups()?.flatMap(([, list]) => list) ?? shown());
+  const rows = createMemo(
+    () => groups()?.flatMap(([, list]) => list) ?? shown(),
+  );
   const row = (): DocRow | null => rows()[cursor.index(rows().length)] ?? null;
 
   const move = (d: number) => cursor.move(d, rows().length);
   const refilter = () => cursor.reset();
 
-  const onRow = (fn: (r: DocRow) => false | void): Handler => () => {
-    if (!opts.active()) return false;
-    const r = row();
-    if (!r) return false;
-    return fn(r);
-  };
+  const onRow =
+    (fn: (r: DocRow) => false | void): Handler =>
+    () => {
+      if (!opts.active()) {
+        return false;
+      }
+      const r = row();
+      if (!r) {
+        return false;
+      }
+      return fn(r);
+    };
 
   const ownerWords = (o: DocOwner) =>
     o.taskId !== null
@@ -80,7 +107,11 @@ export function useDocsTab(opts: { active: () => boolean; actions: Actions; dial
         ? `${projectName(o.projectId)} (project)`
         : "Riker";
 
-  const pick = (title: string, owners: DocOwner[], run: (o: DocOwner) => void) => {
+  const pick = (
+    title: string,
+    owners: DocOwner[],
+    run: (o: DocOwner) => void,
+  ) => {
     if (owners.length === 1) {
       run(owners[0]);
       return;
@@ -88,15 +119,22 @@ export function useDocsTab(opts: { active: () => boolean; actions: Actions; dial
     opts.dialogs.show(() => (
       <ChoiceModal
         title={title}
-        choices={owners.map((o) => ({ label: ownerWords(o), hint: o.source, run: () => run(o) }))}
+        choices={owners.map((o) => ({
+          label: ownerWords(o),
+          hint: o.source,
+          run: () => run(o),
+        }))}
         onClose={opts.dialogs.close}
       />
     ));
   };
 
   const goTo = (o: DocOwner) => {
-    if (o.taskId !== null) opts.actions.goToTask(o.taskId);
-    else if (o.projectId !== null) opts.actions.goToProject(o.projectId);
+    if (o.taskId !== null) {
+      opts.actions.goToTask(o.taskId);
+    } else if (o.projectId !== null) {
+      opts.actions.goToProject(o.projectId);
+    }
   };
 
   const remove = (r: DocRow, o: DocOwner) => {
@@ -135,7 +173,8 @@ export function useDocsTab(opts: { active: () => boolean; actions: Actions; dial
             showToast(`No task ${text.trim()}`, 4000, "error");
             return;
           }
-          const stored = r.owners.find((o) => o.title)?.stored ?? r.owners[0].stored;
+          const stored =
+            r.owners.find((o) => o.title)?.stored ?? r.owners[0].stored;
           const title = r.owners.some((o) => o.title) ? r.title : null;
           riker.desk.link(task.id, stored, title, "you");
           showToast(`Attached to ${taskRef(task.id)}`);
@@ -149,34 +188,48 @@ export function useDocsTab(opts: { active: () => boolean; actions: Actions; dial
     [Commands.DOCUMENTS_EXPAND]: onRow((r) => cursor.toggle(r.key)),
     [Commands.DOCUMENTS_OPEN_LINK]: onRow((r) => opts.actions.openLink(r.url)),
     [Commands.DOCUMENTS_GO]: onRow((r) => {
-      const owners = r.owners.filter((o) => o.taskId !== null || o.projectId !== null);
-      if (!owners.length) return false;
+      const owners = r.owners.filter(
+        (o) => o.taskId !== null || o.projectId !== null,
+      );
+      if (!owners.length) {
+        return false;
+      }
       pick("Go to", owners, goTo);
     }),
     [Commands.DOCUMENTS_COPY]: onRow((r) => opts.actions.copyText(r.url)),
     [Commands.DOCUMENTS_ATTACH]: onRow(attach),
     [Commands.DOCUMENTS_REMOVE]: onRow((r) => {
       const owners = r.owners.filter(removable);
-      if (!owners.length) return false;
+      if (!owners.length) {
+        return false;
+      }
       pick("Take it off", owners, (o) => remove(r, o));
     }),
     [Commands.DOCUMENTS_KIND]: () => {
-      if (!opts.active()) return false;
+      if (!opts.active()) {
+        return false;
+      }
       setKind(nextKind(kind()));
       refilter();
     },
     [Commands.DOCUMENTS_PROJECT]: () => {
-      if (!opts.active()) return false;
+      if (!opts.active()) {
+        return false;
+      }
       setProject(nextProject(project(), projectChoices(all())));
       refilter();
     },
     [Commands.DOCUMENTS_GROUP]: () => {
-      if (!opts.active()) return false;
+      if (!opts.active()) {
+        return false;
+      }
       setGrouped((g) => !g);
       refilter();
     },
     [Commands.DOCUMENTS_SEARCH]: () => {
-      if (!opts.active()) return false;
+      if (!opts.active()) {
+        return false;
+      }
       askSearch(
         opts.dialogs,
         query(),
@@ -194,7 +247,9 @@ export function useDocsTab(opts: { active: () => boolean; actions: Actions; dial
 
   const ctx = (): Partial<HelpCtx> => {
     const r = row();
-    if (!r) return { item: null };
+    if (!r) {
+      return { item: null };
+    }
     return {
       item: "doc",
       docOwned: r.owners.some((o) => o.taskId !== null || o.projectId !== null),
@@ -204,7 +259,9 @@ export function useDocsTab(opts: { active: () => boolean; actions: Actions; dial
 
   const counts = createMemo(() => {
     const out = new Map<DocKind | null, number>([[null, 0]]);
-    for (const r of all().filter((r) => inProject(r, project()) && matchesDoc(r, query()))) {
+    for (const r of all().filter(
+      (r) => inProject(r, project()) && matchesDoc(r, query()),
+    )) {
       out.set(null, (out.get(null) ?? 0) + 1);
       out.set(r.kind, (out.get(r.kind) ?? 0) + 1);
     }
@@ -227,7 +284,13 @@ export function useDocsTab(opts: { active: () => boolean; actions: Actions; dial
         openKey={cursor.openKey()}
         kind={kind()}
         counts={counts()}
-        project={project() === null ? null : project() === "none" ? "No project" : projectName(project() as number)}
+        project={
+          project() === null
+            ? null
+            : project() === "none"
+              ? "No project"
+              : projectName(project() as number)
+        }
         grouped={grouped()}
         query={query()}
         total={all().length}
@@ -239,7 +302,15 @@ export function useDocsTab(opts: { active: () => boolean; actions: Actions; dial
   };
 }
 
-const KIND_PILLS: (DocKind | null)[] = [null, "pr", "issue", "doc", "thread", "file", "other"];
+const KIND_PILLS: (DocKind | null)[] = [
+  null,
+  "pr",
+  "issue",
+  "doc",
+  "thread",
+  "file",
+  "other",
+];
 
 function DocsView(props: {
   rows: DocRow[];
@@ -260,13 +331,17 @@ function DocsView(props: {
   const riker = useRiker();
 
   const entries = createMemo((): ListEntry<DocRow>[] => {
-    if (!props.groups) return props.rows.map((row) => ({ row }));
+    if (!props.groups) {
+      return props.rows.map((row) => ({ row }));
+    }
     return props.groups.flatMap(([id, list], i) => [
       {
         key: `group-${id ?? "none"}`,
         heading: () => (
           <text marginTop={i === 0 ? 0 : 1}>
-            <span style={{ fg: theme.accent, attributes: 1 }}>{props.projectName(id)}</span>
+            <span style={{ fg: theme.accent, attributes: 1 }}>
+              {props.projectName(id)}
+            </span>
             <span style={{ fg: theme.textMuted }}>{`  ${list.length}`}</span>
           </text>
         ),
@@ -348,7 +423,9 @@ function DocsView(props: {
               </>
             );
           }}
-          detail={(r) => <Detail row={r} ownerWords={props.ownerWords} width={props.width} />}
+          detail={(r) => (
+            <Detail row={r} ownerWords={props.ownerWords} width={props.width} />
+          )}
         />
       </Show>
     </box>
@@ -361,11 +438,21 @@ function stamp(iso: string): string {
 }
 
 // The open row: the whole address, then each owner with how it got there.
-function Detail(props: { row: DocRow; ownerWords: (o: DocOwner) => string; width: number }) {
+function Detail(props: {
+  row: DocRow;
+  ownerWords: (o: DocOwner) => string;
+  width: number;
+}) {
   const theme = useTheme();
   const width = () => Math.max(20, props.width - 8);
   return (
-    <box flexDirection="column" paddingLeft={2} paddingTop={1} paddingBottom={1} backgroundColor={theme.contentPane}>
+    <box
+      flexDirection="column"
+      paddingLeft={2}
+      paddingTop={1}
+      paddingBottom={1}
+      backgroundColor={theme.contentPane}
+    >
       <text fg={theme.text} wrapMode="char">
         {props.row.url}
       </text>

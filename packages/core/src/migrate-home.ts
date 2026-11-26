@@ -63,7 +63,9 @@ function isLink(path: string): boolean {
 
 function heldBy(from: string, alive: (pid: number) => boolean): number | null {
   try {
-    const pid = Number(readFileSync(join(from, `${LEGACY.cmd}.pid`), "utf8").trim());
+    const pid = Number(
+      readFileSync(join(from, `${LEGACY.cmd}.pid`), "utf8").trim(),
+    );
     return Number.isInteger(pid) && pid > 0 && alive(pid) ? pid : null;
   } catch {
     return null;
@@ -74,7 +76,11 @@ export function planHomeMigration(opts: MigrateOptions = {}): HomeMigration {
   const env = opts.env ?? process.env;
   const from = opts.from ?? legacyHome();
   const to = opts.to ?? defaultHome();
-  const plan = (skip: string | null, refuse: string | null, steps: string[] = []) => ({
+  const plan = (
+    skip: string | null,
+    refuse: string | null,
+    steps: string[] = [],
+  ) => ({
     from,
     to,
     skip,
@@ -82,22 +88,49 @@ export function planHomeMigration(opts: MigrateOptions = {}): HomeMigration {
     steps,
   });
   const named = env[envName("HOME")];
-  if (named) return plan(`${envName("HOME")} is set (${named}): that home is used as it is`, null);
+  if (named) {
+    return plan(
+      `${envName("HOME")} is set (${named}): that home is used as it is`,
+      null,
+    );
+  }
   const old = env[`${LEGACY.envPrefix}HOME`];
-  if (old && resolve(old) !== resolve(from))
-    return plan(`${LEGACY.envPrefix}HOME is set (${old}): that home is used as it is`, null);
-  if (isLink(from)) return plan(`${from} is already a link to ${readlinkSync(from)}`, null);
-  if (!existsSync(from)) return plan(`no ${from}: nothing to move`, null);
-  if (existsSync(to)) return plan(null, `both ${from} and ${to} exist: move one of them aside first`);
+  if (old && resolve(old) !== resolve(from)) {
+    return plan(
+      `${LEGACY.envPrefix}HOME is set (${old}): that home is used as it is`,
+      null,
+    );
+  }
+  if (isLink(from)) {
+    return plan(`${from} is already a link to ${readlinkSync(from)}`, null);
+  }
+  if (!existsSync(from)) {
+    return plan(`no ${from}: nothing to move`, null);
+  }
+  if (existsSync(to)) {
+    return plan(
+      null,
+      `both ${from} and ${to} exist: move one of them aside first`,
+    );
+  }
   const pid = heldBy(from, opts.alive ?? pidAlive);
-  if (pid) return plan(null, `${LEGACY.name} is running on ${from} (pid ${pid}): quit it first`);
+  if (pid) {
+    return plan(
+      null,
+      `${LEGACY.name} is running on ${from} (pid ${pid}): quit it first`,
+    );
+  }
 
-  const files = STEMMED.filter((ext) => existsSync(join(from, `${LEGACY.cmd}.${ext}`)));
+  const files = STEMMED.filter((ext) =>
+    existsSync(join(from, `${LEGACY.cmd}.${ext}`)),
+  );
   const db = join(from, `${LEGACY.cmd}.db`);
   const steps = [
     `move ${from} to ${to}`,
     ...(files.length
-      ? [`rename ${files.map((ext) => `${LEGACY.cmd}.${ext}`).join(", ")} to ${CMD}.*`]
+      ? [
+          `rename ${files.map((ext) => `${LEGACY.cmd}.${ext}`).join(", ")} to ${CMD}.*`,
+        ]
       : []),
     `leave ${from} as a link to ${to}`,
     ...(existsSync(db) ? dbSteps(db, true) : []),
@@ -108,12 +141,16 @@ export function planHomeMigration(opts: MigrateOptions = {}): HomeMigration {
 
 export function migrateHome(opts: MigrateOptions = {}): HomeMigration {
   const plan = planHomeMigration(opts);
-  if (plan.skip || plan.refuse) return plan;
+  if (plan.skip || plan.refuse) {
+    return plan;
+  }
   const { from, to } = plan;
   renameSync(from, to);
   for (const ext of STEMMED) {
     const old = join(to, `${LEGACY.cmd}.${ext}`);
-    if (existsSync(old)) renameSync(old, join(to, `${CMD}.${ext}`));
+    if (existsSync(old)) {
+      renameSync(old, join(to, `${CMD}.${ext}`));
+    }
   }
   symlinkSync(to, from);
   const db = join(to, `${CMD}.db`);
@@ -189,7 +226,11 @@ const CHANGES: Change[] = [
 ];
 
 function hasTable(db: Database, table: string): boolean {
-  return Boolean(db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table));
+  return Boolean(
+    db
+      .query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(table),
+  );
 }
 
 interface ProjectRepos {
@@ -198,8 +239,12 @@ interface ProjectRepos {
 }
 
 function projectsToChange(db: Database): ProjectRepos[] {
-  if (!hasTable(db, "projects")) return [];
-  return (db.query("SELECT id, repos FROM projects").all() as ProjectRepos[]).filter((p) => {
+  if (!hasTable(db, "projects")) {
+    return [];
+  }
+  return (
+    db.query("SELECT id, repos FROM projects").all() as ProjectRepos[]
+  ).filter((p) => {
     try {
       return (JSON.parse(p.repos) as unknown[]).includes(LEGACY.repo);
     } catch {
@@ -215,23 +260,44 @@ function dbSteps(file: string, dry: boolean): string[] {
     const lines: string[] = [];
     const run = () => {
       for (const c of CHANGES) {
-        if (!hasTable(db, c.table)) continue;
+        if (!hasTable(db, c.table)) {
+          continue;
+        }
         const n = (db.query(c.count).get(c.args[0]) as { n: number }).n;
-        if (!n) continue;
-        if (!dry) db.query(c.apply).run(...c.args);
-        lines.push(`${dry ? "update" : "updated"} ${n} ${c.what} to ${c.args[1]}`);
+        if (!n) {
+          continue;
+        }
+        if (!dry) {
+          db.query(c.apply).run(...c.args);
+        }
+        lines.push(
+          `${dry ? "update" : "updated"} ${n} ${c.what} to ${c.args[1]}`,
+        );
       }
       const projects = projectsToChange(db);
       for (const p of projects) {
-        if (dry) continue;
-        const repos = (JSON.parse(p.repos) as string[]).map((r) => (r === LEGACY.repo ? REPO : r));
-        db.query("UPDATE projects SET repos = ? WHERE id = ?").run(JSON.stringify([...new Set(repos)]), p.id);
+        if (dry) {
+          continue;
+        }
+        const repos = (JSON.parse(p.repos) as string[]).map((r) =>
+          r === LEGACY.repo ? REPO : r,
+        );
+        db.query("UPDATE projects SET repos = ? WHERE id = ?").run(
+          JSON.stringify([...new Set(repos)]),
+          p.id,
+        );
       }
-      if (projects.length)
-        lines.push(`${dry ? "update" : "updated"} ${projects.length} projects.repos ${LEGACY.repo} to ${REPO}`);
+      if (projects.length) {
+        lines.push(
+          `${dry ? "update" : "updated"} ${projects.length} projects.repos ${LEGACY.repo} to ${REPO}`,
+        );
+      }
     };
-    if (dry) run();
-    else db.transaction(run)();
+    if (dry) {
+      run();
+    } else {
+      db.transaction(run)();
+    }
     return lines.map((l) => `db: ${l}`);
   } finally {
     db.close();
@@ -250,15 +316,24 @@ function configSteps(file: string, dry: boolean): string[] {
     return [];
   }
   const github = raw.github as { repos?: Record<string, string> } | undefined;
-  const holder = (raw.repos ? raw : github) as { repos?: Record<string, string> } | undefined;
+  const holder = (raw.repos ? raw : github) as
+    | { repos?: Record<string, string> }
+    | undefined;
   const repos = holder?.repos;
-  if (!repos || !(LEGACY.repo in repos) || REPO in repos) return [];
+  if (!repos || !(LEGACY.repo in repos) || REPO in repos) {
+    return [];
+  }
   const key = holder === raw ? "repos" : "github.repos";
   const line = `config.json: ${key} ${LEGACY.repo} becomes ${REPO} (${repos[LEGACY.repo]})`;
-  if (dry) return [line];
+  if (dry) {
+    return [line];
+  }
   // Rebuilt in order, so the key keeps its place in the file.
   holder!.repos = Object.fromEntries(
-    Object.entries(repos).map(([slug, path]) => [slug === LEGACY.repo ? REPO : slug, path]),
+    Object.entries(repos).map(([slug, path]) => [
+      slug === LEGACY.repo ? REPO : slug,
+      path,
+    ]),
   );
   writeFileSync(file, JSON.stringify(raw, null, 2) + "\n");
   return [line];

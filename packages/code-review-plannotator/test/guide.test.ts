@@ -17,8 +17,12 @@ import { ANSWER, repo, sh } from "./support/repo";
 
 describe("the guide's JSON", () => {
   test("is read from a json fence", () => {
-    const g = parseGuide(`Here:\n\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\`\n`);
-    if ("error" in g) throw new Error(g.error);
+    const g = parseGuide(
+      `Here:\n\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\`\n`,
+    );
+    if ("error" in g) {
+      throw new Error(g.error);
+    }
     expect(g.sections[0]!.diffs[0]!.notes).toHaveLength(2);
   });
 
@@ -32,11 +36,18 @@ describe("fitted to the patch", () => {
   test("files it lacks go, files it left out are unplaced, every note is a review comment", () => {
     const dir = repo();
     const patch = patchFor(dir, "main");
-    if ("error" in patch) throw new Error(patch.error);
-    expect([...patchHunks(patch.text).keys()].sort()).toEqual(["README.md", "math.ts"]);
+    if ("error" in patch) {
+      throw new Error(patch.error);
+    }
+    expect([...patchHunks(patch.text).keys()].sort()).toEqual([
+      "README.md",
+      "math.ts",
+    ]);
 
     const parsed = parseGuide(JSON.stringify(ANSWER));
-    if ("error" in parsed) throw new Error(parsed.error);
+    if ("error" in parsed) {
+      throw new Error(parsed.error);
+    }
     const { guide, findings, comments } = fitGuide(parsed, patch.text);
     expect(findings.map((f) => f.note.lineStart)).toEqual([6, 40]);
     const section = guide.sections[0]!;
@@ -72,7 +83,9 @@ describe("fitted to the patch", () => {
     const dir = repo();
     writeFileSync(join(dir, "mod.ts"), "export const m = 1;\n");
     const patch = patchFor(dir, "main");
-    if ("error" in patch) throw new Error(patch.error);
+    if ("error" in patch) {
+      throw new Error(patch.error);
+    }
     expect([...patchHunks(patch.text).keys()]).toContain("mod.ts");
     // The agent's index is left as it was.
     expect(sh(dir, "git", "status", "--porcelain")).toContain("?? mod.ts");
@@ -82,7 +95,9 @@ describe("fitted to the patch", () => {
     const dir = repo();
     sh(dir, "git", "branch", "-m", "main", "master");
     const patch = patchFor(dir, "main");
-    if ("error" in patch) throw new Error(patch.error);
+    if ("error" in patch) {
+      throw new Error(patch.error);
+    }
     expect(patch.base).toBe("master");
   });
 });
@@ -104,14 +119,25 @@ describe("refit to a later patch", () => {
     ].join("\n");
     const { comments, dropped } = reviewComments(
       [
-        { file: "math.ts", note: { lineStart: 6, lineEnd: 7, text: "Bug: in the hunk" } },
-        { file: "math.ts", note: { lineStart: 12, lineEnd: 12, text: "Nit: moved out of it" } },
-        { file: "gone.ts", note: { lineStart: 1, lineEnd: 1, text: "Risk: file reverted" } },
+        {
+          file: "math.ts",
+          note: { lineStart: 6, lineEnd: 7, text: "Bug: in the hunk" },
+        },
+        {
+          file: "math.ts",
+          note: { lineStart: 12, lineEnd: 12, text: "Nit: moved out of it" },
+        },
+        {
+          file: "gone.ts",
+          note: { lineStart: 1, lineEnd: 1, text: "Risk: file reverted" },
+        },
       ],
       patch,
     );
     expect(dropped).toBe(1);
-    expect(comments.map((c) => [c.scope, c.filePath, c.lineStart ?? null, c.text])).toEqual([
+    expect(
+      comments.map((c) => [c.scope, c.filePath, c.lineStart ?? null, c.text]),
+    ).toEqual([
       ["line", "math.ts", 6, "Bug: in the hunk"],
       ["file", "math.ts", null, "L12: Nit: moved out of it"],
     ]);
@@ -123,7 +149,9 @@ describe("what the review sends back", () => {
     expect(reviewNotes("")).toBeNull();
     expect(reviewNotes("The user approved.\n")).toBeNull();
     expect(reviewNotes("Review session closed without feedback.\n")).toBeNull();
-    expect(reviewNotes("# Code Review Feedback\n\nBug: x\n")).toBe("# Code Review Feedback\n\nBug: x");
+    expect(reviewNotes("# Code Review Feedback\n\nBug: x\n")).toBe(
+      "# Code Review Feedback\n\nBug: x",
+    );
   });
 });
 
@@ -138,8 +166,14 @@ describe("posting the comments", () => {
       type: "comment",
       text: "L1: Nit: x",
     };
-    await postComments(review.server.port!, [comment], { waitMs: 3000, everyMs: 50 });
-    await postComments(review.server.port!, [comment], { waitMs: 3000, everyMs: 50 });
+    await postComments(review.server.port!, [comment], {
+      waitMs: 3000,
+      everyMs: 50,
+    });
+    await postComments(review.server.port!, [comment], {
+      waitMs: 3000,
+      everyMs: 50,
+    });
     void review.server.stop(true);
     expect(review.calls).toEqual([
       "DELETE /api/external-annotations?source=riker-guide",
@@ -163,8 +197,12 @@ describe("posting the comments", () => {
         port,
         async fetch(req) {
           const path = new URL(req.url).pathname;
-          if (path === "/api/diff") return Response.json({ rawPatch: "" });
-          if (req.method === "DELETE") return Response.json({ ok: true });
+          if (path === "/api/diff") {
+            return Response.json({ rawPatch: "" });
+          }
+          if (req.method === "DELETE") {
+            return Response.json({ ok: true });
+          }
           got.push({ path, body: await req.json() });
           return Response.json({ ids: ["a"] }, { status: 201 });
         },
@@ -178,10 +216,15 @@ describe("posting the comments", () => {
       type: "comment" as const,
       text: "L1: Nit: x",
     };
-    const r = await postComments(port, [comment], { waitMs: 3000, everyMs: 50 });
+    const r = await postComments(port, [comment], {
+      waitMs: 3000,
+      everyMs: 50,
+    });
     void server!.stop(true);
     expect(r).toEqual({ ok: true });
-    expect(got).toEqual([{ path: "/api/external-annotations", body: { annotations: [comment] } }]);
+    expect(got).toEqual([
+      { path: "/api/external-annotations", body: { annotations: [comment] } },
+    ]);
   });
 
   test("a port something else took gets nothing", async () => {
@@ -190,11 +233,26 @@ describe("posting the comments", () => {
       hostname: "127.0.0.1",
       port: 0,
       fetch(req) {
-        if (req.method === "POST") posted++;
+        if (req.method === "POST") {
+          posted++;
+        }
         return new Response("not found", { status: 404 });
       },
     });
-    const r = await postComments(server.port!, [{ source: "s", author: "a", scope: "file", filePath: "f", type: "comment", text: "t" }], { waitMs: 3000, everyMs: 50 });
+    const r = await postComments(
+      server.port!,
+      [
+        {
+          source: "s",
+          author: "a",
+          scope: "file",
+          filePath: "f",
+          type: "comment",
+          text: "t",
+        },
+      ],
+      { waitMs: 3000, everyMs: 50 },
+    );
     void server.stop(true);
     expect("error" in r && r.error).toContain("is not a Plannotator review");
     expect(posted).toBe(0);
@@ -209,11 +267,39 @@ describe("posting the comments", () => {
           ? Response.json({ rawPatch: "" })
           : Response.json({ error: "annotations[0] missing" }, { status: 400 }),
     });
-    const refused = await postComments(server.port!, [{ source: "s", author: "a", scope: "file", filePath: "f", type: "comment", text: "t" }], { waitMs: 3000, everyMs: 50 });
+    const refused = await postComments(
+      server.port!,
+      [
+        {
+          source: "s",
+          author: "a",
+          scope: "file",
+          filePath: "f",
+          type: "comment",
+          text: "t",
+        },
+      ],
+      { waitMs: 3000, everyMs: 50 },
+    );
     void server.stop(true);
-    expect("error" in refused && refused.error).toContain("refused the comments (400)");
+    expect("error" in refused && refused.error).toContain(
+      "refused the comments (400)",
+    );
 
-    const silent = await postComments(freePort(), [{ source: "s", author: "a", scope: "file", filePath: "f", type: "comment", text: "t" }], { waitMs: 200, everyMs: 50 });
+    const silent = await postComments(
+      freePort(),
+      [
+        {
+          source: "s",
+          author: "a",
+          scope: "file",
+          filePath: "f",
+          type: "comment",
+          text: "t",
+        },
+      ],
+      { waitMs: 200, everyMs: 50 },
+    );
     expect(silent).toHaveProperty("error");
   });
 });

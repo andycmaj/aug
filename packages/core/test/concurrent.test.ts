@@ -21,7 +21,9 @@ describe("mapLimit", () => {
     const run = mapLimit([0, 1, 2, 3, 4, 5], 2, async (n) => {
       started.push(n);
       await Bun.sleep(1);
-      if (n === 1) throw new Error("rate limited");
+      if (n === 1) {
+        throw new Error("rate limited");
+      }
       return n;
     });
     expect(run).rejects.toThrow("rate limited");

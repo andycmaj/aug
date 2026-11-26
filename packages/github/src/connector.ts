@@ -2,7 +2,11 @@
 // status into pr_status, on one clock, behind the gate (gate.ts) that keeps
 // Riker inside GitHub's budgets.
 
-import type { Connector, ConnectorContext, ConnectorState } from "@riker/core/plugins";
+import type {
+  Connector,
+  ConnectorContext,
+  ConnectorState,
+} from "@riker/core/plugins";
 import { now } from "@riker/core/db";
 import { errorMessage, logger } from "@riker/core/log";
 import { taskPr } from "@riker/core/pr";
@@ -49,8 +53,12 @@ function short(message: string): string {
 
 function pauseWords(what: string, p: Pause, budget: GhBudget): string {
   const at = clockTime(p.until);
-  if (p.why === PauseWhy.rateLimit) return `${what}rate limited until ${at}`;
-  if (p.why === PauseWhy.secondary) return `${what}secondary rate limit, waiting until ${at}`;
+  if (p.why === PauseWhy.rateLimit) {
+    return `${what}rate limited until ${at}`;
+  }
+  if (p.why === PauseWhy.secondary) {
+    return `${what}secondary rate limit, waiting until ${at}`;
+  }
   return `${what}paused until ${at} (${budget === GhBudget.graphql ? "GraphQL" : "REST"} budget low)`;
 }
 
@@ -81,14 +89,20 @@ export class GithubConnector implements Connector {
 
   attach(ctx: ConnectorContext): void {
     this.ctx = ctx;
-    this.client.pollEvery(() => githubConfig.of(this.ctx.config.get()).pollSeconds * 1000);
+    this.client.pollEvery(
+      () => githubConfig.of(this.ctx.config.get()).pollSeconds * 1000,
+    );
   }
 
   start(): void {
     const config = this.ctx.config.get();
     const github = githubConfig.of(config);
     if (!github.enabled) {
-      this.ctx.setStatus({ state: "off", detail: "disabled in config", at: null });
+      this.ctx.setStatus({
+        state: "off",
+        detail: "disabled in config",
+        at: null,
+      });
       return;
     }
     void this.poll();
@@ -104,18 +118,30 @@ export class GithubConnector implements Connector {
   // is paused, REST says whether it merged, since a merge should not wait
   // out a rate limit. A PR already read as merged is not read again.
   async refreshTask(task: TaskRow): Promise<void> {
-    if (!githubConfig.of(this.ctx.config.get()).enabled) return;
+    if (!githubConfig.of(this.ctx.config.get()).enabled) {
+      return;
+    }
     const pr = taskPr(task);
-    if (!pr) return;
+    if (!pr) {
+      return;
+    }
     const last = store.prStatus(task.id);
-    if (last?.url === pr.url && last.state === PrState.merged) return;
+    if (last?.url === pr.url && last.state === PrState.merged) {
+      return;
+    }
     const gate = this.githubGate();
-    if (!gate.prAllowed(pr.url)) return;
+    if (!gate.prAllowed(pr.url)) {
+      return;
+    }
     const rest = async () => {
-      if (gate.pause(GhBudget.rest)) return;
+      if (gate.pause(GhBudget.rest)) {
+        return;
+      }
       await refreshPrEndRest(task, pr, this.api);
     };
-    if (gate.pause(GhBudget.graphql)) return rest();
+    if (gate.pause(GhBudget.graphql)) {
+      return rest();
+    }
     try {
       await refreshPrStatus(task, this.prs);
       gate.prSucceeded(pr.url);
@@ -127,7 +153,10 @@ export class GithubConnector implements Connector {
       }
       gate.prFailed(pr.url);
       store.markPrStale(task.id, message);
-      log.warn("pr status at turn end failed", { task: task.id, error: message });
+      log.warn("pr status at turn end failed", {
+        task: task.id,
+        error: message,
+      });
     }
   }
 
@@ -137,7 +166,11 @@ export class GithubConnector implements Connector {
 
   private holdGithub(budget: GhBudget, until: number, why: PauseWhy): void {
     this.client.hold(budget, until, why);
-    log.warn("github paused", { budget, why, until: new Date(until).toISOString() });
+    log.warn("github paused", {
+      budget,
+      why,
+      until: new Date(until).toISOString(),
+    });
   }
 
   // A call came back rate limited. Through the client, the budget is
@@ -145,7 +178,9 @@ export class GithubConnector implements Connector {
   // seam, gh api rate_limit (free) says when
   // the spent budget comes back.
   private async githubLimited(budget: GhBudget): Promise<void> {
-    if (this.githubGate().pause(budget)) return;
+    if (this.githubGate().pause(budget)) {
+      return;
+    }
     let limits: GhRateLimit | null = null;
     try {
       limits = (await this.api("rate_limit")) as GhRateLimit;
@@ -154,7 +189,11 @@ export class GithubConnector implements Connector {
     }
     const clock = this.opts.clock;
     const nowMs = clock ? clock.now() : Date.now();
-    this.holdGithub(budget, limitedUntil(budget, limits, nowMs), PauseWhy.rateLimit);
+    this.holdGithub(
+      budget,
+      limitedUntil(budget, limits, nowMs),
+      PauseWhy.rateLimit,
+    );
   }
 
   // New notifications into the inbox, then the cursor. Who gh is logged in
@@ -174,9 +213,13 @@ export class GithubConnector implements Connector {
 
   // force (the owner's check now) skips a backoff, never a rate limit.
   async poll(force = false): Promise<void> {
-    if (this.polling) return;
+    if (this.polling) {
+      return;
+    }
     const gate = this.githubGate();
-    if (gate.backoff() && !force) return;
+    if (gate.backoff() && !force) {
+      return;
+    }
     const restHeld = gate.pause(GhBudget.rest);
     const graphHeld = gate.pause(GhBudget.graphql);
     if (restHeld && graphHeld) {
@@ -203,17 +246,23 @@ export class GithubConnector implements Connector {
           ? Promise.resolve(null)
           : refreshPrStatuses({ fetch: this.prs, gate }),
       ]);
-      if (notified.status === "rejected") throw notified.reason;
-      if (read.status === "rejected") throw read.reason;
+      if (notified.status === "rejected") {
+        throw notified.reason;
+      }
+      if (read.status === "rejected") {
+        throw read.reason;
+      }
       const fresh = notified.value;
       const prs = read.value;
-      if (prs?.limited) await this.githubLimited(GhBudget.graphql);
-      else if (prs?.budget && prs.budget.remaining < GRAPHQL_RESERVE)
+      if (prs?.limited) {
+        await this.githubLimited(GhBudget.graphql);
+      } else if (prs?.budget && prs.budget.remaining < GRAPHQL_RESERVE) {
         this.holdGithub(
           GhBudget.graphql,
           Date.parse(prs.budget.resetAt),
           PauseWhy.reserve,
         );
+      }
       await this.ctx.checkMerges();
       const ms = Date.now() - started;
       done({ fresh, prs: prs?.asked ?? 0, failed: prs?.failed ?? 0 });
@@ -248,12 +297,17 @@ export class GithubConnector implements Connector {
     const gate = this.githubGate();
     const restHeld = gate.pause(GhBudget.rest);
     const graphHeld = gate.pause(GhBudget.graphql);
-    const allFailed = !!prs && prs.asked > 0 && prs.ok === 0 && prs.failed === prs.asked;
+    const allFailed =
+      !!prs && prs.asked > 0 && prs.ok === 0 && prs.failed === prs.asked;
     const failedWords = prs?.failed
       ? `${prs.failed} PR${prs.failed === 1 ? "" : "s"} failed: ${short(prs.error ?? "")}`
       : "";
     const parts = [
-      restHeld ? pauseWords("", restHeld, GhBudget.rest) : fresh ? `${fresh} new` : "up to date",
+      restHeld
+        ? pauseWords("", restHeld, GhBudget.rest)
+        : fresh
+          ? `${fresh} new`
+          : "up to date",
       failedWords,
       graphHeld ? pauseWords("PR status ", graphHeld, GhBudget.graphql) : "",
       ms > SLOW_GITHUB_MS ? `slow ${Math.round(ms / 1000)}s` : "",
@@ -263,8 +317,12 @@ export class GithubConnector implements Connector {
       const until = gate.failed(prs.error ?? "PR status failed");
       parts.push(`retry ${clockTime(until)}`);
       state = "error";
-    } else gate.succeeded();
-    if ((graphHeld && graphHeld.why !== PauseWhy.reserve) || restHeld) state = "error";
+    } else {
+      gate.succeeded();
+    }
+    if ((graphHeld && graphHeld.why !== PauseWhy.reserve) || restHeld) {
+      state = "error";
+    }
     this.ctx.setStatus({
       state,
       detail: parts.filter(Boolean).join(" · "),

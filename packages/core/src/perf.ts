@@ -77,12 +77,18 @@ function readSettings(): void {
 }
 
 export function perfOn(): boolean {
-  if (enabled === undefined || readAt !== logGeneration()) readSettings();
+  if (enabled === undefined || readAt !== logGeneration()) {
+    readSettings();
+  }
   return enabled === true;
 }
 
 function bucketOf(value: number): number {
-  for (let i = 0; i < BOUNDS.length; i++) if (value <= BOUNDS[i]!) return i;
+  for (let i = 0; i < BOUNDS.length; i++) {
+    if (value <= BOUNDS[i]!) {
+      return i;
+    }
+  }
   return BOUNDS.length;
 }
 
@@ -101,17 +107,25 @@ function add(op: string, value: number, unit: PerfUnit): void {
   }
   agg.count++;
   agg.total += value;
-  if (value > agg.max) agg.max = value;
+  if (value > agg.max) {
+    agg.max = value;
+  }
   agg.buckets[bucketOf(value)]!++;
 }
 
 function clean(fields: PerfFields | undefined): PerfFields {
   const out: PerfFields = {};
-  if (!fields) return out;
+  if (!fields) {
+    return out;
+  }
   for (const [k, v] of Object.entries(fields)) {
-    if (typeof v === "number") out[k] = Math.round(v * 10) / 10;
-    else if (typeof v === "boolean") out[k] = v;
-    else if (typeof v === "string") out[k] = v.slice(0, MAX_NAME);
+    if (typeof v === "number") {
+      out[k] = Math.round(v * 10) / 10;
+    } else if (typeof v === "boolean") {
+      out[k] = v;
+    } else if (typeof v === "string") {
+      out[k] = v.slice(0, MAX_NAME);
+    }
   }
   return out;
 }
@@ -122,18 +136,26 @@ function keepExample(
   fields: PerfFields | undefined,
 ): void {
   const list = examples.get(op) ?? [];
-  if (list.length >= EXAMPLES_PER_OP && ms <= list[list.length - 1]!.ms) return;
+  if (list.length >= EXAMPLES_PER_OP && ms <= list[list.length - 1]!.ms) {
+    return;
+  }
   list.push({ at: new Date().toISOString(), op, ms, fields: clean(fields) });
   list.sort((a, b) => b.ms - a.ms);
-  if (list.length > EXAMPLES_PER_OP) list.length = EXAMPLES_PER_OP;
+  if (list.length > EXAMPLES_PER_OP) {
+    list.length = EXAMPLES_PER_OP;
+  }
   examples.set(op, list);
 }
 
 // A duration in ms.
 export function timing(op: string, ms: number, fields?: PerfFields): void {
-  if (!perfOn()) return;
+  if (!perfOn()) {
+    return;
+  }
   add(op, ms, "ms");
-  if (ms >= slowMs) keepExample(op, ms, fields);
+  if (ms >= slowMs) {
+    keepExample(op, ms, fields);
+  }
 }
 
 const NOOP = (): void => {};
@@ -143,7 +165,9 @@ export function perfStart(
   op: string,
   fields?: PerfFields,
 ): (end?: PerfFields) => void {
-  if (!perfOn()) return NOOP;
+  if (!perfOn()) {
+    return NOOP;
+  }
   const started = performance.now();
   return (end) =>
     timing(
@@ -154,7 +178,9 @@ export function perfStart(
 }
 
 export function measure<T>(op: string, fn: () => T, fields?: PerfFields): T {
-  if (!perfOn()) return fn();
+  if (!perfOn()) {
+    return fn();
+  }
   const started = performance.now();
   try {
     return fn();
@@ -168,7 +194,9 @@ export async function measureAsync<T>(
   fn: () => Promise<T>,
   fields?: PerfFields,
 ): Promise<T> {
-  if (!perfOn()) return fn();
+  if (!perfOn()) {
+    return fn();
+  }
   const started = performance.now();
   try {
     return await fn();
@@ -179,13 +207,19 @@ export async function measureAsync<T>(
 
 // How often something happened (a table bump, a tmux event).
 export function count(op: string, n = 1): void {
-  if (!perfOn()) return;
-  for (let i = 0; i < n; i++) add(op, 0, "count");
+  if (!perfOn()) {
+    return;
+  }
+  for (let i = 0; i < n; i++) {
+    add(op, 0, "count");
+  }
 }
 
 // A value in its own unit (CPU %, MB, cells per frame, reads per refresh).
 export function sample(op: string, value: number, unit: PerfUnit): void {
-  if (!perfOn()) return;
+  if (!perfOn()) {
+    return;
+  }
   add(op, value, unit);
 }
 
@@ -232,7 +266,9 @@ function perfDb(): Database {
 let flushesAtExit = false;
 
 function ensureFlushing(): void {
-  if (flushTimer) return;
+  if (flushTimer) {
+    return;
+  }
   flushTimer = setInterval(flushPerf, FLUSH_MS);
   flushTimer.unref?.();
   if (!flushesAtExit) {
@@ -244,7 +280,9 @@ function ensureFlushing(): void {
 // Writes what this process has gathered since the last flush. Never throws:
 // perf must not take Riker down.
 export function flushPerf(): void {
-  if (!aggs.size && !examples.size) return;
+  if (!aggs.size && !examples.size) {
+    return;
+  }
   const minute = windowStart;
   windowStart = minuteOf(new Date());
   const rows = [...aggs.entries()];
@@ -262,7 +300,7 @@ export function flushPerf(): void {
       "INSERT INTO perf_examples (at, proc, pid, op, ms, fields) VALUES (?, ?, ?, ?, ?, ?)",
     );
     d.transaction(() => {
-      for (const [op, a] of rows)
+      for (const [op, a] of rows) {
         addMinute.run(
           minute,
           proc,
@@ -274,7 +312,8 @@ export function flushPerf(): void {
           a.max,
           JSON.stringify(a.buckets),
         );
-      for (const e of kept)
+      }
+      for (const e of kept) {
         addExample.run(
           e.at,
           proc,
@@ -283,6 +322,7 @@ export function flushPerf(): void {
           e.ms,
           JSON.stringify(e.fields),
         );
+      }
     })();
   } catch {
     // Dropped: a busy or full disk costs one minute of counters.
@@ -316,12 +356,13 @@ function sampleProcess(): void {
     const elapsed = performance.now() - cpuAt;
     cpu = process.cpuUsage();
     cpuAt = performance.now();
-    if (elapsed > 0)
+    if (elapsed > 0) {
       sample(
         "process.cpu",
         ((used.user + used.system) / 1000 / elapsed) * 100,
         "%",
       );
+    }
     sample("process.rss", process.memoryUsage.rss() / 1024 / 1024, "MB");
   }, 60_000);
   let expected = performance.now() + 1000;
@@ -330,7 +371,9 @@ function sampleProcess(): void {
     timing("process.loop_lag", Math.max(0, now - expected));
     expected = now + 1000;
   }, 1000);
-  for (const t of [minute, lag]) t.unref?.();
+  for (const t of [minute, lag]) {
+    t.unref?.();
+  }
   processTimers = [minute, lag];
 }
 
@@ -346,7 +389,9 @@ export interface PerfStart {
 export function startPerf(opts: PerfStart): void {
   proc = opts.proc;
   setTimingSink(timing);
-  if (!perfOn()) return;
+  if (!perfOn()) {
+    return;
+  }
   if (opts.sampleProcess) {
     prunePerf();
     sampleProcess();
@@ -355,9 +400,13 @@ export function startPerf(opts: PerfStart): void {
 
 // Tests: forget everything gathered and read the settings again.
 export function resetPerf(): void {
-  for (const t of processTimers) clearInterval(t);
+  for (const t of processTimers) {
+    clearInterval(t);
+  }
   processTimers = [];
-  if (flushTimer) clearInterval(flushTimer);
+  if (flushTimer) {
+    clearInterval(flushTimer);
+  }
   flushTimer = null;
   aggs.clear();
   examples.clear();
@@ -408,12 +457,16 @@ export function quantile(
   max: number,
 ): number {
   const total = buckets.reduce((a, b) => a + b, 0);
-  if (!total) return 0;
+  if (!total) {
+    return 0;
+  }
   const rank = q * total;
   let seen = 0;
   for (let i = 0; i < buckets.length; i++) {
     const n = buckets[i]!;
-    if (!n) continue;
+    if (!n) {
+      continue;
+    }
     if (seen + n >= rank) {
       const lo = i === 0 ? 0 : BOUNDS[i - 1]!;
       const hi = Math.min(i < BOUNDS.length ? BOUNDS[i]! : max, max);
@@ -460,10 +513,9 @@ export function perfReport(
   const to = minuteOf(until);
   const prefix = `${opts.op ?? ""}%`;
   const minutes = from
-    .query<
-      MinuteRow,
-      [string, string, string]
-    >("SELECT op, unit, count, total, max, buckets, pid FROM perf_minutes WHERE minute >= ? AND minute <= ? AND op LIKE ?")
+    .query<MinuteRow, [string, string, string]>(
+      "SELECT op, unit, count, total, max, buckets, pid FROM perf_minutes WHERE minute >= ? AND minute <= ? AND op LIKE ?",
+    )
     .all(since, to, prefix);
   const merged = new Map<string, Agg>();
   const pids = new Set<number>();
@@ -484,7 +536,9 @@ export function perfReport(
     agg.total += m.total;
     agg.max = Math.max(agg.max, m.max);
     const b = JSON.parse(m.buckets) as number[];
-    for (let i = 0; i < agg.buckets.length; i++) agg.buckets[i]! += b[i] ?? 0;
+    for (let i = 0; i < agg.buckets.length; i++) {
+      agg.buckets[i]! += b[i] ?? 0;
+    }
   }
   const rows: PerfRow[] = [...merged.entries()].map(([op, a]) => ({
     op,
@@ -524,8 +578,9 @@ export function perfReport(
 
 function num(value: number, unit: PerfUnit): string {
   if (unit === "ms") {
-    if (value >= 1000)
+    if (value >= 1000) {
       return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}s`;
+    }
     return `${value >= 10 ? Math.round(value) : value.toFixed(1)}ms`;
   }
   const n = value >= 10 ? String(Math.round(value)) : value.toFixed(1);
@@ -562,7 +617,7 @@ export function perfText(report: PerfReport): string {
   const samples = report.rows.filter(
     (r) => r.unit !== "ms" && r.unit !== "count",
   );
-  if (timings.length)
+  if (timings.length) {
     out.push(
       "",
       table(
@@ -577,7 +632,8 @@ export function perfText(report: PerfReport): string {
         ]),
       ),
     );
-  if (samples.length)
+  }
+  if (samples.length) {
     out.push(
       "",
       table(
@@ -592,6 +648,7 @@ export function perfText(report: PerfReport): string {
         ]),
       ),
     );
+  }
   if (counts.length) {
     const perHour = (n: number) =>
       hours > 0 ? (n / hours).toFixed(n / hours >= 10 ? 0 : 1) : "-";
@@ -603,7 +660,7 @@ export function perfText(report: PerfReport): string {
       ),
     );
   }
-  if (report.slowest.length)
+  if (report.slowest.length) {
     out.push(
       "",
       "slowest",
@@ -614,5 +671,6 @@ export function perfText(report: PerfReport): string {
         return `  ${e.at.slice(0, 19).replace("T", " ")}  ${num(e.ms, "ms").padStart(7)}  ${e.op}  ${e.proc}${fields}`;
       }),
     );
+  }
   return out.join("\n");
 }

@@ -4,7 +4,11 @@ import { setMux } from "@riker/core/mux";
 import * as store from "@riker/core/store";
 import { MessageState } from "@riker/core/types";
 import { FakeMux } from "@riker/core/test/support/fake-mux";
-import { fakeBrain, freshHome, testConfig } from "@riker/core/test/support/helpers";
+import {
+  fakeBrain,
+  freshHome,
+  testConfig,
+} from "@riker/core/test/support/helpers";
 import { slackPlugin } from "../src/index";
 import { EMPTY_CURSOR, type SlackTransport } from "../src/shared";
 
@@ -21,9 +25,19 @@ afterEach(() => {
 });
 
 const T0 = Date.UTC(2026, 10, 5, 10, 0);
-const verdict = (v: string) => ({ verdict: v, title: "t", summary: "s", priority: "regular", reason: "r" });
+const verdict = (v: string) => ({
+  verdict: v,
+  title: "t",
+  summary: "s",
+  priority: "regular",
+  reason: "r",
+});
 
-function slackMessage(n: number, body: string, opts: { thread?: string; at?: number } = {}): store.NewMessage {
+function slackMessage(
+  n: number,
+  body: string,
+  opts: { thread?: string; at?: number } = {},
+): store.NewMessage {
   return {
     channel: "slack",
     externalId: `slack:C1:${n}`,
@@ -42,15 +56,24 @@ describe("the Slack poll", () => {
     return {
       kind: "token",
       available: () => ({ ok: true, detail: "" }),
-      poll: async () => ({ messages, cursor: { ...EMPTY_CURSOR, since: "200.0" } }),
+      poll: async () => ({
+        messages,
+        cursor: { ...EMPTY_CURSOR, since: "200.0" },
+      }),
       send: async () => "sent",
       stop: () => {},
     };
   }
 
   test("does not move its cursor when the insert throws", async () => {
-    const slack = slackPlugin({ transport: transport([slackMessage(1, "hi there, a question")]) });
-    engine = new Engine({ config: testConfig(), plugins: [slack], offline: true });
+    const slack = slackPlugin({
+      transport: transport([slackMessage(1, "hi there, a question")]),
+    });
+    engine = new Engine({
+      config: testConfig(),
+      plugins: [slack],
+      offline: true,
+    });
     const insertSpy = spyOn(store, "insertMessage").mockImplementation(() => {
       throw new Error("database is locked");
     });
@@ -67,8 +90,14 @@ describe("the Slack poll", () => {
 
   test("only inserts: triage is the worker's, and the model is never asked", async () => {
     const calls = fakeBrain(() => verdict("fyi"));
-    const slack = slackPlugin({ transport: transport([slackMessage(1, "Why is the export short?")]) });
-    engine = new Engine({ config: testConfig(), plugins: [slack], offline: true });
+    const slack = slackPlugin({
+      transport: transport([slackMessage(1, "Why is the export short?")]),
+    });
+    engine = new Engine({
+      config: testConfig(),
+      plugins: [slack],
+      offline: true,
+    });
     await slack.poller.poll();
     const [m] = store.recentMessages(10);
     expect(m!.state).toBe(MessageState.new);

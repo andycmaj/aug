@@ -16,7 +16,14 @@ import {
   type HelpCtx,
 } from "../src/keymap";
 
-const ITEMS: HelpCtx["item"][] = ["task", "message", "fyi", "idea", "project", null];
+const ITEMS: HelpCtx["item"][] = [
+  "task",
+  "message",
+  "fyi",
+  "idea",
+  "project",
+  null,
+];
 const KINDS = ["home", "system", "coding", "task", "chat", null];
 const FLAGS = [
   "hasDraft",
@@ -33,37 +40,45 @@ const FLAGS = [
 // timeout under load.
 function* contexts(scope: string): Generator<HelpCtx> {
   const boards = scope === "board" ? Object.values(BoardTab) : [undefined];
-  for (const item of ITEMS)
-    for (const kind of item === "task" ? KINDS : [null])
+  for (const item of ITEMS) {
+    for (const kind of item === "task" ? KINDS : [null]) {
       // Only a task carries drafts, agents and the rest (see chat-mode's ctx).
       for (
         let bits = 0;
         bits < (item === "task" ? 1 << FLAGS.length : 1);
         bits++
-      )
-        for (const board of boards)
-        for (let inbox = 0; inbox < (board === BoardTab.inbox ? 32 : 1); inbox++) {
-          const ctx: HelpCtx = {
-            item,
-            kind,
-            hasDraft: false,
-            live: false,
-            coding: false,
-            watching: false,
-            started: false,
-            pr: false,
-            board,
-            inboxTask: (inbox & 1) !== 0,
-            handled: (inbox & 2) !== 0,
-            inboxWork: (inbox & 4) !== 0,
-            inboxRead: (inbox & 8) !== 0,
-            inboxMade: (inbox & 16) !== 0,
-          };
-          FLAGS.forEach((flag, i) => {
-            ctx[flag] = (bits & (1 << i)) !== 0;
-          });
-          yield ctx;
+      ) {
+        for (const board of boards) {
+          for (
+            let inbox = 0;
+            inbox < (board === BoardTab.inbox ? 32 : 1);
+            inbox++
+          ) {
+            const ctx: HelpCtx = {
+              item,
+              kind,
+              hasDraft: false,
+              live: false,
+              coding: false,
+              watching: false,
+              started: false,
+              pr: false,
+              board,
+              inboxTask: (inbox & 1) !== 0,
+              handled: (inbox & 2) !== 0,
+              inboxWork: (inbox & 4) !== 0,
+              inboxRead: (inbox & 8) !== 0,
+              inboxMade: (inbox & 16) !== 0,
+            };
+            FLAGS.forEach((flag, i) => {
+              ctx[flag] = (bits & (1 << i)) !== 0;
+            });
+            yield ctx;
+          }
         }
+      }
+    }
+  }
 }
 
 // What a pane's footer would show for this item: its own keys, then the app's.
@@ -84,7 +99,7 @@ function footer(scope: string, ctx: HelpCtx): Map<string, string> {
 // A key that means two things at once is a key whose footer lies about one.
 test("in each pane, a key means one thing for any item", () => {
   const clashes = new Set<string>();
-  for (const scope of ["rail", "canvas", "board"])
+  for (const scope of ["rail", "canvas", "board"]) {
     for (const ctx of contexts(scope)) {
       const bindings = filterRelevant(
         [
@@ -94,14 +109,18 @@ test("in each pane, a key means one thing for any item", () => {
         ctx,
       );
       const byKey = new Map<string, Set<string>>();
-      for (const b of bindings)
+      for (const b of bindings) {
         byKey.set(b.keys, (byKey.get(b.keys) ?? new Set()).add(b.cmd));
-      for (const [key, cmds] of byKey)
-        if (cmds.size > 1)
+      }
+      for (const [key, cmds] of byKey) {
+        if (cmds.size > 1) {
           clashes.add(
             `${scope} ${ctx.item}/${ctx.kind}: ${key} = ${[...cmds].join(", ")}`,
           );
+        }
+      }
     }
+  }
   expect([...clashes]).toEqual([]);
 });
 
@@ -202,7 +221,10 @@ function shown(scopes: string[], ctx: HelpCtx): Map<string, string> {
 }
 
 test("attached to a terminal, only its own keys are listed", () => {
-  const keys = shown(["terminal", "canvas", "app"], { ...quiet, attached: true });
+  const keys = shown(["terminal", "canvas", "app"], {
+    ...quiet,
+    attached: true,
+  });
   // Detach, the go-to chord, back, Home, the tmux jump and the rail: the
   // keys an attached terminal lets past.
   expect([...keys.values()].sort()).toEqual(
@@ -231,15 +253,30 @@ test("ctrl+[ is back and ctrl+a is Home, anywhere, an attached terminal too", ()
   const uses = (key: string) =>
     Object.entries(keymap)
       .flatMap(([scope, bindings]) =>
-        (bindings ?? []).filter((b) => b.key === key).map((b) => `${scope}:${b.cmd}`),
+        (bindings ?? [])
+          .filter((b) => b.key === key)
+          .map((b) => `${scope}:${b.cmd}`),
       )
       .sort();
-  expect(uses("ctrl+[")).toEqual([`app:${Commands.GO_BACK}`, `terminal:${Commands.TERMINAL_KITTY_BACK}`]);
-  expect(uses("ctrl+o")).toEqual([`app:${Commands.GO_BACK}`, `terminal:${Commands.TERMINAL_BACK}`]);
-  expect(uses("ctrl+a")).toEqual([`app:${Commands.GO_HOME}`, `terminal:${Commands.GO_HOME}`]);
-  for (const key of ["ctrl+j", "ctrl+k", "escape"])
-    for (const use of uses(key))
-      expect([Commands.GO_BACK, Commands.GO_HOME]).not.toContain(use.split(":")[1]);
+  expect(uses("ctrl+[")).toEqual([
+    `app:${Commands.GO_BACK}`,
+    `terminal:${Commands.TERMINAL_KITTY_BACK}`,
+  ]);
+  expect(uses("ctrl+o")).toEqual([
+    `app:${Commands.GO_BACK}`,
+    `terminal:${Commands.TERMINAL_BACK}`,
+  ]);
+  expect(uses("ctrl+a")).toEqual([
+    `app:${Commands.GO_HOME}`,
+    `terminal:${Commands.GO_HOME}`,
+  ]);
+  for (const key of ["ctrl+j", "ctrl+k", "escape"]) {
+    for (const use of uses(key)) {
+      expect([Commands.GO_BACK, Commands.GO_HOME]).not.toContain(
+        use.split(":")[1],
+      );
+    }
+  }
 });
 
 // RIKER-0223: no default binding uses a chord that cannot reach Riker in a
@@ -248,10 +285,23 @@ test("ctrl+[ is back and ctrl+a is Home, anywhere, an attached terminal too", ()
 // tmux plugin) takes ctrl+h/j/k/l. ctrl+[ is allowed only beside ctrl+o and
 // only where the kitty protocol tells it from Esc.
 test("no binding needs a chord tmux or the terminal keeps", () => {
-  const kept = ["ctrl+j", "ctrl+m", "ctrl+i", "ctrl+h", "ctrl+b", "ctrl+k", "ctrl+l", "linefeed"];
-  for (const [scope, bindings] of Object.entries(keymap))
-    for (const b of bindings ?? [])
-      expect(`${scope}:${b.key}:${kept.includes(b.key)}`).toBe(`${scope}:${b.key}:false`);
+  const kept = [
+    "ctrl+j",
+    "ctrl+m",
+    "ctrl+i",
+    "ctrl+h",
+    "ctrl+b",
+    "ctrl+k",
+    "ctrl+l",
+    "linefeed",
+  ];
+  for (const [scope, bindings] of Object.entries(keymap)) {
+    for (const b of bindings ?? []) {
+      expect(`${scope}:${b.key}:${kept.includes(b.key)}`).toBe(
+        `${scope}:${b.key}:false`,
+      );
+    }
+  }
 });
 
 test("typing in the chat box, ctrl+[ and ctrl+a still show and work", () => {
@@ -261,24 +311,40 @@ test("typing in the chat box, ctrl+[ and ctrl+a still show and work", () => {
   expect(keys.get("^a")).toBe(Commands.GO_HOME);
   // Where ctrl+[ arrives as Esc (no kitty protocol, or inside tmux), back
   // is not offered: the key would do what Esc does.
-  const legacy = shown(["input", "canvas", "app"], { ...quiet, typing: true, kittyKeys: false });
+  const legacy = shown(["input", "canvas", "app"], {
+    ...quiet,
+    typing: true,
+    kittyKeys: false,
+  });
   expect(legacy.has("^[")).toBe(false);
   expect(legacy.get("^o")).toBe(Commands.GO_BACK);
   expect(legacy.get("^a")).toBe(Commands.GO_HOME);
-  const attached = shown(["terminal"], { ...quiet, attached: true, kittyKeys: false });
+  const attached = shown(["terminal"], {
+    ...quiet,
+    attached: true,
+    kittyKeys: false,
+  });
   expect(attached.has("^[")).toBe(false);
   expect(attached.get("^o")).toBe(Commands.TERMINAL_BACK);
   // On Home, ctrl+a has nowhere to go.
-  const onHome = shown(["input", "canvas", "app"], { ...quiet, kind: "home", typing: true });
+  const onHome = shown(["input", "canvas", "app"], {
+    ...quiet,
+    kind: "home",
+    typing: true,
+  });
   expect(onHome.has("^a")).toBe(false);
 });
 
 // Reserved like ctrl+] (the passthrough lets the terminal scope's keys by),
 // and bound nowhere else, so it means one thing.
 test("ctrl+t is the attached terminal's tmux jump, and only that", () => {
-  expect(keyFor(keymap, "terminal", Commands.TERMINAL_JUMP)).toEqual(["ctrl+t"]);
+  expect(keyFor(keymap, "terminal", Commands.TERMINAL_JUMP)).toEqual([
+    "ctrl+t",
+  ]);
   const others = Object.entries(keymap).flatMap(([scope, bindings]) =>
-    (bindings ?? []).filter((b) => b.key === "ctrl+t").map((b) => `${scope}:${b.cmd}`),
+    (bindings ?? [])
+      .filter((b) => b.key === "ctrl+t")
+      .map((b) => `${scope}:${b.cmd}`),
   );
   expect(others).toEqual([`terminal:${Commands.TERMINAL_JUMP}`]);
 });
@@ -287,18 +353,24 @@ test("ctrl+t is the attached terminal's tmux jump, and only that", () => {
 // thing in both tables.
 test("ctrl+e is the rail toggle anywhere, an attached terminal too", () => {
   const uses = Object.entries(keymap).flatMap(([scope, bindings]) =>
-    (bindings ?? []).filter((b) => b.key === "ctrl+e").map((b) => `${scope}:${b.cmd}`),
+    (bindings ?? [])
+      .filter((b) => b.key === "ctrl+e")
+      .map((b) => `${scope}:${b.cmd}`),
   );
   expect(uses.sort()).toEqual(
-    [`app:${Commands.SIDEBAR_TOGGLE}`, `terminal:${Commands.SIDEBAR_TOGGLE}`].sort(),
+    [
+      `app:${Commands.SIDEBAR_TOGGLE}`,
+      `terminal:${Commands.SIDEBAR_TOGGLE}`,
+    ].sort(),
   );
 });
 
 test("typing in the chat box lists the box's keys, not the Canvas's", () => {
   const keys = shown(["input", "canvas", "app"], { ...quiet, typing: true });
   expect(keys.get("escape")).toBe(Commands.INPUT_LEAVE);
-  for (const k of ["j", "s", "d", "?", "q", "v"])
+  for (const k of ["j", "s", "d", "?", "q", "v"]) {
     expect(keys.has(k)).toBe(false);
+  }
   // These still act while typing.
   expect(keys.has("Tab")).toBe(true);
   expect(keys.has("^r")).toBe(true);
@@ -355,7 +427,11 @@ test("the Inbox's keys say what they do to each row", () => {
       ...extra,
     });
   const idea = inbox("idea");
-  expect([idea.get("x"), idea.get("m"), idea.get("Enter")]).toEqual(["dismiss", "make task", "chain"]);
+  expect([idea.get("x"), idea.get("m"), idea.get("Enter")]).toEqual([
+    "dismiss",
+    "make task",
+    "chain",
+  ]);
   expect(inbox("idea", { handled: true }).has("x")).toBe(false);
   const fyi = inbox("fyi");
   expect([fyi.get("x"), fyi.get("m"), fyi.get("F"), fyi.get("U")]).toEqual([
@@ -366,39 +442,92 @@ test("the Inbox's keys say what they do to each row", () => {
   ]);
   // AUG-0140: x dismisses every message, and drops no task; X undoes the
   // task a message made, never one it only joined.
-  const made = inbox("message", { inboxTask: true, inboxWork: true, inboxMade: true });
-  expect(
-    [made.get("x"), made.get("X"), made.get("t"), made.get("s"), made.get("m"), made.get("U")],
-  ).toEqual(["dismiss", "ignore", "go to task", "start", undefined, undefined]);
+  const made = inbox("message", {
+    inboxTask: true,
+    inboxWork: true,
+    inboxMade: true,
+  });
+  expect([
+    made.get("x"),
+    made.get("X"),
+    made.get("t"),
+    made.get("s"),
+    made.get("m"),
+    made.get("U"),
+  ]).toEqual([
+    "dismiss",
+    "ignore",
+    "go to task",
+    "start",
+    undefined,
+    undefined,
+  ]);
   const joined = inbox("message", { inboxTask: true, inboxWork: true });
-  expect([joined.get("x"), joined.get("X"), joined.get("t")]).toEqual(["dismiss", undefined, "go to task"]);
+  expect([joined.get("x"), joined.get("X"), joined.get("t")]).toEqual([
+    "dismiss",
+    undefined,
+    "go to task",
+  ]);
   const unplaced = inbox("message");
-  expect([unplaced.get("x"), unplaced.get("m")]).toEqual(["dismiss", "make task"]);
+  expect([unplaced.get("x"), unplaced.get("m")]).toEqual([
+    "dismiss",
+    "make task",
+  ]);
   expect(inbox("message", { inboxRead: true }).has("x")).toBe(false);
   expect(inbox("fyi", { inboxRead: true }).has("x")).toBe(false);
   // An approved idea's task starts and moves; an open idea's only goes to.
-  const approved = inbox("idea", { handled: true, inboxTask: true, inboxWork: true });
-  expect([approved.get("t"), approved.get("s"), approved.get("x")]).toEqual(["go to task", "start", undefined]);
+  const approved = inbox("idea", {
+    handled: true,
+    inboxTask: true,
+    inboxWork: true,
+  });
+  expect([approved.get("t"), approved.get("s"), approved.get("x")]).toEqual([
+    "go to task",
+    "start",
+    undefined,
+  ]);
   const about = inbox("idea", { inboxTask: true });
   expect([about.get("t"), about.get("s")]).toEqual(["go to task", undefined]);
   expect(inbox(null).get("/")).toBe("search");
   expect(inbox(null).get("f")).toBe("filter");
   // Off the Inbox, / is the rail search and Enter opens.
-  expect(footer("board", { ...base(), item: "task", kind: "task", board: BoardTab.columns }).get("Enter")).toBe("open");
+  expect(
+    footer("board", {
+      ...base(),
+      item: "task",
+      kind: "task",
+      board: BoardTab.columns,
+    }).get("Enter"),
+  ).toBe("open");
 });
 
 test("the Wins tab's keys: Enter opens the row, t goes, h and l walk days", () => {
   const wins = (item: HelpCtx["item"], extra: Partial<HelpCtx> = {}) =>
-    footer("board", { ...base(), item, kind: item ? "task" : null, board: BoardTab.wins, ...extra });
+    footer("board", {
+      ...base(),
+      item,
+      kind: item ? "task" : null,
+      board: BoardTab.wins,
+      ...extra,
+    });
   const today = wins("task", { winsToday: true });
-  expect([today.get("Enter"), today.get("t"), today.get("h")]).toEqual(["details", "go to task", "earlier"]);
+  expect([today.get("Enter"), today.get("t"), today.get("h")]).toEqual([
+    "details",
+    "go to task",
+    "earlier",
+  ]);
   expect([today.has("l"), today.has("0")]).toEqual([false, false]);
   const past = wins("task", { winsToday: false });
   expect([past.get("l"), past.get("0")]).toEqual(["later", "today"]);
   expect(wins(null).has("Enter")).toBe(false);
   expect(wins(null).get("h")).toBe("earlier");
   // Off Wins, h is the column move and t is nothing on the Board.
-  const columns = footer("board", { ...base(), item: "task", kind: "task", board: BoardTab.columns });
+  const columns = footer("board", {
+    ...base(),
+    item: "task",
+    kind: "task",
+    board: BoardTab.columns,
+  });
   expect(columns.get("Enter")).toBe("open");
   expect(columns.has("t")).toBe(false);
 });
@@ -408,16 +537,44 @@ test("the Docs tab's keys: Enter opens the row, o opens the link, x only on atta
     footer("board", { ...base(), item, board: BoardTab.docs, ...extra });
   const attached = docs("doc", { docOwned: true, docRemovable: true });
   expect(
-    ["Enter", "o", "t", "y", "L", "x", "f", "p", "P", "/"].map((k) => attached.get(k)),
-  ).toEqual(["details", "open", "go to", "copy", "attach", "remove", "kind", "project", "group", "search"]);
+    ["Enter", "o", "t", "y", "L", "x", "f", "p", "P", "/"].map((k) =>
+      attached.get(k),
+    ),
+  ).toEqual([
+    "details",
+    "open",
+    "go to",
+    "copy",
+    "attach",
+    "remove",
+    "kind",
+    "project",
+    "group",
+    "search",
+  ]);
   // A PR its branch opened, or a brain doc: nothing to take off, nowhere to go.
   const seen = docs("doc", { docOwned: false, docRemovable: false });
-  expect([seen.has("x"), seen.has("t"), seen.get("o")]).toEqual([false, false, "open"]);
+  expect([seen.has("x"), seen.has("t"), seen.get("o")]).toEqual([
+    false,
+    false,
+    "open",
+  ]);
   // An empty list still filters and searches.
   const empty = docs(null);
-  expect([empty.has("Enter"), empty.get("f"), empty.get("/")]).toEqual([false, "kind", "search"]);
+  expect([empty.has("Enter"), empty.get("f"), empty.get("/")]).toEqual([
+    false,
+    "kind",
+    "search",
+  ]);
   // Docs is tab 6, after Cost.
-  expect(Object.values(BoardTab)).toEqual(["wins", "columns", "knowledge", "inbox", "cost", "docs"]);
+  expect(Object.values(BoardTab)).toEqual([
+    "wins",
+    "columns",
+    "knowledge",
+    "inbox",
+    "cost",
+    "docs",
+  ]);
 });
 
 function base(): HelpCtx {
@@ -454,13 +611,29 @@ test("an action with a key gets it on the rail and the Canvas, never over a move
 });
 
 test("an action's own key is listed only on the rows it is offered on", () => {
-  const table = buildKeymap({}, [{ name: "guide", key: "shift+z", title: "Guided review" }]);
+  const table = buildKeymap({}, [
+    { name: "guide", key: "shift+z", title: "Guided review" },
+  ]);
   const listed = (ctx: HelpCtx) =>
-    new Map(helpBindings(getScopeBindings(table, "rail"), ctx).map((b) => [b.keys, b.cmd]));
-  const review: HelpCtx = { ...base(), item: "task", kind: "coding", coding: true };
-  expect(listed({ ...review, actions: ["guide", "summarize"] }).get("Z")).toBe(actionCommand("guide"));
+    new Map(
+      helpBindings(getScopeBindings(table, "rail"), ctx).map((b) => [
+        b.keys,
+        b.cmd,
+      ]),
+    );
+  const review: HelpCtx = {
+    ...base(),
+    item: "task",
+    kind: "coding",
+    coding: true,
+  };
+  expect(listed({ ...review, actions: ["guide", "summarize"] }).get("Z")).toBe(
+    actionCommand("guide"),
+  );
   expect(listed({ ...review, actions: ["summarize"] }).has("Z")).toBe(false);
   // A view that does not say which actions apply lists it on every work row.
   expect(listed(review).get("Z")).toBe(actionCommand("guide"));
-  expect(listed({ ...review, kind: "home", actions: ["guide"] }).has("Z")).toBe(false);
+  expect(listed({ ...review, kind: "home", actions: ["guide"] }).has("Z")).toBe(
+    false,
+  );
 });

@@ -107,24 +107,42 @@ export type InboxRow =
 // Where a message went, from what the message says now: an owner's move
 // after triage (ignore, make it a task) changes it, and the row follows.
 export function messageResult(m: MessageRow): InboxResult {
-  if (m.channel === Channel.timer) return InboxResult.timer;
-  if (m.from_me) return InboxResult.own;
-  if (m.task_id !== null)
+  if (m.channel === Channel.timer) {
+    return InboxResult.timer;
+  }
+  if (m.from_me) {
+    return InboxResult.own;
+  }
+  if (m.task_id !== null) {
     return m.verdict && m.verdict !== Verdict.fyi
       ? InboxResult.task
       : InboxResult.attached;
-  if (m.state === MessageState.new || m.state === MessageState.triaging)
+  }
+  if (m.state === MessageState.new || m.state === MessageState.triaging) {
     return InboxResult.untriaged;
-  if (m.state === MessageState.failed) return InboxResult.failed;
-  if (m.reason?.startsWith(HELD)) return InboxResult.held;
-  if (m.verdict === Verdict.fyi) return InboxResult.fyi;
-  if (m.reason?.startsWith("a greeting")) return InboxResult.greeting;
+  }
+  if (m.state === MessageState.failed) {
+    return InboxResult.failed;
+  }
+  if (m.reason?.startsWith(HELD)) {
+    return InboxResult.held;
+  }
+  if (m.verdict === Verdict.fyi) {
+    return InboxResult.fyi;
+  }
+  if (m.reason?.startsWith("a greeting")) {
+    return InboxResult.greeting;
+  }
   return InboxResult.untriaged;
 }
 
 function ideaResult(idea: IdeaRow): InboxResult {
-  if (idea.status === IdeaStatus.tasked) return InboxResult.tasked;
-  if (idea.status === IdeaStatus.dismissed) return InboxResult.dismissed;
+  if (idea.status === IdeaStatus.tasked) {
+    return InboxResult.tasked;
+  }
+  if (idea.status === IdeaStatus.dismissed) {
+    return InboxResult.dismissed;
+  }
   return InboxResult.idea;
 }
 
@@ -134,13 +152,19 @@ export function clip(text: string, chars: number): string {
 }
 
 function firstLine(text: string): string {
-  return text.split("\n").find((l) => l.trim())?.trim() ?? "";
+  return (
+    text
+      .split("\n")
+      .find((l) => l.trim())
+      ?.trim() ?? ""
+  );
 }
 
 // A GitHub title names the issue or PR; a Slack title is only where it
 // was ("DM with Sam"), so the body's first line says more.
 export function subjectOf(m: MessageRow): string {
-  const text = m.channel === "github" && m.title ? m.title : firstLine(m.body) || m.title;
+  const text =
+    m.channel === "github" && m.title ? m.title : firstLine(m.body) || m.title;
   return clip(text.replace(/\s+/g, " "), SUBJECT_CHARS);
 }
 
@@ -180,9 +204,12 @@ export function ideaRow(idea: IdeaRow): InboxRow {
 // still waiting for the worker is not theirs yet. What the rail's badge
 // counts (store.unplacedMessages).
 export function needsAttention(row: InboxRow): boolean {
-  if (row.read) return false;
-  if (row.result === InboxResult.failed)
+  if (row.read) {
+    return false;
+  }
+  if (row.result === InboxResult.failed) {
     return row.type === "message" && row.message.next_at === null;
+  }
   return row.result === InboxResult.idea || row.result === InboxResult.held;
 }
 
@@ -193,7 +220,9 @@ export function inFilter(row: InboxRow, filter: InboxFilter): boolean {
     case InboxFilter.attention:
       return needsAttention(row);
     case InboxFilter.task:
-      return row.result === InboxResult.task || row.result === InboxResult.tasked;
+      return (
+        row.result === InboxResult.task || row.result === InboxResult.tasked
+      );
     case InboxFilter.fyi:
       return row.result === InboxResult.fyi;
     case InboxFilter.timers:
@@ -218,7 +247,9 @@ export function inFilter(row: InboxRow, filter: InboxFilter): boolean {
 // Search reads the subject, who sent it, where it came from and the result.
 export function matchesQuery(row: InboxRow, query: string): boolean {
   const q = query.trim().toLowerCase();
-  if (!q) return true;
+  if (!q) {
+    return true;
+  }
   return [row.subject, row.from, row.source, RESULT_WORDS[row.result]]
     .join(" ")
     .toLowerCase()
@@ -235,7 +266,11 @@ function foldJoined(rows: InboxRow[]): InboxRow[] {
   const byTask = new Map<number, Extract<InboxRow, { type: "message" }>>();
   const out: InboxRow[] = [];
   for (const row of rows) {
-    if (row.type !== "message" || row.result !== InboxResult.attached || row.taskId === null) {
+    if (
+      row.type !== "message" ||
+      row.result !== InboxResult.attached ||
+      row.taskId === null
+    ) {
       out.push(row);
       continue;
     }
@@ -251,8 +286,13 @@ function foldJoined(rows: InboxRow[]): InboxRow[] {
   return out;
 }
 
-export function buildInbox(messages: MessageRow[], ideas: IdeaRow[]): InboxRow[] {
-  return foldJoined([...messages.map(messageRow), ...ideas.map(ideaRow)].sort(newestFirst));
+export function buildInbox(
+  messages: MessageRow[],
+  ideas: IdeaRow[],
+): InboxRow[] {
+  return foldJoined(
+    [...messages.map(messageRow), ...ideas.map(ideaRow)].sort(newestFirst),
+  );
 }
 
 // A row's messages, itself first: what x dismisses.

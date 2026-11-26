@@ -9,7 +9,12 @@ import { PROJECT_STEP, triage } from "../src/triage";
 import { ideaRow } from "@riker/core/inbox";
 import { Kind, type MessageRow } from "@riker/core/types";
 import { FakeMux } from "@riker/core/test/support/fake-mux";
-import { config, fakeBrain, freshHome, testConfig } from "@riker/core/test/support/helpers";
+import {
+  config,
+  fakeBrain,
+  freshHome,
+  testConfig,
+} from "@riker/core/test/support/helpers";
 
 function slackDm(n: number, body: string): MessageRow {
   return store.insertMessage({
@@ -65,7 +70,10 @@ describe("the triage chain is recorded", () => {
     expect(run.outcome).toBe("general");
     expect(run.task_id).toBe(out.taskId);
     expect(JSON.parse(run.verdict!).verdict).toBe("general");
-    expect(JSON.parse(run.input)).toMatchObject({ dm: true, openOnThread: null });
+    expect(JSON.parse(run.input)).toMatchObject({
+      dm: true,
+      openOnThread: null,
+    });
     expect(steps.map((s) => [s.rule, s.decision])).toEqual([
       ["timer", "pass"],
       ["own message", "pass"],
@@ -93,7 +101,11 @@ describe("the triage chain is recorded", () => {
     expect(calls).toHaveLength(0);
     expect(run.verdict).toBeNull();
     expect(run.outcome).toBe("opener");
-    expect(steps.map((s) => s.rule)).toEqual(["timer", "own message", "greeting"]);
+    expect(steps.map((s) => s.rule)).toEqual([
+      "timer",
+      "own message",
+      "greeting",
+    ]);
   });
 
   test("a failed model call keeps the error as the run's verdict", async () => {
@@ -110,7 +122,11 @@ describe("triage files new work under a project", () => {
   beforeEach(() => freshHome());
 
   test("the repo's one project, with no guess", async () => {
-    const api = store.createProject({ name: "API", tmuxSession: "api", repos: ["acme/api"] });
+    const api = store.createProject({
+      name: "API",
+      tmuxSession: "api",
+      repos: ["acme/api"],
+    });
     fakeBrain(() => verdict("task", { project: "Web" }));
     const m = ghIssue(1, "the export drops transfers");
     const out = await triage(m, { config: config() });
@@ -125,24 +141,41 @@ describe("triage files new work under a project", () => {
   });
 
   test("otherwise the project the model named", async () => {
-    store.createProject({ name: "API", tmuxSession: "api", repos: ["acme/api"] });
-    const payroll = store.createProject({ name: "Payroll", tmuxSession: "payroll" });
-    const calls = fakeBrain(() => verdict("task", { project: "payroll" }));
-    const out = await triage(slackDm(1, "Which payroll providers do same-day pay?"), {
-      config: config(),
+    store.createProject({
+      name: "API",
+      tmuxSession: "api",
+      repos: ["acme/api"],
     });
+    const payroll = store.createProject({
+      name: "Payroll",
+      tmuxSession: "payroll",
+    });
+    const calls = fakeBrain(() => verdict("task", { project: "payroll" }));
+    const out = await triage(
+      slackDm(1, "Which payroll providers do same-day pay?"),
+      {
+        config: config(),
+      },
+    );
     expect(store.getTask(out.taskId!)!.project_id).toBe(payroll.id);
     expect(calls[0]!.prompt).toContain("- Payroll");
   });
 
   test("a solo project is never offered, and a name that is no project files none", async () => {
-    store.createProject({ name: "Payroll", tmuxSession: "payroll", solo: true });
+    store.createProject({
+      name: "Payroll",
+      tmuxSession: "payroll",
+      solo: true,
+    });
     const calls = fakeBrain(() => verdict("task", { project: "Payroll" }));
     const m = slackDm(1, "Which payroll providers do same-day pay?");
     const out = await triage(m, { config: config() });
     expect(store.getTask(out.taskId!)!.project_id).toBeNull();
     expect(calls[0]!.prompt).not.toContain("- Payroll");
-    expect(lastRun(m.id).steps.at(-1)).toMatchObject({ rule: PROJECT_STEP, decision: "pass" });
+    expect(lastRun(m.id).steps.at(-1)).toMatchObject({
+      rule: PROJECT_STEP,
+      decision: "pass",
+    });
   });
 
   test("an attach runs no project step", async () => {
@@ -160,7 +193,9 @@ describe("triage files new work under a project", () => {
     })!;
     const out = await triage(second, { config: config() });
     expect(out.verdict).toBe("attached");
-    expect(lastRun(second.id).steps.map((s) => s.rule)).not.toContain(PROJECT_STEP);
+    expect(lastRun(second.id).steps.map((s) => s.rule)).not.toContain(
+      PROJECT_STEP,
+    );
   });
 });
 
@@ -198,21 +233,28 @@ describe("re-running triage", () => {
   test("moving a triaged task to another project is a correction", async () => {
     fakeBrain(() => verdict("task"));
     const web = store.createProject({ name: "Web", tmuxSession: "web" });
-    const out = await triage(slackDm(1, "Can you check the signup page?"), { config: config() });
+    const out = await triage(slackDm(1, "Can you check the signup page?"), {
+      config: config(),
+    });
     await engine.desk.moveTask(out.taskId!, web.id);
-    expect(store.recentCorrections().map((c) => [c.what, c.after])).toContainEqual([
-      "Triage project: filed it under another project",
-      "Web",
-    ]);
+    expect(
+      store.recentCorrections().map((c) => [c.what, c.after]),
+    ).toContainEqual(["Triage project: filed it under another project", "Web"]);
   });
 
   test("the next verdict reads where the owner last moved such work", async () => {
     fakeBrain(() => verdict("task"));
     const web = store.createProject({ name: "Web", tmuxSession: "web" });
-    const payroll = store.createProject({ name: "Payroll", tmuxSession: "payroll" });
-    const out = await triage(slackDm(1, "Which payroll providers do same-day pay?"), {
-      config: config(),
+    const payroll = store.createProject({
+      name: "Payroll",
+      tmuxSession: "payroll",
     });
+    const out = await triage(
+      slackDm(1, "Which payroll providers do same-day pay?"),
+      {
+        config: config(),
+      },
+    );
     await engine.desk.moveTask(out.taskId!, web.id);
     await engine.desk.moveTask(out.taskId!, payroll.id);
     expect(store.recentProjectMoves()).toEqual([
@@ -220,7 +262,9 @@ describe("re-running triage", () => {
     ]);
     const calls = fakeBrain(() => verdict("fyi"));
     await triage(slackDm(2, "And what about Deel?"), { config: config() });
-    const prompt = calls.find((c) => c.prompt.includes("A message arrived"))!.prompt;
+    const prompt = calls.find((c) =>
+      c.prompt.includes("A message arrived"),
+    )!.prompt;
     expect(prompt).toContain('- "Same-day pay providers": Web -> Payroll');
     expect(prompt).not.toContain("-> Web");
   });
@@ -230,9 +274,15 @@ describe("re-running triage", () => {
     const idea = store.addIdea("Follow up with Sam", "body", about.id);
     const task = engine.desk.ideaToTask(idea.id)!;
     const row = store.allIdeas().find((i) => i.id === idea.id)!;
-    expect(row).toMatchObject({ status: "tasked", made_task_id: task.id, task_id: about.id });
+    expect(row).toMatchObject({
+      status: "tasked",
+      made_task_id: task.id,
+      task_id: about.id,
+    });
     expect(ideaRow(row).taskId).toBe(task.id);
-    expect(ideaRow(store.addIdea("open", "body", about.id)).taskId).toBe(about.id);
+    expect(ideaRow(store.addIdea("open", "body", about.id)).taskId).toBe(
+      about.id,
+    );
   });
 });
 
@@ -255,15 +305,23 @@ describe("the backfill", () => {
     migrate(db);
     migrate(db);
     const runs = db
-      .query("SELECT message_id, outcome, project_id FROM triage_runs ORDER BY message_id")
+      .query(
+        "SELECT message_id, outcome, project_id FROM triage_runs ORDER BY message_id",
+      )
       .all();
     expect(runs).toEqual([
       { message_id: 1, outcome: "task", project_id: 3 },
       { message_id: 2, outcome: "opener", project_id: null },
       { message_id: 3, outcome: "failed", project_id: null },
     ]);
-    const steps = db.query("SELECT rule, decision, reason FROM triage_steps ORDER BY run_id").all();
-    expect(steps[0]).toEqual({ rule: "legacy", decision: "claim", reason: "a direct ask" });
+    const steps = db
+      .query("SELECT rule, decision, reason FROM triage_steps ORDER BY run_id")
+      .all();
+    expect(steps[0]).toEqual({
+      rule: "legacy",
+      decision: "claim",
+      reason: "a direct ask",
+    });
     expect(steps).toHaveLength(3);
   });
 
@@ -283,7 +341,9 @@ describe("the backfill", () => {
     db.exec("UPDATE messages SET state = 'done' WHERE id = 4");
     migrate(db);
     expect(
-      db.query("SELECT id, state, attempts, next_at FROM messages ORDER BY id").all(),
+      db
+        .query("SELECT id, state, attempts, next_at FROM messages ORDER BY id")
+        .all(),
     ).toEqual([
       { id: 1, state: "done", attempts: 0, next_at: null },
       { id: 2, state: "done", attempts: 0, next_at: null },
@@ -300,7 +360,8 @@ describe("the backfill", () => {
       INSERT INTO messages (id, received_at) VALUES (4, '2026-11-04');
     `);
     migrate(db);
-    expect(db.query("SELECT state FROM messages").get()).toEqual({ state: "new" });
+    expect(db.query("SELECT state FROM messages").get()).toEqual({
+      state: "new",
+    });
   });
 });
-

@@ -21,7 +21,12 @@ import {
   type WinsDay,
 } from "@riker/core/wins-board";
 import type { Actions } from "./actions";
-import { ExpandList, listCursor, selColor, type ListEntry } from "./expand-list";
+import {
+  ExpandList,
+  listCursor,
+  selColor,
+  type ListEntry,
+} from "./expand-list";
 import { clock, toneColor, useLaneMeta } from "./ui";
 
 type Handler = () => false | void;
@@ -38,7 +43,10 @@ interface WinsLine {
 const [focusDay, setFocusDay] = createSignal<string | null>(null);
 const cursor = listCursor();
 
-const OUTCOME_LOOK: Record<Outcome, { mark: string; word: string; tone: "success" | "accent" | "muted" | "text" }> = {
+const OUTCOME_LOOK: Record<
+  Outcome,
+  { mark: string; word: string; tone: "success" | "accent" | "muted" | "text" }
+> = {
   done: { mark: "✓", word: "done", tone: "success" },
   merged: { mark: "»", word: "merged", tone: "accent" },
   dropped: { mark: "✗", word: "dropped", tone: "muted" },
@@ -51,38 +59,59 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
   const today = () => localDay(riker.now());
   const day = () => focusDay() ?? today();
   const days = createMemo((): WinsDay[] =>
-    opts.active() ? [riker.winsDay(day(), riker.now()), riker.winsDay(shiftDay(day(), -1), riker.now())] : [],
+    opts.active()
+      ? [
+          riker.winsDay(day(), riker.now()),
+          riker.winsDay(shiftDay(day(), -1), riker.now()),
+        ]
+      : [],
   );
   const lines = createMemo((): WinsLine[] =>
     days().flatMap((d) =>
-      [...d.wins, ...d.also].map((row) => ({ key: `${d.day}:${row.task.id}`, day: d.day, row })),
+      [...d.wins, ...d.also].map((row) => ({
+        key: `${d.day}:${row.task.id}`,
+        day: d.day,
+        row,
+      })),
     ),
   );
-  const line = (): WinsLine | null => lines()[cursor.index(lines().length)] ?? null;
+  const line = (): WinsLine | null =>
+    lines()[cursor.index(lines().length)] ?? null;
 
   const move = (d: number) => cursor.move(d, lines().length);
 
   const shift = (by: number) => {
     const next = shiftDay(day(), by);
-    if (next > today()) return false;
+    if (next > today()) {
+      return false;
+    }
     setFocusDay(next === today() ? null : next);
     cursor.reset();
   };
 
-  const onLine = (fn: (l: WinsLine) => false | void): Handler => () => {
-    if (!opts.active()) return false;
-    const l = line();
-    if (!l) return false;
-    return fn(l);
-  };
+  const onLine =
+    (fn: (l: WinsLine) => false | void): Handler =>
+    () => {
+      if (!opts.active()) {
+        return false;
+      }
+      const l = line();
+      if (!l) {
+        return false;
+      }
+      return fn(l);
+    };
 
   const commands: Record<string, Handler> = {
     [Commands.WINS_EXPAND]: onLine((l) => cursor.toggle(l.key)),
     [Commands.WINS_GO]: onLine((l) => opts.actions.goToTask(l.row.task.id)),
     [Commands.WINS_PREV_DAY]: () => (opts.active() ? shift(-1) : false),
-    [Commands.WINS_NEXT_DAY]: () => (opts.active() && focusDay() ? shift(1) : false),
+    [Commands.WINS_NEXT_DAY]: () =>
+      opts.active() && focusDay() ? shift(1) : false,
     [Commands.WINS_TODAY]: () => {
-      if (!opts.active() || !focusDay()) return false;
+      if (!opts.active() || !focusDay()) {
+        return false;
+      }
       setFocusDay(null);
       cursor.reset();
     },
@@ -117,8 +146,12 @@ function dayTitle(day: string, today: string): string {
     month: "short",
     day: "numeric",
   });
-  if (day === today) return `Today · ${date}`;
-  if (day === shiftDay(today, -1)) return `Yesterday · ${date}`;
+  if (day === today) {
+    return `Today · ${date}`;
+  }
+  if (day === shiftDay(today, -1)) {
+    return `Yesterday · ${date}`;
+  }
   return date;
 }
 
@@ -127,7 +160,10 @@ function dayTitle(day: string, today: string): string {
 function rowSays(row: DayRow): string {
   // The outcome column already says merged or dropped.
   const happened = row.events
-    .filter((e) => e.kind !== "created" && !(e.kind === row.outcome && e.kind !== "done"))
+    .filter(
+      (e) =>
+        e.kind !== "created" && !(e.kind === row.outcome && e.kind !== "done"),
+    )
     .map(eventWords);
   const talk = [
     row.you ? `${row.you} from you` : null,
@@ -146,7 +182,11 @@ function WinsView(props: {
   const theme = useTheme();
   const lane = useLaneMeta();
 
-  const heading = (key: string, text: string, extra?: string): ListEntry<WinsLine> => ({
+  const heading = (
+    key: string,
+    text: string,
+    extra?: string,
+  ): ListEntry<WinsLine> => ({
     key,
     heading: () => (
       <text marginTop={1}>
@@ -170,7 +210,10 @@ function WinsView(props: {
   const entries = createMemo((): ListEntry<WinsLine>[] =>
     props.days.flatMap((d, i) => {
       const done = d.wins.filter((w) => w.outcome === Outcome.done).length;
-      const rows = (list: DayRow[]) => list.map((row) => ({ row: { key: `${d.day}:${row.task.id}`, day: d.day, row } }));
+      const rows = (list: DayRow[]) =>
+        list.map((row) => ({
+          row: { key: `${d.day}:${row.task.id}`, day: d.day, row },
+        }));
       const title: ListEntry<WinsLine> = {
         key: `${d.day}:title`,
         heading: (): JSX.Element => (
@@ -193,7 +236,9 @@ function WinsView(props: {
           : [
               quiet(
                 `${d.day}:no-wins`,
-                d.isToday ? "No Wins pinned today. z on a rail row pins one (up to 5)." : "No Wins were pinned this day.",
+                d.isToday
+                  ? "No Wins pinned today. z on a rail row pins one (up to 5)."
+                  : "No Wins were pinned this day.",
               ),
             ]),
         heading(
@@ -201,12 +246,21 @@ function WinsView(props: {
           d.isToday ? "Also done today" : "Also done",
           [
             d.made ? `${d.made} task${d.made === 1 ? "" : "s"} made` : null,
-            d.moves ? `${d.moves} move${d.moves === 1 ? "" : "s"} by the Assistant and agents` : null,
+            d.moves
+              ? `${d.moves} move${d.moves === 1 ? "" : "s"} by the Assistant and agents`
+              : null,
           ]
             .filter(Boolean)
             .join(" · ") || undefined,
         ),
-        ...(d.also.length ? rows(d.also) : [quiet(`${d.day}:no-also`, "Nothing else closed, merged or talked over.")]),
+        ...(d.also.length
+          ? rows(d.also)
+          : [
+              quiet(
+                `${d.day}:no-also`,
+                "Nothing else closed, merged or talked over.",
+              ),
+            ]),
       ];
     }),
   );
@@ -215,7 +269,11 @@ function WinsView(props: {
   const look = (r: DayRow) => {
     if (r.lane && r.outcome === Outcome.open) {
       const meta = lane(r.lane);
-      return { mark: meta.mark, word: meta.word, color: toneColor(theme, meta.tone) };
+      return {
+        mark: meta.mark,
+        word: meta.word,
+        color: toneColor(theme, meta.tone),
+      };
     }
     const o = OUTCOME_LOOK[r.outcome];
     return { mark: o.mark, word: o.word, color: toneColor(theme, o.tone) };
@@ -226,7 +284,9 @@ function WinsView(props: {
     <box flexDirection="column" flexGrow={1} flexBasis={0} paddingLeft={1}>
       <box flexDirection="row" gap={2} flexShrink={0} paddingBottom={1}>
         <text fg={theme.textMuted}>
-          {props.days[0]?.isToday ? "h the day before" : "h the day before · l the day after · 0 today"}
+          {props.days[0]?.isToday
+            ? "h the day before"
+            : "h the day before · l the day after · 0 today"}
         </text>
       </box>
       <ExpandList
@@ -255,21 +315,40 @@ function WinsView(props: {
                 {truncate(lk.word, 22)}
               </text>
               <text fg={fg(theme.textMuted)} flexGrow={1}>
-                {truncate(rowSays(l.row), Math.max(10, props.width - titleWidth() - 46))}
+                {truncate(
+                  rowSays(l.row),
+                  Math.max(10, props.width - titleWidth() - 46),
+                )}
               </text>
             </>
           );
         }}
-        detail={(l) => <Detail taskId={l.row.task.id} day={l.day} width={props.width} />}
+        detail={(l) => (
+          <Detail taskId={l.row.task.id} day={l.day} width={props.width} />
+        )}
       />
     </box>
   );
 }
 
 function turnLine(t: TurnRow): string {
-  const first = (s: string | null) => (s ?? "").split("\n").find((l) => l.trim())?.trim() ?? "";
-  const who = t.role === TurnRole.you ? "you" : t.role === TurnRole.agent ? "agent" : t.role === TurnRole.incoming ? t.author || "in" : "riker";
-  const what = t.role === TurnRole.agent ? first(t.did) || first(t.about) || first(t.body) : first(t.body);
+  const first = (s: string | null) =>
+    (s ?? "")
+      .split("\n")
+      .find((l) => l.trim())
+      ?.trim() ?? "";
+  const who =
+    t.role === TurnRole.you
+      ? "you"
+      : t.role === TurnRole.agent
+        ? "agent"
+        : t.role === TurnRole.incoming
+          ? t.author || "in"
+          : "riker";
+  const what =
+    t.role === TurnRole.agent
+      ? first(t.did) || first(t.about) || first(t.body)
+      : first(t.body);
   return `${clockCol(t.started_at)}${who}: ${what}`;
 }
 
@@ -287,7 +366,9 @@ function hours(ms: number): string {
 function Detail(props: { taskId: number; day: string; width: number }) {
   const theme = useTheme();
   const riker = useRiker();
-  const detail = createMemo((): WinDetail | null => riker.winDetail(props.taskId, props.day));
+  const detail = createMemo((): WinDetail | null =>
+    riker.winDetail(props.taskId, props.day),
+  );
   const width = () => Math.max(20, props.width - 10);
   const sub = (text: string) => (
     <text fg={theme.secondary} marginTop={1}>
@@ -297,10 +378,21 @@ function Detail(props: { taskId: number; day: string; width: number }) {
   return (
     <Show when={detail()}>
       {(d: () => WinDetail) => {
-        const summary = () => d().task.summary.split("\n").filter((l) => l.trim()).slice(0, 3).join(" ");
+        const summary = () =>
+          d()
+            .task.summary.split("\n")
+            .filter((l) => l.trim())
+            .slice(0, 3)
+            .join(" ");
         const pr = () => d().pr;
         return (
-          <box flexDirection="column" paddingLeft={4} paddingTop={1} paddingBottom={1} backgroundColor={theme.contentPane}>
+          <box
+            flexDirection="column"
+            paddingLeft={4}
+            paddingTop={1}
+            paddingBottom={1}
+            backgroundColor={theme.contentPane}
+          >
             <text fg={theme.text} wrapMode="word">
               {summary() ? truncate(summary(), width() * 3) : "(no brief)"}
             </text>
@@ -315,8 +407,12 @@ function Detail(props: { taskId: number; day: string; width: number }) {
                       ? `PR ${pr()!.pr.repo}#${pr()!.pr.number} ${prChip(pr()!.status!).text}`
                       : `PR ${pr()!.pr.repo}#${pr()!.pr.number} (not read yet)`
                     : null,
-                  d().agentMs > 0 ? `agent ran ${hours(d().agentMs)} this day` : null,
-                  d().spend.calls ? `${usd(d().spend.cost)} · ${tokens(d().spend.tokens)} tok` : null,
+                  d().agentMs > 0
+                    ? `agent ran ${hours(d().agentMs)} this day`
+                    : null,
+                  d().spend.calls
+                    ? `${usd(d().spend.cost)} · ${tokens(d().spend.tokens)} tok`
+                    : null,
                 ]
                   .filter(Boolean)
                   .join(" · "),
@@ -328,7 +424,10 @@ function Detail(props: { taskId: number; day: string; width: number }) {
               <For each={d().events}>
                 {(e) => (
                   <text fg={theme.text}>
-                    {truncate(`${clockCol(e.at)}${eventWords(e)}${e.kind === "finished" && e.detail ? `: ${e.detail}` : ""}`, width())}
+                    {truncate(
+                      `${clockCol(e.at)}${eventWords(e)}${e.kind === "finished" && e.detail ? `: ${e.detail}` : ""}`,
+                      width(),
+                    )}
                   </text>
                 )}
               </For>
@@ -338,9 +437,16 @@ function Detail(props: { taskId: number; day: string; width: number }) {
                 ? `Chat and agent${d().moreTurns ? ` (newest ${d().turns.length}, ${d().moreTurns} older)` : ""}`
                 : "Chat and agent",
             )}
-            <For each={d().turns} fallback={<text fg={theme.textMuted}>No turns this day.</text>}>
+            <For
+              each={d().turns}
+              fallback={<text fg={theme.textMuted}>No turns this day.</text>}
+            >
               {(t) => (
-                <text fg={t.role === TurnRole.agent ? theme.text : theme.textMuted}>{truncate(turnLine(t), width())}</text>
+                <text
+                  fg={t.role === TurnRole.agent ? theme.text : theme.textMuted}
+                >
+                  {truncate(turnLine(t), width())}
+                </text>
               )}
             </For>
             <Show when={d().moves.length > 0}>
@@ -348,7 +454,10 @@ function Detail(props: { taskId: number; day: string; width: number }) {
               <For each={d().moves}>
                 {(m) => (
                   <text fg={theme.textMuted}>
-                    {truncate(`${clockCol(m.created_at)}${m.asked_by}: ${m.verb}${m.result ? ` → ${m.result}` : ""}`, width())}
+                    {truncate(
+                      `${clockCol(m.created_at)}${m.asked_by}: ${m.verb}${m.result ? ` → ${m.result}` : ""}`,
+                      width(),
+                    )}
                   </text>
                 )}
               </For>

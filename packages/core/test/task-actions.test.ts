@@ -79,7 +79,9 @@ beforeEach(() => {
 
 function task(kind: Kind = Kind.coding, patch: Partial<TaskRow> = {}): TaskRow {
   const t = engine.desk.newTask("Fix the build", kind);
-  if (Object.keys(patch).length) store.updateTask(t.id, patch);
+  if (Object.keys(patch).length) {
+    store.updateTask(t.id, patch);
+  }
   return store.getTask(t.id)!;
 }
 
@@ -98,14 +100,18 @@ describe("the registry", () => {
       summarize: { model: "haiku" },
       recap: { skill: "riker:summarize", via: "headless", title: "Recap" },
     });
-    const byName = Object.fromEntries(registeredActions(c).map((a) => [a.name, a]));
+    const byName = Object.fromEntries(
+      registeredActions(c).map((a) => [a.name, a]),
+    );
     expect(byName.summarize!.model).toBe("haiku");
     expect(byName.summarize!.skill).toBe("riker:summarize");
     expect(byName.recap!.title).toBe("Recap");
     expect(byName.recap!.output).toBe("turn");
 
     const off = withActions({ summarize: false });
-    expect(registeredActions(off).map((a) => a.name)).not.toContain("summarize");
+    expect(registeredActions(off).map((a) => a.name)).not.toContain(
+      "summarize",
+    );
   });
 
   test("an entry without a skill or a known via is left out", () => {
@@ -122,18 +128,27 @@ describe("the registry", () => {
 describe("which rows an action applies to", () => {
   test("work, not Home", () => {
     const home = store.homeTask();
-    expect(actionsFor(config(), task()).map((a) => a.name)).toContain("summarize");
+    expect(actionsFor(config(), task()).map((a) => a.name)).toContain(
+      "summarize",
+    );
     expect(actionsFor(config(), home)).toEqual([]);
   });
 
   test("kinds and needs say why not", () => {
     const c = withActions({
-      review: { skill: "riker:summarize", via: "headless", kinds: ["coding"], needs: ["worktree"] },
+      review: {
+        skill: "riker:summarize",
+        via: "headless",
+        kinds: ["coding"],
+        needs: ["worktree"],
+      },
     });
     const review = registeredActions(c).find((a) => a.name === "review")!;
     expect(whyNot(review, task(Kind.general))).toContain("coding");
     expect(whyNot(review, task())).toContain("worktree");
-    expect(whyNot(review, task(Kind.coding, { worktree: tmpdir() }))).toBeNull();
+    expect(
+      whyNot(review, task(Kind.coding, { worktree: tmpdir() })),
+    ).toBeNull();
   });
 
   test("quiz: coding work with a checkout", () => {
@@ -148,11 +163,15 @@ describe("args", () => {
   test("the task fills the template", () => {
     const t = task(Kind.coding, { worktree: "/w/riker", branch: "fix-build" });
     const ref = store.taskRef(t.id);
-    expect(fillArgs("{ref} {title} {worktree} {branch} {base} {pr} {other}", t)).toBe(
-      `${ref} Fix the build /w/riker fix-build main none {other}`,
+    expect(
+      fillArgs("{ref} {title} {worktree} {branch} {base} {pr} {other}", t),
+    ).toBe(`${ref} Fix the build /w/riker fix-build main none {other}`);
+    const summarize = registeredActions(config()).find(
+      (a) => a.name === "summarize",
+    )!;
+    expect(invocation(summarize, t)).toStartWith(
+      `/riker:summarize task ${ref}`,
     );
-    const summarize = registeredActions(config()).find((a) => a.name === "summarize")!;
-    expect(invocation(summarize, t)).toStartWith(`/riker:summarize task ${ref}`);
   });
 });
 
@@ -209,7 +228,11 @@ describe("the base an action is taken against", () => {
 
   test("a read about another PR than the task's now says nothing", () => {
     const t = task(Kind.coding, { url: PR });
-    prStatus(t.id, { url: "https://github.com/acme/ledger/pull/199", number: 199, base: "old-parent" });
+    prStatus(t.id, {
+      url: "https://github.com/acme/ledger/pull/199",
+      number: 199,
+      base: "old-parent",
+    });
     expect(actionBase(t)).toBe("main");
   });
 });
@@ -222,9 +245,9 @@ describe("Riker's plugin", () => {
       readFileSync(join(dir, ".claude-plugin", "plugin.json"), "utf8"),
     ) as { name: string };
     expect(manifest.name).toBe("riker");
-    expect(readFileSync(join(dir, "skills", "summarize", "SKILL.md"), "utf8")).toContain(
-      "name: summarize",
-    );
+    expect(
+      readFileSync(join(dir, "skills", "summarize", "SKILL.md"), "utf8"),
+    ).toContain("name: summarize");
   });
 });
 
@@ -232,8 +255,12 @@ describe("running one", () => {
   test("headless: a running action turn, then the answer", async () => {
     const t = task(Kind.general);
     const started = engine.desk.runAction(t.id, "summarize");
-    if ("error" in started) throw new Error(started.error);
-    const running = store.turnsForTask(t.id).find((x) => x.role === TurnRole.action)!;
+    if ("error" in started) {
+      throw new Error(started.error);
+    }
+    const running = store
+      .turnsForTask(t.id)
+      .find((x) => x.role === TurnRole.action)!;
     expect(running.status).toBe("running");
     expect(running.author).toBe("summarize");
 
@@ -258,13 +285,17 @@ describe("running one", () => {
     const wt = mkdtempSync(join(tmpdir(), "riker-wt-"));
     const t = task(Kind.coding, { worktree: wt, branch: "fix-build" });
     const started = engine.desk.runAction(t.id, "summarize");
-    if ("error" in started) throw new Error(started.error);
+    if ("error" in started) {
+      throw new Error(started.error);
+    }
     await started.done;
     const call = calls.at(-1)!;
     expect(call.cwd).toBe(wt);
     expect(call.system).toContain(SHELL_HOWTO);
     expect(SHELL_HOWTO).toContain("never with -C");
-    expect(call.prompt).toContain("Checkout: you run in it (branch fix-build), so run git there as is, never with -C.");
+    expect(call.prompt).toContain(
+      "Checkout: you run in it (branch fix-build), so run git there as is, never with -C.",
+    );
     expect(call.prompt).not.toContain(`Checkout: ${wt}`);
   });
 
@@ -279,7 +310,9 @@ describe("running one", () => {
       startedBy: "owner",
     });
     const started = engine.desk.runAction(t.id, "summarize");
-    if ("error" in started) throw new Error(started.error);
+    if ("error" in started) {
+      throw new Error(started.error);
+    }
     await started.done;
     const call = calls.at(-1)!;
     expect(call.resume).toBe("sess-1");
@@ -292,10 +325,14 @@ describe("running one", () => {
     answer = () => ({ isError: true, text: "overloaded" });
     const t = task(Kind.general);
     const started = engine.desk.runAction(t.id, "summarize");
-    if ("error" in started) throw new Error(started.error);
+    if ("error" in started) {
+      throw new Error(started.error);
+    }
     const result = await started.done;
     expect(result.ok).toBe(false);
-    const turn = store.turnsForTask(t.id).find((x) => x.role === TurnRole.action)!;
+    const turn = store
+      .turnsForTask(t.id)
+      .find((x) => x.role === TurnRole.action)!;
     expect(turn.status).toBe("failed");
     expect(turn.body).toContain("overloaded");
   });
@@ -320,9 +357,13 @@ describe("running one", () => {
     const e = new Engine({ config: source });
     const t = task(Kind.general);
     const started = e.desk.runAction(t.id, "summarize");
-    if ("error" in started) throw new Error(started.error);
+    if ("error" in started) {
+      throw new Error(started.error);
+    }
     await started.done;
-    const turn = store.turnsForTask(t.id).find((x) => x.role === TurnRole.action)!;
+    const turn = store
+      .turnsForTask(t.id)
+      .find((x) => x.role === TurnRole.action)!;
     const files = JSON.parse(turn.files ?? "[]") as { path: string }[];
     expect(files).toHaveLength(1);
     expect(existsSync(files[0]!.path)).toBe(true);
@@ -333,7 +374,9 @@ describe("what agents read back", () => {
   test("an action's answer is named as the action's, not the agent's", async () => {
     const t = task(Kind.general);
     const started = engine.desk.runAction(t.id, "summarize");
-    if ("error" in started) throw new Error(started.error);
+    if ("error" in started) {
+      throw new Error(started.error);
+    }
     await started.done;
     const text = transcript(store.turnsForTask(t.id));
     expect(text).toContain("ran the summarize action");
@@ -350,7 +393,9 @@ describe("a pane action (quiz)", () => {
   test("no agent window: interactive claude on the Canvas, Riker's plugin loaded", async () => {
     const t = codingTask();
     const started = engine.desk.runAction(t.id, "quiz");
-    if ("error" in started) throw new Error(started.error);
+    if ("error" in started) {
+      throw new Error(started.error);
+    }
     const result = await started.done;
     expect(result.ok).toBe(true);
     const run = result.terminal!;
@@ -363,7 +408,9 @@ describe("a pane action (quiz)", () => {
     // Its hooks see a task but no session: not taken for the agent.
     expect(run.env).toEqual({ RIKER_TASK_ID: String(t.id) });
     expect(calls).toHaveLength(0);
-    const turn = store.turnsForTask(t.id).find((x) => x.role === TurnRole.action)!;
+    const turn = store
+      .turnsForTask(t.id)
+      .find((x) => x.role === TurnRole.action)!;
     expect(turn.status).toBe("done");
     expect(turn.body).toContain("on the Canvas");
   });
@@ -380,7 +427,9 @@ describe("a pane action (quiz)", () => {
       argv: [],
     } as never);
     const started = engine.desk.runAction(t.id, "quiz");
-    if ("error" in started) throw new Error(started.error);
+    if ("error" in started) {
+      throw new Error(started.error);
+    }
     const result = await started.done;
     expect(result.pane).toBe(true);
     expect(result.terminal).toBeUndefined();
@@ -397,7 +446,9 @@ describe("a pane action (quiz)", () => {
       const c = withActions({ quiz: { skill: "quiz-me" } });
       const e = new Engine({ config: { ...testConfig(), get: () => c } });
       const r = e.desk.runAction(codingTask().id, "quiz");
-      expect("error" in r && r.error).toContain(join(claude, "skills", "quiz-me"));
+      expect("error" in r && r.error).toContain(
+        join(claude, "skills", "quiz-me"),
+      );
     } finally {
       delete process.env.CLAUDE_CONFIG_DIR;
     }
@@ -421,12 +472,16 @@ describe("a bare user skill, headless", () => {
       const c = withActions({ recap: { skill: "recap", via: "headless" } });
       const e = new Engine({ config: { ...testConfig(), get: () => c } });
       const started = e.desk.runAction(task(Kind.general).id, "recap");
-      if ("error" in started) throw new Error(started.error);
+      if ("error" in started) {
+        throw new Error(started.error);
+      }
       await started.done;
       const call = calls.at(-1)!;
       expect(call.prompt).toContain(`/${WRAP_PLUGIN}:recap`);
       const dir = call.pluginDirs!.find((d) => d.includes("wrapped"))!;
-      expect(lstatSync(join(dir, "skills", "recap")).isSymbolicLink()).toBe(true);
+      expect(lstatSync(join(dir, "skills", "recap")).isSymbolicLink()).toBe(
+        true,
+      );
     } finally {
       delete process.env.CLAUDE_CONFIG_DIR;
     }
@@ -451,19 +506,34 @@ describe("as a move", () => {
     const ref = store.taskRef(t.id);
     const list = await runMove(engine.desk, "action", { task: ref });
     expect(list.result).toContain("summarize (Summarize the work so far)");
-    const run = await runMove(engine.desk, "action", { task: ref, name: "summarize" });
+    const run = await runMove(engine.desk, "action", {
+      task: ref,
+      name: "summarize",
+    });
     expect(run.ok).toBe(true);
     expect(run.result).toContain("started summarize");
-    expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(true);
+    expect(
+      store.turnsForTask(t.id).some((x) => x.role === TurnRole.action),
+    ).toBe(true);
   });
 
   test("a pane action needs the TUI; an agent cannot run one", async () => {
-    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "riker-wt-")) });
+    const t = task(Kind.coding, {
+      worktree: mkdtempSync(join(tmpdir(), "riker-wt-")),
+    });
     const ref = store.taskRef(t.id);
-    const quiz = await runMove(engine.desk, "action", { task: ref, name: "quiz" });
+    const quiz = await runMove(engine.desk, "action", {
+      task: ref,
+      name: "quiz",
+    });
     expect(quiz.ok).toBe(false);
     expect(quiz.result).toContain("needs the TUI");
-    const agent = await runMove(engine.desk, "action", { task: ref, name: "summarize" }, `agent ${ref}`);
+    const agent = await runMove(
+      engine.desk,
+      "action",
+      { task: ref, name: "summarize" },
+      `agent ${ref}`,
+    );
     expect(agent.ok).toBe(false);
     expect(agent.result).toContain("owner's move");
   });
@@ -473,28 +543,52 @@ describe("as a move", () => {
 // offers each action's last answer to read over it.
 describe("reading an answer again", () => {
   test("each action's last finished answer, newest first", async () => {
-    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "riker-wt-")) });
+    const t = task(Kind.coding, {
+      worktree: mkdtempSync(join(tmpdir(), "riker-wt-")),
+    });
     answer = () => ({ text: "first summary" });
     const one = engine.desk.runAction(t.id, "summarize");
-    if ("error" in one) throw new Error(one.error);
+    if ("error" in one) {
+      throw new Error(one.error);
+    }
     await one.done;
     answer = () => ({ text: "second summary" });
     const two = engine.desk.runAction(t.id, "summarize");
-    if ("error" in two) throw new Error(two.error);
+    if ("error" in two) {
+      throw new Error(two.error);
+    }
     expect(two.turnId).toBeDefined();
     // Still running: nothing new to read yet, the last one still is.
-    expect(actionAnswers(store.turnsForTask(t.id)).map((x) => x.body)).toEqual(["first summary"]);
+    expect(actionAnswers(store.turnsForTask(t.id)).map((x) => x.body)).toEqual([
+      "first summary",
+    ]);
     await two.done;
-    const quiz = store.addTurn({ taskId: t.id, role: TurnRole.action, author: "quiz", body: "Opened on the Canvas" });
-    const answers = actionAnswers(store.turnsForTask(t.id), (name) => name === "quiz");
+    const quiz = store.addTurn({
+      taskId: t.id,
+      role: TurnRole.action,
+      author: "quiz",
+      body: "Opened on the Canvas",
+    });
+    const answers = actionAnswers(
+      store.turnsForTask(t.id),
+      (name) => name === "quiz",
+    );
     expect(answers.map((x) => x.id)).toEqual([two.turnId!]);
     expect(answers[0]!.body).toBe("second summary");
-    expect(actionAnswers(store.turnsForTask(t.id)).map((x) => x.id)).toEqual([quiz.id, two.turnId!]);
+    expect(actionAnswers(store.turnsForTask(t.id)).map((x) => x.id)).toEqual([
+      quiz.id,
+      two.turnId!,
+    ]);
   });
 
   test("a move says where its answer shows", async () => {
-    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "riker-wt-")) });
-    const run = await runMove(engine.desk, "action", { task: store.taskRef(t.id), name: "summarize" });
+    const t = task(Kind.coding, {
+      worktree: mkdtempSync(join(tmpdir(), "riker-wt-")),
+    });
+    const run = await runMove(engine.desk, "action", {
+      task: store.taskRef(t.id),
+      name: "summarize",
+    });
     expect(run.result).toContain("Read");
   });
 });
@@ -517,35 +611,67 @@ describe("triggers", () => {
   test("triaged: plain rules on the message and the task pick the action, once", async () => {
     const e = engineWith({
       summarize: {
-        on: [{ event: "triaged", kind: "coding", channel: "github", githubReason: ["review_requested"] }],
+        on: [
+          {
+            event: "triaged",
+            kind: "coding",
+            channel: "github",
+            githubReason: ["review_requested"],
+          },
+        ],
       },
     });
     const t = task();
-    const outcome = { verdict: "coding", taskId: t.id, reason: "", effects: [] } as never;
+    const outcome = {
+      verdict: "coding",
+      taskId: t.id,
+      reason: "",
+      effects: [],
+    } as never;
     e.desk.afterTriage(outcome, reviewAsk);
     e.desk.afterTriage(outcome, reviewAsk);
     await e.desk.actionsSettled();
-    const turns = store.turnsForTask(t.id).filter((x) => x.role === TurnRole.action);
+    const turns = store
+      .turnsForTask(t.id)
+      .filter((x) => x.role === TurnRole.action);
     expect(turns).toHaveLength(1);
     expect(turns[0]!.about).toBe("Summarize the work so far (on triaged)");
 
     // Another reason, another kind: no match.
     const other = task(Kind.general);
-    e.desk.afterTriage({ ...(outcome as object), taskId: other.id } as never, reviewAsk);
-    const mention = { ...reviewAsk, meta: JSON.stringify({ reason: "mention" }) } as MessageRow;
+    e.desk.afterTriage(
+      { ...(outcome as object), taskId: other.id } as never,
+      reviewAsk,
+    );
+    const mention = {
+      ...reviewAsk,
+      meta: JSON.stringify({ reason: "mention" }),
+    } as MessageRow;
     const t2 = task();
-    e.desk.afterTriage({ ...(outcome as object), taskId: t2.id } as never, mention);
+    e.desk.afterTriage(
+      { ...(outcome as object), taskId: t2.id } as never,
+      mention,
+    );
     await e.desk.actionsSettled();
-    expect(store.turnsForTask(other.id).some((x) => x.role === TurnRole.action)).toBe(false);
-    expect(store.turnsForTask(t2.id).some((x) => x.role === TurnRole.action)).toBe(false);
+    expect(
+      store.turnsForTask(other.id).some((x) => x.role === TurnRole.action),
+    ).toBe(false);
+    expect(
+      store.turnsForTask(t2.id).some((x) => x.role === TurnRole.action),
+    ).toBe(false);
   });
 
   test("the owner's own message on a thread triggers nothing", async () => {
     const e = engineWith({ summarize: { on: [{ event: "triaged" }] } });
     const t = task(Kind.general);
-    e.desk.afterTriage({ verdict: "own", taskId: t.id, reason: "", effects: [] } as never, reviewAsk);
+    e.desk.afterTriage(
+      { verdict: "own", taskId: t.id, reason: "", effects: [] } as never,
+      reviewAsk,
+    );
     await e.desk.actionsSettled();
-    expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(false);
+    expect(
+      store.turnsForTask(t.id).some((x) => x.role === TurnRole.action),
+    ).toBe(false);
   });
 
   test("a timer coming due triggers nothing: it is not something that came in", async () => {
@@ -557,33 +683,58 @@ describe("triggers", () => {
       { ...reviewAsk, channel: "timer" },
     );
     await e.desk.actionsSettled();
-    expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(false);
+    expect(
+      store.turnsForTask(t.id).some((x) => x.role === TurnRole.action),
+    ).toBe(false);
   });
 
   test("lifecycle: task events since the last look, history left alone", async () => {
     const e = engineWith({ summarize: { on: [{ event: "done" }] } });
     const before = task(Kind.general);
-    store.updateTask(before.id, { status: TaskStatus.done, closed_at: "2026-11-20T00:00:00Z" });
+    store.updateTask(before.id, {
+      status: TaskStatus.done,
+      closed_at: "2026-11-20T00:00:00Z",
+    });
     // The first look only sets the cursor.
     expect(e.fireEventActions()).toBe(0);
     const t = task(Kind.general);
-    store.updateTask(t.id, { status: TaskStatus.done, closed_at: "2026-11-20T00:00:00Z" });
+    store.updateTask(t.id, {
+      status: TaskStatus.done,
+      closed_at: "2026-11-20T00:00:00Z",
+    });
     expect(e.fireEventActions()).toBe(1);
     expect(e.fireEventActions()).toBe(0);
     await e.desk.actionsSettled();
-    expect(store.turnsForTask(t.id).some((x) => x.role === TurnRole.action)).toBe(true);
-    expect(store.turnsForTask(before.id).some((x) => x.role === TurnRole.action)).toBe(false);
+    expect(
+      store.turnsForTask(t.id).some((x) => x.role === TurnRole.action),
+    ).toBe(true);
+    expect(
+      store.turnsForTask(before.id).some((x) => x.role === TurnRole.action),
+    ).toBe(false);
   });
 
   test("ready is the agent's finished work; merged is the merge", async () => {
     const e = engineWith({
       summarize: { on: [{ event: "ready" }] },
-      recap: { skill: "riker:summarize", via: "headless", on: [{ event: "merged" }] },
+      recap: {
+        skill: "riker:summarize",
+        via: "headless",
+        on: [{ event: "merged" }],
+      },
     });
     e.fireEventActions();
     const t = task(Kind.general);
-    sessionStarted({ id: "s-ready", taskId: t.id, kind: SessionKind.tmux, cwd: tmpdir(), startedBy: "owner" });
-    workFinished({ taskId: t.id, sessionId: "s-ready" }, { summary: "did it", closes: false });
+    sessionStarted({
+      id: "s-ready",
+      taskId: t.id,
+      kind: SessionKind.tmux,
+      cwd: tmpdir(),
+      startedBy: "owner",
+    });
+    workFinished(
+      { taskId: t.id, sessionId: "s-ready" },
+      { summary: "did it", closes: false },
+    );
     store.updateTask(t.id, { merged_at: "2026-11-20T00:00:00Z" });
     expect(e.fireEventActions()).toBe(2);
     await e.desk.actionsSettled();
@@ -596,7 +747,9 @@ describe("triggers", () => {
   });
 
   test("a run that never started is not counted: the next event tries again", async () => {
-    const e = engineWith({ recap: { skill: "nope", via: "headless", on: [{ event: "done" }] } });
+    const e = engineWith({
+      recap: { skill: "nope", via: "headless", on: [{ event: "done" }] },
+    });
     const t = task(Kind.general);
     expect(e.desk.fireActions("done", t.id)).toEqual(["recap"]);
     await e.desk.actionsSettled();
@@ -610,7 +763,9 @@ describe("triggers", () => {
     const quiz = registeredActions(c).find((a) => a.name === "quiz")!;
     expect(quiz.on!.map((t) => t.event)).toEqual(["triaged"]);
     const e = new Engine({ config: { ...testConfig(), get: () => c } });
-    const t = task(Kind.coding, { worktree: mkdtempSync(join(tmpdir(), "riker-wt-")) });
+    const t = task(Kind.coding, {
+      worktree: mkdtempSync(join(tmpdir(), "riker-wt-")),
+    });
     expect(e.desk.fireActions("triaged", t.id, reviewAsk)).toEqual([]);
   });
 });

@@ -45,11 +45,18 @@ export class TerminalModes {
       for (const p of (m[1] ?? "").split(";")) {
         const n = Number(p);
         if (MOUSE.has(n)) {
-          if (on) this.mouse.add(n);
-          else this.mouse.delete(n);
-        } else if (n === SGR) this.sgr = on;
-        else if (ALT.has(n)) this.alt = on;
-        else if (n === BRACKETED_PASTE) this.bracketedPaste = on;
+          if (on) {
+            this.mouse.add(n);
+          } else {
+            this.mouse.delete(n);
+          }
+        } else if (n === SGR) {
+          this.sgr = on;
+        } else if (ALT.has(n)) {
+          this.alt = on;
+        } else if (n === BRACKETED_PASTE) {
+          this.bracketedPaste = on;
+        }
       }
     }
   }
@@ -61,7 +68,9 @@ export class TerminalModes {
   // and run the rest as typed keys.
   paste(text: string): string {
     const body = text.replace(/\r?\n/g, "\r");
-    if (!this.bracketedPaste) return body;
+    if (!this.bracketedPaste) {
+      return body;
+    }
     return `${PASTE_START}${body.replaceAll(PASTE_END, "")}${PASTE_END}`;
   }
 
@@ -69,11 +78,15 @@ export class TerminalModes {
   wheel(direction: Wheel, x: number, y: number): string | null {
     if (this.mouseTracking) {
       const button = direction === "up" ? 64 : 65;
-      if (this.sgr) return `\x1b[<${button};${x + 1};${y + 1}M`;
+      if (this.sgr) {
+        return `\x1b[<${button};${x + 1};${y + 1}M`;
+      }
       const c = (n: number) => String.fromCharCode(32 + Math.min(n, 222));
       return `\x1b[M${c(button)}${c(x + 1)}${c(y + 1)}`;
     }
-    if (this.alt) return direction === "up" ? "\x1b[A" : "\x1b[B";
+    if (this.alt) {
+      return direction === "up" ? "\x1b[A" : "\x1b[B";
+    }
     return null;
   }
 }

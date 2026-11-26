@@ -54,7 +54,9 @@ export function useRepos(dialogs: Dialogs) {
           label: `Call it ${remote}`,
           hint: "renames it in config, projects, open tasks",
           run: () =>
-            act(() => showToast(`${repo} is now ${desk.renameRepo(repo, remote)}`)),
+            act(() =>
+              showToast(`${repo} is now ${desk.renameRepo(repo, remote)}`),
+            ),
         },
         {
           label: `Use ${tildePath(problem.path)} anyway`,
@@ -63,23 +65,31 @@ export function useRepos(dialogs: Dialogs) {
         },
       );
     }
-    if (fix) choices.push({ label: `Use ${tildePath(fix)}`, run: () => usePath(fix) });
-    for (const c of pick.candidates)
-      if (c.path !== fix)
+    if (fix) {
+      choices.push({ label: `Use ${tildePath(fix)}`, run: () => usePath(fix) });
+    }
+    for (const c of pick.candidates) {
+      if (c.path !== fix) {
         choices.push({
           label: tildePath(c.path),
-          hint: c.guess ? "folder name only, no GitHub remote" : "found on disk",
+          hint: c.guess
+            ? "folder name only, no GitHub remote"
+            : "found on disk",
           run: () => usePath(c.path),
         });
+      }
+    }
     choices.push(
       {
         label: `Clone to ${tildePath(pick.clone)}`,
         hint: "gh repo clone",
         run: () => {
           showToast(`Cloning ${repo}...`);
-          void desk.cloneRepo(repo).then(done, (err) =>
-            showToast(`Could not clone: ${errorMessage(err)}`, 4000, "error"),
-          );
+          void desk
+            .cloneRepo(repo)
+            .then(done, (err) =>
+              showToast(`Could not clone: ${errorMessage(err)}`, 4000, "error"),
+            );
         },
       },
       {
@@ -96,19 +106,23 @@ export function useRepos(dialogs: Dialogs) {
           )),
       },
     );
-    if (pick.mapped)
+    if (pick.mapped) {
       choices.push({
         label: "Forget its path",
         hint: "the checkout stays on disk",
         run: () => act(() => desk.unmapRepo(repo)),
       });
+    }
     return choices;
   }
 
   function stateHint(s: RepoState): string {
-    if (!s.path) return s.others.length ? "no path; found on disk" : "no path";
-    if (s.problem && s.problem.kind !== "unmapped")
+    if (!s.path) {
+      return s.others.length ? "no path; found on disk" : "no path";
+    }
+    if (s.problem && s.problem.kind !== "unmapped") {
       return `${tildePath(s.path)}: ${describeProblem(s.repo, s.problem).replace(`${tildePath(s.path)} `, "")}`;
+    }
     return tildePath(s.path);
   }
 
@@ -124,7 +138,11 @@ export function useRepos(dialogs: Dialogs) {
     const one = (s: RepoState) =>
       dialogs.show(() => (
         <ChoiceModal
-          title={s.problem && s.problem.kind !== "unmapped" ? `${s.repo}: ${describeProblem(s.repo, s.problem)}` : s.repo}
+          title={
+            s.problem && s.problem.kind !== "unmapped"
+              ? `${s.repo}: ${describeProblem(s.repo, s.problem)}`
+              : s.repo
+          }
           hint={`${s.path ? `Checked out at ${tildePath(s.path)}.` : "No checkout yet."}${s.projects.length ? ` In ${s.projects.join(", ")}.` : ""}`}
           choices={pathChoices(
             {

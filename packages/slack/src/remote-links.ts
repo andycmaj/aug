@@ -4,9 +4,23 @@
 import type { RikerConfig } from "@riker/core/config";
 import { slackConfig, slackToken } from "./config";
 import { logger } from "@riker/core/log";
-import { ClaudeMcpTransport, PersistentClaude, type SpawnFn } from "./claude-mcp";
-import type { RemoteLink, RemoteMessage, RemoteQuery, RemoteRead } from "./remote";
-import { slackApi, slackPostApi, type SlackApi, type SlackMessage } from "./token";
+import {
+  ClaudeMcpTransport,
+  PersistentClaude,
+  type SpawnFn,
+} from "./claude-mcp";
+import type {
+  RemoteLink,
+  RemoteMessage,
+  RemoteQuery,
+  RemoteRead,
+} from "./remote";
+import {
+  slackApi,
+  slackPostApi,
+  type SlackApi,
+  type SlackMessage,
+} from "./token";
 
 const log = logger("slack.remote");
 
@@ -42,20 +56,28 @@ export class TokenRemoteLink implements RemoteLink {
   ) {}
 
   private async whoAmI(): Promise<string> {
-    if (this.me) return this.me;
+    if (this.me) {
+      return this.me;
+    }
     const auth = await this.api("auth.test", {});
     this.me = String(auth.user_id ?? "");
     return this.me;
   }
 
   private async channel(query: RemoteQuery, me: string): Promise<string> {
-    if (query.channel) return query.channel;
-    if (this.selfDm) return this.selfDm;
+    if (query.channel) {
+      return query.channel;
+    }
+    if (this.selfDm) {
+      return this.selfDm;
+    }
     const opened = (await this.api("conversations.open", { users: me })) as {
       channel?: { id?: string };
     };
     const id = opened.channel?.id;
-    if (!id) throw new Error("Slack did not give your self-DM");
+    if (!id) {
+      throw new Error("Slack did not give your self-DM");
+    }
     this.selfDm = id;
     return id;
   }
@@ -65,11 +87,16 @@ export class TokenRemoteLink implements RemoteLink {
       channel?: ConversationInfo;
     };
     const conv = info.channel;
-    if (!conv) throw new Error(`no conversation ${channel}`);
-    if (conv.is_im) return [conv.user ?? ""];
+    if (!conv) {
+      throw new Error(`no conversation ${channel}`);
+    }
+    if (conv.is_im) {
+      return [conv.user ?? ""];
+    }
     // A public channel is never private, however few are in it today.
-    if (!conv.is_private && !conv.is_mpim)
+    if (!conv.is_private && !conv.is_mpim) {
       return [me, "(a public channel: anyone can join)"];
+    }
     const list = (await this.api("conversations.members", {
       channel,
       limit: "10",
@@ -94,8 +121,11 @@ export class TokenRemoteLink implements RemoteLink {
         oldest: query.since,
         limit: "50",
       })) as { messages?: SlackMessage[] };
-      for (const m of replies.messages ?? [])
-        if (m.ts !== thread) messages.push(toRemote({ ...m, thread_ts: thread }));
+      for (const m of replies.messages ?? []) {
+        if (m.ts !== thread) {
+          messages.push(toRemote({ ...m, thread_ts: thread }));
+        }
+      }
     }
     return { channel, me, members, messages };
   }
@@ -196,10 +226,11 @@ export class ClaudeMcpRemoteLink implements RemoteLink {
 
   async read(query: RemoteQuery): Promise<RemoteRead> {
     const channel = query.channel;
-    if (!channel)
+    if (!channel) {
       throw new Error(
         "set remote.channel to your self-DM or private channel id (claude-mcp cannot find it)",
       );
+    }
     const tools = await this.transport.slackTools();
     this.session ??= new PersistentClaude(
       () =>
@@ -214,11 +245,13 @@ export class ClaudeMcpRemoteLink implements RemoteLink {
       },
     );
     const turn = await this.session.ask(remotePrompt(channel, query));
-    if (turn.isError)
+    if (turn.isError) {
       throw new Error(`the Slack session failed: ${turn.text.slice(0, 200)}`);
+    }
     const answer = turn.structured as McpRemoteAnswer | null;
-    if (!answer || !Array.isArray(answer.messages))
+    if (!answer || !Array.isArray(answer.messages)) {
       throw new Error("the Slack session returned no messages list");
+    }
     return {
       channel,
       me: answer.me ?? "",
@@ -254,16 +287,20 @@ export class ClaudeMcpRemoteLink implements RemoteLink {
   }
 }
 
-export function remoteLink(config: RikerConfig): RemoteLink | { error: string } {
-  if (slackConfig.of(config).transport === "claude-mcp")
+export function remoteLink(
+  config: RikerConfig,
+): RemoteLink | { error: string } {
+  if (slackConfig.of(config).transport === "claude-mcp") {
     return new ClaudeMcpRemoteLink(
       new ClaudeMcpTransport({
         model: slackConfig.of(config).model,
         server: slackConfig.of(config).mcpServer,
       }),
     );
-  if (slackConfig.of(config).transport === "mcp")
+  }
+  if (slackConfig.of(config).transport === "mcp") {
     return { error: "the mcp transport is not built: use token or claude-mcp" };
+  }
   const token = slackToken(config);
   if (!token) {
     log.warn("no token for the remote");

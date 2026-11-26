@@ -78,8 +78,9 @@ const only = process.argv.slice(2);
 
 function tmux(...args: string[]): string {
   const r = Bun.spawnSync(["tmux", "-L", SERVER, ...args], { cwd: ROOT });
-  if (r.exitCode !== 0)
+  if (r.exitCode !== 0) {
     throw new Error(`tmux ${args.join(" ")}: ${r.stderr.toString()}`);
+  }
   return r.stdout.toString();
 }
 
@@ -131,23 +132,39 @@ const BASE = [
 function apply(style: Style, params: number[]): void {
   for (let i = 0; i < params.length; i++) {
     const p = params[i] ?? 0;
-    if (p === 0) Object.assign(style, plain());
-    else if (p === 1) style.bold = true;
-    else if (p === 2) style.dim = true;
-    else if (p === 3) style.italic = true;
-    else if (p === 4) style.under = true;
-    else if (p === 7) style.reverse = true;
-    else if (p === 22) style.bold = style.dim = false;
-    else if (p === 23) style.italic = false;
-    else if (p === 24) style.under = false;
-    else if (p === 27) style.reverse = false;
-    else if (p === 39) style.fg = FG;
-    else if (p === 49) style.bg = BG;
-    else if (p >= 30 && p <= 37) style.fg = BASE[p - 30] ?? FG;
-    else if (p >= 90 && p <= 97) style.fg = BASE[p - 82] ?? FG;
-    else if (p >= 40 && p <= 47) style.bg = BASE[p - 40] ?? BG;
-    else if (p >= 100 && p <= 107) style.bg = BASE[p - 92] ?? BG;
-    else if (p === 38 || p === 48) {
+    if (p === 0) {
+      Object.assign(style, plain());
+    } else if (p === 1) {
+      style.bold = true;
+    } else if (p === 2) {
+      style.dim = true;
+    } else if (p === 3) {
+      style.italic = true;
+    } else if (p === 4) {
+      style.under = true;
+    } else if (p === 7) {
+      style.reverse = true;
+    } else if (p === 22) {
+      style.bold = style.dim = false;
+    } else if (p === 23) {
+      style.italic = false;
+    } else if (p === 24) {
+      style.under = false;
+    } else if (p === 27) {
+      style.reverse = false;
+    } else if (p === 39) {
+      style.fg = FG;
+    } else if (p === 49) {
+      style.bg = BG;
+    } else if (p >= 30 && p <= 37) {
+      style.fg = BASE[p - 30] ?? FG;
+    } else if (p >= 90 && p <= 97) {
+      style.fg = BASE[p - 82] ?? FG;
+    } else if (p >= 40 && p <= 47) {
+      style.bg = BASE[p - 40] ?? BG;
+    } else if (p >= 100 && p <= 107) {
+      style.bg = BASE[p - 92] ?? BG;
+    } else if (p === 38 || p === 48) {
       const key = p === 38 ? "fg" : "bg";
       if (params[i + 1] === 2) {
         style[key] = rgb(
@@ -183,10 +200,18 @@ function css(s: Style): string {
   const fg = s.reverse ? s.bg : s.fg;
   const bg = s.reverse ? s.fg : s.bg;
   const parts = [`color:${fg}`, `background:${bg}`];
-  if (s.bold) parts.push("font-weight:bold");
-  if (s.dim) parts.push("opacity:.6");
-  if (s.italic) parts.push("font-style:italic");
-  if (s.under) parts.push("text-decoration:underline");
+  if (s.bold) {
+    parts.push("font-weight:bold");
+  }
+  if (s.dim) {
+    parts.push("opacity:.6");
+  }
+  if (s.italic) {
+    parts.push("font-style:italic");
+  }
+  if (s.under) {
+    parts.push("text-decoration:underline");
+  }
   return parts.join(";");
 }
 
@@ -200,7 +225,9 @@ const BLOCKS: Record<string, string> = {
 
 function cell(c: string, style: Style): string {
   const block = BLOCKS[c];
-  if (block === undefined) return `<i style="${css(style)}">${escape(c)}</i>`;
+  if (block === undefined) {
+    return `<i style="${css(style)}">${escape(c)}</i>`;
+  }
   const fg = style.reverse ? style.bg : style.fg;
   const bg = style.reverse ? style.fg : style.bg;
   const fill =
@@ -223,15 +250,16 @@ function toHtml(ansi: string): string {
     let col = 0;
     const re = /\x1b\[([0-9;]*)m|\x1b\[[0-9;?]*[A-Za-z]|([\s\S])/gu;
     for (const m of line.matchAll(re)) {
-      if (m[1] !== undefined)
+      if (m[1] !== undefined) {
         apply(style, m[1] === "" ? [0] : m[1].split(";").map(Number));
-      else if (m[2] !== undefined && col < COLS) {
+      } else if (m[2] !== undefined && col < COLS) {
         html += cell(m[2], style);
         col++;
       }
     }
-    if (col < COLS)
+    if (col < COLS) {
       html += `<i style="background:${style.bg};width:${(COLS - col) * CELL_W}px"></i>`;
+    }
     return `<div>${html}</div>`;
   });
   return `<!doctype html><meta charset="utf-8"><style>
@@ -258,7 +286,9 @@ async function capture(name: string, scratch: string): Promise<void> {
     `--screenshot=${png}`,
     `file://${html}`,
   ]);
-  if (r.exitCode !== 0) throw new Error(`chrome: ${r.stderr.toString()}`);
+  if (r.exitCode !== 0) {
+    throw new Error(`chrome: ${r.stderr.toString()}`);
+  }
   console.log(`wrote docs/screenshots/${name}.png`);
 }
 
@@ -285,8 +315,9 @@ try {
       tmux("send-keys", "-t", SESSION, ...step.keys);
       await sleep(step.wait ?? 400);
     }
-    if (only.length === 0 || only.includes(shot.name))
+    if (only.length === 0 || only.includes(shot.name)) {
       await capture(shot.name, scratch);
+    }
   }
 } finally {
   Bun.spawnSync(["tmux", "-L", SERVER, "kill-server"]);

@@ -6,7 +6,11 @@
 export const Ask = { me: "me", team: "team" } as const;
 export type Ask = (typeof Ask)[keyof typeof Ask];
 
-export const PrState = { open: "open", closed: "closed", merged: "merged" } as const;
+export const PrState = {
+  open: "open",
+  closed: "closed",
+  merged: "merged",
+} as const;
 export type PrState = (typeof PrState)[keyof typeof PrState];
 
 export const Verdict = {
@@ -75,40 +79,76 @@ const after = (a: string, b: string) => Date.parse(a) > Date.parse(b);
 // What to do for one open PR, by the owner's latest review: approve merges
 // it, changes get a follow-up, a comment gets one reply; untouched for too
 // long, it is closed.
-export function answer(pr: GenPr, now: Date, limits: Limits = DEFAULT_LIMITS): Move | null {
-  if (pr.state !== PrState.open) return null;
+export function answer(
+  pr: GenPr,
+  now: Date,
+  limits: Limits = DEFAULT_LIMITS,
+): Move | null {
+  if (pr.state !== PrState.open) {
+    return null;
+  }
   const mine = pr.mine;
   if (mine && after(mine.at, pr.pushedAt)) {
-    if (mine.verdict === Verdict.approved) return { type: "merge", pr: pr.number };
-    if (mine.verdict === Verdict.changes) return { type: "follow-up", pr: pr.number };
-    if (mine.verdict === Verdict.commented && !(pr.repliedAt && after(pr.repliedAt, mine.at)))
+    if (mine.verdict === Verdict.approved) {
+      return { type: "merge", pr: pr.number };
+    }
+    if (mine.verdict === Verdict.changes) {
+      return { type: "follow-up", pr: pr.number };
+    }
+    if (
+      mine.verdict === Verdict.commented &&
+      !(pr.repliedAt && after(pr.repliedAt, mine.at))
+    ) {
       return { type: "reply", pr: pr.number };
+    }
   }
-  if (now.getTime() - Date.parse(pr.updatedAt) > limits.staleMs) return { type: "close", pr: pr.number };
+  if (now.getTime() - Date.parse(pr.updatedAt) > limits.staleMs) {
+    return { type: "close", pr: pr.number };
+  }
   return null;
 }
 
 // Whether a new PR is due: inside its hours, under its cap, and long enough
 // since the last one.
-export function openDue(prs: GenPr[], clock: Clock, limits: Limits = DEFAULT_LIMITS): boolean {
+export function openDue(
+  prs: GenPr[],
+  clock: Clock,
+  limits: Limits = DEFAULT_LIMITS,
+): boolean {
   const hour = clock.now.getHours();
   const [from, to] = limits.hours;
-  if (hour < from || hour >= to) return false;
-  if (prs.filter((p) => p.state === PrState.open).length >= limits.maxOpen) return false;
-  return !clock.lastOpened || clock.now.getTime() - Date.parse(clock.lastOpened) >= limits.everyMs;
+  if (hour < from || hour >= to) {
+    return false;
+  }
+  if (prs.filter((p) => p.state === PrState.open).length >= limits.maxOpen) {
+    return false;
+  }
+  return (
+    !clock.lastOpened ||
+    clock.now.getTime() - Date.parse(clock.lastOpened) >= limits.everyMs
+  );
 }
 
 // One tick of the stream: answer every PR, then maybe open one.
-export function plan(prs: GenPr[], clock: Clock, limits: Limits = DEFAULT_LIMITS): Move[] {
+export function plan(
+  prs: GenPr[],
+  clock: Clock,
+  limits: Limits = DEFAULT_LIMITS,
+): Move[] {
   const moves = prs.flatMap((p) => {
     const m = answer(p, clock.now, limits);
     return m ? [m] : [];
   });
   // A PR merged or closed this tick frees its place.
-  const leaving = new Set(moves.filter((m) => m.type === "merge" || m.type === "close").map((m) => m.pr));
+  const leaving = new Set(
+    moves
+      .filter((m) => m.type === "merge" || m.type === "close")
+      .map((m) => m.pr),
+  );
   const staying = prs.filter((p) => !leaving.has(p.number));
-  if (openDue(staying, clock, limits))
+  if (openDue(staying, clock, limits)) {
     moves.push({ type: "open", ask: clock.hasTeam ? clock.nextAsk : Ask.me });
+  }
   return moves;
 }
 

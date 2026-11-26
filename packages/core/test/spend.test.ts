@@ -19,13 +19,7 @@ import {
   spentToday,
 } from "../src/spend";
 import * as store from "../src/store";
-import {
-  AgentState,
-  Kind,
-  SpendRole,
-  TurnRole,
-  Verdict,
-} from "../src/types";
+import { AgentState, Kind, SpendRole, TurnRole, Verdict } from "../src/types";
 import { config, fakeBrain, freshHome } from "./support/helpers";
 
 const DONE = { about: "a", did: "b", next: "c", state: "done" };
@@ -34,7 +28,11 @@ function capped(dailyUsd: number, capEnabled = true): RikerConfig {
   return { ...config(), maxActiveAgents: 4, spend: { capEnabled, dailyUsd } };
 }
 
-function spendRows(): { role: string; task_id: number | null; cost_usd: number }[] {
+function spendRows(): {
+  role: string;
+  task_id: number | null;
+  cost_usd: number;
+}[] {
   return store.spendByRole(localDay(new Date())).flatMap((r) =>
     Array.from({ length: r.calls }, () => ({
       role: r.role,
@@ -46,7 +44,12 @@ function spendRows(): { role: string; task_id: number | null; cost_usd: number }
 
 function chatTask(title = "seat count"): number {
   const t = store.createTask({ title, kind: Kind.general, channel: "owner" });
-  store.addTurn({ taskId: t.id, role: TurnRole.you, author: "you", body: `ask about ${title}` });
+  store.addTurn({
+    taskId: t.id,
+    role: TurnRole.you,
+    author: "you",
+    body: `ask about ${title}`,
+  });
   return t.id;
 }
 
@@ -55,14 +58,22 @@ describe("recording spend", () => {
 
   test("think records what a call cost under its role and task", async () => {
     fakeBrain(() => null, { costUsd: 0.25 });
-    await think({ prompt: "hi", model: "haiku", spend: { role: SpendRole.general, taskId: 7 } });
+    await think({
+      prompt: "hi",
+      model: "haiku",
+      spend: { role: SpendRole.general, taskId: 7 },
+    });
     await think({ prompt: "hi" });
     const today = spentToday();
     expect(today.calls).toBe(2);
     expect(today.cost).toBeCloseTo(0.5);
     expect(today.tokens).toBe(230);
     expect(store.taskSpend(7)).toMatchObject({ calls: 1, cost: 0.25 });
-    expect(spendRows().map((r) => r.role).sort()).toEqual(["general", "other"]);
+    expect(
+      spendRows()
+        .map((r) => r.role)
+        .sort(),
+    ).toEqual(["general", "other"]);
   });
 
   test("a call that reports no cost leaves no row", async () => {
@@ -74,11 +85,22 @@ describe("recording spend", () => {
   test("each caller tags its role: a general turn, Home, the Advisor, the doc pass", async () => {
     const general = chatTask();
     const home = store.homeTask();
-    store.addTurn({ taskId: home.id, role: TurnRole.you, author: "you", body: "what is open?" });
+    store.addTurn({
+      taskId: home.id,
+      role: TurnRole.you,
+      author: "you",
+      body: "what is open?",
+    });
     fakeBrain(
       (call) =>
         call.schema && "verdict" in (call.schema.properties ?? {})
-          ? { verdict: Verdict.fyi, reason: "x", title: "x", summary: "x", priority: "regular" }
+          ? {
+              verdict: Verdict.fyi,
+              reason: "x",
+              title: "x",
+              summary: "x",
+              priority: "regular",
+            }
           : call.schema && "ideas" in (call.schema.properties ?? {})
             ? { ideas: [] }
             : call.schema && "edits" in (call.schema.properties ?? {})
@@ -93,17 +115,26 @@ describe("recording spend", () => {
     await runDocPass(config(), new Date(), true);
     expect(store.taskSpend(general)).toMatchObject({ calls: 1 });
     expect(store.taskSpend(home.id)).toMatchObject({ calls: 1 });
-    expect(spendRows().map((r) => r.role).sort()).toEqual(
-      ["advisor", "assistant", "doc-pass", "general"].sort(),
-    );
+    expect(
+      spendRows()
+        .map((r) => r.role)
+        .sort(),
+    ).toEqual(["advisor", "assistant", "doc-pass", "general"].sort());
   });
 
   test("the report says today, by role and task, the week, and the cap", () => {
     const t = chatTask("renewals");
-    recordSpend({ role: SpendRole.general, taskId: t }, "sonnet", { costUsd: 1.5 });
+    recordSpend({ role: SpendRole.general, taskId: t }, "sonnet", {
+      costUsd: 1.5,
+    });
     recordSpend({ role: SpendRole.triage }, "haiku", { costUsd: 0.02 });
     const yesterday = new Date(Date.now() - 86400_000);
-    recordSpend({ role: SpendRole.general, taskId: t }, "sonnet", { costUsd: 3 }, yesterday);
+    recordSpend(
+      { role: SpendRole.general, taskId: t },
+      "sonnet",
+      { costUsd: 3 },
+      yesterday,
+    );
     const report = spendReport(capped(10));
     expect(report.today.cost).toBeCloseTo(1.52);
     expect(report.byRole.map((r) => r.role)).toEqual(["general", "triage"]);
@@ -113,7 +144,9 @@ describe("recording spend", () => {
     expect(text).toContain("$1.52 over 2 calls");
     expect(text).toContain("cap $10.00/day");
     expect(text).toContain(store.taskRef(t));
-    expect(reportLines(spendReport(capped(10, false))).join("\n")).toContain("no daily cap");
+    expect(reportLines(spendReport(capped(10, false))).join("\n")).toContain(
+      "no daily cap",
+    );
   });
 });
 
@@ -138,7 +171,9 @@ describe("the daily cap", () => {
     expect(pool.request(augs, "autostart", "riker")).toBeNull();
     const held = store.getTask(augs)!;
     expect(held.agent_state).toBe(AgentState.queued);
-    expect(held.queue_reason).toContain("daily spend cap reached ($2.00 of $1.00)");
+    expect(held.queue_reason).toContain(
+      "daily spend cap reached ($2.00 of $1.00)",
+    );
     await pool.request(mine, "the owner typed", "owner");
     expect(calls).toHaveLength(1);
     // Still capped: draining leaves it waiting.
@@ -163,10 +198,15 @@ describe("the daily cap", () => {
     const [chat, coding] = [chatTask("chat"), chatTask("coding")];
     fakeBrain(() => DONE);
     recordSpend({ role: SpendRole.general }, null, { costUsd: 2 });
-    const pool = new AgentPool({ config: fixedConfig({ ...capped(1), maxActiveAgents: 1 }) });
+    const pool = new AgentPool({
+      config: fixedConfig({ ...capped(1), maxActiveAgents: 1 }),
+    });
     expect(pool.request(chat, "autostart", "riker")).toBeNull();
     let release: () => void = () => {};
-    const blocker = pool.claim(9999, () => new Promise<void>((r) => (release = r)));
+    const blocker = pool.claim(
+      9999,
+      () => new Promise<void>((r) => (release = r)),
+    );
     let started = false;
     expect(pool.claim(coding, async () => void (started = true))).toBeNull();
     release();
@@ -178,8 +218,13 @@ describe("the daily cap", () => {
   test("the Advisor and the doc pass skip their model call while capped", async () => {
     const calls = fakeBrain(() => ({ ideas: [], edits: [] }));
     recordSpend({ role: SpendRole.general }, null, { costUsd: 2 });
-    expect(await runAdvisor(capped(1))).toEqual({ added: 0, skipped: "daily spend cap reached" });
-    expect((await runDocPass(capped(1), new Date())).skipped).toBe("daily spend cap reached");
+    expect(await runAdvisor(capped(1))).toEqual({
+      added: 0,
+      skipped: "daily spend cap reached",
+    });
+    expect((await runDocPass(capped(1), new Date())).skipped).toBe(
+      "daily spend cap reached",
+    );
     expect(calls).toHaveLength(0);
     // Not marked run: it asks once the cap lifts.
     expect(store.kvGet("advisor.lastRun")).toBeNull();
@@ -194,7 +239,12 @@ describe("what a turn re-sends", () => {
     const calls = fakeBrain(() => DONE);
     const pool = new AgentPool({ config: fixedConfig(capped(100)) });
     await pool.request(t, "first", "owner");
-    store.addTurn({ taskId: t, role: TurnRole.you, author: "you", body: "and the renewal date?" });
+    store.addTurn({
+      taskId: t,
+      role: TurnRole.you,
+      author: "you",
+      body: "and the renewal date?",
+    });
     await pool.request(t, "second", "owner");
     expect(calls[1].resume).toBe(calls[0].sessionId);
     expect(calls[0].prompt).toContain("ask about seat count");
@@ -206,9 +256,25 @@ describe("what a turn re-sends", () => {
 
   test("a turn that failed is no proof the session heard what came before it", () => {
     const t = chatTask();
-    const turn = store.addTurn({ taskId: t, role: TurnRole.agent, author: "agent", status: "failed", body: "x" });
-    store.addTurn({ taskId: t, role: TurnRole.you, author: "you", body: "again" });
-    const prompt = turnPrompt(store.getTask(t)!, store.turnsForTask(t), "x", true);
+    const turn = store.addTurn({
+      taskId: t,
+      role: TurnRole.agent,
+      author: "agent",
+      status: "failed",
+      body: "x",
+    });
+    store.addTurn({
+      taskId: t,
+      role: TurnRole.you,
+      author: "you",
+      body: "again",
+    });
+    const prompt = turnPrompt(
+      store.getTask(t)!,
+      store.turnsForTask(t),
+      "x",
+      true,
+    );
     expect(turn.status).toBe("failed");
     expect(prompt).toContain("ask about seat count");
     expect(prompt).toContain("again");
@@ -216,17 +282,43 @@ describe("what a turn re-sends", () => {
 
   test("a fresh session reads the whole conversation back", () => {
     const t = chatTask();
-    store.addTurn({ taskId: t, role: TurnRole.agent, author: "agent", status: "done", body: "42" });
-    store.addTurn({ taskId: t, role: TurnRole.you, author: "you", body: "thanks" });
-    const prompt = turnPrompt(store.getTask(t)!, store.turnsForTask(t), "x", false);
+    store.addTurn({
+      taskId: t,
+      role: TurnRole.agent,
+      author: "agent",
+      status: "done",
+      body: "42",
+    });
+    store.addTurn({
+      taskId: t,
+      role: TurnRole.you,
+      author: "you",
+      body: "thanks",
+    });
+    const prompt = turnPrompt(
+      store.getTask(t)!,
+      store.turnsForTask(t),
+      "x",
+      false,
+    );
     expect(prompt).toContain("The conversation so far");
     expect(prompt).toContain("ask about seat count");
   });
 
   test("the coding brief keeps only the latest turns", () => {
-    const t = store.createTask({ title: "fix it", kind: Kind.coding, channel: "owner" });
-    for (let i = 0; i < CODING_BRIEF_TURNS + 5; i++)
-      store.addTurn({ taskId: t.id, role: TurnRole.you, author: "you", body: `note number ${i}.` });
+    const t = store.createTask({
+      title: "fix it",
+      kind: Kind.coding,
+      channel: "owner",
+    });
+    for (let i = 0; i < CODING_BRIEF_TURNS + 5; i++) {
+      store.addTurn({
+        taskId: t.id,
+        role: TurnRole.you,
+        author: "you",
+        body: `note number ${i}.`,
+      });
+    }
     const brief = codingBrief(config(), store.getTask(t.id)!);
     expect(brief).not.toContain("note number 4.");
     expect(brief).toContain("note number 5.");
@@ -243,7 +335,10 @@ describe("the Advisor's clock", () => {
     chatTask("one");
     const cfg = capped(100);
     expect(await runAdvisor(cfg)).toEqual({ added: 0 });
-    expect(await runAdvisor(cfg)).toEqual({ added: 0, skipped: "work unchanged" });
+    expect(await runAdvisor(cfg)).toEqual({
+      added: 0,
+      skipped: "work unchanged",
+    });
     expect(calls).toHaveLength(1);
     await runAdvisor(cfg, new Date(), true);
     expect(calls).toHaveLength(2);

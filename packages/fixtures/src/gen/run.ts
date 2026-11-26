@@ -2,9 +2,23 @@
 // remember (when it last opened one, whom it asks next, where it is in the
 // donor's history, the bugs it planted) in a state file beside its config.
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname } from "node:path";
-import { Ask, DEFAULT_LIMITS, nextAsk, plan, type GenPr, type Limits, type Move } from "./plan";
+import {
+  Ask,
+  DEFAULT_LIMITS,
+  nextAsk,
+  plan,
+  type GenPr,
+  type Limits,
+  type Move,
+} from "./plan";
 import type { Change, GenTarget } from "./target";
 
 export interface GenState {
@@ -15,7 +29,14 @@ export interface GenState {
   // PR number -> when it last answered a comment review.
   replied: Record<string, string>;
   // What --plant put in, for checking a guide's findings against.
-  planted: { pr: number; url: string; path: string; line: number; what: string; at: string }[];
+  planted: {
+    pr: number;
+    url: string;
+    path: string;
+    line: number;
+    what: string;
+    at: string;
+  }[];
   log: { at: string; line: string }[];
 }
 
@@ -29,21 +50,33 @@ export const EMPTY_STATE: GenState = {
 };
 
 export function loadGenState(file: string): GenState {
-  if (!existsSync(file)) return structuredClone(EMPTY_STATE);
-  return { ...structuredClone(EMPTY_STATE), ...(JSON.parse(readFileSync(file, "utf8")) as Partial<GenState>) };
+  if (!existsSync(file)) {
+    return structuredClone(EMPTY_STATE);
+  }
+  return {
+    ...structuredClone(EMPTY_STATE),
+    ...(JSON.parse(readFileSync(file, "utf8")) as Partial<GenState>),
+  };
 }
 
 export function saveGenState(file: string, state: GenState): void {
   mkdirSync(dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify({ ...state, log: state.log.slice(-200) }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(
+    tmp,
+    `${JSON.stringify({ ...state, log: state.log.slice(-200) }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
   renameSync(tmp, file);
 }
 
 // Where a new PR's change comes from. `planted` says where a --plant change
 // hid its bug.
 export interface Changes {
-  next(state: GenState): Promise<{ change: Change; planted?: { path: string; line: number; what: string } } | null>;
+  next(state: GenState): Promise<{
+    change: Change;
+    planted?: { path: string; line: number; what: string };
+  } | null>;
 }
 
 const REPLIES = [
@@ -68,10 +101,22 @@ export async function tick(
   opts: { now?: Date; limits?: Limits; moves?: Move[] } = {},
 ): Promise<TickResult> {
   const now = opts.now ?? new Date();
-  const prs: GenPr[] = (await target.list()).map((p) => ({ ...p, repliedAt: state.replied[p.number] ?? null }));
+  const prs: GenPr[] = (await target.list()).map((p) => ({
+    ...p,
+    repliedAt: state.replied[p.number] ?? null,
+  }));
   const moves =
     opts.moves ??
-    plan(prs, { now, lastOpened: state.lastOpened, nextAsk: state.nextAsk, hasTeam: target.hasTeam }, opts.limits ?? DEFAULT_LIMITS);
+    plan(
+      prs,
+      {
+        now,
+        lastOpened: state.lastOpened,
+        nextAsk: state.nextAsk,
+        hasTeam: target.hasTeam,
+      },
+      opts.limits ?? DEFAULT_LIMITS,
+    );
   const said: string[] = [];
   const say = (line: string) => {
     said.push(line);
@@ -90,9 +135,17 @@ export async function tick(
           const opened = await target.open(next.change, ask);
           state.lastOpened = now.toISOString();
           state.nextAsk = nextAsk(ask);
-          if (next.planted)
-            state.planted.push({ pr: opened.number, url: opened.url, ...next.planted, at: now.toISOString() });
-          say(`opened #${opened.number} (${next.change.source}), asking ${ask === Ask.team ? "the team" : "you"}: ${opened.url}`);
+          if (next.planted) {
+            state.planted.push({
+              pr: opened.number,
+              url: opened.url,
+              ...next.planted,
+              at: now.toISOString(),
+            });
+          }
+          say(
+            `opened #${opened.number} (${next.change.source}), asking ${ask === Ask.team ? "the team" : "you"}: ${opened.url}`,
+          );
           break;
         }
         case "follow-up": {
@@ -100,11 +153,22 @@ export async function tick(
           const change = next?.change ?? {
             title: "Address review",
             body: "",
-            files: [{ path: `riker-gen/followups/${move.pr}.md`, content: `Addressed review at ${now.toISOString()}\n` }],
+            files: [
+              {
+                path: `riker-gen/followups/${move.pr}.md`,
+                content: `Addressed review at ${now.toISOString()}\n`,
+              },
+            ],
             source: "a note",
           };
-          await target.followUp(move.pr, { ...change, title: `Address review: ${change.title}` }, REPLIES[move.pr % REPLIES.length]!);
-          say(`#${move.pr}: pushed a follow-up (${change.source}) and asked you again`);
+          await target.followUp(
+            move.pr,
+            { ...change, title: `Address review: ${change.title}` },
+            REPLIES[move.pr % REPLIES.length]!,
+          );
+          say(
+            `#${move.pr}: pushed a follow-up (${change.source}) and asked you again`,
+          );
           break;
         }
         case "reply":
@@ -122,7 +186,9 @@ export async function tick(
           break;
       }
     } catch (error) {
-      say(`${move.type}${"pr" in move ? ` #${move.pr}` : ""} failed: ${error instanceof Error ? error.message : String(error)}`);
+      say(
+        `${move.type}${"pr" in move ? ` #${move.pr}` : ""} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
   return { moves, said };

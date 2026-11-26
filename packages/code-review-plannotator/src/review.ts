@@ -2,8 +2,20 @@
 // handed in: the patch against the base, its batches, the calls, and the
 // guide fitted to the patch. Saving it (Plannotator, files) is the caller's.
 
-import { branchCommits, commitLog, planBatches, type BatchPlan } from "./batches";
-import { fitGuide, patchFor, type Finding, type Guide, type Patch, type ReviewComment } from "./guide";
+import {
+  branchCommits,
+  commitLog,
+  planBatches,
+  type BatchPlan,
+} from "./batches";
+import {
+  fitGuide,
+  patchFor,
+  type Finding,
+  type Guide,
+  type Patch,
+  type ReviewComment,
+} from "./guide";
 import type { GuideProgress } from "./progress";
 import { jobPrompt } from "./prompt";
 import { reviewInBatches, type GuideAsk } from "./run";
@@ -39,19 +51,32 @@ export interface Review {
   calls: number;
 }
 
-export async function review(opts: ReviewOptions): Promise<Review | { error: string; answer?: string }> {
+export async function review(
+  opts: ReviewOptions,
+): Promise<Review | { error: string; answer?: string }> {
   const patch = patchFor(opts.cwd, opts.base ?? "main");
-  if ("error" in patch) return patch;
-  const plan = planBatches(patch, opts.cwd, { budget: opts.batchChars, fileMax: opts.fileMax });
-  const commits = branchCommits(opts.cwd, patch.mergeBase).length ? commitLog(opts.cwd, patch.mergeBase) : "";
+  if ("error" in patch) {
+    return patch;
+  }
+  const plan = planBatches(patch, opts.cwd, {
+    budget: opts.batchChars,
+    fileMax: opts.fileMax,
+  });
+  const commits = branchCommits(opts.cwd, patch.mergeBase).length
+    ? commitLog(opts.cwd, patch.mergeBase)
+    : "";
   const ran = await reviewInBatches({
     plan,
     commits,
-    prompt: opts.prompt ?? jobPrompt({ base: patch.base, pr: opts.pr, about: opts.about }),
+    prompt:
+      opts.prompt ??
+      jobPrompt({ base: patch.base, pr: opts.pr, about: opts.about }),
     ask: opts.ask,
     progress: opts.progress,
   });
-  if ("error" in ran) return ran;
+  if ("error" in ran) {
+    return ran;
+  }
   const fitted = fitGuide(ran.guide, patch.text);
   return {
     patch,

@@ -46,7 +46,12 @@ function draft(name: string, text: string): string {
 }
 
 async function made(args: Record<string, string>) {
-  const out = await engine.runMove("new", { title: "Readable briefs", kind: "coding", repo: "acme/api", ...args });
+  const out = await engine.runMove("new", {
+    title: "Readable briefs",
+    kind: "coding",
+    repo: "acme/api",
+    ...args,
+  });
   expect(out.ok).toBe(true);
   const ref = out.result.match(/RIKER-\d+/)![0];
   return store.getTask(store.parseTaskRef(ref)!)!;
@@ -57,40 +62,56 @@ describe("a brief with blank lines", () => {
     // riker-tools enqueues the args as given and the engine drains them.
     const move = store.enqueueMove(
       "new",
-      { title: "Readable briefs", kind: "coding", repo: "acme/api", brief: `${BRIEF}\n` },
+      {
+        title: "Readable briefs",
+        kind: "coding",
+        repo: "acme/api",
+        brief: `${BRIEF}\n`,
+      },
       "assistant",
     );
     await engine.drainMoves();
     const row = store.getMove(move.id)!;
     expect(row.status).toBe(MoveStatus.done);
-    const task = store.getTask(store.parseTaskRef(row.result!.match(/RIKER-\d+/)![0])!)!;
+    const task = store.getTask(
+      store.parseTaskRef(row.result!.match(/RIKER-\d+/)![0])!,
+    )!;
     expect(task.summary).toBe(BRIEF);
   });
 
   test("comes from a draft file, which goes once the task is made", async () => {
-    const file = draft("brief.txt", `# 12 starts a line, which Bash denies inline\n\n${BRIEF}\n`);
+    const file = draft(
+      "brief.txt",
+      `# 12 starts a line, which Bash denies inline\n\n${BRIEF}\n`,
+    );
     const task = await made({ file });
-    expect(task.summary).toBe(`# 12 starts a line, which Bash denies inline\n\n${BRIEF}`);
+    expect(task.summary).toBe(
+      `# 12 starts a line, which Bash denies inline\n\n${BRIEF}`,
+    );
     expect(existsSync(file)).toBe(false);
   });
 
   test("a refused move keeps its draft to call again with", async () => {
     const file = draft("kept.txt", BRIEF);
-    const out = await engine.runMove("new", { title: "x", project: "nope", file });
+    const out = await engine.runMove("new", {
+      title: "x",
+      project: "nope",
+      file,
+    });
     expect(out.ok).toBe(false);
     expect(existsSync(file)).toBe(true);
   });
 
   test("takes --brief or --file, not both, and only a file in drafts", async () => {
     const file = draft("both.txt", BRIEF);
-    expect((await engine.runMove("new", { title: "x", brief: "y", file })).result).toBe(
-      "give --brief or --file, not both",
-    );
+    expect(
+      (await engine.runMove("new", { title: "x", brief: "y", file })).result,
+    ).toBe("give --brief or --file, not both");
     const outside = join(process.env.RIKER_HOME!, "elsewhere.txt");
     writeFileSync(outside, BRIEF);
-    expect((await engine.runMove("new", { title: "x", file: outside })).result).toStartWith(
-      "the file must be in",
-    );
+    expect(
+      (await engine.runMove("new", { title: "x", file: outside })).result,
+    ).toStartWith("the file must be in");
   });
 
   test("move brief rewrites it from a file or inline, breaks kept", async () => {
@@ -100,16 +121,28 @@ describe("a brief with blank lines", () => {
     expect((await engine.runMove("brief", { task: ref, file })).ok).toBe(true);
     expect(store.getTask(task.id)!.summary).toBe(BRIEF);
     expect(existsSync(file)).toBe(false);
-    expect((await engine.runMove("brief", { task: ref, text: `${BRIEF}\n\nWhy\nmore` })).ok).toBe(true);
+    expect(
+      (
+        await engine.runMove("brief", {
+          task: ref,
+          text: `${BRIEF}\n\nWhy\nmore`,
+        })
+      ).ok,
+    ).toBe(true);
     expect(store.getTask(task.id)!.summary).toBe(`${BRIEF}\n\nWhy\nmore`);
-    expect((await engine.runMove("brief", { task: ref })).result).toBe("brief needs --text or --file");
+    expect((await engine.runMove("brief", { task: ref })).result).toBe(
+      "brief needs --text or --file",
+    );
   });
 
   test("reaches the coding agent's prompt file unchanged", async () => {
     const task = await made({ brief: BRIEF });
-    expect(codingBrief(config(), task)).toContain(`## The task\n${store.taskRef(task.id)}: Readable briefs\n${BRIEF}\n`);
+    expect(codingBrief(config(), task)).toContain(
+      `## The task\n${store.taskRef(task.id)}: Readable briefs\n${BRIEF}\n`,
+    );
     const launch = codingLaunch(config(), task);
-    const file = launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1];
+    const file =
+      launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1];
     expect(readFileSync(file, "utf8")).toContain(`\n${BRIEF}\n`);
   });
 

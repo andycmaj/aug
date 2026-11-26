@@ -78,7 +78,9 @@ export interface DocRow {
 }
 
 export function removable(owner: DocOwner): boolean {
-  return owner.source === DocSource.link || owner.source === DocSource.projectLink;
+  return (
+    owner.source === DocSource.link || owner.source === DocSource.projectLink
+  );
 }
 
 // http(s) and file: links, wherever they sit in text. Slack writes
@@ -89,7 +91,9 @@ export function urlsIn(text: string): string[] {
   const out = new Set<string>();
   for (const m of text.matchAll(URL_IN_TEXT)) {
     const url = m[0].replace(/[.,;:!?*_~]+$/, "");
-    if (linkTarget(url)) out.add(url);
+    if (linkTarget(url)) {
+      out.add(url);
+    }
   }
   return [...out];
 }
@@ -97,9 +101,13 @@ export function urlsIn(text: string): string[] {
 // One address however it was written: a scheme or host in capitals, a
 // trailing slash, a PR's /files tab are the same doc.
 export function docKey(target: LinkTarget): string {
-  if (target.type === "file") return `file:${target.path}`;
+  if (target.type === "file") {
+    return `file:${target.path}`;
+  }
   const pr = parsePrUrl(target.url);
-  if (pr) return prUrl(pr.repo, pr.number);
+  if (pr) {
+    return prUrl(pr.repo, pr.number);
+  }
   try {
     const u = new URL(target.url);
     const path = u.pathname.length > 1 ? u.pathname.replace(/\/+$/, "") : "";
@@ -124,7 +132,9 @@ const DOC_HOSTS = [
 ];
 
 function hostOf(target: LinkTarget): string {
-  if (target.type === "file") return "local";
+  if (target.type === "file") {
+    return "local";
+  }
   try {
     return new URL(target.url).host.toLowerCase().replace(/^www\./, "");
   } catch {
@@ -133,7 +143,9 @@ function hostOf(target: LinkTarget): string {
 }
 
 export function kindOf(target: LinkTarget): DocKind {
-  if (target.type === "file") return DocKind.file;
+  if (target.type === "file") {
+    return DocKind.file;
+  }
   const host = hostOf(target);
   let path = "";
   try {
@@ -142,29 +154,57 @@ export function kindOf(target: LinkTarget): DocKind {
     return DocKind.other;
   }
   if (host === "github.com") {
-    if (/^\/[^/]+\/[^/]+\/pull\/\d+/.test(path)) return DocKind.pr;
-    if (/^\/[^/]+\/[^/]+\/issues\/\d+/.test(path)) return DocKind.issue;
-    if (/^\/[^/]+\/[^/]+\/discussions\/\d+/.test(path)) return DocKind.thread;
-    if (/^\/[^/]+\/[^/]+\/(blob|tree|wiki)\//.test(path)) return DocKind.doc;
+    if (/^\/[^/]+\/[^/]+\/pull\/\d+/.test(path)) {
+      return DocKind.pr;
+    }
+    if (/^\/[^/]+\/[^/]+\/issues\/\d+/.test(path)) {
+      return DocKind.issue;
+    }
+    if (/^\/[^/]+\/[^/]+\/discussions\/\d+/.test(path)) {
+      return DocKind.thread;
+    }
+    if (/^\/[^/]+\/[^/]+\/(blob|tree|wiki)\//.test(path)) {
+      return DocKind.doc;
+    }
   }
-  if (host.endsWith("slack.com") && path.startsWith("/archives/")) return DocKind.thread;
-  if (host === "linear.app" && path.includes("/issue/")) return DocKind.issue;
+  if (host.endsWith("slack.com") && path.startsWith("/archives/")) {
+    return DocKind.thread;
+  }
+  if (host === "linear.app" && path.includes("/issue/")) {
+    return DocKind.issue;
+  }
   if (host.endsWith("atlassian.net")) {
-    if (path.startsWith("/browse/")) return DocKind.issue;
-    if (path.startsWith("/wiki/")) return DocKind.doc;
+    if (path.startsWith("/browse/")) {
+      return DocKind.issue;
+    }
+    if (path.startsWith("/wiki/")) {
+      return DocKind.doc;
+    }
   }
-  if (DOC_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return DocKind.doc;
+  if (DOC_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) {
+    return DocKind.doc;
+  }
   return DocKind.other;
 }
 
 // A name for a link nobody titled: a PR or issue by its number, a file by
 // its name, else the address without its scheme.
 function derivedTitle(target: LinkTarget, kind: DocKind): string {
-  if (target.type === "file") return basename(target.path);
-  const m = target.url.match(/github\.com\/([^/]+\/[^/]+)\/(?:pull|issues|discussions)\/(\d+)/i);
-  if (m && (kind === DocKind.pr || kind === DocKind.issue || kind === DocKind.thread))
+  if (target.type === "file") {
+    return basename(target.path);
+  }
+  const m = target.url.match(
+    /github\.com\/([^/]+\/[^/]+)\/(?:pull|issues|discussions)\/(\d+)/i,
+  );
+  if (
+    m &&
+    (kind === DocKind.pr || kind === DocKind.issue || kind === DocKind.thread)
+  ) {
     return `${m[1]}#${m[2]}`;
-  if (kind === DocKind.thread && hostOf(target).endsWith("slack.com")) return "Slack thread";
+  }
+  if (kind === DocKind.thread && hostOf(target).endsWith("slack.com")) {
+    return "Slack thread";
+  }
   return target.url.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/+$/, "");
 }
 
@@ -183,14 +223,31 @@ function ownersOf(src: DocumentSources): DocOwner[] {
   const projectOf = new Map(src.tasks.map((t) => [t.id, t.project_id]));
   const out: DocOwner[] = [];
   // A task the sources leave out is Home: the Assistant's scratch.
-  const add = (o: Omit<DocOwner, "projectId"> & { projectId?: number | null }) => {
-    if (o.taskId !== null && !projectOf.has(o.taskId)) return;
-    out.push({ ...o, projectId: o.projectId ?? (o.taskId ? (projectOf.get(o.taskId) ?? null) : null) });
+  const add = (
+    o: Omit<DocOwner, "projectId"> & { projectId?: number | null },
+  ) => {
+    if (o.taskId !== null && !projectOf.has(o.taskId)) {
+      return;
+    }
+    out.push({
+      ...o,
+      projectId:
+        o.projectId ?? (o.taskId ? (projectOf.get(o.taskId) ?? null) : null),
+    });
   };
 
-  for (const l of src.taskLinks)
-    add({ source: DocSource.link, taskId: l.task_id, stored: l.url, title: l.title, by: l.added_by, at: l.created_at, note: null });
-  for (const l of src.projectLinks)
+  for (const l of src.taskLinks) {
+    add({
+      source: DocSource.link,
+      taskId: l.task_id,
+      stored: l.url,
+      title: l.title,
+      by: l.added_by,
+      at: l.created_at,
+      note: null,
+    });
+  }
+  for (const l of src.projectLinks) {
     add({
       source: DocSource.projectLink,
       taskId: null,
@@ -201,12 +258,25 @@ function ownersOf(src: DocumentSources): DocOwner[] {
       at: l.created_at,
       note: null,
     });
-  for (const t of src.tasks)
-    if (t.url)
-      add({ source: DocSource.thread, taskId: t.id, stored: t.url, title: null, by: null, at: t.created_at, note: "where the task came from" });
+  }
+  for (const t of src.tasks) {
+    if (t.url) {
+      add({
+        source: DocSource.thread,
+        taskId: t.id,
+        stored: t.url,
+        title: null,
+        by: null,
+        at: t.created_at,
+        note: "where the task came from",
+      });
+    }
+  }
   for (const th of src.threads) {
     const m = th.thread_key.match(THREAD);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     add({
       source: DocSource.pr,
       taskId: th.task_id,
@@ -217,15 +287,45 @@ function ownersOf(src: DocumentSources): DocOwner[] {
       note: "its pull request",
     });
   }
-  for (const turn of src.made)
-    for (const f of parseFiles(turn.files))
-      add({ source: DocSource.made, taskId: turn.task_id, stored: f.path, title: f.name, by: "agent", at: turn.started_at, note: "a file the agent made" });
-  for (const n of src.notes)
-    for (const url of urlsIn(n.body))
-      add({ source: DocSource.note, taskId: n.task_id, stored: url, title: null, by: n.author, at: n.created_at, note: "in a handoff note" });
-  for (const m of src.messages)
-    for (const url of urlsIn(m.body))
-      add({ source: DocSource.message, taskId: m.task_id, stored: url, title: null, by: m.author_name, at: m.received_at, note: "in a message" });
+  for (const turn of src.made) {
+    for (const f of parseFiles(turn.files)) {
+      add({
+        source: DocSource.made,
+        taskId: turn.task_id,
+        stored: f.path,
+        title: f.name,
+        by: "agent",
+        at: turn.started_at,
+        note: "a file the agent made",
+      });
+    }
+  }
+  for (const n of src.notes) {
+    for (const url of urlsIn(n.body)) {
+      add({
+        source: DocSource.note,
+        taskId: n.task_id,
+        stored: url,
+        title: null,
+        by: n.author,
+        at: n.created_at,
+        note: "in a handoff note",
+      });
+    }
+  }
+  for (const m of src.messages) {
+    for (const url of urlsIn(m.body)) {
+      add({
+        source: DocSource.message,
+        taskId: m.task_id,
+        stored: url,
+        title: null,
+        by: m.author_name,
+        at: m.received_at,
+        note: "in a message",
+      });
+    }
+  }
   return out;
 }
 
@@ -235,7 +335,9 @@ function brainOwners(): DocOwner[] {
   for (const name of Object.values(DocName)) {
     const path = docPath(name);
     const at = mtimeIso(path);
-    if (!at) continue;
+    if (!at) {
+      continue;
+    }
     out.push({
       source: DocSource.brain,
       taskId: null,
@@ -250,13 +352,18 @@ function brainOwners(): DocOwner[] {
   return out;
 }
 
-export function buildDocuments(src: DocumentSources, extra: DocOwner[] = []): DocRow[] {
+export function buildDocuments(
+  src: DocumentSources,
+  extra: DocOwner[] = [],
+): DocRow[] {
   const projectName = new Map(src.projects.map((p) => [p.id, p.name]));
   const taskTitle = new Map(src.tasks.map((t) => [t.id, t.title]));
   const rows = new Map<string, DocRow>();
   for (const owner of [...ownersOf(src), ...extra]) {
     const target = linkTarget(owner.stored);
-    if (!target) continue;
+    if (!target) {
+      continue;
+    }
     const key = docKey(target);
     let row = rows.get(key);
     if (!row) {
@@ -276,17 +383,31 @@ export function buildDocuments(src: DocumentSources, extra: DocOwner[] = []): Do
     }
     // The same task twice (its thread and a link to it) is one owner, the
     // one someone attached: that is what can be taken off.
-    const twin = row.owners.findIndex((o) => o.taskId === owner.taskId && o.projectId === owner.projectId && owner.taskId !== null);
+    const twin = row.owners.findIndex(
+      (o) =>
+        o.taskId === owner.taskId &&
+        o.projectId === owner.projectId &&
+        owner.taskId !== null,
+    );
     if (twin >= 0) {
       const had = row.owners[twin];
-      if (removable(owner) && !removable(had)) row.owners[twin] = { ...owner, note: owner.note ?? had.note };
-      else if (!had.title && owner.title) row.owners[twin] = { ...had, title: owner.title };
-    } else row.owners.push(owner);
-    if (owner.at > row.at) row.at = owner.at;
+      if (removable(owner) && !removable(had)) {
+        row.owners[twin] = { ...owner, note: owner.note ?? had.note };
+      } else if (!had.title && owner.title) {
+        row.owners[twin] = { ...had, title: owner.title };
+      }
+    } else {
+      row.owners.push(owner);
+    }
+    if (owner.at > row.at) {
+      row.at = owner.at;
+    }
   }
   for (const row of rows.values()) {
     row.owners.sort((a, b) => b.at.localeCompare(a.at));
-    row.title = row.owners.find((o) => o.title)?.title ?? derivedTitle(row.target, row.kind);
+    row.title =
+      row.owners.find((o) => o.title)?.title ??
+      derivedTitle(row.target, row.kind);
     row.words = [
       row.title,
       row.url,
@@ -306,9 +427,11 @@ export function buildDocuments(src: DocumentSources, extra: DocOwner[] = []): Do
   }
   // Riker's own docs last: they are rewritten at start, and newest first
   // would bury every link under them.
-  const own = (r: DocRow) => (r.owners.every((o) => o.source === DocSource.brain) ? 1 : 0);
+  const own = (r: DocRow) =>
+    r.owners.every((o) => o.source === DocSource.brain) ? 1 : 0;
   return [...rows.values()].sort(
-    (a, b) => own(a) - own(b) || b.at.localeCompare(a.at) || a.key.localeCompare(b.key),
+    (a, b) =>
+      own(a) - own(b) || b.at.localeCompare(a.at) || a.key.localeCompare(b.key),
   );
 }
 
@@ -326,8 +449,12 @@ export function inKind(row: DocRow, kind: DocKind | null): boolean {
 }
 
 export function inProject(row: DocRow, project: ProjectFilter): boolean {
-  if (project === null) return true;
-  if (project === "none") return row.owners.every((o) => o.projectId === null);
+  if (project === null) {
+    return true;
+  }
+  if (project === "none") {
+    return row.owners.every((o) => o.projectId === null);
+  }
   return row.owners.some((o) => o.projectId === project);
 }
 
@@ -338,7 +465,9 @@ export function matchesDoc(row: DocRow, query: string): boolean {
 }
 
 export function nextKind(kind: DocKind | null): DocKind | null {
-  if (kind === null) return DOC_KINDS[0];
+  if (kind === null) {
+    return DOC_KINDS[0];
+  }
   const i = DOC_KINDS.indexOf(kind);
   return i === DOC_KINDS.length - 1 ? null : DOC_KINDS[i + 1];
 }
@@ -349,13 +478,26 @@ export function projectChoices(rows: DocRow[]): ProjectFilter[] {
   const ids: number[] = [];
   let none = false;
   for (const row of rows) {
-    if (row.owners.every((o) => o.projectId === null)) none = true;
-    for (const o of row.owners) if (o.projectId !== null && !ids.includes(o.projectId)) ids.push(o.projectId);
+    if (row.owners.every((o) => o.projectId === null)) {
+      none = true;
+    }
+    for (const o of row.owners) {
+      if (o.projectId !== null && !ids.includes(o.projectId)) {
+        ids.push(o.projectId);
+      }
+    }
   }
-  return [null, ...ids.sort((a, b) => a - b), ...(none ? (["none"] as const) : [])];
+  return [
+    null,
+    ...ids.sort((a, b) => a - b),
+    ...(none ? (["none"] as const) : []),
+  ];
 }
 
-export function nextProject(current: ProjectFilter, choices: ProjectFilter[]): ProjectFilter {
+export function nextProject(
+  current: ProjectFilter,
+  choices: ProjectFilter[],
+): ProjectFilter {
   const i = choices.indexOf(current);
   return choices[(i + 1) % choices.length] ?? null;
 }

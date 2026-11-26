@@ -11,8 +11,9 @@ function git(cwd: string, args: string[]): string {
     stdout: "pipe",
     stderr: "pipe",
   });
-  if (proc.exitCode !== 0)
+  if (proc.exitCode !== 0) {
     throw new Error(`git ${args.join(" ")}: ${proc.stderr.toString().trim()}`);
+  }
   return proc.stdout.toString().trim();
 }
 
@@ -46,15 +47,18 @@ export function makeCheckout(source: string, home: string): SimCheckout {
     source,
     path,
   ]);
-  if (!existsSync(join(path, ".git")))
+  if (!existsSync(join(path, ".git"))) {
     throw new Error(`could not clone ${source}`);
+  }
   run(["remote", "remove", "origin"]);
   const head = run(["rev-parse", "HEAD"]);
   const count = Number(run(["rev-list", "--count", "--first-parent", "HEAD"]));
   const depth = Math.max(1, Math.min(DEPTH, count - 1));
   run(["checkout", "-q", "-B", "main", `${head}~${depth}`]);
   // Each PR is one plain commit's change (a merge is a whole PR's).
-  const commits = run(["rev-list", "--no-merges", `main..${head}`]).split("\n").filter(Boolean);
+  const commits = run(["rev-list", "--no-merges", `main..${head}`])
+    .split("\n")
+    .filter(Boolean);
   const work = join(home, "worktrees", "work");
   run(["worktree", "add", "-q", "-b", WORK_BRANCH, work, head]);
   return {
@@ -79,19 +83,38 @@ export function makeBranch(
   for (let i = 0; i < commits.length; i++) {
     const sha = commits[(from + i) % commits.length]!;
     const merged = Bun.spawnSync(
-      ["git", "-C", checkout, "merge-tree", "--write-tree", `--merge-base=${sha}^1`, base, sha],
+      [
+        "git",
+        "-C",
+        checkout,
+        "merge-tree",
+        "--write-tree",
+        `--merge-base=${sha}^1`,
+        base,
+        sha,
+      ],
       { stdout: "pipe", stderr: "pipe" },
     );
-    if (merged.exitCode !== 0) continue;
+    if (merged.exitCode !== 0) {
+      continue;
+    }
     const tree = merged.stdout.toString().split("\n")[0]!.trim();
-    if (tree === git(checkout, ["rev-parse", `${base}^{tree}`])) continue;
+    if (tree === git(checkout, ["rev-parse", `${base}^{tree}`])) {
+      continue;
+    }
     layOver(checkout, branch, sha, tree, base);
     return;
   }
   git(checkout, ["branch", "-f", branch, commits[from % commits.length]!]);
 }
 
-function layOver(checkout: string, branch: string, sha: string, tree: string, base: string): void {
+function layOver(
+  checkout: string,
+  branch: string,
+  sha: string,
+  tree: string,
+  base: string,
+): void {
   const subject = git(checkout, ["log", "-1", "--format=%s", sha]);
   const commit = git(checkout, [
     "-c",
@@ -119,8 +142,9 @@ export function worktreeFor(
   );
   for (const entry of listed) {
     const lines = entry.split("\n");
-    if (lines.includes(`branch refs/heads/${branch}`))
+    if (lines.includes(`branch refs/heads/${branch}`)) {
       return lines[0].replace("worktree ", "");
+    }
   }
   const path = join(home, "worktrees", branch.replaceAll("/", "-"));
   git(checkout, ["worktree", "add", "-q", path, branch]);
@@ -145,14 +169,20 @@ export function diffLines(
   for (const row of out.split("\n")) {
     if (row.startsWith("+++ ")) {
       path = row === "+++ /dev/null" ? null : row.slice(6);
-      if (path) files.push(path);
+      if (path) {
+        files.push(path);
+      }
       continue;
     }
     const hunk = row.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
-    if (!hunk || !path) continue;
+    if (!hunk || !path) {
+      continue;
+    }
     const start = Number(hunk[1]);
     const size = hunk[2] === undefined ? 1 : Number(hunk[2]);
-    for (let i = 0; i < size; i++) lines.push({ path, line: start + i });
+    for (let i = 0; i < size; i++) {
+      lines.push({ path, line: start + i });
+    }
   }
   return { files, lines };
 }

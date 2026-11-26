@@ -3,7 +3,12 @@
 // move anything.
 
 import type { RikerConfig } from "./config";
-import { journalSwitch, projectStoryDefault, storySwitch, switchWords } from "./digests";
+import {
+  journalSwitch,
+  projectStoryDefault,
+  storySwitch,
+  switchWords,
+} from "./digests";
 import { labeled } from "./rows";
 import { storyBlock } from "./story";
 import { transcript } from "./transcript";
@@ -63,16 +68,21 @@ export interface TaskFilter {
 
 export function findTasks(filter: TaskFilter = {}): TaskRow[] {
   const project = filter.project ? findProject(filter.project) : null;
-  if (filter.project && !project) return [];
+  if (filter.project && !project) {
+    return [];
+  }
   const words = (filter.query ?? "").toLowerCase().split(/\s+/).filter(Boolean);
   return store.listTasks().filter((t) => {
     if (
       !filter.all &&
       t.status !== TaskStatus.open &&
       t.status !== TaskStatus.later
-    )
+    ) {
       return false;
-    if (project && t.project_id !== project.id) return false;
+    }
+    if (project && t.project_id !== project.id) {
+      return false;
+    }
     const text = `${store.taskRef(t.id)} ${t.title} ${t.summary}`.toLowerCase();
     return words.every((w) => text.includes(w));
   });
@@ -85,7 +95,11 @@ export function linkLine(l: TaskLinkRow | ProjectLinkRow): string {
 // The board drops a task's notes when it closes; its detail keeps the latest.
 const TASK_NOTES = 10;
 
-export function taskDetail(t: TaskRow, turns = 12, config?: RikerConfig): string {
+export function taskDetail(
+  t: TaskRow,
+  turns = 12,
+  config?: RikerConfig,
+): string {
   const story = storyBlock(t.id);
   const facts = [
     taskLine(t),
@@ -98,14 +112,20 @@ export function taskDetail(t: TaskRow, turns = 12, config?: RikerConfig): string
     t.agent_says ? `Agent says: ${t.agent_says}` : "",
     ...store
       .timersForTask(t.id)
-      .map((timer) => `Timer ${timerRef(timer.id)}: ${timerLine(timer, new Date())}`),
+      .map(
+        (timer) =>
+          `Timer ${timerRef(timer.id)}: ${timerLine(timer, new Date())}`,
+      ),
     config ? `Switches: ${switchWords("story", storySwitch(config, t))}` : "",
     story ? `\n${story}\n` : "",
   ].filter(Boolean);
   const notes = store
     .notesForTask(t.id)
     .slice(-TASK_NOTES)
-    .map((n) => `Note ${n.created_at.slice(0, 16)} ${n.author} [${n.label}]: ${n.body}`);
+    .map(
+      (n) =>
+        `Note ${n.created_at.slice(0, 16)} ${n.author} [${n.label}]: ${n.body}`,
+    );
   const said = transcript(store.turnsForTask(t.id).slice(-turns));
   return [[...facts, ...notes].join("\n"), said].filter(Boolean).join("\n\n");
 }
@@ -131,7 +151,9 @@ export function projectSummary(p: ProjectRow): RailProject {
 
 export function managerInfo(projectId: number): ManagerInfo | null {
   const manager = store.managerOf(projectId);
-  if (!manager) return null;
+  if (!manager) {
+    return null;
+  }
   return {
     id: manager.id,
     state: manager.agent_state,
@@ -200,7 +222,9 @@ export function projectLine(p: ProjectRow): string {
 // each has come, the docs, and the open work that names no goal.
 export function projectDetail(p: ProjectRow, config?: RikerConfig): string {
   const progress = projectProgress(p);
-  const goals = progress.goals.filter((g) => g.goal.status !== GoalStatus.dropped);
+  const goals = progress.goals.filter(
+    (g) => g.goal.status !== GoalStatus.dropped,
+  );
   const links = store.linksForProject(p.id);
   return [
     projectLine(p),
@@ -211,11 +235,16 @@ export function projectDetail(p: ProjectRow, config?: RikerConfig): string {
     goals.length
       ? `\nGoals:\n${goals
           .map((g) =>
-            [goalLine(g), ...g.tasks.filter(isOpen).map((t) => `  ${taskLine(t)}`)].join("\n"),
+            [
+              goalLine(g),
+              ...g.tasks.filter(isOpen).map((t) => `  ${taskLine(t)}`),
+            ].join("\n"),
           )
           .join("\n")}`
       : "\nNo goals yet.",
-    links.length ? `\nDocs:\n${links.map((l) => `- ${linkLine(l)}`).join("\n")}` : "",
+    links.length
+      ? `\nDocs:\n${links.map((l) => `- ${linkLine(l)}`).join("\n")}`
+      : "",
     progress.loose.length
       ? `\nOpen tasks for no goal:\n${progress.loose.map((t) => `  ${taskLine(t)}`).join("\n")}`
       : "",
@@ -257,8 +286,12 @@ export function projectBrief(p: ProjectRow): string {
     p.brief ? `\nBrief:\n${p.brief}` : "\nNo brief yet.",
     standingBlock(p),
     managerLine(p),
-    goals.length ? `\nGoals:\n${goals.map(goalLine).join("\n")}` : "\nNo goals yet.",
-    links.length ? `\nDocs:\n${links.map((l) => `- ${linkLine(l)}`).join("\n")}` : "",
+    goals.length
+      ? `\nGoals:\n${goals.map(goalLine).join("\n")}`
+      : "\nNo goals yet.",
+    links.length
+      ? `\nDocs:\n${links.map((l) => `- ${linkLine(l)}`).join("\n")}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -268,17 +301,23 @@ export function projectBrief(p: ProjectRow): string {
 // is for, the goal this task serves, the others beside it, and the docs.
 export function projectContext(task: TaskRow): string {
   const p = task.project_id ? store.getProject(task.project_id) : null;
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   const goals = store
     .goalsForProject(p.id)
     .filter((g) => g.status !== GoalStatus.dropped);
   const links = store.linksForProject(p.id);
-  if (!p.brief && !goals.length && !links.length) return "";
+  if (!p.brief && !goals.length && !links.length) {
+    return "";
+  }
   const mine = goals.find((g) => g.id === task.goal_id);
   return [
     `## The project: ${p.name}`,
     p.brief,
-    mine ? `This task works toward ${store.goalRef(mine.id)}: ${mine.title}` : "",
+    mine
+      ? `This task works toward ${store.goalRef(mine.id)}: ${mine.title}`
+      : "",
     goals.length
       ? `Project goals:\n${goals.map((g) => `- ${store.goalRef(g.id)} [${g.status}] ${g.title}`).join("\n")}`
       : "",
@@ -295,8 +334,6 @@ export function findProject(name: string): ProjectRow | null {
   return (
     store
       .listProjects()
-      .find((p) => key(p.name) === want || key(p.tmux_session) === want) ??
-    null
+      .find((p) => key(p.name) === want || key(p.tmux_session) === want) ?? null
   );
 }
-

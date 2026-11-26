@@ -20,12 +20,15 @@
     "docs:screenshots": "bun run packages/tui/script/screenshots.ts",
     "docs:site": "bun run packages/tui/script/site.ts",
     "test": "bun test",
-    "format": "prettier --write packages"
+    "lint": "oxlint packages && oxfmt --check packages",
+    "format": "oxlint --fix packages; oxfmt packages"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "25.2.0",
-    "prettier": "3.8.1",
+    "oxfmt": "0.78.0",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2006",
     "typescript": "5.9.3"
   }
 }

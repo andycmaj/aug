@@ -9,7 +9,14 @@
 import { SECTION_TITLES, type RailItem, type RailSection } from "./rail";
 import { taskRef, type SearchTurn } from "./store";
 import { laneOf } from "./lanes";
-import { Channel, Kind, TaskStatus, TurnRole, type MessageRow, type TaskRow } from "./types";
+import {
+  Channel,
+  Kind,
+  TaskStatus,
+  TurnRole,
+  type MessageRow,
+  type TaskRow,
+} from "./types";
 
 interface Person {
   // null: a name typed by hand (waiting on), with no account behind it.
@@ -68,9 +75,13 @@ function githubNumber(
 }
 
 function personOf(m: MessageRow): Person | null {
-  if (m.from_me || m.channel === Channel.owner) return null;
+  if (m.from_me || m.channel === Channel.owner) {
+    return null;
+  }
   // A channel's stand-in when it names nobody (GitHub's "github").
-  if (m.author === m.channel) return null;
+  if (m.author === m.channel) {
+    return null;
+  }
   return {
     channel: m.channel,
     handle: m.author,
@@ -82,7 +93,9 @@ function uniq<T>(list: T[], key: (t: T) => string): T[] {
   const seen = new Set<string>();
   return list.filter((t) => {
     const k = key(t);
-    if (seen.has(k)) return false;
+    if (seen.has(k)) {
+      return false;
+    }
     seen.add(k);
     return true;
   });
@@ -144,7 +157,9 @@ export function searchIndex(
   for (const s of sections) {
     for (const item of s.items) {
       // A Win or watched task listed twice is found once, at its own row.
-      if (item.type === "task" && item.copy) continue;
+      if (item.type === "task" && item.copy) {
+        continue;
+      }
       const base = {
         item,
         section: SECTION_TITLES[s.section],
@@ -173,12 +188,16 @@ export function searchIndex(
   for (const task of closed) {
     const item = closedItem(task);
     docs.push({
-      ...taskDoc(item, {
+      ...taskDoc(
         item,
-        section: task.status === TaskStatus.dropped ? "Dropped" : "Done",
-        order: docs.length,
-        title: task.title,
-      }, sources),
+        {
+          item,
+          section: task.status === TaskStatus.dropped ? "Dropped" : "Done",
+          order: docs.length,
+          title: task.title,
+        },
+        sources,
+      ),
       closed: true,
     });
   }
@@ -208,12 +227,13 @@ function taskDoc(
   const t = item.task;
   const filed = sources.messages.get(t.id) ?? [];
   const people = filed.map(personOf).filter((p): p is Person => !!p);
-  if (t.waiting_on)
+  if (t.waiting_on) {
     people.push({
       channel: null,
       handle: t.waiting_on,
       name: t.waiting_on,
     });
+  }
   return {
     ...base,
     taskId: t.id,
@@ -250,18 +270,29 @@ interface Match {
 // 0 begins the text, 1 begins a word in it, 2 is inside it.
 function textScore(text: string, word: string): number | null {
   const t = text.toLowerCase();
-  if (t.startsWith(word)) return 0;
+  if (t.startsWith(word)) {
+    return 0;
+  }
   const at = t.indexOf(word);
-  if (at === -1) return null;
-  for (let i = at; i !== -1; i = t.indexOf(word, i + 1))
-    if (!/[a-z0-9]/.test(t[i - 1])) return 1;
+  if (at === -1) {
+    return null;
+  }
+  for (let i = at; i !== -1; i = t.indexOf(word, i + 1)) {
+    if (!/[a-z0-9]/.test(t[i - 1])) {
+      return 1;
+    }
+  }
   return 2;
 }
 
 function personWhy(p: Person): string {
-  if (!p.channel) return `waiting on ${p.name}`;
+  if (!p.channel) {
+    return `waiting on ${p.name}`;
+  }
   // A display name when the channel has one (Slack), else the handle.
-  return p.name !== p.handle ? `${p.channel} ${p.name}` : `${p.channel} @${p.handle}`;
+  return p.name !== p.handle
+    ? `${p.channel} ${p.name}`
+    : `${p.channel} @${p.handle}`;
 }
 
 function personMatch(doc: SearchDoc, word: string, base: number): Match | null {
@@ -270,17 +301,24 @@ function personMatch(doc: SearchDoc, word: string, base: number): Match | null {
     const scores = [textScore(p.name, word), textScore(p.handle, word)].filter(
       (n): n is number => n !== null,
     );
-    if (scores.length === 0) continue;
+    if (scores.length === 0) {
+      continue;
+    }
     const s = Math.min(...scores);
-    if (!best || base + s < best.score)
+    if (!best || base + s < best.score) {
       best = { score: base + s, why: personWhy(p) };
+    }
   }
   return best;
 }
 
 function better(a: Match | null, b: Match | null): Match | null {
-  if (!a) return b;
-  if (!b) return a;
+  if (!a) {
+    return b;
+  }
+  if (!b) {
+    return a;
+  }
   return b.score < a.score ? b : a;
 }
 
@@ -298,7 +336,9 @@ function wordMatch(doc: SearchDoc, raw: string): Match | null {
   if (hash) {
     const n = Number(hash[1]);
     const gh = doc.numbers.find((x) => x.n === n);
-    if (gh) return { score: 0, why: gh.where };
+    if (gh) {
+      return { score: 0, why: gh.where };
+    }
     return doc.taskId === n ? { score: 1, why: null } : null;
   }
 
@@ -309,27 +349,41 @@ function wordMatch(doc: SearchDoc, raw: string): Match | null {
   if (ref) {
     const id = doc.taskId === null ? "" : String(doc.taskId);
     const want = ref[2] || "0";
-    if (id === want) match = { score: 0, why: null };
-    else if (id.startsWith(want)) match = { score: 3, why: null };
-    if (ref[1]) return match;
+    if (id === want) {
+      match = { score: 0, why: null };
+    } else if (id.startsWith(want)) {
+      match = { score: 3, why: null };
+    }
+    if (ref[1]) {
+      return match;
+    }
     const gh = doc.numbers.find((x) => String(x.n) === want);
-    if (gh) match = better(match, { score: 1, why: gh.where });
+    if (gh) {
+      match = better(match, { score: 1, why: gh.where });
+    }
   }
 
   const title = textScore(doc.title, word);
-  if (title !== null) match = better(match, { score: title, why: null });
+  if (title !== null) {
+    match = better(match, { score: title, why: null });
+  }
   match = better(match, personMatch(doc, word, 1));
   if (
     doc.item.type === "task" &&
     taskRef(doc.item.task.id).toLowerCase().includes(word)
-  )
+  ) {
     match = better(match, { score: 2, why: null });
-  for (const n of doc.numbers)
-    if (n.where.toLowerCase().includes(word))
+  }
+  for (const n of doc.numbers) {
+    if (n.where.toLowerCase().includes(word)) {
       match = better(match, { score: 3, why: n.where });
+    }
+  }
   for (const c of doc.content) {
     const s = textScore(c.text, word);
-    if (s === null) continue;
+    if (s === null) {
+      continue;
+    }
     match = better(
       match,
       c.chat
@@ -350,7 +404,9 @@ export function search(
   const words = query.trim().split(/\s+/).filter(Boolean);
   const scored: { doc: SearchDoc; score: number; why: string[] }[] = [];
   for (const doc of docs) {
-    if (doc.closed && !words.length) continue;
+    if (doc.closed && !words.length) {
+      continue;
+    }
     let score = 0;
     const why: string[] = [];
     let all = true;
@@ -361,9 +417,13 @@ export function search(
         break;
       }
       score += m.score;
-      if (m.why && !why.includes(m.why)) why.push(m.why);
+      if (m.why && !why.includes(m.why)) {
+        why.push(m.why);
+      }
     }
-    if (all) scored.push({ doc, score, why });
+    if (all) {
+      scored.push({ doc, score, why });
+    }
   }
   return scored
     .sort((a, b) => a.score - b.score || a.doc.order - b.doc.order)
@@ -402,7 +462,9 @@ export function goToList(
   showDone = false,
 ): SearchHit[] {
   const shown = showDone ? docs : docs.filter((d) => !d.closed);
-  if (query.trim()) return search(shown, query);
+  if (query.trim()) {
+    return search(shown, query);
+  }
   const byKey = new Map(shown.map((d) => [d.item.key, d]));
   const recent = recentKeys
     .flatMap((k) => byKey.get(k) ?? [])

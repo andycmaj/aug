@@ -7,7 +7,11 @@ import { linkByBranch, triage } from "../src/triage";
 beforeEach(() => freshHome());
 
 let seq = 0;
-function prMessage(number: number, body: string, opts: { head?: string; fromMe?: boolean; at?: string } = {}) {
+function prMessage(
+  number: number,
+  body: string,
+  opts: { head?: string; fromMe?: boolean; at?: string } = {},
+) {
   seq++;
   return store.insertMessage({
     channel: "github",
@@ -20,7 +24,13 @@ function prMessage(number: number, body: string, opts: { head?: string; fromMe?:
     url: `https://github.com/acme/ledger/pull/${number}#c${seq}`,
     receivedAt: opts.at ?? new Date(Date.now() + seq * 1000).toISOString(),
     fromMe: opts.fromMe,
-    meta: { repo: "acme/ledger", number, type: "PullRequest", reason: "comment", ...(opts.head ? { head: opts.head } : {}) },
+    meta: {
+      repo: "acme/ledger",
+      number,
+      type: "PullRequest",
+      reason: "comment",
+      ...(opts.head ? { head: opts.head } : {}),
+    },
   })!;
 }
 
@@ -33,7 +43,13 @@ function branchTask() {
     threadKey: "github:acme/ledger#214",
     branch: "keep-transfers",
   });
-  store.createSession({ id: `s${t.id}`, taskId: t.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "owner" });
+  store.createSession({
+    id: `s${t.id}`,
+    taskId: t.id,
+    kind: SessionKind.tmux,
+    cwd: "/w",
+    startedBy: "owner",
+  });
   return t;
 }
 
@@ -42,7 +58,10 @@ describe("linking a PR to its task by branch", () => {
     const t = branchTask();
     const m = prMessage(230, "Please add a test", { head: "keep-transfers" });
     expect(linkByBranch(m)).toBe(t.id);
-    expect(store.threadsForTask(t.id)).toEqual(["github:acme/ledger#214", "github:acme/ledger#230"]);
+    expect(store.threadsForTask(t.id)).toEqual([
+      "github:acme/ledger#214",
+      "github:acme/ledger#230",
+    ]);
     expect(store.openTaskForThread("github:acme/ledger#230")?.id).toBe(t.id);
     const outcome = await triage(m, { config: config() });
     expect(outcome.taskId).toBe(t.id);
@@ -51,8 +70,9 @@ describe("linking a PR to its task by branch", () => {
 
   test("other branches and other channels are not linked", () => {
     branchTask();
-    expect(linkByBranch(prMessage(231, "x", { head: "someone-else" }))).toBeNull();
+    expect(
+      linkByBranch(prMessage(231, "x", { head: "someone-else" })),
+    ).toBeNull();
     expect(linkByBranch(prMessage(232, "x"))).toBeNull();
   });
-
 });

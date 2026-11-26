@@ -37,14 +37,20 @@ const SLACK_DEFAULTS: SlackConfig = {
   model: "haiku",
 };
 
-export const slackConfig = configSection<SlackConfig>("slack", SLACK_DEFAULTS, (written, config) => ({
-  ...SLACK_DEFAULTS,
-  ...written,
-  pollSeconds:
-    written.pollSeconds ??
-    (written.transport === "claude-mcp" ? CLAUDE_MCP_POLL_SECONDS : SLACK_DEFAULTS.pollSeconds),
-  model: written.model ?? legacyModel(config) ?? SLACK_DEFAULTS.model,
-}));
+export const slackConfig = configSection<SlackConfig>(
+  "slack",
+  SLACK_DEFAULTS,
+  (written, config) => ({
+    ...SLACK_DEFAULTS,
+    ...written,
+    pollSeconds:
+      written.pollSeconds ??
+      (written.transport === "claude-mcp"
+        ? CLAUDE_MCP_POLL_SECONDS
+        : SLACK_DEFAULTS.pollSeconds),
+    model: written.model ?? legacyModel(config) ?? SLACK_DEFAULTS.model,
+  }),
+);
 
 function legacyModel(config: RikerConfig): string | undefined {
   const model = (config.brain as { slackModel?: unknown }).slackModel;
@@ -67,15 +73,25 @@ export interface RemoteConfig {
   notify: ("finished" | "waiting")[];
 }
 
-const REMOTE_DEFAULTS: RemoteConfig = { enabled: false, pollSeconds: 15, notify: [] };
+const REMOTE_DEFAULTS: RemoteConfig = {
+  enabled: false,
+  pollSeconds: 15,
+  notify: [],
+};
 
-export const remoteConfig = configSection<RemoteConfig>("remote", REMOTE_DEFAULTS, (written, config) => ({
-  ...REMOTE_DEFAULTS,
-  ...written,
-  pollSeconds:
-    written.pollSeconds ??
-    (slackConfig.of(config).transport === "claude-mcp" ? CLAUDE_MCP_REMOTE_SECONDS : REMOTE_DEFAULTS.pollSeconds),
-}));
+export const remoteConfig = configSection<RemoteConfig>(
+  "remote",
+  REMOTE_DEFAULTS,
+  (written, config) => ({
+    ...REMOTE_DEFAULTS,
+    ...written,
+    pollSeconds:
+      written.pollSeconds ??
+      (slackConfig.of(config).transport === "claude-mcp"
+        ? CLAUDE_MCP_REMOTE_SECONDS
+        : REMOTE_DEFAULTS.pollSeconds),
+  }),
+);
 
 export function slackToken(config: RikerConfig): string | undefined {
   return process.env.SLACK_TOKEN ?? slackConfig.of(config).token;

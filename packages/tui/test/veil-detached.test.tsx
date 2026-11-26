@@ -15,7 +15,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 const AGENT = [
@@ -31,7 +33,9 @@ async function boot() {
   const csv = store
     .listTasks()
     .find((t) => t.title === "CSV import fails on a BOM");
-  if (!csv) throw new Error("demo has no CSV task");
+  if (!csv) {
+    throw new Error("demo has no CSV task");
+  }
   const isLive = engine.desk.isLive.bind(engine.desk);
   engine.desk.isLive = (t) => t.id === csv.id || isLive(t);
   engine.desk.viewer = async () => ({ argv: AGENT });
@@ -52,24 +56,31 @@ async function boot() {
     await settle();
   };
   const type = async (text: string) => {
-    for (const c of text) setup.mockInput.pressKey(c);
+    for (const c of text) {
+      setup.mockInput.pressKey(c);
+    }
     await settle();
   };
   const frameWith = async (want: string) => {
     const end = Date.now() + 3000;
-    while (!frame().includes(want) && Date.now() < end) await settle(20);
+    while (!frame().includes(want) && Date.now() < end) {
+      await settle(20);
+    }
     return frame();
   };
   // How far the agent's own text stands from the cell behind it: the sum of
   // the channel gaps, 0 when the text would vanish into its background.
   const contrast = (want: string) => {
-    for (const line of setup.captureSpans().lines)
+    for (const line of setup.captureSpans().lines) {
       for (const span of line.spans) {
-        if (!span.text.includes(want)) continue;
+        if (!span.text.includes(want)) {
+          continue;
+        }
         const fg = span.fg.toInts();
         const bg = span.bg.toInts();
         return [0, 1, 2].reduce((n, i) => n + Math.abs(fg[i] - bg[i]), 0);
       }
+    }
     throw new Error(`no span holds ${want}`);
   };
   return { press, type, frame, frameWith, contrast };

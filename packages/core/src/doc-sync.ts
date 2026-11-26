@@ -46,9 +46,13 @@ export interface SyncResult {
 export function migrateSoul(at = new Date()): boolean {
   const soulFile = docPath("SOUL.md");
   const counselFile = docPath("COUNSEL.md");
-  if (!existsSync(soulFile) && !existsSync(counselFile)) return false;
+  if (!existsSync(soulFile) && !existsSync(counselFile)) {
+    return false;
+  }
   const others = Object.values(DocName).filter((n) => existsSync(docPath(n)));
-  for (const name of ["SOUL.md", "COUNSEL.md", ...others]) trashDoc(name, at);
+  for (const name of ["SOUL.md", "COUNSEL.md", ...others]) {
+    trashDoc(name, at);
+  }
 
   if (!existsSync(docPath(DocName.persona))) {
     const soul = existsSync(soulFile) ? readFileSync(soulFile, "utf8") : null;
@@ -57,15 +61,23 @@ export function migrateSoul(at = new Date()): boolean {
       : null;
     writeDoc(DocName.persona, mergePersona(soul, counsel));
   }
-  if (existsSync(soulFile)) unlinkSync(soulFile);
-  if (existsSync(counselFile)) unlinkSync(counselFile);
+  if (existsSync(soulFile)) {
+    unlinkSync(soulFile);
+  }
+  if (existsSync(counselFile)) {
+    unlinkSync(counselFile);
+  }
 
   for (const name of Object.values(DocName)) {
     const file = docPath(name);
-    if (!existsSync(file)) continue;
+    if (!existsSync(file)) {
+      continue;
+    }
     const text = readFileSync(file, "utf8");
     const renamed = text.replace(/\b(SOUL|COUNSEL)\.md\b/g, "PERSONA.md");
-    if (renamed !== text) writeFileSync(file, renamed);
+    if (renamed !== text) {
+      writeFileSync(file, renamed);
+    }
   }
   log.info("migrated SOUL.md and COUNSEL.md to PERSONA.md");
   return true;
@@ -73,7 +85,10 @@ export function migrateSoul(at = new Date()): boolean {
 
 // SOUL.md's text under a PERSONA heading, then COUNSEL.md's under its own.
 // From the old shipped pair this gives exactly the new shipped PERSONA.md.
-export function mergePersona(soul: string | null, counsel: string | null): string {
+export function mergePersona(
+  soul: string | null,
+  counsel: string | null,
+): string {
   const rules = (soul ?? "").replace(/^# SOUL\b.*$/m, "# PERSONA").trimEnd();
   const voice = (counsel ?? "").replace(/^# COUNSEL\b.*\n*/m, "").trim();
   const top = rules || "# PERSONA";
@@ -88,13 +103,18 @@ export function syncShipped(): Pick<SyncResult, "updated" | "asked"> {
   const updated: DocName[] = [];
   const asked: DocName[] = [];
   for (const name of Object.values(DocName)) {
-    if (DOC_CLASS[name] === DocClass.learned) continue;
+    if (DOC_CLASS[name] === DocClass.learned) {
+      continue;
+    }
     const shipped = shippedText(name);
     const now = docHash(shipped);
     const was = store.kvGet(shippedKey(name));
-    if (was === now) continue;
-    if (!existsSync(docPath(name))) writeDoc(name, shipped);
-    else {
+    if (was === now) {
+      continue;
+    }
+    if (!existsSync(docPath(name))) {
+      writeDoc(name, shipped);
+    } else {
       const mine = docHash(readDoc(name));
       if (mine === now) {
         // Already the new text.
@@ -121,7 +141,9 @@ const OFFERED = "onboard.offered";
 // Once per install: a SYSTEM task offering the interview. Never started by
 // itself.
 export function offerOnboarding(): boolean {
-  if (store.kvGet(OFFERED)) return false;
+  if (store.kvGet(OFFERED)) {
+    return false;
+  }
   const task = systemTask(
     "Set up your docs: a short interview",
     [
@@ -143,13 +165,18 @@ export function syncDocs(opts: { offer?: boolean } = {}): SyncResult {
   const result = syncShipped();
   const learned = readDoc(DocName.learned);
   const sectioned = withLearnedSections(learned);
-  if (sectioned !== learned) writeDoc(DocName.learned, sectioned);
-  if (opts.offer) offerOnboarding();
+  if (sectioned !== learned) {
+    writeDoc(DocName.learned, sectioned);
+  }
+  if (opts.offer) {
+    offerOnboarding();
+  }
   pruneTrash();
-  if (result.updated.length || result.asked.length)
+  if (result.updated.length || result.asked.length) {
     log.info("shipped docs", {
       updated: result.updated.join(","),
       asked: result.asked.join(","),
     });
+  }
   return { migrated, ...result };
 }

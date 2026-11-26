@@ -42,10 +42,19 @@ DAYS.forEach((d, i) => {
   DAY_WORDS[d] = [i];
 });
 for (const [word, i] of [
-  ["sunday", 0], ["monday", 1], ["tues", 2], ["tuesday", 2], ["wednesday", 3],
-  ["thur", 4], ["thurs", 4], ["thursday", 4], ["friday", 5], ["saturday", 6],
-] as const)
+  ["sunday", 0],
+  ["monday", 1],
+  ["tues", 2],
+  ["tuesday", 2],
+  ["wednesday", 3],
+  ["thur", 4],
+  ["thurs", 4],
+  ["thursday", 4],
+  ["friday", 5],
+  ["saturday", 6],
+] as const) {
   DAY_WORDS[word] = [i];
+}
 
 // Words a rule may carry that say nothing ("every weekday at 09:00").
 const FILLER = new Set(["every", "at", "on", "and", "week", "weekly"]);
@@ -59,28 +68,41 @@ export interface Rule {
 
 function parseTime(word: string): { hour: number; minute: number } | null {
   const m = /^(\d{1,2})(?::(\d{2}))?(am|pm)?$/.exec(word);
-  if (!m || (m[2] === undefined && m[3] === undefined)) return null;
+  if (!m || (m[2] === undefined && m[3] === undefined)) {
+    return null;
+  }
   let hour = Number(m[1]);
   const minute = Number(m[2] ?? 0);
   if (m[3]) {
-    if (hour < 1 || hour > 12) return null;
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
     hour = (hour % 12) + (m[3] === "pm" ? 12 : 0);
   }
-  if (hour > 23 || minute > 59) return null;
+  if (hour > 23 || minute > 59) {
+    return null;
+  }
   return { hour, minute };
 }
 
 // "every weekday 09:00", "daily at 7am", "weekly on mon,thu 14:30". The
 // time is the owner's local time.
 export function parseRule(text: string): Rule {
-  const words = text.toLowerCase().split(/[\s,]+/).filter(Boolean);
+  const words = text
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .filter(Boolean);
   const days = new Set<number>();
   let time: { hour: number; minute: number } | null = null;
   for (const word of words) {
-    if (FILLER.has(word)) continue;
+    if (FILLER.has(word)) {
+      continue;
+    }
     const named = DAY_WORDS[word];
     if (named) {
-      for (const d of named) days.add(d);
+      for (const d of named) {
+        days.add(d);
+      }
       continue;
     }
     const t = parseTime(word);
@@ -92,9 +114,14 @@ export function parseRule(text: string): Rule {
       `a schedule is days and a time, like "every weekday 09:00", "daily 7am" or "mon,thu 14:30": "${word}" is neither`,
     );
   }
-  if (days.size === 0)
-    throw new TimerError(`which days? daily, weekdays, or day names (mon,thu): got "${text}"`);
-  if (!time) throw new TimerError(`at what time? 09:00 or 9am: got "${text}"`);
+  if (days.size === 0) {
+    throw new TimerError(
+      `which days? daily, weekdays, or day names (mon,thu): got "${text}"`,
+    );
+  }
+  if (!time) {
+    throw new TimerError(`at what time? 09:00 or 9am: got "${text}"`);
+  }
   return { days: [...days].sort((a, b) => a - b), ...time };
 }
 
@@ -103,8 +130,12 @@ function hhmm(rule: Rule): string {
 }
 
 function daysWord(days: number[]): string {
-  if (days.length === 7) return "daily";
-  if (days.join() === WEEKDAYS.join()) return "weekdays";
+  if (days.length === 7) {
+    return "daily";
+  }
+  if (days.join() === WEEKDAYS.join()) {
+    return "weekdays";
+  }
   return days.map((d) => DAYS[d]).join(",");
 }
 
@@ -117,7 +148,11 @@ export function describeRule(text: string): string {
   const rule = parseRule(text);
   const days = daysWord(rule.days);
   const every =
-    days === "daily" ? "every day" : days === "weekdays" ? "every weekday" : `every ${days}`;
+    days === "daily"
+      ? "every day"
+      : days === "weekdays"
+        ? "every weekday"
+        : `every ${days}`;
   return `${every} at ${hhmm(rule)}`;
 }
 
@@ -129,7 +164,9 @@ export function nextAfter(text: string, after: Date): Date {
     const at = new Date(after);
     at.setDate(at.getDate() + i);
     at.setHours(rule.hour, rule.minute, 0, 0);
-    if (rule.days.includes(at.getDay()) && at > after) return at;
+    if (rule.days.includes(at.getDay()) && at > after) {
+      return at;
+    }
   }
   throw new TimerError(`no next time for "${text}"`);
 }
@@ -145,26 +182,43 @@ const UNIT_MS: Record<string, number> = {
 
 // "30m", "3h", "1d", "2w" from now.
 export function parseIn(text: string, from: Date): Date {
-  const m = /^(\d+(?:\.\d+)?)\s*(m|min|mins|minutes?|h|hrs?|hours?|d|days?|w|weeks?)$/.exec(
-    text.trim().toLowerCase(),
-  );
-  if (!m) throw new TimerError(`--in is a number and a unit, like 30m, 3h, 1d or 2w: got "${text}"`);
+  const m =
+    /^(\d+(?:\.\d+)?)\s*(m|min|mins|minutes?|h|hrs?|hours?|d|days?|w|weeks?)$/.exec(
+      text.trim().toLowerCase(),
+    );
+  if (!m) {
+    throw new TimerError(
+      `--in is a number and a unit, like 30m, 3h, 1d or 2w: got "${text}"`,
+    );
+  }
   const ms = Number(m[1]) * UNIT_MS[m[2]![0]!]!;
-  if (ms < 60_000) throw new TimerError(`--in is at least a minute: got "${text}"`);
+  if (ms < 60_000) {
+    throw new TimerError(`--in is at least a minute: got "${text}"`);
+  }
   return new Date(from.getTime() + ms);
 }
 
 export function parseAt(text: string, from: Date): Date {
   const at = new Date(text.trim());
-  if (Number.isNaN(at.getTime()))
-    throw new TimerError(`--at is a date and time, like 2026-11-24T09:00: got "${text}"`);
-  if (at <= from) throw new TimerError(`--at is in the past: ${text}`);
+  if (Number.isNaN(at.getTime())) {
+    throw new TimerError(
+      `--at is a date and time, like 2026-11-24T09:00: got "${text}"`,
+    );
+  }
+  if (at <= from) {
+    throw new TimerError(`--at is in the past: ${text}`);
+  }
   return at;
 }
 
 // ── setting and listing ──────────────────────────────────────────────────
 
-export function addFollowup(taskId: number, dueAt: Date, note: string, by: string): TimerRow {
+export function addFollowup(
+  taskId: number,
+  dueAt: Date,
+  note: string,
+  by: string,
+): TimerRow {
   return store.addTimer({
     taskId,
     kind: TimerKind.followup,
@@ -203,10 +257,16 @@ export function parseTimerRef(text: string): number | null {
 
 function dueIn(iso: string, now: Date): string {
   const ms = Date.parse(iso) - now.getTime();
-  if (ms <= 0) return "due now";
+  if (ms <= 0) {
+    return "due now";
+  }
   const min = Math.floor(ms / 60_000);
-  if (min < 60) return `in ${Math.max(1, Math.ceil(ms / 60_000))}m`;
-  if (min < 60 * 24) return `in ${Math.floor(min / 60)}h`;
+  if (min < 60) {
+    return `in ${Math.max(1, Math.ceil(ms / 60_000))}m`;
+  }
+  if (min < 60 * 24) {
+    return `in ${Math.floor(min / 60)}h`;
+  }
   return `in ${Math.floor(min / (60 * 24))}d`;
 }
 
@@ -231,7 +291,11 @@ export interface TimerMeta {
 }
 
 function byName(by: string): string {
-  return by === "you" ? "You" : by === "assistant" ? "The Assistant" : by.replace(/^agent /, "Agent ");
+  return by === "you"
+    ? "You"
+    : by === "assistant"
+      ? "The Assistant"
+      : by.replace(/^agent /, "Agent ");
 }
 
 function titleOf(timer: TimerRow): string {
@@ -276,7 +340,9 @@ export function fireDue(at = new Date()): MessageRow[] {
         fromMe: true,
         meta: { ...meta },
       });
-      if (message) fired.push(message);
+      if (message) {
+        fired.push(message);
+      }
       const next =
         timer.kind === TimerKind.schedule && timer.rule
           ? nextAfter(timer.rule, at).toISOString()
@@ -294,7 +360,9 @@ export function isTimerMessage(message: MessageRow): boolean {
 function timerMeta(message: MessageRow): TimerMeta | null {
   try {
     const meta = JSON.parse(message.meta) as Partial<TimerMeta>;
-    return typeof meta.timer === "number" && typeof meta.task === "number" && meta.kind
+    return typeof meta.timer === "number" &&
+      typeof meta.task === "number" &&
+      meta.kind
       ? (meta as TimerMeta)
       : null;
   } catch {
@@ -318,7 +386,9 @@ function settled(
   ring = false,
 ): TriageOutcome {
   store.fileMessage(message.id, null, reason, task?.id ?? null);
-  if (!ring) store.markMessageRead(message.id);
+  if (!ring) {
+    store.markMessageRead(message.id);
+  }
   return { verdict: "timer", taskId: task?.id ?? null, reason, effects: [] };
 }
 
@@ -327,13 +397,16 @@ function settled(
 export function routeTimer(message: MessageRow): TriageOutcome {
   const meta = timerMeta(message);
   const task = meta ? store.getTask(meta.task) : null;
-  if (!meta || !task) return settled(message, null, "a timer whose task is gone");
+  if (!meta || !task) {
+    return settled(message, null, "a timer whose task is gone");
+  }
   const ref = store.taskRef(task.id);
   return store.batch(() => {
     if (meta.kind === TimerKind.remind) {
       // Brought back or put away again since: nothing to do.
-      if (task.status !== TaskStatus.later || task.remind_at !== meta.due)
+      if (task.status !== TaskStatus.later || task.remind_at !== meta.due) {
         return settled(message, task, `a reminder for ${ref}, already back`);
+      }
       store.reopen(task.id);
       store.addTurn({
         taskId: task.id,
@@ -347,20 +420,30 @@ export function routeTimer(message: MessageRow): TriageOutcome {
       meta.kind === TimerKind.followup
         ? `Follow-up set by ${message.author} came due`
         : `Scheduled ${message.title}`;
-    const body = message.body && message.body !== message.title ? `${what}: ${message.body}` : what;
+    const body =
+      message.body && message.body !== message.title
+        ? `${what}: ${message.body}`
+        : what;
     const turn = store.addTurn({
       taskId: task.id,
       role: TurnRole.trigger,
       body,
       messageId: message.id,
     });
-    if (task.status !== TaskStatus.open) store.reopen(task.id);
+    if (task.status !== TaskStatus.open) {
+      store.reopen(task.id);
+    }
     const outcome = settled(
       message,
       task,
       `${meta.kind === TimerKind.followup ? "follow-up" : "schedule"} on ${ref}`,
       ringsForOwner(message.author),
     );
-    return { ...outcome, effects: [{ type: "timer", taskId: task.id, turnId: turn.id, reason: body }] };
+    return {
+      ...outcome,
+      effects: [
+        { type: "timer", taskId: task.id, turnId: turn.id, reason: body },
+      ],
+    };
   });
 }

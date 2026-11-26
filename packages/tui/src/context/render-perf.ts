@@ -11,7 +11,9 @@ import { useRenderer } from "@opentui/solid";
 import { perfOn, sample, timing } from "@riker/core/perf";
 
 export function useRenderPerf(): void {
-  if (!perfOn()) return;
+  if (!perfOn()) {
+    return;
+  }
   const renderer = useRenderer();
   let first = true;
   let frameStart: number | null = null;
@@ -25,7 +27,9 @@ export function useRenderPerf(): void {
       // performance.now() counts from process start.
       timing("startup.first_frame", end);
     }
-    if (frameStart !== null) timing("render.frame", end - frameStart);
+    if (frameStart !== null) {
+      timing("render.frame", end - frameStart);
+    }
     frameStart = null;
     sample("render.cells", renderer.getNativeStats().cellsUpdated, "cells");
   };

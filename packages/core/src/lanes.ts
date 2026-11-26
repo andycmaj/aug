@@ -101,11 +101,18 @@ export const Phase = {
 export type Phase = (typeof Phase)[keyof typeof Phase];
 
 export function phaseOf(task: TaskRow, facts: LaneFacts): Phase {
-  if (task.status !== TaskStatus.open) return task.status;
-  if (task.merged_at) return Phase.merged;
-  if (facts.prState === PrState.open || facts.prState === PrState.draft)
+  if (task.status !== TaskStatus.open) {
+    return task.status;
+  }
+  if (task.merged_at) {
+    return Phase.merged;
+  }
+  if (facts.prState === PrState.open || facts.prState === PrState.draft) {
     return Phase.review;
-  if ((facts.blockers ?? 0) > 0) return Phase.blocked;
+  }
+  if ((facts.blockers ?? 0) > 0) {
+    return Phase.blocked;
+  }
   return Phase.open;
 }
 
@@ -118,23 +125,51 @@ export function laneOf(task: TaskRow, facts: LaneFacts): Lane {
       ? Lane.ready
       : Lane.done;
   }
-  if (task.status === TaskStatus.later) return Lane.later;
-  if (task.agent_state === AgentState.waiting) return Lane.waiting;
-  if (facts.hasPendingAction) return Lane.approve;
-  if (task.agent_state === AgentState.working) return Lane.working;
-  if (task.agent_state === AgentState.queued) return Lane.queued;
+  if (task.status === TaskStatus.later) {
+    return Lane.later;
+  }
+  if (task.agent_state === AgentState.waiting) {
+    return Lane.waiting;
+  }
+  if (facts.hasPendingAction) {
+    return Lane.approve;
+  }
+  if (task.agent_state === AgentState.working) {
+    return Lane.working;
+  }
+  if (task.agent_state === AgentState.queued) {
+    return Lane.queued;
+  }
   const phase = phaseOf(task, facts);
   // Landed work is past review: it only waits to be closed.
-  if (phase === Phase.merged) return Lane.merged;
+  if (phase === Phase.merged) {
+    return Lane.merged;
+  }
   // Its agent is finished and the result is on you, PR open or not.
-  if (task.agent_state === AgentState.ready) return Lane.ready;
-  if (phase === Phase.review) return Lane.review;
-  if (phase === Phase.blocked) return Lane.blocked;
-  if (task.agent_state === AgentState.idle) return Lane.idle;
-  if (task.agent_state === AgentState.stopped) return Lane.stopped;
-  if (task.watching) return Lane.watching;
-  if (task.waiting_on) return Lane.theirs;
-  if (task.kind === Kind.task) return Lane.yours;
+  if (task.agent_state === AgentState.ready) {
+    return Lane.ready;
+  }
+  if (phase === Phase.review) {
+    return Lane.review;
+  }
+  if (phase === Phase.blocked) {
+    return Lane.blocked;
+  }
+  if (task.agent_state === AgentState.idle) {
+    return Lane.idle;
+  }
+  if (task.agent_state === AgentState.stopped) {
+    return Lane.stopped;
+  }
+  if (task.watching) {
+    return Lane.watching;
+  }
+  if (task.waiting_on) {
+    return Lane.theirs;
+  }
+  if (task.kind === Kind.task) {
+    return Lane.yours;
+  }
   return task.channel === "owner" ? Lane.yours : Lane.asked;
 }
 
@@ -164,8 +199,12 @@ export function boardColumnOf(
   facts: LaneFacts,
   today: string,
 ): BoardColumn | null {
-  if (task.kind === Kind.task || task.kind === Kind.reply) return null;
-  if (task.status === TaskStatus.dropped) return null;
+  if (task.kind === Kind.task || task.kind === Kind.reply) {
+    return null;
+  }
+  if (task.status === TaskStatus.dropped) {
+    return null;
+  }
   switch (task.agent_state) {
     case AgentState.queued:
       return BoardColumn.left;
@@ -180,9 +219,7 @@ export function boardColumnOf(
     case AgentState.ready:
       // Done is a today column: yesterday's finished work is history.
       if (task.status !== TaskStatus.done) {
-        return facts.hasPendingAction
-          ? BoardColumn.waiting
-          : BoardColumn.ready;
+        return facts.hasPendingAction ? BoardColumn.waiting : BoardColumn.ready;
       }
       return (task.closed_at ?? "").slice(0, 10) === today
         ? BoardColumn.ready

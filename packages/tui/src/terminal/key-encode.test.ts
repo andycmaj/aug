@@ -4,7 +4,9 @@ import { encodeKey } from "./key-encode";
 
 const k = (s: string) => {
   const p = parseKeypress(s, { useKittyKeyboard: true });
-  if (!p) throw new Error("unparsed " + JSON.stringify(s));
+  if (!p) {
+    throw new Error("unparsed " + JSON.stringify(s));
+  }
   return p;
 };
 

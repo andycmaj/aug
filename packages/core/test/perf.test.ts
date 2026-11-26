@@ -47,7 +47,9 @@ describe("perf", () => {
   test("count, p50, p95, max and total per op across flushes", () => {
     freshHome(on);
     resetPerf();
-    for (let i = 1; i <= 100; i++) timing("mux.state", i);
+    for (let i = 1; i <= 100; i++) {
+      timing("mux.state", i);
+    }
     flushPerf();
     timing("mux.state", 400);
     timing("read.rail", 3);
@@ -71,8 +73,9 @@ describe("perf", () => {
     freshHome({ log: { enabled: true, level: "error", slowMs: 100 } });
     resetPerf();
     timing("engine.reconcile", 99, { by: "tick" });
-    for (const ms of [150, 900, 120, 300, 700, 200, 101])
+    for (const ms of [150, 900, 120, 300, 700, 200, 101]) {
       timing("engine.reconcile", ms, { by: "tmux" });
+    }
     flushPerf();
     const { slowest } = perfReport({ since: hourAgo() });
     expect(slowest.map((e) => e.ms)).toEqual([900, 700, 300, 200, 150]);

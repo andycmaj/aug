@@ -28,7 +28,9 @@ if (!cli.fixture && !cli.sim) {
     console.error(`${CMD}: cannot move aug's home: ${moved.refuse}`);
     process.exit(1);
   }
-  if (!moved.skip) console.error(moved.steps.join("\n"));
+  if (!moved.skip) {
+    console.error(moved.steps.join("\n"));
+  }
   migrated = moved.skip ? null : moved.steps;
 }
 // config.json, read again whenever it changes. Everything below is handed
@@ -36,7 +38,9 @@ if (!cli.fixture && !cli.sim) {
 const config = fileConfig();
 configureLog(() => config.get().log);
 logCrashes();
-if (migrated) logger(CMD).info("moved aug's home", { steps: migrated.join("; ") });
+if (migrated) {
+  logger(CMD).info("moved aug's home", { steps: migrated.join("; ") });
+}
 startPerf({ proc: "riker", sampleProcess: true });
 logger("riker").info("start", {
   fixture: cli.fixture ?? (cli.sim ? "sim" : null),

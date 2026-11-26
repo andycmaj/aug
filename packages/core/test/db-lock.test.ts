@@ -35,7 +35,7 @@ async function holdWriteLock(file: string, holdMs = 0): Promise<Holder> {
   expect((await lines.read()).value?.trim()).toBe("locked");
   return {
     release: async () => {
-      proc.stdin.end();
+      await proc.stdin.end();
       expect(await proc.exited).toBe(0);
     },
   };
@@ -69,10 +69,18 @@ describe("replying in the Assistant's thread while another process writes", () =
     const home = store.homeTask();
     reply(home.id, "make a task");
     const holder = await holdWriteLock(file, 200);
-    await new AgentPool({ config: withLimit(4) }).request(home.id, "the owner typed in the chat", "owner");
+    await new AgentPool({ config: withLimit(4) }).request(
+      home.id,
+      "the owner typed in the chat",
+      "owner",
+    );
     await holder.release();
     const answer = store.turnsForTask(home.id).at(-1)!;
-    expect(answer).toMatchObject({ role: TurnRole.agent, status: TurnStatus.done, body: "On it." });
+    expect(answer).toMatchObject({
+      role: TurnRole.agent,
+      status: TurnStatus.done,
+      body: "On it.",
+    });
   });
 
   test("a lock held past the busy timeout is a failed turn in the thread, not an unhandled rejection", async () => {
@@ -80,7 +88,11 @@ describe("replying in the Assistant's thread while another process writes", () =
     const home = store.homeTask();
     reply(home.id, "make a task");
     const holder = await holdWriteLock(file);
-    const turn = new AgentPool({ config: withLimit(4) }).request(home.id, "the owner typed in the chat", "owner");
+    const turn = new AgentPool({ config: withLimit(4) }).request(
+      home.id,
+      "the owner typed in the chat",
+      "owner",
+    );
     await holder.release();
     await turn;
 
@@ -88,7 +100,9 @@ describe("replying in the Assistant's thread while another process writes", () =
     expect(last.role).toBe(TurnRole.agent);
     expect(last.status).toBe(TurnStatus.failed);
     expect(last.body).toContain("database is locked");
-    const log = existsSync(paths.log()) ? readFileSync(paths.log(), "utf8") : "";
+    const log = existsSync(paths.log())
+      ? readFileSync(paths.log(), "utf8")
+      : "";
     expect(log).toContain("turn could not start");
     expect(log).toContain(`"task":${home.id}`);
   });

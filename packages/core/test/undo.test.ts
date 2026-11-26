@@ -7,7 +7,15 @@ import { setMux } from "../src/mux";
 import { localDay } from "../src/rail";
 import * as store from "../src/store";
 import { UndoStack } from "../src/undo";
-import { AgentState, Kind, Priority, SessionKind, TaskStatus, TurnRole, Verdict } from "../src/types";
+import {
+  AgentState,
+  Kind,
+  Priority,
+  SessionKind,
+  TaskStatus,
+  TurnRole,
+  Verdict,
+} from "../src/types";
 import { FakeMux } from "./support/fake-mux";
 import { fakeBrain, freshHome, testConfig } from "./support/helpers";
 
@@ -33,10 +41,15 @@ describe("ctrl+z undoes the last move", () => {
     engine.desk.remind(t.id, 2);
     engine.desk.remind(t.id, 3); // later rather than open: undo restores exactly that
     const before = store.getTask(t.id)!;
-    expect((await engine.runMove("done", { task: ref(t.id) }, "assistant")).ok).toBe(true);
+    expect(
+      (await engine.runMove("done", { task: ref(t.id) }, "assistant")).ok,
+    ).toBe(true);
     expect(store.getTask(t.id)!.status).toBe(TaskStatus.done);
 
-    expect(await undo()).toEqual({ ok: true, text: `undid: done ${ref(t.id)} (assistant's move)` });
+    expect(await undo()).toEqual({
+      ok: true,
+      text: `undid: done ${ref(t.id)} (assistant's move)`,
+    });
     const after = store.getTask(t.id)!;
     expect(after).toMatchObject({
       status: before.status,
@@ -77,10 +90,19 @@ describe("ctrl+z undoes the last move", () => {
   test("priority goes back, pin and all", async () => {
     const t = task();
     const was = store.getTask(t.id)!;
-    expect((await engine.runMove("priority", { task: ref(t.id), level: "urgent" })).ok).toBe(true);
-    expect(store.getTask(t.id)).toMatchObject({ priority: Priority.urgent, priority_pinned: 1 });
+    expect(
+      (await engine.runMove("priority", { task: ref(t.id), level: "urgent" }))
+        .ok,
+    ).toBe(true);
+    expect(store.getTask(t.id)).toMatchObject({
+      priority: Priority.urgent,
+      priority_pinned: 1,
+    });
 
-    expect(await undo()).toEqual({ ok: true, text: `undid: priority ${ref(t.id)}` });
+    expect(await undo()).toEqual({
+      ok: true,
+      text: `undid: priority ${ref(t.id)}`,
+    });
     expect(store.getTask(t.id)).toMatchObject({
       priority: was.priority,
       priority_pinned: was.priority_pinned,
@@ -95,21 +117,45 @@ describe("ctrl+z undoes the last move", () => {
       projectId: ledger.id,
       goalId: goal.id,
     });
-    expect((await engine.runMove("project", { task: ref(t.id), project: "api" })).ok).toBe(true);
-    expect(store.getTask(t.id)).toMatchObject({ project_id: api.id, goal_id: null });
+    expect(
+      (await engine.runMove("project", { task: ref(t.id), project: "api" })).ok,
+    ).toBe(true);
+    expect(store.getTask(t.id)).toMatchObject({
+      project_id: api.id,
+      goal_id: null,
+    });
 
-    expect(await undo()).toEqual({ ok: true, text: `undid: project ${ref(t.id)}` });
-    expect(store.getTask(t.id)).toMatchObject({ project_id: ledger.id, goal_id: goal.id });
+    expect(await undo()).toEqual({
+      ok: true,
+      text: `undid: project ${ref(t.id)}`,
+    });
+    expect(store.getTask(t.id)).toMatchObject({
+      project_id: ledger.id,
+      goal_id: goal.id,
+    });
   });
 
   test("a running agent's window goes back to its project's session", async () => {
     const a = await engine.desk.createProject("a");
     const b = await engine.desk.createProject("b");
     const t = engine.desk.newTask("Work", Kind.coding, "", { projectId: a.id });
-    const sessionOf = (projectId: number) => fake.sessions.find((s) => s.projectId === projectId)!.id;
-    const w = await fake.newWindow({ sessionId: sessionOf(a.id), name: "w", cwd: "/w", env: {}, argv: [] });
+    const sessionOf = (projectId: number) =>
+      fake.sessions.find((s) => s.projectId === projectId)!.id;
+    const w = await fake.newWindow({
+      sessionId: sessionOf(a.id),
+      name: "w",
+      cwd: "/w",
+      env: {},
+      argv: [],
+    });
     await fake.tagWindow(w.id, t.id);
-    store.createSession({ id: "s1", taskId: t.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "owner" });
+    store.createSession({
+      id: "s1",
+      taskId: t.id,
+      kind: SessionKind.tmux,
+      cwd: "/w",
+      startedBy: "owner",
+    });
 
     await engine.desk.moveTask(t.id, b.id);
     expect(fake.windows[0].sessionId).toBe(sessionOf(b.id));
@@ -125,8 +171,16 @@ describe("ctrl+z undoes the last move", () => {
     const was = store.getTask(id)!;
     const day = localDay(new Date());
     const steps: [string, () => unknown, () => void][] = [
-      ["remind", () => engine.desk.remind(id, 1), () => expect(store.getTask(id)!.status).toBe(was.status)],
-      ["watch", () => engine.desk.watch(id, true), () => expect(store.getTask(id)!.watching).toBe(0)],
+      [
+        "remind",
+        () => engine.desk.remind(id, 1),
+        () => expect(store.getTask(id)!.status).toBe(was.status),
+      ],
+      [
+        "watch",
+        () => engine.desk.watch(id, true),
+        () => expect(store.getTask(id)!.watching).toBe(0),
+      ],
       [
         "kind",
         () => engine.desk.setKind(id, Kind.coding),
@@ -137,10 +191,26 @@ describe("ctrl+z undoes the last move", () => {
             queue_reason: null,
           }),
       ],
-      ["retitle", () => engine.desk.retitle(id, "new"), () => expect(store.getTask(id)!.title).toBe("old")],
-      ["wait_on", () => engine.desk.waitOn(id, "Sam"), () => expect(store.getTask(id)!.waiting_on).toBeNull()],
-      ["block_on", () => engine.desk.blockOn(id, other.id, "you"), () => expect(store.blockersOf(id)).toEqual([])],
-      ["win", () => engine.desk.setWin(id, true), () => expect(store.winsOn(day)).toEqual([])],
+      [
+        "retitle",
+        () => engine.desk.retitle(id, "new"),
+        () => expect(store.getTask(id)!.title).toBe("old"),
+      ],
+      [
+        "wait_on",
+        () => engine.desk.waitOn(id, "Sam"),
+        () => expect(store.getTask(id)!.waiting_on).toBeNull(),
+      ],
+      [
+        "block_on",
+        () => engine.desk.blockOn(id, other.id, "you"),
+        () => expect(store.blockersOf(id)).toEqual([]),
+      ],
+      [
+        "win",
+        () => engine.desk.setWin(id, true),
+        () => expect(store.winsOn(day)).toEqual([]),
+      ],
       [
         "link",
         () => engine.desk.link(id, "https://example.com/doc", "doc", "you"),
@@ -149,7 +219,10 @@ describe("ctrl+z undoes the last move", () => {
     ];
     for (const [what, act, check] of steps) {
       act();
-      expect(await undo()).toEqual({ ok: true, text: `undid: ${what} ${ref(id)}` });
+      expect(await undo()).toEqual({
+        ok: true,
+        text: `undid: ${what} ${ref(id)}`,
+      });
       check();
     }
   });
@@ -172,7 +245,15 @@ describe("ctrl+z undoes the last move", () => {
   test("a move with outside effects is named, not skipped; the next ctrl+z reaches the one before", async () => {
     const t = task();
     engine.desk.setPriority(t.id, Priority.urgent);
-    expect((await engine.runMove("tell", { task: ref(t.id), text: "hello" }, "assistant")).ok).toBe(true);
+    expect(
+      (
+        await engine.runMove(
+          "tell",
+          { task: ref(t.id), text: "hello" },
+          "assistant",
+        )
+      ).ok,
+    ).toBe(true);
 
     expect(await undo()).toEqual({
       ok: false,
@@ -180,14 +261,19 @@ describe("ctrl+z undoes the last move", () => {
     });
     expect(store.getTask(t.id)!.priority).toBe(Priority.urgent);
     expect((await undo()).text).toBe(`undid: priority ${ref(t.id)}`);
-    expect(await undo()).toEqual({ ok: false, text: `Can't undo new ${ref(t.id)}: a task made is not unmade: x (ignore) drops it` });
+    expect(await undo()).toEqual({
+      ok: false,
+      text: `Can't undo new ${ref(t.id)}: a task made is not unmade: x (ignore) drops it`,
+    });
     expect(await undo()).toEqual({ ok: false, text: "Nothing to undo" });
   });
 
   test("starting an agent cannot be undone", async () => {
     const t = task();
     await engine.desk.startAgent(t.id);
-    expect((await undo()).text).toBe(`Can't undo start ${ref(t.id)}: it started an agent`);
+    expect((await undo()).text).toBe(
+      `Can't undo start ${ref(t.id)}: it started an agent`,
+    );
   });
 
   test("a task changed since is left alone", async () => {
@@ -219,13 +305,24 @@ describe("ctrl+z undoes the last move", () => {
     db().run("PRAGMA foreign_keys = OFF");
     db().run("DELETE FROM tasks WHERE id = ?", [t.id]);
     db().run("PRAGMA foreign_keys = ON");
-    expect(await undo()).toEqual({ ok: false, text: `Can't undo priority ${ref(t.id)}: ${ref(t.id)} is gone` });
+    expect(await undo()).toEqual({
+      ok: false,
+      text: `Can't undo priority ${ref(t.id)}: ${ref(t.id)} is gone`,
+    });
   });
 
   test("a task's own agent's moves are not kept", async () => {
     const t = task();
     engine.desk.setPriority(t.id, Priority.urgent);
-    expect((await engine.runMove("retitle", { task: ref(t.id), title: "mine" }, `agent ${ref(t.id)}`)).ok).toBe(true);
+    expect(
+      (
+        await engine.runMove(
+          "retitle",
+          { task: ref(t.id), title: "mine" },
+          `agent ${ref(t.id)}`,
+        )
+      ).ok,
+    ).toBe(true);
     expect((await undo()).text).toBe(`undid: priority ${ref(t.id)}`);
     expect(store.getTask(t.id)!.title).toBe("mine");
   });
@@ -238,7 +335,9 @@ describe("ctrl+z undoes the last move", () => {
 
   test("the stack keeps the newest moves only", () => {
     const stack = new UndoStack(2);
-    for (const what of ["a", "b", "c"]) stack.cannot(what, "why");
+    for (const what of ["a", "b", "c"]) {
+      stack.cannot(what, "why");
+    }
     expect(stack.size).toBe(2);
     expect(stack.pop()).toMatchObject({ what: "c" });
     expect(stack.pop()).toMatchObject({ what: "b" });
@@ -267,17 +366,37 @@ describe("ignore and reopen (AUG-0186)", () => {
   test("ignore drops it, says who on the task, learns nothing, and ctrl+z takes all of it back", async () => {
     const t = task("Look at the flaky test");
     const m = filedTo(t.id);
-    expect((await engine.runMove("ignore", { task: ref(t.id), why: "not mine" }, "assistant")).ok).toBe(true);
+    expect(
+      (
+        await engine.runMove(
+          "ignore",
+          { task: ref(t.id), why: "not mine" },
+          "assistant",
+        )
+      ).ok,
+    ).toBe(true);
 
-    expect(store.getTask(t.id)).toMatchObject({ status: TaskStatus.dropped, closed_by: "assistant" });
+    expect(store.getTask(t.id)).toMatchObject({
+      status: TaskStatus.dropped,
+      closed_by: "assistant",
+    });
     expect(store.turnsForTask(t.id).at(-1)?.body).toBe(
       "Dropped by assistant (ignore): not mine. d reopens it.",
     );
-    expect(store.getMessage(m)).toMatchObject({ verdict: Verdict.fyi, task_id: null });
+    expect(store.getMessage(m)).toMatchObject({
+      verdict: Verdict.fyi,
+      task_id: null,
+    });
     expect(corrections().n).toBe(0);
 
-    expect(await undo()).toEqual({ ok: true, text: `undid: ignore ${ref(t.id)} (assistant's move)` });
-    expect(store.getTask(t.id)).toMatchObject({ status: TaskStatus.open, closed_by: null });
+    expect(await undo()).toEqual({
+      ok: true,
+      text: `undid: ignore ${ref(t.id)} (assistant's move)`,
+    });
+    expect(store.getTask(t.id)).toMatchObject({
+      status: TaskStatus.open,
+      closed_by: null,
+    });
     expect(store.getMessage(m)).toMatchObject({
       verdict: Verdict.task,
       reason: "asks you to look",
@@ -298,7 +417,10 @@ describe("ignore and reopen (AUG-0186)", () => {
     const t = task("Guide findings", Kind.coding);
     await engine.desk.ignore(t.id);
     const r = await engine.runMove("reopen", { task: ref(t.id) }, "assistant");
-    expect(r).toEqual({ ok: true, result: `${ref(t.id)} is open again; s starts its agent` });
+    expect(r).toEqual({
+      ok: true,
+      result: `${ref(t.id)} is open again; s starts its agent`,
+    });
     expect(store.getTask(t.id)).toMatchObject({
       status: TaskStatus.open,
       closed_at: null,
@@ -307,9 +429,13 @@ describe("ignore and reopen (AUG-0186)", () => {
     });
     expect(store.latestSession(t.id)).toBeNull();
     expect(fake.windows).toEqual([]);
-    expect(store.turnsForTask(t.id).at(-1)?.body).toBe("Reopened by assistant (was dropped)");
+    expect(store.turnsForTask(t.id).at(-1)?.body).toBe(
+      "Reopened by assistant (was dropped)",
+    );
     const events = db()
-      .query("SELECT kind, detail FROM task_events WHERE task_id = ? ORDER BY id")
+      .query(
+        "SELECT kind, detail FROM task_events WHERE task_id = ? ORDER BY id",
+      )
       .all(t.id);
     expect(events).toEqual([
       { kind: "created", detail: "coding" },
@@ -320,7 +446,9 @@ describe("ignore and reopen (AUG-0186)", () => {
     expect((await engine.runMove("reopen", { task: ref(t.id) })).result).toBe(
       `${ref(t.id)} is not done or dropped`,
     );
-    expect((await undo()).text).toBe(`undid: reopen ${ref(t.id)} (assistant's move)`);
+    expect((await undo()).text).toBe(
+      `undid: reopen ${ref(t.id)} (assistant's move)`,
+    );
     expect(store.getTask(t.id)!.status).toBe(TaskStatus.dropped);
   });
 });

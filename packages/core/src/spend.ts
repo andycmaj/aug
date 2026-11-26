@@ -42,7 +42,9 @@ export function recordSpend(
   result: Costed,
   at = new Date(),
 ): void {
-  if (result.costUsd === undefined && !result.usage) return;
+  if (result.costUsd === undefined && !result.usage) {
+    return;
+  }
   try {
     store.addSpend({
       day: localDay(at),
@@ -82,7 +84,9 @@ export function capReason(config: RikerConfig, at = new Date()): string {
 }
 
 export function usd(n: number): string {
-  if (n > 0 && n < 0.01) return "<$0.01";
+  if (n > 0 && n < 0.01) {
+    return "<$0.01";
+  }
   return `$${n.toFixed(2)}`;
 }
 
@@ -94,8 +98,12 @@ export function dayBefore(at: Date, days: number): string {
 }
 
 export function tokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+  if (n >= 1_000_000) {
+    return `${(n / 1_000_000).toFixed(1)}M`;
+  }
+  if (n >= 1_000) {
+    return `${Math.round(n / 1_000)}k`;
+  }
   return String(n);
 }
 

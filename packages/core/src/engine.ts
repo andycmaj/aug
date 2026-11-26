@@ -85,7 +85,10 @@ export class Engine {
   readonly connectors: readonly Connector[];
 
   // What the status line and modal list, in order.
-  connections(): readonly Pick<Connector, "name" | "label" | "quietWhenOff" | "hint">[] {
+  connections(): readonly Pick<
+    Connector,
+    "name" | "label" | "quietWhenOff" | "hint"
+  >[] {
     return this.connectors;
   }
 
@@ -93,19 +96,27 @@ export class Engine {
 
   constructor(private options: EngineOptions) {
     const { config } = options;
-    const judges = (options.plugins ?? []).flatMap((p) => (p.triage ? [p.triage] : []));
-    if (judges.length > 1) throw new Error("more than one plugin brings triage");
+    const judges = (options.plugins ?? []).flatMap((p) =>
+      p.triage ? [p.triage] : [],
+    );
+    if (judges.length > 1) {
+      throw new Error("more than one plugin brings triage");
+    }
     this.judge = judges[0] ?? null;
     const plugins = options.plugins ?? [];
     const keys = new Set<string>(CORE_KEYS);
     for (const section of plugins.flatMap((p) => p.config ?? [])) {
-      if (keys.has(section.key)) throw new Error(`config key ${section.key} is taken`);
+      if (keys.has(section.key)) {
+        throw new Error(`config key ${section.key} is taken`);
+      }
       keys.add(section.key);
     }
     this.connectors = plugins.flatMap((p) => p.connectors ?? []);
     const names = new Set<string>(["advisor"]);
     for (const c of this.connectors) {
-      if (names.has(c.name)) throw new Error(`two connectors are called ${c.name}`);
+      if (names.has(c.name)) {
+        throw new Error(`two connectors are called ${c.name}`);
+      }
       names.add(c.name);
       this.status = { ...this.status, [c.name]: off("not started") };
     }
@@ -131,7 +142,9 @@ export class Engine {
       guards: plugins.flatMap((p) => p.guards ?? []),
       reviews: plugins.find((p) => p.reviews)?.reviews,
     });
-    for (const c of this.connectors) c.attach(this.connectorContext(c));
+    for (const c of this.connectors) {
+      c.attach(this.connectorContext(c));
+    }
   }
 
   onStatus(listener: (s: EngineStatus) => void): () => void {
@@ -149,7 +162,9 @@ export class Engine {
       say: (taskId, text, author) => this.desk.say(taskId, text, author),
       wake: (taskId, reason) => {
         const task = store.getTask(taskId);
-        if (task) void this.drivers.for(task).wake(task, reason);
+        if (task) {
+          void this.drivers.for(task).wake(task, reason);
+        }
       },
       runMove: (verb, args, by) => this.runMove(verb, args, by),
       checkMerges: () => this.checkMerges(),
@@ -161,12 +176,18 @@ export class Engine {
     // A connection changing state is worth a line; each poll is only a trace.
     if (prev.state !== next.state || prev.detail !== next.detail) {
       const fields = { from: prev.state, detail: next.detail };
-      if (next.state === "error") log.error(`${key} ${next.state}`, fields);
-      else if (next.state === "polling") log.trace(`${key} polling`, fields);
-      else log.info(`${key} ${next.state}`, fields);
+      if (next.state === "error") {
+        log.error(`${key} ${next.state}`, fields);
+      } else if (next.state === "polling") {
+        log.trace(`${key} polling`, fields);
+      } else {
+        log.info(`${key} ${next.state}`, fields);
+      }
     }
     this.status = { ...this.status, [key]: next };
-    for (const l of this.statusListeners) l(this.status);
+    for (const l of this.statusListeners) {
+      l(this.status);
+    }
   }
 
   // Your setup outside Riker follows Riker when it moves (a new checkout, the
@@ -174,7 +195,9 @@ export class Engine {
   private refreshInstalls(): void {
     try {
       const names = refreshInstalls();
-      if (names.length) log.info("refreshed installs", { names: names.join(",") });
+      if (names.length) {
+        log.info("refreshed installs", { names: names.join(",") });
+      }
     } catch (err) {
       log.error("refresh installs failed", { error: errorMessage(err) });
     }
@@ -193,7 +216,9 @@ export class Engine {
 
   start(): void {
     this.syncDocs();
-    if (!this.options.offline) this.refreshInstalls();
+    if (!this.options.offline) {
+      this.refreshInstalls();
+    }
     store.homeTask();
     this.recoverSessions();
     void this.reconcile();
@@ -211,11 +236,15 @@ export class Engine {
       setInterval(() => {
         this.fireEventActions();
         void this.writeJournals();
-        for (const id of this.turnEnds()) void this.recheckMerge(id);
+        for (const id of this.turnEnds()) {
+          void this.recheckMerge(id);
+        }
       }, 2_000),
     );
     if (this.options.offline) {
-      for (const c of this.connectors) this.setStatus(c.name, off("fixture mode"));
+      for (const c of this.connectors) {
+        this.setStatus(c.name, off("fixture mode"));
+      }
       this.setStatus("advisor", off("fixture mode"));
       return;
     }
@@ -227,7 +256,9 @@ export class Engine {
       connectors: this.connectors.map((c) => c.name).join(","),
       maxActiveAgents: config.maxActiveAgents,
     });
-    for (const c of this.connectors) c.start();
+    for (const c of this.connectors) {
+      c.start();
+    }
     this.timers.push(setInterval(() => void this.advisorTick(), 10 * 60_000));
     setTimeout(() => void this.advisorTick(), 20_000);
     // A local merge needs no network, so it has its own clock.
@@ -247,7 +278,9 @@ export class Engine {
     }
     if (fired) {
       log.info("timers fired", { fired });
-      if (!this.options.offline) void this.triageInbox();
+      if (!this.options.offline) {
+        void this.triageInbox();
+      }
     }
     return fired;
   }
@@ -265,15 +298,27 @@ export class Engine {
   // learns where things stand.
   turnEnds(): number[] {
     const v = tableVersions().tasks;
-    if (v === this.tasksVersion) return [];
+    if (v === this.tasksVersion) {
+      return [];
+    }
     this.tasksVersion = v;
     const before = this.agentSeen;
-    const after = new Map(store.agentStates().map((r) => [r.id, r.agent_state]));
+    const after = new Map(
+      store.agentStates().map((r) => [r.id, r.agent_state]),
+    );
     this.agentSeen = after;
-    if (!before) return [];
+    if (!before) {
+      return [];
+    }
     const ended: number[] = [];
-    for (const [id, state] of after)
-      if (before.get(id) === AgentState.working && state !== AgentState.working) ended.push(id);
+    for (const [id, state] of after) {
+      if (
+        before.get(id) === AgentState.working &&
+        state !== AgentState.working
+      ) {
+        ended.push(id);
+      }
+    }
     return ended;
   }
 
@@ -281,27 +326,43 @@ export class Engine {
   // whether it landed. A task with no branch and no PR costs nothing.
   async recheckMerge(taskId: number): Promise<boolean> {
     const task = store.getTask(taskId);
-    if (!task) return false;
+    if (!task) {
+      return false;
+    }
     for (const c of this.connectors) {
-      if (!c.refreshTask) continue;
+      if (!c.refreshTask) {
+        continue;
+      }
       try {
         await c.refreshTask(task);
       } catch (err) {
-        log.warn("turn-end refresh failed", { task: taskId, connector: c.name, err: errorMessage(err) });
+        log.warn("turn-end refresh failed", {
+          task: taskId,
+          connector: c.name,
+          err: errorMessage(err),
+        });
       }
     }
     const fresh = store.getTask(taskId);
-    const changed = fresh ? await checkMerge(this.options.config.get(), fresh) : false;
-    if (changed) log.info("merge at turn end", { task: taskId });
+    const changed = fresh
+      ? await checkMerge(this.options.config.get(), fresh)
+      : false;
+    if (changed) {
+      log.info("merge at turn end", { task: taskId });
+    }
     return changed;
   }
 
   async checkMerges(): Promise<void> {
-    if (this.merging) return;
+    if (this.merging) {
+      return;
+    }
     this.merging = true;
     try {
       const changed = await checkMerges(this.options.config.get());
-      if (changed) log.info("merge check", { changed });
+      if (changed) {
+        log.info("merge check", { changed });
+      }
     } catch (err) {
       log.warn("merge check failed", { err: errorMessage(err) });
     } finally {
@@ -311,11 +372,15 @@ export class Engine {
 
   stop(): void {
     log.info("engine stop");
-    for (const t of this.timers) clearInterval(t);
+    for (const t of this.timers) {
+      clearInterval(t);
+    }
     this.timers = [];
     this.watching?.abort();
     this.watching = null;
-    for (const c of this.connectors) c.stop?.();
+    for (const c of this.connectors) {
+      c.stop?.();
+    }
     this.pool.stopAll();
   }
 
@@ -341,7 +406,9 @@ export class Engine {
           this.pool.drain();
           return dataVersion();
         });
-        if (v === seen || this.draining) return;
+        if (v === seen || this.draining) {
+          return;
+        }
         seen = v;
         void this.drainMoves();
       }, 250),
@@ -358,11 +425,15 @@ export class Engine {
       return 0;
     }
     const events = store.taskEventsAfter(Number(cursor));
-    if (events.length === 0) return 0;
+    if (events.length === 0) {
+      return 0;
+    }
     let queued = 0;
     for (const e of events) {
       const event = EVENT_TRIGGERS[e.kind];
-      if (event) queued += this.desk.fireActions(event, e.task_id).length;
+      if (event) {
+        queued += this.desk.fireActions(event, e.task_id).length;
+      }
     }
     store.kvSet(EVENTS_CURSOR, String(events.at(-1)!.id));
     return queued;
@@ -375,7 +446,9 @@ export class Engine {
     try {
       return await journalTick(this.options.config.get());
     } catch (err) {
-      log.error("journal tick failed", { err: err instanceof Error ? err.name : "error" });
+      log.error("journal tick failed", {
+        err: err instanceof Error ? err.name : "error",
+      });
       return 0;
     }
   }
@@ -408,12 +481,18 @@ export class Engine {
   private ingest(messages: store.NewMessage[]): number {
     let fresh = 0;
     for (const m of messages) {
-      const row = measure("engine.insert_message", () => store.insertMessage(m));
-      if (!row) continue;
+      const row = measure("engine.insert_message", () =>
+        store.insertMessage(m),
+      );
+      if (!row) {
+        continue;
+      }
       fresh++;
       this.judge?.arrived?.(row);
     }
-    if (fresh && !this.options.offline) void this.triageInbox();
+    if (fresh && !this.options.offline) {
+      void this.triageInbox();
+    }
     return fresh;
   }
 
@@ -424,7 +503,9 @@ export class Engine {
   private triageAgain = false;
   triageInbox(): Promise<number> {
     const judge = this.judge;
-    if (!judge) return Promise.resolve(0);
+    if (!judge) {
+      return Promise.resolve(0);
+    }
     if (this.triaging) {
       this.triageAgain = true;
       return this.triaging;
@@ -442,7 +523,9 @@ export class Engine {
             log.error("triage failed", { err: errorMessage(err) });
             break;
           }
-          if (!done) break;
+          if (!done) {
+            break;
+          }
           ran++;
           log.debug("triaged", {
             messages: done.messages.join(","),
@@ -451,7 +534,10 @@ export class Engine {
             reason: done.outcome.reason,
           });
           // The chain ran on the latest of a burst: that one's words.
-          this.desk.afterTriage(done.outcome, store.getMessage(done.messages.at(-1)!));
+          this.desk.afterTriage(
+            done.outcome,
+            store.getMessage(done.messages.at(-1)!),
+          );
         }
       } while (this.triageAgain);
       return ran;
@@ -465,9 +551,13 @@ export class Engine {
   // At start: claims a Riker that died left are new again, and the worker
   // takes whatever waits (inserted, never triaged; a retry come due).
   resumeTriage(): Promise<number> {
-    if (!this.judge) return Promise.resolve(0);
+    if (!this.judge) {
+      return Promise.resolve(0);
+    }
     const reset = store.resetTriaging();
-    if (reset) log.info("triage claims reset", { messages: reset });
+    if (reset) {
+      log.info("triage claims reset", { messages: reset });
+    }
     return this.triageInbox();
   }
 
@@ -476,12 +566,17 @@ export class Engine {
   }
 
   async pollNow(): Promise<void> {
-    await Promise.all(this.connectors.map((c) => c.pollNow?.()));
+    await Promise.all(
+      this.connectors.map(async (c) => {
+        await c.pollNow?.();
+      }),
+    );
   }
 
   private async advisorTick(force = false): Promise<void> {
-    if (!force && !advisorDue(store.kvGet("advisor.lastRun"), new Date()))
+    if (!force && !advisorDue(store.kvGet("advisor.lastRun"), new Date())) {
       return;
+    }
     this.setStatus("advisor", { ...this.status.advisor, state: "polling" });
     const done = log.time("advisor run", { force });
     try {
@@ -525,7 +620,9 @@ export class Engine {
   // One watch at a time; when it ends (no server yet, or it went away) the
   // next poll tick starts another.
   private watchTmux(): void {
-    if (this.watching) return;
+    if (this.watching) {
+      return;
+    }
     const abort = new AbortController();
     this.watching = abort;
     projects
@@ -535,18 +632,23 @@ export class Engine {
       }, abort.signal)
       .catch((err) => log.debug("tmux watch ended", { err: errorMessage(err) }))
       .finally(() => {
-        if (this.watching === abort) this.watching = null;
+        if (this.watching === abort) {
+          this.watching = null;
+        }
       });
   }
 
   async reconcile(by = "start"): Promise<void> {
-    if (by === "start")
+    if (by === "start") {
       try {
         const tagged = await projects.copyLegacyTags();
-        if (tagged) log.info("copied aug's tmux tags", { tagged });
+        if (tagged) {
+          log.info("copied aug's tmux tags", { tagged });
+        }
       } catch (err) {
         log.warn("copying aug's tmux tags failed", { err: errorMessage(err) });
       }
+    }
     const done = perfStart("engine.reconcile", { by });
     try {
       await projects.reconcile();
@@ -557,10 +659,11 @@ export class Engine {
     }
     try {
       const settled = settleStaleTurns();
-      if (settled.length) log.info("stale turns settled", { sessions: settled });
+      if (settled.length) {
+        log.info("stale turns settled", { sessions: settled });
+      }
     } catch (err) {
       log.warn("turn check failed", { err: errorMessage(err) });
     }
   }
-
 }

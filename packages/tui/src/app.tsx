@@ -46,8 +46,10 @@ export function App(props: { engine: Engine; theme?: ThemeName }) {
   // binds at start.
   const config = props.engine.desk.config();
   const keymap = buildKeymap(config.keys, keyedActions(config));
-  for (const r of actionKeys(keyedActions(config), buildKeymap(config.keys)).refused)
+  for (const r of actionKeys(keyedActions(config), buildKeymap(config.keys))
+    .refused) {
     log.warn("action key refused", r);
+  }
   return (
     <ThemeProvider name={props.theme}>
       <RikerProvider engine={props.engine}>

@@ -122,7 +122,8 @@ interface RikerContextValue extends ReadModel {
   setWantsInput: (on: boolean) => void;
 }
 
-const [RikerContext, useRiker] = createRequiredContext<RikerContextValue>("Riker");
+const [RikerContext, useRiker] =
+  createRequiredContext<RikerContextValue>("Riker");
 export { useRiker };
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -142,7 +143,9 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     TABLES.map((t) => [t, createSignal(0)]),
   );
   const track = (tables: readonly Table[]) => {
-    for (const t of tables) tableSignals.get(t)![0]();
+    for (const t of tables) {
+      tableSignals.get(t)![0]();
+    }
   };
   const reads = readModel(track, engine.desk);
   let seenTables = tableVersions();
@@ -152,19 +155,27 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     const next = tableVersions();
     const bumped: Table[] = [];
     batch(() => {
-      for (const t of TABLES)
+      for (const t of TABLES) {
         if (next[t] !== seenTables[t]) {
           bumped.push(t);
           tableSignals.get(t)![1]((v) => v + 1);
         }
+      }
     });
     seenTables = next;
     // Solid re-runs the reads over the bumped tables when the batch ends,
     // so this times the whole fan-out a write causes (not the frame).
-    if (!perfOn()) return;
-    for (const t of bumped) count(`bump.${t}`);
+    if (!perfOn()) {
+      return;
+    }
+    for (const t of bumped) {
+      count(`bump.${t}`);
+    }
     const reran = readsRun() - runsBefore;
-    timing("tui.refresh", performance.now() - started, { tables: bumped.join(","), reads: reran });
+    timing("tui.refresh", performance.now() - started, {
+      tables: bumped.join(","),
+      reads: reran,
+    });
     sample("tui.refresh_reads", reran, "reads");
   };
   const [status, setStatus] = createSignal(engine.status);
@@ -219,7 +230,9 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
       offStatus();
       clearInterval(poll);
       clearInterval(clock);
-      for (const t of trackers.values()) t.dispose();
+      for (const t of trackers.values()) {
+        t.dispose();
+      }
       redraw.cancel();
     });
   });
@@ -231,10 +244,15 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     engine.desk.foldedProjects(),
   );
   const setFold = (projectId: number, on: boolean) => {
-    if (folded().has(projectId) === on) return;
+    if (folded().has(projectId) === on) {
+      return;
+    }
     const next = new Set(folded());
-    if (on) next.add(projectId);
-    else next.delete(projectId);
+    if (on) {
+      next.add(projectId);
+    } else {
+      next.delete(projectId);
+    }
     setFolded(next);
     engine.desk.setFoldedProjects(next);
   };
@@ -259,7 +277,9 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   const currentRow = (): string | null => {
     const sel = selectedKey();
     const cur = cursorKey();
-    if (sel && cur && baseKey(cur) === sel) return cur;
+    if (sel && cur && baseKey(cur) === sel) {
+      return cur;
+    }
     return rowFor(shownItems(), sel)?.key ?? sel;
   };
   const selectedRowKey = createMemo((): string | null => {
@@ -296,10 +316,16 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   const selected = createMemo((): RailItem | null => {
     const key = selectedKey();
     const item = rowFor(items(), key);
-    if (item) return item;
-    if (!key || key !== offRail()) return null;
+    if (item) {
+      return item;
+    }
+    if (!key || key !== offRail()) {
+      return null;
+    }
     const task = reads.task(Number(key.slice(1)));
-    if (!task) return null;
+    if (!task) {
+      return null;
+    }
     return {
       type: "task",
       key,
@@ -321,16 +347,18 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     // A row written a moment ago (a new task) is on the rail before we look.
     redraw.flush();
     const item = rowFor(items(), key);
-    if (item?.type === "task" && item.group !== null)
+    if (item?.type === "task" && item.group !== null) {
       setFold(item.group, false);
+    }
     // Nor does the status filter hide it: like tilt-tui's picker, going to
     // a row the filter leaves out clears the filter.
     if (
       item &&
       railFilter().size > 0 &&
       !flattenRail(filtered()).some((i) => i.key === item.key)
-    )
+    ) {
       setRailFilter(new Set<RailFilter>());
+    }
     const base = baseKey(key);
     setOffRail(!item && base?.startsWith("t") ? base : null);
     setSelectedKey(base);
@@ -353,7 +381,9 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   const cursorItem = createMemo(() => {
     const key = cursorKey();
     const row = items().find((i) => i.key === key);
-    if (row) return row;
+    if (row) {
+      return row;
+    }
     const off = selected();
     return off && off.key === key && key === offRail() ? off : null;
   });
@@ -364,8 +394,9 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     const fold = !folded().has(projectId);
     if (fold) {
       const under = items().find((i) => i.key === cursorKey());
-      if (under?.type === "task" && under.group === projectId)
+      if (under?.type === "task" && under.group === projectId) {
         setCursorKey(`p${projectId}`);
+      }
     }
     setFold(projectId, fold);
   }
@@ -373,8 +404,11 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   function toggleFilter(filter: RailFilter) {
     redraw.flush();
     const next = new Set(railFilter());
-    if (next.has(filter)) next.delete(filter);
-    else next.add(filter);
+    if (next.has(filter)) {
+      next.delete(filter);
+    } else {
+      next.add(filter);
+    }
     setRailFilter(next);
   }
 
@@ -382,7 +416,9 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     redraw.flush();
     const walkable = walkableKeys(shownRail(), selectedKey());
     const key = nextKey(order(), walkable, currentRow(), direction);
-    if (key) select(key);
+    if (key) {
+      select(key);
+    }
     return key;
   }
 
@@ -401,29 +437,38 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   // you were there.
   createEffect(() => {
     const key = selectedKey();
-    if (mode() !== ViewMode.chat || !key) return;
+    if (mode() !== ViewMode.chat || !key) {
+      return;
+    }
     const due = rail().find((s) => s.section === Section.due);
-    if (due?.items.some((i) => baseKey(i.key) === key))
+    if (due?.items.some((i) => baseKey(i.key) === key)) {
       engine.desk.seenTimers(Number(key.slice(1)));
+    }
   });
 
   const trail = new NavHistory();
   const [trailMoved, setTrailMoved] = createSignal(0);
   let recordQueued = false;
   const here = (): Place | null => {
-    if (mode() === ViewMode.board) return { view: "board" };
+    if (mode() === ViewMode.board) {
+      return { view: "board" };
+    }
     const key = selectedKey();
     return key ? { view: "chat", key } : null;
   };
   createEffect(() => {
     mode();
     selectedKey();
-    if (recordQueued) return;
+    if (recordQueued) {
+      return;
+    }
     recordQueued = true;
     queueMicrotask(() => {
       recordQueued = false;
       const place = here();
-      if (!place) return;
+      if (!place) {
+        return;
+      }
       trail.visit(place);
       setTrailMoved((n) => n + 1);
     });
@@ -433,9 +478,14 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   function history(direction: 1 | -1): boolean {
     redraw.flush();
     const place = direction < 0 ? trail.back(exists) : trail.forward(exists);
-    if (!place) return false;
-    if (place.view === "board") setMode(ViewMode.board);
-    else goTo(place.key);
+    if (!place) {
+      return false;
+    }
+    if (place.view === "board") {
+      setMode(ViewMode.board);
+    } else {
+      goTo(place.key);
+    }
     return true;
   }
   const recent = createMemo(() => {
@@ -453,7 +503,9 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
   // Motion is read once per run, not per row per frame (config is a file).
   let spinMoves = true;
   createEffect(() => {
-    if (!anyWorking()) return;
+    if (!anyWorking()) {
+      return;
+    }
     spinMoves = motion();
     const spin = setInterval(
       () => setFrame((f) => (f + 1) % SPINNER.length),
@@ -462,7 +514,9 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     onCleanup(() => clearInterval(spin));
   });
   const spinner = () => {
-    if (!anyWorking()) return SPINNER[0];
+    if (!anyWorking()) {
+      return SPINNER[0];
+    }
     const f = frame();
     return spinMoves ? SPINNER[f] : SPINNER[0];
   };

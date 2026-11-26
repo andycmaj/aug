@@ -11,7 +11,11 @@ function task(title: string): number {
 
 // Notes in a row, a minute apart, so the order does not rest on the clock.
 let minute = 0;
-function note(body: string, taskId: number | null, label: NoteLabel = NoteLabel.note): void {
+function note(
+  body: string,
+  taskId: number | null,
+  label: NoteLabel = NoteLabel.note,
+): void {
   const row = store.addNote(`agent ${taskId ?? "home"}`, label, body, taskId);
   const at = new Date(Date.UTC(2026, 10, 21, 9, minute++)).toISOString();
   db().run("UPDATE notes SET created_at = ? WHERE id = ?", [at, row.id]);
@@ -44,7 +48,10 @@ describe("the notes board", () => {
 
     store.updateTask(merged, { status: TaskStatus.done });
     store.updateTask(dropped, { status: TaskStatus.dropped });
-    expect(board()).toEqual(["no task: rebase every branch", "open: working on"]);
+    expect(board()).toEqual([
+      "no task: rebase every branch",
+      "open: working on",
+    ]);
 
     expect(store.notesForTask(merged).map((n) => n.body)).toEqual([
       "merged: working on",
@@ -59,7 +66,9 @@ describe("the notes board", () => {
     const busy = task("Busy");
     const quiet = task("Quiet");
     note("quiet: one", quiet);
-    for (let i = 1; i <= store.NOTES_PER_TASK + 2; i++) note(`busy: ${i}`, busy);
+    for (let i = 1; i <= store.NOTES_PER_TASK + 2; i++) {
+      note(`busy: ${i}`, busy);
+    }
     note("home: one", null);
     note("home: two", null);
     const n = store.NOTES_PER_TASK;
@@ -74,7 +83,9 @@ describe("the notes board", () => {
 
   test("the limit counts what the board shows", () => {
     const t = task("t");
-    for (let i = 0; i < 5; i++) note(`n${i}`, null);
+    for (let i = 0; i < 5; i++) {
+      note(`n${i}`, null);
+    }
     note("t1", t);
     expect(store.listNotes(3).map((n) => n.body)).toEqual(["t1", "n4", "n3"]);
   });

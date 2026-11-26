@@ -11,13 +11,7 @@ import { docsBlock } from "./prompts";
 import { isSlipped } from "./rail";
 import { capReached } from "./spend";
 import * as store from "./store";
-import {
-  IdeaStatus,
-  Kind,
-  SpendRole,
-  TaskStatus,
-  type IdeaRow,
-} from "./types";
+import { IdeaStatus, Kind, SpendRole, TaskStatus, type IdeaRow } from "./types";
 
 const log = logger("advisor");
 
@@ -99,10 +93,16 @@ export const PAST_IDEAS_DAYS = 30;
 // Every idea still open, and every one made in the window whatever became of
 // it.
 export function pastIdeas(at: Date): IdeaRow[] {
-  const since = new Date(at.getTime() - PAST_IDEAS_DAYS * 86400000).toISOString();
+  const since = new Date(
+    at.getTime() - PAST_IDEAS_DAYS * 86400000,
+  ).toISOString();
   const byId = new Map<number, IdeaRow>();
-  for (const i of [...store.openIdeas(), ...store.ideasSince(since)]) byId.set(i.id, i);
-  return [...byId.values()].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+  for (const i of [...store.openIdeas(), ...store.ideasSince(since)]) {
+    byId.set(i.id, i);
+  }
+  return [...byId.values()].sort(
+    (a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id,
+  );
 }
 
 function outcome(i: IdeaRow): string {
@@ -121,14 +121,18 @@ function outcome(i: IdeaRow): string {
 // nothing; the refusal (repeatsPastIdea) still reads every idea.
 export function promptIdeas(past: IdeaRow[]): IdeaRow[] {
   return past.filter((i) => {
-    if (!i.task_id) return true;
+    if (!i.task_id) {
+      return true;
+    }
     const status = store.getTask(i.task_id)?.status;
     return status === TaskStatus.open || status === TaskStatus.later;
   });
 }
 
 export function pastIdeasBlock(past: IdeaRow[]): string {
-  if (past.length === 0) return "(none)";
+  if (past.length === 0) {
+    return "(none)";
+  }
   return past
     .map(
       (i) =>
@@ -148,13 +152,16 @@ export function repeatsPastIdea(
   past: IdeaRow[],
 ): string | null {
   const same = past.find((p) => sameTitle(p.title, idea.title));
-  if (same) return `repeats idea #${same.id} (${outcome(same)})`;
+  if (same) {
+    return `repeats idea #${same.id} (${outcome(same)})`;
+  }
   if (idea.taskId) {
     const dismissed = past.find(
       (p) => p.status === IdeaStatus.dismissed && p.task_id === idea.taskId,
     );
-    if (dismissed)
+    if (dismissed) {
       return `${store.taskRef(idea.taskId)}'s idea #${dismissed.id} was dismissed`;
+    }
   }
   return null;
 }

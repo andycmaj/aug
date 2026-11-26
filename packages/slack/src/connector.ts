@@ -13,7 +13,12 @@ import { SendError } from "@riker/core/outbound";
 import { remoteConfig, slackConfig } from "./config";
 import { Remote, remoteChannel, type RemoteLink } from "./remote";
 import { remoteLink } from "./remote-links";
-import { EMPTY_CURSOR, type SlackCursor, type SlackReply, type SlackTransport } from "./shared";
+import {
+  EMPTY_CURSOR,
+  type SlackCursor,
+  type SlackReply,
+  type SlackTransport,
+} from "./shared";
 import { slackTransport } from "./transport";
 
 const log = logger("slack");
@@ -48,13 +53,15 @@ export class SlackConnector implements Connector {
     if (settings.enabled && can.ok) {
       void this.poll();
       this.ctx.every(settings.pollSeconds * 1000, () => void this.poll());
-    } else if (!settings.enabled) this.ctx.setStatus(off("disabled in config"));
-    else
+    } else if (!settings.enabled) {
+      this.ctx.setStatus(off("disabled in config"));
+    } else {
       this.ctx.setStatus(
         slack.kind === "mcp"
           ? { state: "error", detail: can.detail, at: now() }
           : off(can.detail),
       );
+    }
   }
 
   stop(): void {
@@ -74,7 +81,9 @@ export class SlackConnector implements Connector {
 
   async poll(): Promise<void> {
     const slack = this.transport;
-    if (!slack?.available().ok || this.polling) return;
+    if (!slack?.available().ok || this.polling) {
+      return;
+    }
     this.polling = true;
     this.ctx.setStatus({ ...this.ctx.status(), state: "polling" });
     const done = log.time("slack poll", { transport: slack.kind });
@@ -143,7 +152,9 @@ export class RemoteConnector implements Connector {
 
   // Made on first use, so a test can tick a remote the engine never started.
   private ready(): Remote | null {
-    if (this.remote) return this.remote;
+    if (this.remote) {
+      return this.remote;
+    }
     const config = this.ctx.config.get();
     if (!remoteConfig.of(config).enabled) {
       this.ctx.setStatus(off("disabled in config"));
@@ -167,9 +178,14 @@ export class RemoteConnector implements Connector {
   }
 
   start(): void {
-    if (!this.ready()) return;
+    if (!this.ready()) {
+      return;
+    }
     void this.poll();
-    this.ctx.every(remoteConfig.of(this.ctx.config.get()).pollSeconds * 1000, () => void this.poll());
+    this.ctx.every(
+      remoteConfig.of(this.ctx.config.get()).pollSeconds * 1000,
+      () => void this.poll(),
+    );
   }
 
   stop(): void {
@@ -178,14 +194,21 @@ export class RemoteConnector implements Connector {
   }
 
   async poll(): Promise<void> {
-    if (!remoteConfig.of(this.ctx.config.get()).enabled) return;
+    if (!remoteConfig.of(this.ctx.config.get()).enabled) {
+      return;
+    }
     const remote = this.ready();
-    if (!remote) return;
-    if (this.ctx.status().state !== "error")
+    if (!remote) {
+      return;
+    }
+    if (this.ctx.status().state !== "error") {
       this.ctx.setStatus({ ...this.ctx.status(), state: "polling" });
+    }
     try {
       const result = await remote.tick();
-      if (!result) return;
+      if (!result) {
+        return;
+      }
       const did = [
         result.heard ? `${result.heard} heard` : "",
         result.answered ? `${result.answered} answered` : "",

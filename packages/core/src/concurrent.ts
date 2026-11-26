@@ -25,6 +25,8 @@ export async function mapLimit<T, R>(
   await Promise.all(
     Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker),
   );
-  if (failed) throw (failed as { err: unknown }).err;
+  if (failed) {
+    throw (failed as { err: unknown }).err;
+  }
   return out;
 }

@@ -11,12 +11,7 @@ import type { TurnAnswer } from "./agents";
 import type { ConfigSection, ConfigSource, RikerConfig } from "./config";
 import type { PrRef } from "./pr";
 import type { NewMessage } from "./store";
-import type {
-  DraftAction,
-  MessageRow,
-  TaskRow,
-  TriageVerdict,
-} from "./types";
+import type { DraftAction, MessageRow, TaskRow, TriageVerdict } from "./types";
 
 // ── triage: what happens to a message after a poller inserts it ─────────
 
@@ -92,7 +87,11 @@ export interface ConnectorContext {
   say(taskId: number, text: string, author: string): Promise<boolean>;
   wake(taskId: number, reason: string): void;
   // A move run on the desk, as `by`.
-  runMove(verb: string, args: Record<string, string>, by: string): Promise<{ ok: boolean; result: string }>;
+  runMove(
+    verb: string,
+    args: Record<string, string>,
+    by: string,
+  ): Promise<{ ok: boolean; result: string }>;
   // Work the engine runs on its own clock that a poll may want now.
   checkMerges(): Promise<void>;
 }

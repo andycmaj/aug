@@ -149,9 +149,15 @@ export const GENERAL_ALLOW = [
 // which; see AGENT_MOVES).
 function agentToolRules(): string[] {
   return [
-    ...["tasks", "task", "projects", "project", "notes", "knowledge search", "hub search"].flatMap((c) =>
-      toolsRules(...c.split(" ")),
-    ),
+    ...[
+      "tasks",
+      "task",
+      "projects",
+      "project",
+      "notes",
+      "knowledge search",
+      "hub search",
+    ].flatMap((c) => toolsRules(...c.split(" "))),
     ...[...AGENT_MOVES].flatMap((verb) => toolsRules("move", verb)),
   ];
 }
@@ -323,11 +329,13 @@ export function leaveSession(
         t.finished_at !== null,
     )?.finished_at ?? session.last_event_at;
   const idle = at - Date.parse(last);
-  if (idleMinutes > 0 && idle > idleMinutes * 60_000)
+  if (idleMinutes > 0 && idle > idleMinutes * 60_000) {
     return `idle ${Math.round(idle / 60_000)} minutes`;
+  }
   const context = session.context_tokens ?? 0;
-  if (home && homeMaxTokens > 0 && context > homeMaxTokens)
+  if (home && homeMaxTokens > 0 && context > homeMaxTokens) {
     return `context ${context} tokens`;
+  }
   return null;
 }
 
@@ -369,7 +377,9 @@ export class AgentPool {
 
   active(): number {
     const ids = new Set([...this.running.keys(), ...this.starting]);
-    for (const id of store.workingTaskIds()) ids.add(id);
+    for (const id of store.workingTaskIds()) {
+      ids.add(id);
+    }
     return ids.size;
   }
 
@@ -378,7 +388,9 @@ export class AgentPool {
   }
 
   private enqueue(entry: Waiting, why = this.waitReason()): void {
-    if (this.isWaiting(entry.taskId)) return;
+    if (this.isWaiting(entry.taskId)) {
+      return;
+    }
     this.waiting.push(entry);
     log.debug("queued", { task: entry.taskId, reason: entry.reason, why });
     queued(entry.taskId, why);
@@ -399,7 +411,9 @@ export class AgentPool {
     reason: string,
     by: "owner" | typeof SELF,
   ): Promise<void> | null {
-    if (this.running.has(taskId)) return null;
+    if (this.running.has(taskId)) {
+      return null;
+    }
     if (by === SELF && this.capped()) {
       this.enqueue({ taskId, reason }, capReason(this.options.config.get()));
       return null;
@@ -415,7 +429,9 @@ export class AgentPool {
   // The owner's coding Start: it runs now while there is room, else waits
   // its turn and runs when one frees. Null when it waits.
   claim<T>(taskId: number, start: () => Promise<T>): Promise<T> | null {
-    if (this.isWaiting(taskId)) return null;
+    if (this.isWaiting(taskId)) {
+      return null;
+    }
     if (this.full()) {
       this.enqueue({ taskId, reason: "the owner pressed Start", start });
       return null;
@@ -437,7 +453,9 @@ export class AgentPool {
   }
 
   stopAll(): void {
-    for (const r of this.running.values()) r.abort.abort();
+    for (const r of this.running.values()) {
+      r.abort.abort();
+    }
   }
 
   // Run whatever waits while there is room. The engine calls it whenever
@@ -446,17 +464,24 @@ export class AgentPool {
     while (this.waiting.length > 0 && !this.full()) {
       // Under the cap only the owner's coding Starts go; Riker's chat turns
       // stay queued until the day turns or the owner starts one.
-      const at = this.capped()
-        ? this.waiting.findIndex((w) => w.start)
-        : 0;
-      if (at < 0) break;
+      const at = this.capped() ? this.waiting.findIndex((w) => w.start) : 0;
+      if (at < 0) {
+        break;
+      }
       const [next] = this.waiting.splice(at, 1);
-      if (!next) break;
+      if (!next) {
+        break;
+      }
       const task = store.getTask(next.taskId);
-      if (!task || task.status !== TaskStatus.open) continue;
+      if (!task || task.status !== TaskStatus.open) {
+        continue;
+      }
       log.debug("dequeued", { task: next.taskId, reason: next.reason });
-      if (next.start) void this.launch(next.taskId, next.start);
-      else void this.run(next.taskId, next.reason).finally(() => this.drain());
+      if (next.start) {
+        void this.launch(next.taskId, next.start);
+      } else {
+        void this.run(next.taskId, next.reason).finally(() => this.drain());
+      }
     }
   }
 
@@ -466,7 +491,9 @@ export class AgentPool {
 
   private async run(taskId: number, reason: string): Promise<void> {
     const task = store.getTask(taskId);
-    if (!task) return;
+    if (!task) {
+      return;
+    }
     const cwd = paths.work(taskId);
     mkdirSync(cwd, { recursive: true });
 
@@ -482,8 +509,12 @@ export class AgentPool {
     const runsRiker = home || project !== null;
     const prior = chatResume(taskId, history);
     const priorRow = prior ? store.getSession(prior) : null;
-    const left = priorRow ? leaveSession(priorRow, history, runsRiker, config) : null;
-    if (left) log.info("new session", { task: taskId, left: prior, why: left });
+    const left = priorRow
+      ? leaveSession(priorRow, history, runsRiker, config)
+      : null;
+    if (left) {
+      log.info("new session", { task: taskId, left: prior, why: left });
+    }
     const resume = left ? undefined : prior;
     const sessionId = resume ?? randomUUID();
     const ref = { taskId, sessionId };
@@ -523,12 +554,15 @@ export class AgentPool {
     // Whatever the turn left in its folder, kept even when it fails.
     const recordFiles = () => {
       const made = changedFiles(cwd, before, snapshotDir(cwd));
-      if (made.length)
+      if (made.length) {
         store.updateTurn(turn.id, { files: JSON.stringify(made) });
+      }
     };
 
     const steps: string[] = [];
-    const lines = runsRiker ? (this.options.assistantLines?.(config) ?? []) : [];
+    const lines = runsRiker
+      ? (this.options.assistantLines?.(config) ?? [])
+      : [];
     const where = home
       ? whereThingsStand()
       : project
@@ -539,12 +573,25 @@ export class AgentPool {
         ...(home
           ? assistantCall(config, history, reason, resume, where, lines)
           : project
-            ? managerCall(config, task, project, history, reason, resume, where, lines)
+            ? managerCall(
+                config,
+                task,
+                project,
+                history,
+                reason,
+                resume,
+                where,
+                lines,
+              )
             : generalCall(config, task, history, reason, Boolean(resume))),
         cwd,
         ...(resume ? { resume } : { sessionId }),
         spend: {
-          role: home ? SpendRole.assistant : project ? SpendRole.manager : SpendRole.general,
+          role: home
+            ? SpendRole.assistant
+            : project
+              ? SpendRole.manager
+              : SpendRole.general,
           taskId,
         },
         signal: abort.signal,
@@ -568,18 +615,27 @@ export class AgentPool {
       if (result.denied?.length) {
         steps.push(
           ...result.denied.map((d) => `${DENIED_STEP}${d}`),
-          ...grantSteps(result.denied, runsRiker ? "assistant" : "general", config),
+          ...grantSteps(
+            result.denied,
+            runsRiker ? "assistant" : "general",
+            config,
+          ),
         );
         store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
       }
-      if (home) rememberWhere(sessionId, where);
-      if (project) rememberWhere(sessionId, where, pictureKey(taskId));
+      if (home) {
+        rememberWhere(sessionId, where);
+      }
+      if (project) {
+        rememberWhere(sessionId, where, pictureKey(taskId));
+      }
       const answer = result.structured as TurnAnswer | null;
       const finished = now();
       recordFiles();
       store.batch(() => {
-        if (result.context !== undefined)
+        if (result.context !== undefined) {
           store.updateSession(sessionId, { context_tokens: result.context });
+        }
         if (!answer) {
           store.updateTurn(turn.id, {
             status: "done",
@@ -591,7 +647,10 @@ export class AgentPool {
           turnFinished(ref, { asking: null, at: finished });
           return;
         }
-        const action = this.drafts.for(store.getTask(taskId) ?? task, answer.action);
+        const action = this.drafts.for(
+          store.getTask(taskId) ?? task,
+          answer.action,
+        );
         store.updateTurn(turn.id, {
           status: "done",
           about: answer.about,
@@ -600,7 +659,9 @@ export class AgentPool {
           body: answer.did,
           finished_at: finished,
         });
-        if (action) store.setTurnAction(turn.id, action);
+        if (action) {
+          store.setTurnAction(turn.id, action);
+        }
         turnFinished(ref, {
           asking: answer.state === "asking" ? answer.next : null,
           at: finished,
@@ -609,8 +670,9 @@ export class AgentPool {
       done();
     } catch (err) {
       const stopped = abort.signal.aborted;
-      if (stopped) done({ stopped: true });
-      else {
+      if (stopped) {
+        done({ stopped: true });
+      } else {
         done({ ok: false });
         log.error("turn failed", { task: taskId, session: sessionId, err });
       }
@@ -705,10 +767,18 @@ function launchFile(taskId: number, name: string, text: string): string {
   return file;
 }
 
-function ownerNote(taskId: number, note: string): { text: string; inFile?: string } {
-  if (note.length <= NOTE_INLINE_MAX) return { text: note };
+function ownerNote(
+  taskId: number,
+  note: string,
+): { text: string; inFile?: string } {
+  if (note.length <= NOTE_INLINE_MAX) {
+    return { text: note };
+  }
   const file = launchFile(taskId, "note.md", note);
-  return { text: note, inFile: `The owner left you a note too long to type here: read ${file} first.` };
+  return {
+    text: note,
+    inFile: `The owner left you a note too long to type here: read ${file} first.`,
+  };
 }
 
 export function dropLaunchFiles(taskId: number): void {
@@ -733,10 +803,16 @@ export function hookSettings(): Record<string, unknown> {
 
 export function codingCwd(config: RikerConfig, task: TaskRow): string {
   // The interview writes its drafts there, so Write needs no other folder.
-  if (task.kind === Kind.system) return docDraftsDir();
+  if (task.kind === Kind.system) {
+    return docDraftsDir();
+  }
   const mapped = task.repo ? config.repos[task.repo] : undefined;
-  if (mapped) return mapped;
-  if (config.scratchRepo) return config.scratchRepo;
+  if (mapped) {
+    return mapped;
+  }
+  if (config.scratchRepo) {
+    return config.scratchRepo;
+  }
   const dir = paths.work(task.id);
   mkdirSync(dir, { recursive: true });
   return dir;
@@ -809,12 +885,20 @@ export function codingLaunch(
 ): CodingLaunch {
   const sessionId = opts.resume ?? randomUUID();
   const argv = ["claude"];
-  if (opts.resume) argv.push("--resume", opts.resume);
-  else argv.push("--session-id", sessionId);
+  if (opts.resume) {
+    argv.push("--resume", opts.resume);
+  } else {
+    argv.push("--session-id", sessionId);
+  }
   argv.push("--settings", JSON.stringify(hookSettings()));
   const interview = task.kind === Kind.system;
-  const brief = interview ? onboardBrief(config, task) : codingBrief(config, task);
-  argv.push("--append-system-prompt-file", launchFile(task.id, "brief.md", brief));
+  const brief = interview
+    ? onboardBrief(config, task)
+    : codingBrief(config, task);
+  argv.push(
+    "--append-system-prompt-file",
+    launchFile(task.id, "brief.md", brief),
+  );
   argv.push("-n", store.taskRef(task.id));
   const note = opts.note ? ownerNote(task.id, opts.note) : null;
   const first = opts.resume
@@ -822,7 +906,9 @@ export function codingLaunch(
     : interview
       ? ONBOARD_START
       : `Work ${store.taskRef(task.id)}: ${task.title}.${note ? ` ${note.inFile ?? `Note from the owner: ${note.text}`}` : ""} Start by reading the notes board, then the task brief in your system prompt.`;
-  if (first) argv.push(first);
+  if (first) {
+    argv.push(first);
+  }
   return {
     argv,
     cwd: codingCwd(config, task),

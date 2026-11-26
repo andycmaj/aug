@@ -90,11 +90,18 @@ export function Rail(props: { actions: TaskActions }) {
   // that has no row (done or dropped) keeps it, so the rail's keys reach it.
   createEffect(() => {
     const list = riker.shownItems();
-    if (list.length === 0) return;
+    if (list.length === 0) {
+      return;
+    }
     const shown = (key: string | null) => list.some((i) => i.key === key);
-    if (!riker.selectedKey()) riker.select(list[0].key);
-    else if (!shown(riker.cursorKey()) && riker.cursorKey() !== riker.offRailKey())
+    if (!riker.selectedKey()) {
+      riker.select(list[0].key);
+    } else if (
+      !shown(riker.cursorKey()) &&
+      riker.cursorKey() !== riker.offRailKey()
+    ) {
       riker.moveCursor(riker.selectedRowKey() ?? list[0].key);
+    }
   });
 
   const cursorIndex = () =>
@@ -107,7 +114,9 @@ export function Rail(props: { actions: TaskActions }) {
       row += first ? 1 : 2;
       first = false;
       for (const item of section.items) {
-        if (item.key === key) return { top: row, height: 2 };
+        if (item.key === key) {
+          return { top: row, height: 2 };
+        }
         row += 3;
       }
     }
@@ -116,14 +125,18 @@ export function Rail(props: { actions: TaskActions }) {
 
   createEffect(
     on([riker.cursorKey, riker.shownRail], ([key]) => {
-      if (!scrollRef) return;
+      if (!scrollRef) {
+        return;
+      }
       const { top, height } = rowOf(key);
       const view = scrollRef.viewport.height ?? 10;
       // Keep the section heading in view when its first row is selected.
       const want = Math.max(0, top - 1);
-      if (want < scrollRef.scrollTop) scrollRef.scrollTo(want);
-      else if (top + height > scrollRef.scrollTop + view)
+      if (want < scrollRef.scrollTop) {
+        scrollRef.scrollTo(want);
+      } else if (top + height > scrollRef.scrollTop + view) {
         scrollRef.scrollTo(top + height - view);
+      }
     }),
   );
 
@@ -132,11 +145,15 @@ export function Rail(props: { actions: TaskActions }) {
   function landCursor() {
     const list = riker.shownItems();
     const at = list.find((i) => i.key === riker.cursorKey());
-    if (at && !(at.type === "task" && at.task.kind === Kind.home)) return;
+    if (at && !(at.type === "task" && at.task.kind === Kind.home)) {
+      return;
+    }
     const first =
       list.find((i) => i.type === "task" && i.task.kind !== Kind.home) ??
       list[0];
-    if (first) riker.moveCursor(first.key);
+    if (first) {
+      riker.moveCursor(first.key);
+    }
   }
 
   const filterHandlers = Object.fromEntries(
@@ -151,7 +168,9 @@ export function Rail(props: { actions: TaskActions }) {
 
   function move(next: (i: number, n: number) => number) {
     const list = riker.shownItems();
-    if (list.length === 0) return;
+    if (list.length === 0) {
+      return;
+    }
     const i = Math.max(0, cursorIndex());
     riker.moveCursor(
       list[Math.min(list.length - 1, Math.max(0, next(i, list.length)))].key,
@@ -170,11 +189,15 @@ export function Rail(props: { actions: TaskActions }) {
       [Commands.OPEN]: () => {
         const item = riker.cursorItem();
         riker.select(riker.cursorKey());
-        if (item?.type !== "project") setActivePane("canvas");
+        if (item?.type !== "project") {
+          setActivePane("canvas");
+        }
       },
       [Commands.FOLD]: () => {
         const item = riker.cursorItem();
-        if (item?.type === "project") riker.toggleFold(item.project.id);
+        if (item?.type === "project") {
+          riker.toggleFold(item.project.id);
+        }
       },
       [Commands.FILTER_CYCLE]: () => {
         riker.cycleFilter();
@@ -340,26 +363,34 @@ function RailRow(props: {
   const laneWord = (item: Extract<RailItem, { type: "task" }>) => {
     if (item.lane === Lane.blocked) {
       const by = riker.blockers(item.task.id);
-      if (by.length) return `blocked by ${by.map(taskRef).join(", ")}`;
+      if (by.length) {
+        return `blocked by ${by.map(taskRef).join(", ")}`;
+      }
     }
     if (item.lane === Lane.stopped) {
       const why = riker.latestSession(item.task.id)?.end_reason;
-      if (why) return `stopped: ${why}`;
+      if (why) {
+        return `stopped: ${why}`;
+      }
     }
     // What review means here: read what it closed, or close it yourself.
-    if (item.lane === Lane.ready)
+    if (item.lane === Lane.ready) {
       return item.task.status === TaskStatus.done
         ? "ready: its agent closed it"
         : "ready: yours to close";
+    }
     // Working outranks merged (an agent that landed its branch is often
     // still writing its note), so the word carries the merge; first, so a
     // cut sub line keeps it.
-    if (item.lane === Lane.working && item.task.merged_at)
+    if (item.lane === Lane.working && item.task.merged_at) {
       return "merged, agent working";
+    }
     // Past review: its PR waits in GitHub's merge queue, or was put out.
     if (item.lane === Lane.review) {
       const queued = prQueueWord(riker.prStatus(item.task.id));
-      if (queued) return queued;
+      if (queued) {
+        return queued;
+      }
     }
     return LANE_META[item.lane].word;
   };
@@ -386,8 +417,15 @@ function RailRow(props: {
           item.lane === Lane.working;
         // A task action running on it (the guide) says where it is, in
         // place of its lane's word; then, for a while, that it ended.
-        const acting = actionRailWord(riker.latestActionTurns().get(item.task.id), now);
-        const word = acting ? acting.text : item.slipped ? "slipped" : laneWord(item);
+        const acting = actionRailWord(
+          riker.latestActionTurns().get(item.task.id),
+          now,
+        );
+        const word = acting
+          ? acting.text
+          : item.slipped
+            ? "slipped"
+            : laneWord(item);
         const age =
           item.lane === Lane.later && item.task.remind_at
             ? ageLabel(item.task.remind_at, now)
@@ -407,7 +445,9 @@ function RailRow(props: {
             theme().borderSubtle ??
             theme().textMuted,
           mark: working || acting?.running ? riker.spinner() : meta.mark,
-          markColor: acting?.failed ? theme().error : toneColor(theme(), meta.tone),
+          markColor: acting?.failed
+            ? theme().error
+            : toneColor(theme(), meta.tone),
           title: item.task.title,
           titleColor: item.priority === "urgent" ? theme().error : theme().text,
           tags: item.tags.map((t) => TAG_MARK[t]).join(""),
@@ -416,15 +456,15 @@ function RailRow(props: {
           sub: acting
             ? [word, taskRef(item.task.id)].join(" · ")
             : chip
-            ? [taskRef(item.task.id), item.copy ? project : null, word]
-                .filter(Boolean)
-                .join(" · ")
-            : [
-                age,
-                (!props.nested && project) || CHANNEL_WORD[item.task.channel],
-                taskRef(item.task.id),
-                word,
-              ].join(" · "),
+              ? [taskRef(item.task.id), item.copy ? project : null, word]
+                  .filter(Boolean)
+                  .join(" · ")
+              : [
+                  age,
+                  (!props.nested && project) || CHANNEL_WORD[item.task.channel],
+                  taskRef(item.task.id),
+                  word,
+                ].join(" · "),
           lead: `${age} · `,
           chip: chip && {
             text: chip.text,
@@ -438,13 +478,22 @@ function RailRow(props: {
         let asks = 0;
         let review = 0;
         let ready = 0;
-        if (folded)
+        if (folded) {
           for (const i of riker.items()) {
-            if (i.type !== "task" || i.group !== item.project.id) continue;
-            if (i.lane === Lane.waiting) asks++;
-            if (i.lane === Lane.ready) review++;
-            if (i.lane === Lane.approve) ready++;
+            if (i.type !== "task" || i.group !== item.project.id) {
+              continue;
+            }
+            if (i.lane === Lane.waiting) {
+              asks++;
+            }
+            if (i.lane === Lane.ready) {
+              review++;
+            }
+            if (i.lane === Lane.approve) {
+              ready++;
+            }
           }
+        }
         // Its manager, once the owner has talked to it: on while its
         // session would resume, asleep past the idle hour.
         const manager = managerMark(
@@ -471,7 +520,9 @@ function RailRow(props: {
                 ? theme().warning
                 : theme().accent,
           sub: [
-            manager && manager !== ManagerMark.asleep ? MANAGER_WORD[manager] : "",
+            manager && manager !== ManagerMark.asleep
+              ? MANAGER_WORD[manager]
+              : "",
             `${item.open} open`,
             item.working ? `${item.working} working` : "",
             item.goals ? `goals ${item.goalsMet}/${item.goals}` : "",
@@ -501,7 +552,9 @@ function RailRow(props: {
           <text bg={view().bar}> </text>
           <text fg={lit() ? selFg() : view().markColor}>{view().mark}</text>
           <Show when={view().tags}>
-            <text fg={lit() ? selFg() : (view().tagColor ?? theme().warning)}>{view().tags}</text>
+            <text fg={lit() ? selFg() : (view().tagColor ?? theme().warning)}>
+              {view().tags}
+            </text>
           </Show>
           <text
             fg={lit() ? selFg() : view().titleColor}

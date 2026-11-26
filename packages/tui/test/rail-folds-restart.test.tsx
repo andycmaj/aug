@@ -16,7 +16,9 @@ afterEach(() => {
   destroy?.();
   destroy = undefined;
   const home = process.env.RIKER_HOME;
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 // A restart: the database opened again from disk, and a new engine over it.
@@ -46,7 +48,9 @@ async function mount(engine: Engine) {
   };
   const goTo = async (words: string) => {
     await press("\\", { ctrl: true });
-    for (const c of words) setup.mockInput.pressKey(c);
+    for (const c of words) {
+      setup.mockInput.pressKey(c);
+    }
     setup.mockInput.pressEnter();
     await settle();
   };

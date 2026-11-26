@@ -87,9 +87,15 @@ describe("the SOUL to PERSONA rename", () => {
   });
 
   test("an edited SOUL.md keeps its words, and old names are rewritten", () => {
-    writeFileSync(docPath("SOUL.md"), "# SOUL\n\n- Never ping Dana after 6pm.\n");
+    writeFileSync(
+      docPath("SOUL.md"),
+      "# SOUL\n\n- Never ping Dana after 6pm.\n",
+    );
     writeFileSync(docPath("COUNSEL.md"), OLD_COUNSEL);
-    writeDoc(DocName.learned, "# LEARNED\n\nSOUL.md always outranks this file.\n");
+    writeDoc(
+      DocName.learned,
+      "# LEARNED\n\nSOUL.md always outranks this file.\n",
+    );
     // As an install before the rename: PERSONA.md not seeded yet.
     Bun.spawnSync(["rm", docPath(DocName.persona)]);
     expect(migrateSoul()).toBe(true);
@@ -153,7 +159,10 @@ describe("shipped updates: notify, never merge", () => {
   });
 
   test("an edited owner doc is never asked about", () => {
-    store.kvSet(`doc.shipped.${DocName.job}`, docHash("# JOB\n\nold template\n"));
+    store.kvSet(
+      `doc.shipped.${DocName.job}`,
+      docHash("# JOB\n\nold template\n"),
+    );
     writeDoc(DocName.job, "# JOB\n\nMine.\n");
     expect(syncShipped()).toEqual({ updated: [], asked: [] });
     expect(readDoc(DocName.job)).toBe("# JOB\n\nMine.\n");
@@ -205,7 +214,10 @@ describe("proposals", () => {
       "- Erin's asks are important. [s:3 | ev: c1,c2 | seen: 2026-11-01]";
     writeDoc(
       DocName.learned,
-      readDoc(DocName.learned).replace("## Your people\n", `## Your people\n${lesson}\n`),
+      readDoc(DocName.learned).replace(
+        "## Your people\n",
+        `## Your people\n${lesson}\n`,
+      ),
     );
     const p = propose({
       doc: DocName.job,
@@ -223,15 +235,18 @@ describe("proposals", () => {
   });
 
   test("the owner's notes redraft a proposal in place", async () => {
-    const calls = fakeBrain(() => ({ text: "# STYLE\n\nTerse.", reason: "shorter" }));
+    const calls = fakeBrain(() => ({
+      text: "# STYLE\n\nTerse.",
+      reason: "shorter",
+    }));
     const p = propose({
       doc: DocName.style,
       source: ProposalSource.evolve,
       proposed: "# STYLE\n\nVery long.\n",
     });
-    expect(await redraftProposals(config(), p.task_id, "## STYLE.md:3\ntoo long")).toBe(
-      "redrafted STYLE.md",
-    );
+    expect(
+      await redraftProposals(config(), p.task_id, "## STYLE.md:3\ntoo long"),
+    ).toBe("redrafted STYLE.md");
     expect(store.getProposal(p.id)!.proposed).toBe("# STYLE\n\nTerse.\n");
     expect(calls[0].prompt).toContain("too long");
   });
@@ -248,14 +263,26 @@ describe("proposals", () => {
   });
 
   test("a closed System task's proposal is not revised: a new one opens", () => {
-    const a = propose({ doc: DocName.job, source: ProposalSource.evolve, proposed: "a\n" });
+    const a = propose({
+      doc: DocName.job,
+      source: ProposalSource.evolve,
+      proposed: "a\n",
+    });
     store.updateTask(a.task_id, { status: TaskStatus.done });
-    const b = propose({ doc: DocName.job, source: ProposalSource.evolve, proposed: "b\n" });
+    const b = propose({
+      doc: DocName.job,
+      source: ProposalSource.evolve,
+      proposed: "b\n",
+    });
     expect(b.task_id).not.toBe(a.task_id);
   });
 
   test("System tasks sit in their own rail section", () => {
-    propose({ doc: DocName.job, source: ProposalSource.evolve, proposed: "x\n" });
+    propose({
+      doc: DocName.job,
+      source: ProposalSource.evolve,
+      proposed: "x\n",
+    });
     const sections = buildRail({
       tasks: store.listTasks(),
       pendingActions: new Set(),
@@ -271,7 +298,12 @@ describe("LEARNED.md", () => {
     expect(PROMOTE_AT).toBe(3);
     const { text } = applyLesson(
       readDoc(DocName.learned),
-      { skip: false, section: "How you work", text: "Lead with the number", strength: 3 },
+      {
+        skip: false,
+        section: "How you work",
+        text: "Lead with the number",
+        strength: 3,
+      },
       "c1",
       "2026-11-13",
     );
@@ -279,16 +311,22 @@ describe("LEARNED.md", () => {
   });
 
   test("the header comes from code; the file's own header is not read", () => {
-    const inUse = learnedInUse("# LEARNED\n\nSOUL.md outranks.\n\n## How you work\n- x\n");
+    const inUse = learnedInUse(
+      "# LEARNED\n\nSOUL.md outranks.\n\n## How you work\n- x\n",
+    );
     expect(inUse).toStartWith(LEARNED_HEADER);
     expect(inUse).not.toContain("SOUL.md");
     expect(inUse).toContain("- x");
   });
 
   test("a missing section is added; lines are never touched", () => {
-    const text = withLearnedSections("# LEARNED\n\n## How you work\n- mine\n\n## Watching\n- w\n");
+    const text = withLearnedSections(
+      "# LEARNED\n\n## How you work\n- mine\n\n## Watching\n- w\n",
+    );
     expect(text).toContain("## Your people");
-    expect(text.indexOf("## Promises")).toBeLessThan(text.indexOf("## Watching"));
+    expect(text.indexOf("## Promises")).toBeLessThan(
+      text.indexOf("## Watching"),
+    );
     expect(text).toContain("- mine");
     expect(text).toContain("- w");
   });
@@ -310,7 +348,9 @@ describe("LEARNED.md", () => {
 describe("budgets", () => {
   test("a doc is whole up to twice its budget, then cut with a note", () => {
     freshHome({ ...DEFAULT_CONFIG, docBudgets: { "STYLE.md": 10 } });
-    expect(forPrompt(config(), DocName.style, "x".repeat(20))).toBe("x".repeat(20));
+    expect(forPrompt(config(), DocName.style, "x".repeat(20))).toBe(
+      "x".repeat(20),
+    );
     const cut = forPrompt(config(), DocName.style, "x".repeat(50));
     expect(cut).toStartWith("x".repeat(20) + "\n(cut at budget");
   });
@@ -332,9 +372,15 @@ describe("the daily doc pass", () => {
     fakeBrain(() => ({
       edits: [
         { doc: "JOB.md", text: "# JOB\n\nShip the ledger.", reason: "settled" },
-        { doc: "CODING.md", text: "nope", reason: "shipped docs are off limits" },
+        {
+          doc: "CODING.md",
+          text: "nope",
+          reason: "shipped docs are off limits",
+        },
       ],
-      ideas: [{ title: "Teach CODING.md to run lint", body: "Agents skip lint." }],
+      ideas: [
+        { title: "Teach CODING.md to run lint", body: "Agents skip lint." },
+      ],
     }));
     const result = await runDocPass(config(), new Date());
     expect(result.proposed).toBe(1);
@@ -349,12 +395,17 @@ describe("the daily doc pass", () => {
   // the review read it as deleted and accept deleted it.
   test("a line added after a LEARNED.md proposal is never proposed for deletion", async () => {
     const a = "- Clarify the ask first [s:2 | ev: c1 | seen: 2026-11-08]";
-    const b = "- Clarify the ask before diving in [s:3 | ev: c2 | seen: 2026-11-08]";
+    const b =
+      "- Clarify the ask before diving in [s:3 | ev: c2 | seen: 2026-11-08]";
     writeDoc(
       DocName.learned,
-      readDoc(DocName.learned).replace("## Watching\n", `## Watching\n${a}\n${b}\n`),
+      readDoc(DocName.learned).replace(
+        "## Watching\n",
+        `## Watching\n${a}\n${b}\n`,
+      ),
     );
-    const merged = "- Clarify the ask before diving in [s:3 | ev: c1,c2 | seen: 2026-11-08]";
+    const merged =
+      "- Clarify the ask before diving in [s:3 | ev: c1,c2 | seen: 2026-11-08]";
     fakeBrain((call) => ({
       edits: [
         {
@@ -397,7 +448,10 @@ describe("the daily doc pass", () => {
     const owners = "- Mornings are for deep work";
     writeDoc(
       DocName.learned,
-      readDoc(DocName.learned).replace("## How you work\n", `## How you work\n${owners}\n`),
+      readDoc(DocName.learned).replace(
+        "## How you work\n",
+        `## How you work\n${owners}\n`,
+      ),
     );
     fakeBrain(() => ({
       edits: [
@@ -428,15 +482,24 @@ describe("the daily doc pass", () => {
     const line = "- Ship small [s:3 | ev: c1 | seen: 2026-11-08]";
     writeDoc(
       DocName.learned,
-      readDoc(DocName.learned).replace("## How you work\n", `## How you work\n${line}\n`),
+      readDoc(DocName.learned).replace(
+        "## How you work\n",
+        `## How you work\n${line}\n`,
+      ),
     );
     const p = propose({
       doc: DocName.learned,
       source: ProposalSource.evolve,
-      proposed: readDoc(DocName.learned).replace(line, "- Ship smaller [s:3 | ev: c1 | seen: 2026-11-08]"),
+      proposed: readDoc(DocName.learned).replace(
+        line,
+        "- Ship smaller [s:3 | ev: c1 | seen: 2026-11-08]",
+      ),
       reason: "wording",
     });
-    const moved = readDoc(DocName.learned).replace(line, "- Ship small [s:4 | ev: c1,c3 | seen: 2026-11-17]");
+    const moved = readDoc(DocName.learned).replace(
+      line,
+      "- Ship small [s:4 | ev: c1,c3 | seen: 2026-11-17]",
+    );
     writeDoc(DocName.learned, moved);
     expect(acceptProposals(p.task_id)).toContain("changed since");
     expect(readDoc(DocName.learned)).toBe(moved);
@@ -479,14 +542,19 @@ describe("onboarding", () => {
     expect(window!.taskId).toBe(offer.id);
     expect(window!.cwd).toBe(docDraftsDir());
     expect(window!.argv[0]).toBe("claude");
-    const system = readFileSync(window!.argv[window!.argv.indexOf("--append-system-prompt-file") + 1]!, "utf8");
+    const system = readFileSync(
+      window!.argv[window!.argv.indexOf("--append-system-prompt-file") + 1]!,
+      "utf8",
+    );
     expect(system).toContain("onboarding interview");
     expect(system).toContain(`--file ${join(docDraftsDir(), "PERSONA.md")}`);
     expect(window!.argv.at(-1)).toBe(ONBOARD_START);
     expect(engine.desk.isLive(store.getTask(offer.id)!)).toBe(true);
     // Home is not involved.
     expect(
-      store.turnsForTask(store.homeTask().id).some((t) => t.role === TurnRole.trigger),
+      store
+        .turnsForTask(store.homeTask().id)
+        .some((t) => t.role === TurnRole.trigger),
     ).toBe(false);
   });
 
@@ -495,12 +563,18 @@ describe("onboarding", () => {
     const engine = new Engine({ config: testConfig() });
     const offer = onboardingTask()!;
     const by = `agent ${store.taskRef(offer.id)}`;
-    const ok = store.enqueueMove("propose_doc", { doc: "JOB", text: "draft" }, by);
+    const ok = store.enqueueMove(
+      "propose_doc",
+      { doc: "JOB", text: "draft" },
+      by,
+    );
     const no = store.enqueueMove("new", { title: "x" }, by);
     await engine.drainMoves();
     expect(store.getMove(ok.id)!.status).toBe(MoveStatus.done);
     expect(store.getMove(no.id)!.result).toContain("the owner's move");
-    expect(store.proposalsForTask(offer.id).map((p) => p.doc)).toEqual(["JOB.md"]);
+    expect(store.proposalsForTask(offer.id).map((p) => p.doc)).toEqual([
+      "JOB.md",
+    ]);
   });
 
   test("y on the drafts closes the interview's window", async () => {
@@ -509,7 +583,11 @@ describe("onboarding", () => {
     const offer = onboardingTask()!;
     engine.desk.acceptDocs(offer.id);
     await settle();
-    propose({ doc: DocName.job, source: ProposalSource.onboard, proposed: "# JOB\n" });
+    propose({
+      doc: DocName.job,
+      source: ProposalSource.onboard,
+      proposed: "# JOB\n",
+    });
     expect(mux.windows).toHaveLength(1);
     expect(engine.desk.acceptDocs(offer.id)).toBe("wrote JOB.md");
     await settle();
@@ -520,12 +598,13 @@ describe("onboarding", () => {
     offerOnboarding();
     const engine = new Engine({ config: testConfig() });
     const offer = onboardingTask()!;
-    for (const doc of ["PERSONA", "JOB"])
+    for (const doc of ["PERSONA", "JOB"]) {
       store.enqueueMove(
         "propose_doc",
         { doc, text: `# ${doc}\n\ndraft`, reason: "interview" },
         "assistant",
       );
+    }
     const bad = store.enqueueMove(
       "propose_doc",
       { doc: "CODING", text: "x" },
@@ -554,7 +633,10 @@ describe("onboarding", () => {
       "assistant",
     );
     // A bare name is read from the drafts folder too.
-    writeFileSync(join(docDraftsDir(), "STYLE.md"), "# STYLE\n\n## Tone\nShort.\n");
+    writeFileSync(
+      join(docDraftsDir(), "STYLE.md"),
+      "# STYLE\n\n## Tone\nShort.\n",
+    );
     const bare = store.enqueueMove(
       "propose_doc",
       { doc: "STYLE", file: "STYLE.md" },
@@ -563,7 +645,9 @@ describe("onboarding", () => {
     await engine.drainMoves();
     expect(store.getMove(ok.id)!.result).toContain("JOB.md proposed on");
     expect(store.getMove(bare.id)!.status).toBe(MoveStatus.done);
-    const [job] = store.proposalsForTask(offer.id).filter((p) => p.doc === "JOB.md");
+    const [job] = store
+      .proposalsForTask(offer.id)
+      .filter((p) => p.doc === "JOB.md");
     expect(job!.proposed).toBe(REAL_JOB);
     expect(existsSync(file)).toBe(false);
   });
@@ -591,7 +675,9 @@ describe("onboarding", () => {
 
   test("the Assistant may write only in the drafts folder", () => {
     expect(ASSISTANT_TOOLS).toContain("Write");
-    const writes = assistantAllow(config()).filter((r) => /^(Edit|Write)\b/.test(r));
+    const writes = assistantAllow(config()).filter((r) =>
+      /^(Edit|Write)\b/.test(r),
+    );
     expect(writes).toEqual([`Edit(/${docDraftsDir()}/**)`]);
   });
 

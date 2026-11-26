@@ -471,7 +471,11 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "next (walk the rail)",
       help: "next",
     },
-    { key: "b", cmd: Commands.WALK_BACK, desc: "previous (walk the rail backwards)" },
+    {
+      key: "b",
+      cmd: Commands.WALK_BACK,
+      desc: "previous (walk the rail backwards)",
+    },
     {
       key: "/",
       cmd: Commands.SEARCH_OPEN,
@@ -567,12 +571,25 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
   // it, and all decline while it has focus.
   canvas: quietWhileTyping([
     ...(navBindings() as BindingSpec<HelpCtx>[]),
-    { key: "escape", cmd: Commands.BACK_TO_RAIL, desc: "back to the rail", help: "rail" },
+    {
+      key: "escape",
+      cmd: Commands.BACK_TO_RAIL,
+      desc: "back to the rail",
+      help: "rail",
+    },
     ...taskActions,
   ]),
   input: [
-    { key: "return", cmd: Commands.INPUT_SUBMIT, desc: "send (or take the @ suggestion)" },
-    { key: "tab", cmd: Commands.INPUT_COMPLETE, desc: "@: take the suggestion" },
+    {
+      key: "return",
+      cmd: Commands.INPUT_SUBMIT,
+      desc: "send (or take the @ suggestion)",
+    },
+    {
+      key: "tab",
+      cmd: Commands.INPUT_COMPLETE,
+      desc: "@: take the suggestion",
+    },
     { key: "up", cmd: Commands.INPUT_PICK_UP, desc: "@: previous suggestion" },
     { key: "down", cmd: Commands.INPUT_PICK_DOWN, desc: "@: next suggestion" },
     {
@@ -661,10 +678,30 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
   ],
   board: [
     ...(listNav as BindingSpec<HelpCtx>[]),
-    { key: "h", cmd: Commands.BOARD_LEFT, desc: "column left", relevant: onColumns },
-    { key: "left", cmd: Commands.BOARD_LEFT, desc: "column left", relevant: onColumns },
-    { key: "l", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
-    { key: "right", cmd: Commands.BOARD_RIGHT, desc: "column right", relevant: onColumns },
+    {
+      key: "h",
+      cmd: Commands.BOARD_LEFT,
+      desc: "column left",
+      relevant: onColumns,
+    },
+    {
+      key: "left",
+      cmd: Commands.BOARD_LEFT,
+      desc: "column left",
+      relevant: onColumns,
+    },
+    {
+      key: "l",
+      cmd: Commands.BOARD_RIGHT,
+      desc: "column right",
+      relevant: onColumns,
+    },
+    {
+      key: "right",
+      cmd: Commands.BOARD_RIGHT,
+      desc: "column right",
+      relevant: onColumns,
+    },
     // The footer folds the six into "1-6 tabs" (BOARD_HELP_OPTIONS).
     { key: "1", cmd: Commands.BOARD_TAB_1, desc: "tab: wins", help: "tabs" },
     { key: "2", cmd: Commands.BOARD_TAB_2, desc: "tab: columns" },
@@ -677,7 +714,8 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       cmd: Commands.OPEN,
       desc: "open the task in Chat, or jump to the project's session",
       help: "open",
-      relevant: (c) => c.item !== null && !onInbox(c) && !onWins(c) && !onDocs(c),
+      relevant: (c) =>
+        c.item !== null && !onInbox(c) && !onWins(c) && !onDocs(c),
     },
     // Wins: a day's Wins and what else got done, the day before beside it.
     {
@@ -694,8 +732,19 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       help: "go to task",
       relevant: (c) => onWins(c) && c.item !== null,
     },
-    { key: "h", cmd: Commands.WINS_PREV_DAY, desc: "Wins: a day earlier", help: "earlier", relevant: onWins },
-    { key: "left", cmd: Commands.WINS_PREV_DAY, desc: "Wins: a day earlier", relevant: onWins },
+    {
+      key: "h",
+      cmd: Commands.WINS_PREV_DAY,
+      desc: "Wins: a day earlier",
+      help: "earlier",
+      relevant: onWins,
+    },
+    {
+      key: "left",
+      cmd: Commands.WINS_PREV_DAY,
+      desc: "Wins: a day earlier",
+      relevant: onWins,
+    },
     {
       key: "l",
       cmd: Commands.WINS_NEXT_DAY,
@@ -738,7 +787,13 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       help: "go to",
       relevant: (c) => onDoc(c) && Boolean(c.docOwned),
     },
-    { key: "y", cmd: Commands.DOCUMENTS_COPY, desc: "Docs: copy the address", help: "copy", relevant: onDoc },
+    {
+      key: "y",
+      cmd: Commands.DOCUMENTS_COPY,
+      desc: "Docs: copy the address",
+      help: "copy",
+      relevant: onDoc,
+    },
     {
       key: "shift+l",
       cmd: Commands.DOCUMENTS_ATTACH,
@@ -753,10 +808,34 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       help: "remove",
       relevant: (c) => onDoc(c) && Boolean(c.docRemovable),
     },
-    { key: "f", cmd: Commands.DOCUMENTS_KIND, desc: "Docs: next kind (PR, issue, doc, thread, file, other)", help: "kind", relevant: onDocs },
-    { key: "p", cmd: Commands.DOCUMENTS_PROJECT, desc: "Docs: next project", help: "project", relevant: onDocs },
-    { key: "shift+p", cmd: Commands.DOCUMENTS_GROUP, desc: "Docs: group by project, or one list", help: "group", relevant: onDocs },
-    { key: "/", cmd: Commands.DOCUMENTS_SEARCH, desc: "Docs: search title, address, kind, task and project", help: "search", relevant: onDocs },
+    {
+      key: "f",
+      cmd: Commands.DOCUMENTS_KIND,
+      desc: "Docs: next kind (PR, issue, doc, thread, file, other)",
+      help: "kind",
+      relevant: onDocs,
+    },
+    {
+      key: "p",
+      cmd: Commands.DOCUMENTS_PROJECT,
+      desc: "Docs: next project",
+      help: "project",
+      relevant: onDocs,
+    },
+    {
+      key: "shift+p",
+      cmd: Commands.DOCUMENTS_GROUP,
+      desc: "Docs: group by project, or one list",
+      help: "group",
+      relevant: onDocs,
+    },
+    {
+      key: "/",
+      cmd: Commands.DOCUMENTS_SEARCH,
+      desc: "Docs: search title, address, kind, task and project",
+      help: "search",
+      relevant: onDocs,
+    },
     // The Inbox: every message triage saw and every Advisor idea.
     {
       key: "return",
@@ -765,8 +844,20 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       help: "chain",
       relevant: (c) => onInbox(c) && c.item !== null,
     },
-    { key: "f", cmd: Commands.INBOX_FILTER, desc: "Inbox: next filter", help: "filter", relevant: onInbox },
-    { key: "/", cmd: Commands.INBOX_SEARCH, desc: "Inbox: search subject, sender and source", help: "search", relevant: onInbox },
+    {
+      key: "f",
+      cmd: Commands.INBOX_FILTER,
+      desc: "Inbox: next filter",
+      help: "filter",
+      relevant: onInbox,
+    },
+    {
+      key: "/",
+      cmd: Commands.INBOX_SEARCH,
+      desc: "Inbox: search subject, sender and source",
+      help: "search",
+      relevant: onInbox,
+    },
     {
       key: "t",
       cmd: Commands.INBOX_GO,
@@ -781,7 +872,8 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       help: "make task",
       relevant: (c) =>
         onInbox(c) &&
-        ((c.item === "idea" && !c.handled) || (inboxMessage(c) && !c.inboxTask)),
+        ((c.item === "idea" && !c.handled) ||
+          (inboxMessage(c) && !c.inboxTask)),
     },
     {
       key: "x",
@@ -805,7 +897,8 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       cmd: Commands.IGNORE,
       desc: "Inbox: ignore (drops the task it made; ctrl+z undoes)",
       help: "ignore",
-      relevant: (c) => onInbox(c) && c.item === "message" && Boolean(c.inboxMade),
+      relevant: (c) =>
+        onInbox(c) && c.item === "message" && Boolean(c.inboxMade),
     },
     {
       key: "o",
@@ -858,7 +951,13 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       relevant: (c) =>
         !c.live && (isWork(c) || (onInbox(c) && Boolean(c.inboxWork))),
     },
-    { key: "shift+s", cmd: Commands.STOP, desc: "stop the agent and save", help: "stop", relevant: (c) => c.live },
+    {
+      key: "shift+s",
+      cmd: Commands.STOP,
+      desc: "stop the agent and save",
+      help: "stop",
+      relevant: (c) => c.live,
+    },
     {
       key: "shift+t",
       cmd: Commands.JUMP,
@@ -866,8 +965,19 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       help: "jump",
       relevant: (c) => c.coding || c.item === "project",
     },
-    { key: "u", cmd: Commands.NUDGE, desc: "nudge the agent about new feedback", relevant: (c) => c.coding },
-    { key: "d", cmd: Commands.DONE, desc: "mark done", help: "done", relevant: (c) => isWork(c) && !c.closed },
+    {
+      key: "u",
+      cmd: Commands.NUDGE,
+      desc: "nudge the agent about new feedback",
+      relevant: (c) => c.coding,
+    },
+    {
+      key: "d",
+      cmd: Commands.DONE,
+      desc: "mark done",
+      help: "done",
+      relevant: (c) => isWork(c) && !c.closed,
+    },
     {
       key: "d",
       cmd: Commands.REOPEN,
@@ -888,8 +998,18 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "move the task to a project",
       relevant: (c) => isTask(c) || (onInbox(c) && Boolean(c.inboxWork)),
     },
-    { key: "shift+p", cmd: Commands.PR_DASH, desc: "its PR in ghdash (in Chat)", help: "PR", relevant: (c) => c.pr && !onDocs(c) },
-    { key: "shift+r", cmd: Commands.REPOS, desc: "repos: where each is checked out, and checkouts to add" },
+    {
+      key: "shift+p",
+      cmd: Commands.PR_DASH,
+      desc: "its PR in ghdash (in Chat)",
+      help: "PR",
+      relevant: (c) => c.pr && !onDocs(c),
+    },
+    {
+      key: "shift+r",
+      cmd: Commands.REPOS,
+      desc: "repos: where each is checked out, and checkouts to add",
+    },
   ],
 };
 
@@ -903,7 +1023,9 @@ export function buildKeymap(
 ): KeymapTable<HelpCtx> {
   const nav = withNavKeys(keys);
   const { bound } = actionKeys(actions, nav);
-  if (bound.length === 0) return nav;
+  if (bound.length === 0) {
+    return nav;
+  }
   const specs: BindingSpec<HelpCtx>[] = bound.map((a) => ({
     key: a.key,
     cmd: actionCommand(a.name),
@@ -911,7 +1033,8 @@ export function buildKeymap(
     // In the footer too, on the rows it is offered on (a review that just
     // arrived offers its guide).
     help: a.name,
-    relevant: (c: HelpCtx) => isWork(c) && (c.actions?.includes(a.name) ?? true),
+    relevant: (c: HelpCtx) =>
+      isWork(c) && (c.actions?.includes(a.name) ?? true),
   }));
   return {
     ...nav,
@@ -922,11 +1045,18 @@ export function buildKeymap(
 
 function withNavKeys(keys: NavKeys): KeymapTable<HelpCtx> {
   const byCmd = new Map<string, string>();
-  for (const [field, cmd] of Object.entries(NAV_COMMANDS) as [keyof NavKeys, string][]) {
+  for (const [field, cmd] of Object.entries(NAV_COMMANDS) as [
+    keyof NavKeys,
+    string,
+  ][]) {
     const key = keys[field];
-    if (key && key !== NAV_DEFAULTS[field]) byCmd.set(cmd, key);
+    if (key && key !== NAV_DEFAULTS[field]) {
+      byCmd.set(cmd, key);
+    }
   }
-  if (byCmd.size === 0) return defaultKeymap;
+  if (byCmd.size === 0) {
+    return defaultKeymap;
+  }
   return Object.fromEntries(
     Object.entries(defaultKeymap).map(([scope, specs]) => [
       scope,
@@ -956,17 +1086,28 @@ const ACTION_KEY_SCOPES = ["app", "rail", "canvas"];
 export function actionKeys(
   actions: ActionKey[],
   table: KeymapTable<HelpCtx> = defaultKeymap,
-): { bound: ActionKey[]; refused: { name: string; key: string; why: string }[] } {
+): {
+  bound: ActionKey[];
+  refused: { name: string; key: string; why: string }[];
+} {
   const owner = new Map<string, string>();
-  for (const scope of ACTION_KEY_SCOPES)
-    for (const spec of table[scope] ?? [])
-      if (!owner.has(spec.key)) owner.set(spec.key, spec.desc);
+  for (const scope of ACTION_KEY_SCOPES) {
+    for (const spec of table[scope] ?? []) {
+      if (!owner.has(spec.key)) {
+        owner.set(spec.key, spec.desc);
+      }
+    }
+  }
   const bound: ActionKey[] = [];
   const refused: { name: string; key: string; why: string }[] = [];
   for (const a of actions) {
     const taken = owner.get(a.key);
     if (taken) {
-      refused.push({ name: a.name, key: a.key, why: `${a.key} is taken (${taken})` });
+      refused.push({
+        name: a.name,
+        key: a.key,
+        why: `${a.key} is taken (${taken})`,
+      });
       continue;
     }
     owner.set(a.key, `action: ${a.title}`);

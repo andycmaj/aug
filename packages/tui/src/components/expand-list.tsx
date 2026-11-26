@@ -5,7 +5,11 @@
 
 import { createEffect, createSignal, For, on, Show, type JSX } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
-import { contrastingForeground, useTheme, type ThemeColor } from "@andycmaj/opentui-app";
+import {
+  contrastingForeground,
+  useTheme,
+  type ThemeColor,
+} from "@andycmaj/opentui-app";
 import type { Dialogs } from "./actions";
 import { PromptModal } from "./modals";
 
@@ -51,7 +55,12 @@ export function askSearch(
     return;
   }
   dialogs.show(() => (
-    <PromptModal title={words.title} hint={words.hint} onSubmit={set} onClose={dialogs.close} />
+    <PromptModal
+      title={words.title}
+      hint={words.hint}
+      onSubmit={set}
+      onClose={dialogs.close}
+    />
   ));
 }
 
@@ -71,7 +80,12 @@ export interface Pill {
 }
 
 // A row of filter pills, the key that cycles them, and the search shown.
-export function FilterPills(props: { pills: Pill[]; hint?: string; query?: string; children?: JSX.Element }) {
+export function FilterPills(props: {
+  pills: Pill[];
+  hint?: string;
+  query?: string;
+  children?: JSX.Element;
+}) {
   const theme = useTheme();
   return (
     <box flexDirection="row" gap={1} flexShrink={0}>
@@ -95,11 +109,14 @@ export function FilterPills(props: { pills: Pill[]; hint?: string; query?: strin
 }
 
 // A heading between groups, or a selectable row.
-export type ListEntry<T> = { heading: () => JSX.Element; key: string } | { row: T };
+export type ListEntry<T> =
+  | { heading: () => JSX.Element; key: string }
+  | { row: T };
 
 // Colors on the cursor row read against its background.
 export function selColor(theme: ReturnType<typeof useTheme>, on: boolean) {
-  return (c: ThemeColor): ThemeColor => (on ? contrastingForeground(theme.primary) : c);
+  return (c: ThemeColor): ThemeColor =>
+    on ? contrastingForeground(theme.primary) : c;
 }
 
 export function ExpandList<T>(props: {
@@ -123,7 +140,9 @@ export function ExpandList<T>(props: {
     on(
       () => [props.selected, props.openKey] as const,
       ([selected]) => {
-        if (!selected) return;
+        if (!selected) {
+          return;
+        }
         // After layout, so the row (and what opened under it) has its place.
         setTimeout(() => scrollRef?.scrollChildIntoView(rowId(selected)), 0);
       },
@@ -139,15 +158,27 @@ export function ExpandList<T>(props: {
     >
       <For each={props.entries}>
         {(entry) => {
-          if ("heading" in entry) return entry.heading();
+          if ("heading" in entry) {
+            return entry.heading();
+          }
           const key = () => props.rowKey(entry.row);
           const sel = () => props.selected === key();
           return (
-            <box id={rowId(key())} flexDirection="column" paddingLeft={props.indent}>
-              <box flexDirection="row" gap={1} backgroundColor={sel() ? theme.primary : undefined}>
+            <box
+              id={rowId(key())}
+              flexDirection="column"
+              paddingLeft={props.indent}
+            >
+              <box
+                flexDirection="row"
+                gap={1}
+                backgroundColor={sel() ? theme.primary : undefined}
+              >
                 {props.row(entry.row, sel())}
               </box>
-              <Show when={props.openKey === key()}>{props.detail(entry.row)}</Show>
+              <Show when={props.openKey === key()}>
+                {props.detail(entry.row)}
+              </Show>
             </box>
           );
         }}

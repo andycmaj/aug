@@ -32,7 +32,12 @@ function say(taskId: number, body: string) {
 }
 
 function task(title: string) {
-  return store.createTask({ title, summary: "", kind: Kind.general, channel: "owner" });
+  return store.createTask({
+    title,
+    summary: "",
+    kind: Kind.general,
+    channel: "owner",
+  });
 }
 
 describe("Where things stand", () => {
@@ -74,7 +79,9 @@ describe("Where things stand", () => {
     task("one");
     const where = whereThingsStand();
     const prompt = assistantPrompt([], "typed", true, where, where);
-    expect(prompt).toContain("## Where things stand: unchanged since your last turn\nNow: ");
+    expect(prompt).toContain(
+      "## Where things stand: unchanged since your last turn\nNow: ",
+    );
     expect(prompt).not.toContain("Open work");
   });
 
@@ -83,7 +90,13 @@ describe("Where things stand", () => {
     store.createProject({ name: "steady", tmuxSession: "steady" });
     const heard = whereThingsStand();
     task("two");
-    const prompt = assistantPrompt([], "typed", true, whereThingsStand(), heard);
+    const prompt = assistantPrompt(
+      [],
+      "typed",
+      true,
+      whereThingsStand(),
+      heard,
+    );
     expect(prompt).toContain("changed since your last turn");
     expect(prompt).toContain("- Open work: 1 task (1 open, 0 later)");
     expect(prompt).toContain("+ Open work: 2 tasks (2 open, 0 later)");

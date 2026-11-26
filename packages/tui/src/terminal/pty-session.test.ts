@@ -12,7 +12,9 @@ test("no data is delivered after kill", async () => {
     cols: 80,
     rows: 24,
     onData: () => {
-      if (killed) late++;
+      if (killed) {
+        late++;
+      }
       first();
     },
     onExit: () => {},

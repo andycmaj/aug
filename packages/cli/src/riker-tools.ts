@@ -14,7 +14,12 @@ import {
   unreadFeedback,
 } from "@riker/core/feedback";
 import { repeated } from "@riker/core/digests";
-import { handleDone, handleHook, type HookEnv, type HookPayload } from "@riker/core/hooks";
+import {
+  handleDone,
+  handleHook,
+  type HookEnv,
+  type HookPayload,
+} from "@riker/core/hooks";
 import { loadConfig } from "@riker/core/config";
 import { Drafts } from "@riker/core/outbound";
 import { rikerPlugins } from "@riker/tui/plugins";
@@ -31,7 +36,13 @@ import {
 import { MOVES, waitForMove } from "@riker/core/moves";
 import { mux, setMux, socketFromEnv, TmuxMux } from "@riker/core/mux";
 import { runInPane } from "@riker/core/pane";
-import { flushPerf, perfReport, perfText, startPerf, timing } from "@riker/core/perf";
+import {
+  flushPerf,
+  perfReport,
+  perfText,
+  startPerf,
+  timing,
+} from "@riker/core/perf";
 import * as projects from "@riker/core/projects";
 import { repoReport, reportText } from "@riker/core/repos";
 import { reportLines, spendReport } from "@riker/core/spend";
@@ -47,7 +58,9 @@ setToolsEntry(lastingEntry(fileURLToPath(import.meta.url)));
 // Before riker first starts after the rename, ~/.aug is still aug's: writing
 // would make an empty ~/.riker that the move then refuses to overwrite.
 if (homeUnmoved()) {
-  console.error(`riker-tools: ${legacyHome()} has not moved to ${defaultHome()} yet; start riker once to move it`);
+  console.error(
+    `riker-tools: ${legacyHome()} has not moved to ${defaultHome()} yet; start riker once to move it`,
+  );
   process.exit(1);
 }
 
@@ -60,8 +73,11 @@ configureLog(() => loadConfig().log);
 startPerf({ proc: "riker-tools" });
 process.on("exit", () => {
   const [cmd, sub] = process.argv.slice(2);
-  if (!cmd || cmd.startsWith("-")) return;
-  const op = cmd === "move" && sub && !sub.startsWith("-") ? `${cmd}.${sub}` : cmd;
+  if (!cmd || cmd.startsWith("-")) {
+    return;
+  }
+  const op =
+    cmd === "move" && sub && !sub.startsWith("-") ? `${cmd}.${sub}` : cmd;
   timing(`riker-tools.${op}`, performance.now());
   flushPerf();
 });
@@ -77,12 +93,16 @@ function usePaneServer(): void {
 async function env(): Promise<HookEnv> {
   const taskId = Number(envVar("TASK_ID"));
   const sessionId = envVar("SESSION_ID") ?? "";
-  if (taskId && sessionId) return { taskId, sessionId };
+  if (taskId && sessionId) {
+    return { taskId, sessionId };
+  }
   const pane = process.env.TMUX_PANE;
   if (pane) {
     usePaneServer();
     const found = await paneEnv(pane);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   console.error(
     "riker-tools: run this from a riker agent session (RIKER_TASK_ID is not set)",
@@ -94,7 +114,9 @@ async function env(): Promise<HookEnv> {
 // end stands.
 async function endedElsewhere(sessionId: string): Promise<boolean> {
   const pane = process.env.TMUX_PANE;
-  if (!pane) return false;
+  if (!pane) {
+    return false;
+  }
   usePaneServer();
   try {
     return await projects.endedElsewhere(sessionId, pane);
@@ -114,7 +136,9 @@ async function readPayload(): Promise<HookPayload> {
 
 function author(): string {
   const asked = envVar("ASKED_BY");
-  if (asked) return asked;
+  if (asked) {
+    return asked;
+  }
   const id = Number(envVar("TASK_ID"));
   return id ? `agent ${store.taskRef(id)}` : "you";
 }
@@ -127,7 +151,9 @@ const hook = defineCommand({
     const taskId = Number(envVar("TASK_ID"));
     const sessionId = envVar("SESSION_ID");
     // A hook must never break the agent's session: no task, nothing to do.
-    if (!taskId || !sessionId) return;
+    if (!taskId || !sessionId) {
+      return;
+    }
     logger("hook").trace(String(args.event), {
       task: taskId,
       session: sessionId,
@@ -152,7 +178,9 @@ const adopt = defineCommand({
   async run({ args }) {
     const payload = await readPayload();
     const pane = process.env.TMUX_PANE;
-    if (!pane || envVar("TASK_ID")) return;
+    if (!pane || envVar("TASK_ID")) {
+      return;
+    }
     usePaneServer();
     try {
       await adoptHook(String(args.event), payload, pane);
@@ -164,7 +192,10 @@ const adopt = defineCommand({
 });
 
 const done = defineCommand({
-  meta: { name: "done", description: "Tell riker this task's work is finished" },
+  meta: {
+    name: "done",
+    description: "Tell riker this task's work is finished",
+  },
   args: {
     summary: {
       type: "string",
@@ -182,17 +213,27 @@ const done = defineCommand({
     },
     // The session's digest (the project journal, the task's story). Each
     // may be given more than once, one item each.
-    goal: { type: "string", description: "a goal of the task, as it stands now" },
-    did: { type: "string", description: "what changed, result first (default: --summary)" },
+    goal: {
+      type: "string",
+      description: "a goal of the task, as it stands now",
+    },
+    did: {
+      type: "string",
+      description: "what changed, result first (default: --summary)",
+    },
     decision: { type: "string", description: "a choice made, and why" },
     learned: {
       type: "string",
-      description: "a surprise, gotcha or thing to do differently; 'knowledge:<topic>: ...' also files it in Knowledge",
+      description:
+        "a surprise, gotcha or thing to do differently; 'knowledge:<topic>: ...' also files it in Knowledge",
     },
     next: { type: "string", description: "a next step" },
     blocked: { type: "string", description: "what waits on whom" },
     question: { type: "string", description: "an open question for the owner" },
-    outcome: { type: "string", description: "ready | blocked | waiting | stopped (default ready)" },
+    outcome: {
+      type: "string",
+      description: "ready | blocked | waiting | stopped (default ready)",
+    },
   },
   async run({ args, rawArgs }) {
     const close =
@@ -217,7 +258,8 @@ const done = defineCommand({
             next: many("next"),
             blocked: many("blocked"),
             question: many("question"),
-            outcome: typeof args.outcome === "string" ? args.outcome : undefined,
+            outcome:
+              typeof args.outcome === "string" ? args.outcome : undefined,
           },
         },
         Drafts.of(rikerPlugins()),
@@ -247,7 +289,8 @@ const pr = defineCommand({
 const feedback = defineCommand({
   meta: {
     name: "feedback",
-    description: "Reviews, comments and CI on this task's threads since you last looked",
+    description:
+      "Reviews, comments and CI on this task's threads since you last looked",
   },
   async run() {
     const { taskId } = await env();
@@ -265,11 +308,16 @@ const note = defineCommand({
     description: "Leave a live handoff note for other agents",
   },
   args: {
-    body: { type: "positional", required: false, description: "the note (or --file)" },
+    body: {
+      type: "positional",
+      required: false,
+      description: "the note (or --file)",
+    },
     label: { type: "string", default: "note", description: labels.join(" | ") },
     file: {
       type: "string",
-      description: "read the note from a file (- for stdin): long text, or quotes and $ a shell would mangle",
+      description:
+        "read the note from a file (- for stdin): long text, or quotes and $ a shell would mangle",
     },
   },
   async run({ args }) {
@@ -279,9 +327,14 @@ const note = defineCommand({
     let body = String(args.body ?? "");
     if (args.file) {
       try {
-        body = args.file === "-" ? await Bun.stdin.text() : readFileSync(args.file, "utf8");
+        body =
+          args.file === "-"
+            ? await Bun.stdin.text()
+            : readFileSync(args.file, "utf8");
       } catch (err) {
-        console.error(`riker-tools note: cannot read ${args.file}: ${errorMessage(err)}`);
+        console.error(
+          `riker-tools note: cannot read ${args.file}: ${errorMessage(err)}`,
+        );
         process.exit(1);
       }
     }
@@ -338,19 +391,23 @@ const knowledgeSearch = defineCommand({
           `${h.topic} ${h.title} ${h.body}`.toLowerCase().includes(w),
         ),
       );
-    for (const h of hits)
+    for (const h of hits) {
       console.log(
         `#${h.id} [${h.topic}] ${h.title}\n  ${h.body.replace(/\n/g, "\n  ")}`,
       );
-    if (hits.length === 0) console.log("nothing in Knowledge matches");
+    }
+    if (hits.length === 0) {
+      console.log("nothing in Knowledge matches");
+    }
   },
 });
 
 const knowledgeList = defineCommand({
   meta: { name: "list", description: "List Knowledge topics and entries" },
   run() {
-    for (const h of store.listKnowledge())
+    for (const h of store.listKnowledge()) {
       console.log(`#${h.id} [${h.topic}] ${h.title} (${h.author})`);
+    }
   },
 });
 
@@ -368,7 +425,11 @@ const knowledge = defineCommand({
 const tasks = defineCommand({
   meta: { name: "tasks", description: "List open tasks (and For later)" },
   args: {
-    query: { type: "positional", required: false, description: "words to match" },
+    query: {
+      type: "positional",
+      required: false,
+      description: "words to match",
+    },
     all: { type: "boolean", description: "include done and closed" },
     project: { type: "string", description: "only this project's tasks" },
   },
@@ -378,14 +439,20 @@ const tasks = defineCommand({
       project: args.project,
       query: args.query ? String(args.query) : undefined,
     });
-    for (const t of found) console.log(taskLine(t));
-    if (found.length === 0) console.log("no tasks match");
+    for (const t of found) {
+      console.log(taskLine(t));
+    }
+    if (found.length === 0) {
+      console.log("no tasks match");
+    }
   },
 });
 
 const task = defineCommand({
   meta: { name: "task", description: "Show one task and its recent chat" },
-  args: { ref: { type: "positional", required: true, description: "RIKER-0012" } },
+  args: {
+    ref: { type: "positional", required: true, description: "RIKER-0012" },
+  },
   run({ args }) {
     const id = store.parseTaskRef(String(args.ref));
     const row = id ? store.getTask(id) : null;
@@ -404,15 +471,20 @@ const projectsList = defineCommand({
     const rows = store
       .listProjects()
       .filter((p) => args.all || p.status === "active");
-    for (const p of rows) console.log(projectLine(p));
-    if (rows.length === 0) console.log("no projects");
+    for (const p of rows) {
+      console.log(projectLine(p));
+    }
+    if (rows.length === 0) {
+      console.log("no projects");
+    }
   },
 });
 
 const reposList = defineCommand({
   meta: {
     name: "repos",
-    description: "Repos Riker knows, where each is checked out and whether that checkout is good, and checkouts on disk it has no path for",
+    description:
+      "Repos Riker knows, where each is checked out and whether that checkout is good, and checkouts on disk it has no path for",
   },
   args: { scan: { type: "boolean", description: "look on disk again now" } },
   async run({ args }) {
@@ -426,26 +498,41 @@ const reposList = defineCommand({
 const statusline = defineCommand({
   meta: {
     name: "statusline",
-    description: "Print this session's task (ref, title, priority) for a status line",
+    description:
+      "Print this session's task (ref, title, priority) for a status line",
   },
   async run() {
     let taskId = Number(envVar("TASK_ID"));
     const pane = process.env.TMUX_PANE;
     if (!taskId && pane) {
       usePaneServer();
-      taskId = (await mux().paneInfo(pane).catch(() => null))?.taskId ?? 0;
+      taskId =
+        (
+          await mux()
+            .paneInfo(pane)
+            .catch(() => null)
+        )?.taskId ?? 0;
     }
     const row = taskId ? store.getTask(taskId) : null;
-    if (row) console.log(statusLine(row));
+    if (row) {
+      console.log(statusLine(row));
+    }
   },
 });
 
 const projectShow = defineCommand({
   meta: {
     name: "project",
-    description: "Show one project: its brief, goals and progress, docs, open work",
+    description:
+      "Show one project: its brief, goals and progress, docs, open work",
   },
-  args: { name: { type: "positional", required: true, description: "the project's name" } },
+  args: {
+    name: {
+      type: "positional",
+      required: true,
+      description: "the project's name",
+    },
+  },
   run({ args }) {
     const row = findProject(String(args.name));
     if (!row) {
@@ -461,11 +548,18 @@ const projectShow = defineCommand({
 const pane = defineCommand({
   meta: {
     name: "pane",
-    description: "Run a command in a split of this tmux window: riker-tools pane [--zoom] [--wait] -- <command...>",
+    description:
+      "Run a command in a split of this tmux window: riker-tools pane [--zoom] [--wait] -- <command...>",
   },
   args: {
-    zoom: { type: "boolean", description: "fill the window until the command exits" },
-    wait: { type: "boolean", description: "block until it exits, and exit with its code" },
+    zoom: {
+      type: "boolean",
+      description: "fill the window until the command exits",
+    },
+    wait: {
+      type: "boolean",
+      description: "block until it exits, and exit with its code",
+    },
     cwd: { type: "string", description: "start directory (default: here)" },
   },
   async run({ args }) {
@@ -476,7 +570,9 @@ const pane = defineCommand({
       process.exit(2);
     }
     if (argv.length === 0) {
-      console.error("riker-tools pane: no command (riker-tools pane -- <command...>)");
+      console.error(
+        "riker-tools pane: no command (riker-tools pane -- <command...>)",
+      );
       process.exit(2);
     }
     usePaneServer();
@@ -487,8 +583,11 @@ const pane = defineCommand({
       zoom: Boolean(args.zoom),
       wait: Boolean(args.wait),
     });
-    if (result.exitCode === null) console.log(result.paneId);
-    else process.exit(result.exitCode);
+    if (result.exitCode === null) {
+      console.log(result.paneId);
+    } else {
+      process.exit(result.exitCode);
+    }
   },
 });
 
@@ -497,13 +596,19 @@ const pane = defineCommand({
 function moveCommand(verb: string) {
   const spec = MOVES[verb];
   const args: ArgsDef = {};
-  if (spec.task)
-    args.task = { type: "positional", required: true, description: "RIKER-0012" };
-  for (const [name, arg] of Object.entries(spec.args))
+  if (spec.task) {
+    args.task = {
+      type: "positional",
+      required: true,
+      description: "RIKER-0012",
+    };
+  }
+  for (const [name, arg] of Object.entries(spec.args)) {
     args[name] =
       name === spec.positional
         ? { type: "positional", required: arg.required, description: arg.help }
         : { type: "string", required: arg.required, description: arg.help };
+  }
   return defineCommand({
     meta: { name: verb, description: spec.help },
     args,
@@ -511,12 +616,15 @@ function moveCommand(verb: string) {
       const values: Record<string, string> = {};
       for (const name of Object.keys(args)) {
         const value = given[name];
-        if (value !== undefined && value !== "") values[name] = String(value);
+        if (value !== undefined && value !== "") {
+          values[name] = String(value);
+        }
       }
       const move = store.enqueueMove(verb, values, author());
       const row = await waitForMove(move.id);
-      if (row.status === MoveStatus.done) console.log(row.result);
-      else {
+      if (row.status === MoveStatus.done) {
+        console.log(row.result);
+      } else {
         console.error(row.result);
         process.exit(1);
       }
@@ -527,7 +635,8 @@ function moveCommand(verb: string) {
 const move = defineCommand({
   meta: {
     name: "move",
-    description: "Ask the running riker to make a move (done, remind, start...)",
+    description:
+      "Ask the running riker to make a move (done, remind, start...)",
   },
   subCommands: Object.fromEntries(
     Object.keys(MOVES).map((verb) => [verb, moveCommand(verb)]),
@@ -537,12 +646,22 @@ const move = defineCommand({
 const perf = defineCommand({
   meta: {
     name: "perf",
-    description: "Timings from real use: p50/p95/max per op and the slowest examples",
+    description:
+      "Timings from real use: p50/p95/max per op and the slowest examples",
   },
   args: {
-    hours: { type: "string", description: "Window, in hours back from now (default 24)" },
-    op: { type: "string", description: "Only ops starting with this (mux., read., engine.)" },
-    slowest: { type: "string", description: "How many slow examples to list (default 15)" },
+    hours: {
+      type: "string",
+      description: "Window, in hours back from now (default 24)",
+    },
+    op: {
+      type: "string",
+      description: "Only ops starting with this (mux., read., engine.)",
+    },
+    slowest: {
+      type: "string",
+      description: "How many slow examples to list (default 15)",
+    },
   },
   run({ args }) {
     const hours = Number(args.hours ?? 24) || 24;
@@ -550,7 +669,12 @@ const perf = defineCommand({
     const since = new Date(until.getTime() - hours * 3600_000);
     console.log(
       perfText(
-        perfReport({ since, until, op: args.op, slowest: Number(args.slowest ?? 15) || 15 }),
+        perfReport({
+          since,
+          until,
+          op: args.op,
+          slowest: Number(args.slowest ?? 15) || 15,
+        }),
       ),
     );
   },
@@ -559,7 +683,8 @@ const perf = defineCommand({
 const spend = defineCommand({
   meta: {
     name: "spend",
-    description: "What Riker's model calls cost: today by role and task, the last week, the daily cap",
+    description:
+      "What Riker's model calls cost: today by role and task, the last week, the daily cap",
   },
   run() {
     console.log(reportLines(spendReport(loadConfig())).join("\n"));
@@ -567,7 +692,10 @@ const spend = defineCommand({
 });
 
 const main = defineCommand({
-  meta: { name: "riker-tools", description: "Riker's callback tools for agents" },
+  meta: {
+    name: "riker-tools",
+    description: "Riker's callback tools for agents",
+  },
   subCommands: {
     hook,
     "adopt-hook": adopt,

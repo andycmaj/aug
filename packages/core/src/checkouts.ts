@@ -25,20 +25,38 @@ export interface FoundCheckout {
 
 // Folders a scan never enters: they hold no checkouts of the owner's, and
 // node_modules alone can be thousands of entries.
-const SKIP = new Set(["node_modules", "Library", "vendor", "target", "dist", "build"]);
+const SKIP = new Set([
+  "node_modules",
+  "Library",
+  "vendor",
+  "target",
+  "dist",
+  "build",
+]);
 
 // owner/repo from a GitHub remote URL: https, ssh://, scp-style git@host:
 // and ssh host aliases (git@github-work:owner/repo) alike.
 export function githubRepo(url: string): string | null {
   const clean = url.trim();
-  const scheme = clean.match(/^[a-z+]+:\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/i);
+  const scheme = clean.match(
+    /^[a-z+]+:\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/i,
+  );
   const scp = scheme ? null : clean.match(/^(?:[^@/]+@)?([^/:]+):(.+)$/);
   const m = scheme ?? scp;
-  if (!m || !/github/i.test(m[1])) return null;
-  const parts = m[2].replace(/\/+$/, "").replace(/\.git$/, "").split("/");
-  if (parts.length < 2) return null;
+  if (!m || !/github/i.test(m[1])) {
+    return null;
+  }
+  const parts = m[2]
+    .replace(/\/+$/, "")
+    .replace(/\.git$/, "")
+    .split("/");
+  if (parts.length < 2) {
+    return null;
+  }
   const [owner, name] = parts.slice(-2);
-  return /^[\w.-]+$/.test(owner) && /^[\w.-]+$/.test(name) ? `${owner}/${name}` : null;
+  return /^[\w.-]+$/.test(owner) && /^[\w.-]+$/.test(name)
+    ? `${owner}/${name}`
+    : null;
 }
 
 // The remotes in a git config file, in its order.
@@ -57,7 +75,9 @@ export function parseRemotes(config: string): { name: string; url: string }[] {
       continue;
     }
     const url = current ? line.match(/^url\s*=\s*(.+)$/) : null;
-    if (url && current) remotes.push({ name: current, url: url[1].trim() });
+    if (url && current) {
+      remotes.push({ name: current, url: url[1].trim() });
+    }
   }
   return remotes;
 }
@@ -101,7 +121,10 @@ function linkedGitDir(dotGit: string): string | null {
 function mainOfWorktree(gitDir: string): string | null {
   let common = join(gitDir, "..", "..");
   try {
-    common = resolve(gitDir, readFileSync(join(gitDir, "commondir"), "utf8").trim());
+    common = resolve(
+      gitDir,
+      readFileSync(join(gitDir, "commondir"), "utf8").trim(),
+    );
   } catch {
     // no commondir: the usual <main>/.git/worktrees/<name> layout
   }
@@ -109,26 +132,41 @@ function mainOfWorktree(gitDir: string): string | null {
 }
 
 export function inspect(path: string): CheckoutState {
-  if (!existsSync(path)) return { kind: "missing" };
-  if (!isDir(path)) return { kind: "not-git" };
+  if (!existsSync(path)) {
+    return { kind: "missing" };
+  }
+  if (!isDir(path)) {
+    return { kind: "not-git" };
+  }
   const dotGit = join(path, ".git");
-  if (isDir(dotGit)) return { kind: "checkout", repos: reposOf(dotGit) };
+  if (isDir(dotGit)) {
+    return { kind: "checkout", repos: reposOf(dotGit) };
+  }
   if (existsSync(dotGit)) {
     const gitDir = linkedGitDir(dotGit);
-    if (!gitDir) return { kind: "not-git" };
-    if (basename(dirname(gitDir)) === "worktrees")
+    if (!gitDir) {
+      return { kind: "not-git" };
+    }
+    if (basename(dirname(gitDir)) === "worktrees") {
       return { kind: "worktree", main: mainOfWorktree(gitDir) };
+    }
     return { kind: "checkout", repos: reposOf(gitDir) };
   }
-  for (let up = dirname(path); up !== dirname(up); up = dirname(up))
-    if (existsSync(join(up, ".git"))) return { kind: "inside", root: up };
+  for (let up = dirname(path); up !== dirname(up); up = dirname(up)) {
+    if (existsSync(join(up, ".git"))) {
+      return { kind: "inside", root: up };
+    }
+  }
   return { kind: "not-git" };
 }
 
 // Main checkouts under the roots, `depth` folders down (~/workspace/owner/repo
 // is 2). A checkout is not entered, and worktrees are left out: each is a
 // branch of a checkout found on its own.
-export async function scan(roots: string[], depth: number): Promise<FoundCheckout[]> {
+export async function scan(
+  roots: string[],
+  depth: number,
+): Promise<FoundCheckout[]> {
   const found: FoundCheckout[] = [];
   const seen = new Set<string>();
   async function walk(dir: string, left: number): Promise<void> {
@@ -140,13 +178,20 @@ export async function scan(roots: string[], depth: number): Promise<FoundCheckou
     }
     const subdirs: string[] = [];
     for (const e of entries) {
-      if (!e.isDirectory() || e.name.startsWith(".") || SKIP.has(e.name)) continue;
+      if (!e.isDirectory() || e.name.startsWith(".") || SKIP.has(e.name)) {
+        continue;
+      }
       const path = join(dir, e.name);
-      if (seen.has(path)) continue;
+      if (seen.has(path)) {
+        continue;
+      }
       seen.add(path);
       const dotGit = join(path, ".git");
-      if (isDir(dotGit)) found.push({ path, repos: reposOf(dotGit) });
-      else if (!existsSync(dotGit) && left > 1) subdirs.push(path);
+      if (isDir(dotGit)) {
+        found.push({ path, repos: reposOf(dotGit) });
+      } else if (!existsSync(dotGit) && left > 1) {
+        subdirs.push(path);
+      }
     }
     await Promise.all(subdirs.map((d) => walk(d, left - 1)));
   }

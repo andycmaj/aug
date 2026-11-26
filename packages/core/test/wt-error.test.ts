@@ -4,7 +4,8 @@ import { wtError } from "../src/mux";
 // What wt v0.81 prints on stderr when remove refuses (from a scratch repo).
 describe("wtError", () => {
   test("keeps the reason, not only the hint under it", () => {
-    const stderr = "✗ No branch named feat/site\n↳ To list branches, run wt list --branches --remotes\n";
+    const stderr =
+      "✗ No branch named feat/site\n↳ To list branches, run wt list --branches --remotes\n";
     expect(wtError(stderr, "wt remove exited 1")).toBe(
       "No branch named feat/site. To list branches, run wt list --branches --remotes",
     );

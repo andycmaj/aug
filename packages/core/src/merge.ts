@@ -24,9 +24,14 @@ type Keys = Map<string, string> | null | undefined;
 // it reads, so it is asked again only where a branch's key moved. Kept per
 // Mux, so a test's fresh fake starts empty. Null (git could not say, maybe a
 // timeout) is never kept.
-const verdicts = new WeakMap<Mux, Map<string, { key: string; verdict: string | false }>>();
+const verdicts = new WeakMap<
+  Mux,
+  Map<string, { key: string; verdict: string | false }>
+>();
 
-function verdictsOf(m: Mux): Map<string, { key: string; verdict: string | false }> {
+function verdictsOf(
+  m: Mux,
+): Map<string, { key: string; verdict: string | false }> {
   let v = verdicts.get(m);
   if (!v) {
     v = new Map();
@@ -37,51 +42,88 @@ function verdictsOf(m: Mux): Map<string, { key: string; verdict: string | false 
 
 const slot = (path: string, branch: string) => `${path}\0${branch}`;
 
-async function branchLanded(path: string, branch: string, keys: Keys): Promise<string | false | null> {
+async function branchLanded(
+  path: string,
+  branch: string,
+  keys: Keys,
+): Promise<string | false | null> {
   const m = mux();
   const read = keys === undefined ? await m.mergeKeys(path, [branch]) : keys;
   const key = read?.get(branch);
-  if (!key) return null;
+  if (!key) {
+    return null;
+  }
   const known = verdictsOf(m);
   const at = slot(path, branch);
   const hit = known.get(at);
-  if (hit?.key === key) return hit.verdict;
+  if (hit?.key === key) {
+    return hit.verdict;
+  }
   const verdict = await m.branchMerged(path, branch);
-  if (verdict === null) known.delete(at);
-  else known.set(at, { key, verdict });
+  if (verdict === null) {
+    known.delete(at);
+  } else {
+    known.set(at, { key, verdict });
+  }
   return verdict;
 }
 
 // The words for how it landed, false when it has not, null when nothing
 // can say.
-async function landed(config: RikerConfig, task: TaskRow, keys: Keys): Promise<string | false | null> {
+async function landed(
+  config: RikerConfig,
+  task: TaskRow,
+  keys: Keys,
+): Promise<string | false | null> {
   const pr = taskPrStatus(task)?.status ?? null;
-  if (pr?.state === PrState.merged) return `(PR #${pr.number})`;
+  if (pr?.state === PrState.merged) {
+    return `(PR #${pr.number})`;
+  }
   const path = repoPath(config, task.repo);
-  const local = task.branch && path ? await branchLanded(path, task.branch, keys) : null;
-  if (local) return `into ${local}`;
-  if (local === false) return false;
-  return pr && (pr.state === PrState.open || pr.state === PrState.draft) ? false : null;
+  const local =
+    task.branch && path ? await branchLanded(path, task.branch, keys) : null;
+  if (local) {
+    return `into ${local}`;
+  }
+  if (local === false) {
+    return false;
+  }
+  return pr && (pr.state === PrState.open || pr.state === PrState.draft)
+    ? false
+    : null;
 }
 
 function wantsCheck(task: TaskRow): boolean {
-  if (task.status !== TaskStatus.open && task.status !== TaskStatus.later) return false;
+  if (task.status !== TaskStatus.open && task.status !== TaskStatus.later) {
+    return false;
+  }
   return !!task.branch || !!task.merged_at || !!store.prStatus(task.id);
 }
 
 // One task: true when its merged mark changed.
-export function checkMerge(config: RikerConfig, task: TaskRow): Promise<boolean> {
+export function checkMerge(
+  config: RikerConfig,
+  task: TaskRow,
+): Promise<boolean> {
   return checkOne(config, task, undefined);
 }
 
-async function checkOne(config: RikerConfig, task: TaskRow, keys: Keys): Promise<boolean> {
-  if (!wantsCheck(task)) return false;
+async function checkOne(
+  config: RikerConfig,
+  task: TaskRow,
+  keys: Keys,
+): Promise<boolean> {
+  if (!wantsCheck(task)) {
+    return false;
+  }
   try {
     const how = await landed(config, task, keys);
     // The clock's sweep and a turn's end can ask at once: what the task says
     // now, not before the await, decides, so the mark is made once.
     const current = store.getTask(task.id);
-    if (!current) return false;
+    if (!current) {
+      return false;
+    }
     if (how && !current.merged_at) {
       workMerged(task.id, how);
       return true;
@@ -103,7 +145,9 @@ export async function checkMerges(config: RikerConfig): Promise<number> {
   const branches = new Map<string, string[]>();
   for (const task of tasks) {
     const path = repoPath(config, task.repo);
-    if (path && task.branch) branches.set(path, [...(branches.get(path) ?? []), task.branch]);
+    if (path && task.branch) {
+      branches.set(path, [...(branches.get(path) ?? []), task.branch]);
+    }
   }
   const keys = new Map<string, Map<string, string> | null>();
   for (const [path, names] of branches) {
@@ -116,12 +160,20 @@ export async function checkMerges(config: RikerConfig): Promise<number> {
   }
   // A branch no task asks about any more is forgotten.
   const known = verdictsOf(mux());
-  const asked = new Set([...branches].flatMap(([path, names]) => names.map((b) => slot(path, b))));
-  for (const at of known.keys()) if (!asked.has(at)) known.delete(at);
+  const asked = new Set(
+    [...branches].flatMap(([path, names]) => names.map((b) => slot(path, b))),
+  );
+  for (const at of known.keys()) {
+    if (!asked.has(at)) {
+      known.delete(at);
+    }
+  }
   let changed = 0;
   for (const task of tasks) {
     const path = repoPath(config, task.repo);
-    if (await checkOne(config, task, path ? keys.get(path) : undefined)) changed++;
+    if (await checkOne(config, task, path ? keys.get(path) : undefined)) {
+      changed++;
+    }
   }
   return changed;
 }
@@ -136,21 +188,43 @@ export interface NotMerged {
   why: string | null;
 }
 
-export async function unmergedWork(config: RikerConfig, task: TaskRow): Promise<NotMerged | null> {
-  if (task.merged_at) return null;
+export async function unmergedWork(
+  config: RikerConfig,
+  task: TaskRow,
+): Promise<NotMerged | null> {
+  if (task.merged_at) {
+    return null;
+  }
   const pr = taskPrStatus(task)?.status ?? null;
-  if (pr?.state === PrState.merged) return null;
-  if (pr?.state === PrState.closed) return { why: `PR #${pr.number} was closed, not merged` };
-  if (pr) return { why: unmergedPr(task) };
+  if (pr?.state === PrState.merged) {
+    return null;
+  }
+  if (pr?.state === PrState.closed) {
+    return { why: `PR #${pr.number} was closed, not merged` };
+  }
+  if (pr) {
+    return { why: unmergedPr(task) };
+  }
   const path = repoPath(config, task.repo);
-  if (!task.branch || !path) return { why: null };
+  if (!task.branch || !path) {
+    return { why: null };
+  }
   try {
-    if (await branchLanded(path, task.branch, undefined)) return null;
+    if (await branchLanded(path, task.branch, undefined)) {
+      return null;
+    }
     const ahead = await mux().branchAhead(path, task.branch);
-    if (!ahead) return { why: null };
-    return { why: `Branch ${task.branch} has ${ahead} commit${ahead === 1 ? "" : "s"} not merged` };
+    if (!ahead) {
+      return { why: null };
+    }
+    return {
+      why: `Branch ${task.branch} has ${ahead} commit${ahead === 1 ? "" : "s"} not merged`,
+    };
   } catch (err) {
-    log.warn("unmerged check failed", { task: task.id, error: errorMessage(err) });
+    log.warn("unmerged check failed", {
+      task: task.id,
+      error: errorMessage(err),
+    });
     return { why: null };
   }
 }

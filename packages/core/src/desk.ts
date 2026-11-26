@@ -23,7 +23,12 @@ import {
 } from "./driver";
 import { nudgeText } from "./feedback";
 import { correct } from "./learn";
-import { holdForStart, taskClosed, taskDropped, taskReopened } from "./lifecycle";
+import {
+  holdForStart,
+  taskClosed,
+  taskDropped,
+  taskReopened,
+} from "./lifecycle";
 import { localDay, MAX_WINS, readFolds, writeFolds } from "./rail";
 import type { RikerConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
@@ -36,7 +41,12 @@ import type { PathNeed } from "./repos";
 import { briefEditable } from "./read-model";
 import * as store from "./store";
 import { adoptStray, findStrays, type Stray } from "./strays";
-import { guideReview, hasGuideReview, startAction, type ActionResult } from "./run-action";
+import {
+  guideReview,
+  hasGuideReview,
+  startAction,
+  type ActionResult,
+} from "./run-action";
 import { ReviewEnd, reviewExit } from "./guide-turn";
 import { capReached } from "./spend";
 import {
@@ -51,8 +61,21 @@ import {
   whyNotOffered,
   type ActionSpec,
 } from "./task-actions";
-import { revert, snapshot, taskDraft, UndoStack, type UndoDraft, type UndoResult } from "./undo";
-import type { MoveGuard, ReviewSource, Triage, TriageEffect, TriageOutcome } from "./plugins";
+import {
+  revert,
+  snapshot,
+  taskDraft,
+  UndoStack,
+  type UndoDraft,
+  type UndoResult,
+} from "./undo";
+import type {
+  MoveGuard,
+  ReviewSource,
+  Triage,
+  TriageEffect,
+  TriageOutcome,
+} from "./plugins";
 import { reviewedPr } from "./pr";
 import {
   AgentState,
@@ -75,7 +98,13 @@ import {
   type TimerRow,
 } from "./types";
 import { addFollowup, addSchedule } from "./timers";
-import { journalSwitch, storySwitch, switchColumn, switchWords, SwitchValue } from "./digests";
+import {
+  journalSwitch,
+  storySwitch,
+  switchColumn,
+  switchWords,
+  SwitchValue,
+} from "./digests";
 import { JournalSave, readJournal, saveJournalEdit } from "./journal";
 import { editStory, pin, storyMarkdown, undoStory } from "./story";
 import { errorMessage, logger } from "./log";
@@ -127,10 +156,16 @@ export class Desk {
   }
 
   // What a move must answer instead of running (held for a yes), if any.
-  guardMove(verb: string, args: Record<string, string>, by: string): string | null {
+  guardMove(
+    verb: string,
+    args: Record<string, string>,
+    by: string,
+  ): string | null {
     for (const guard of this.options.guards ?? []) {
       const held = guard(verb, args, by);
-      if (held !== null) return held;
+      if (held !== null) {
+        return held;
+      }
     }
     return null;
   }
@@ -140,12 +175,19 @@ export class Desk {
 
   async undo(): Promise<UndoResult> {
     const entry = this.undos.pop();
-    if (!entry) return { ok: false, text: "Nothing to undo" };
+    if (!entry) {
+      return { ok: false, text: "Nothing to undo" };
+    }
     return revert(this.config(), entry);
   }
 
   // A change to one task, kept for ctrl+z with what the task was before.
-  private onTask<T>(what: string, taskId: number, fn: () => T, at = new Date()): T {
+  private onTask<T>(
+    what: string,
+    taskId: number,
+    fn: () => T,
+    at = new Date(),
+  ): T {
     const day = localDay(at);
     const before = snapshot(taskId, day);
     return this.undos.track(fn, () => taskDraft(what, taskId, day, before));
@@ -157,7 +199,11 @@ export class Desk {
     return this.undos.track(fn, () => ({ type: "cannot", what, why }));
   }
 
-  private cannotAsync<T>(what: string, why: string, fn: () => Promise<T>): Promise<T> {
+  private cannotAsync<T>(
+    what: string,
+    why: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
     return this.undos.trackAsync(fn, () => ({ type: "cannot", what, why }));
   }
 
@@ -183,12 +229,17 @@ export class Desk {
   // and this one filed as FYI under it. A pattern that does not compile is
   // answered now, not skipped at triage time.
   noiseFromMessage(messageId: number, rule: NoiseRule): string | null {
-    if (!rule.reason.trim()) return "a noise filter needs a reason";
-    if (!rule.author && !rule.title && !rule.body && !rule.githubReason)
+    if (!rule.reason.trim()) {
+      return "a noise filter needs a reason";
+    }
+    if (!rule.author && !rule.title && !rule.body && !rule.githubReason) {
       return "a noise filter needs a pattern";
+    }
     for (const field of ["author", "title", "body"] as const) {
       const pattern = rule[field];
-      if (pattern === undefined) continue;
+      if (pattern === undefined) {
+        continue;
+      }
       try {
         new RegExp(pattern, "i");
       } catch {
@@ -210,22 +261,24 @@ export class Desk {
     title: string,
     kind: Kind,
     summary = "",
-    place: Pick<store.NewTask, "projectId" | "repo" | "fromTaskId" | "goalId"> = {},
+    place: Pick<
+      store.NewTask,
+      "projectId" | "repo" | "fromTaskId" | "goalId"
+    > = {},
   ): TaskRow {
-    return this.undos.track(
-      () => {
-        const task = store.createTask({
-          title,
-          kind,
-          summary,
-          channel: "owner",
-          ...place,
-        });
-        if (kind === Kind.coding) holdForStart(task.id);
-        return store.getTask(task.id) ?? task;
-      },
-      madeTask,
-    );
+    return this.undos.track(() => {
+      const task = store.createTask({
+        title,
+        kind,
+        summary,
+        channel: "owner",
+        ...place,
+      });
+      if (kind === Kind.coding) {
+        holdForStart(task.id);
+      }
+      return store.getTask(task.id) ?? task;
+    }, madeTask);
   }
 
   // The brief is what the agent starts from. Once it has started, a new
@@ -235,8 +288,12 @@ export class Desk {
   }
 
   editBrief(taskId: number, text: string): boolean {
-    if (!text.trim() || !this.briefEditable(taskId)) return false;
-    this.onTask("brief", taskId, () => store.updateTask(taskId, { summary: text.trim() }));
+    if (!text.trim() || !this.briefEditable(taskId)) {
+      return false;
+    }
+    this.onTask("brief", taskId, () =>
+      store.updateTask(taskId, { summary: text.trim() }),
+    );
     return true;
   }
 
@@ -250,14 +307,18 @@ export class Desk {
   // heardVia(place).
   async say(taskId: number, text: string, author = "you"): Promise<boolean> {
     const task = store.getTask(taskId);
-    if (!task || !text.trim()) return false;
+    if (!task || !text.trim()) {
+      return false;
+    }
     // A SYSTEM task has no agent: what you type is notes on its proposal.
     if (task.kind === Kind.system) {
       void this.redraftDocs(taskId, text);
       return true;
     }
     store.batch(() => {
-      if (task.status !== TaskStatus.open) store.reopen(taskId);
+      if (task.status !== TaskStatus.open) {
+        store.reopen(taskId);
+      }
       store.addTurn({
         taskId,
         role: TurnRole.you,
@@ -277,17 +338,24 @@ export class Desk {
     opts: StartOptions = {},
   ): Promise<StartResult> {
     const task = store.getTask(taskId);
-    if (!task) return { type: "failed", error: `no task ${taskId}` };
-    if (task.kind === Kind.system && !inTmux(task))
+    if (!task) {
+      return { type: "failed", error: `no task ${taskId}` };
+    }
+    if (task.kind === Kind.system && !inTmux(task)) {
       return {
         type: "failed",
         error: "a System task has no agent: y accepts, x rejects",
       };
+    }
     return this.undos.trackAsync(
       () => this.drivers.for(task).start(task, opts),
       (r) =>
         r.type === "started" || r.type === "queued"
-          ? { type: "cannot", what: `start ${store.taskRef(taskId)}`, why: "it started an agent" }
+          ? {
+              type: "cannot",
+              what: `start ${store.taskRef(taskId)}`,
+              why: "it started an agent",
+            }
           : null,
     );
   }
@@ -295,10 +363,13 @@ export class Desk {
   // The owner's Stop: stopped, and Start resumes it.
   async stopAgent(taskId: number): Promise<void> {
     const task = store.getTask(taskId);
-    if (task)
-      await this.cannotAsync(`stop ${store.taskRef(taskId)}`, "it stopped an agent: s starts it again", () =>
-        this.drivers.for(task).stop(task),
+    if (task) {
+      await this.cannotAsync(
+        `stop ${store.taskRef(taskId)}`,
+        "it stopped an agent: s starts it again",
+        () => this.drivers.for(task).stop(task),
       );
+    }
   }
 
   // What is not merged yet, for the owner's yes before done.
@@ -312,7 +383,9 @@ export class Desk {
   // it archived is not brought back, so that one cannot be undone.
   async close(taskId: number): Promise<CloseResult> {
     const task = store.getTask(taskId);
-    if (!task) return { warnings: [], archived: false };
+    if (!task) {
+      return { warnings: [], archived: false };
+    }
     const day = localDay(new Date());
     const before = snapshot(taskId, day);
     return this.undos.trackAsync(
@@ -322,7 +395,11 @@ export class Desk {
       },
       (r) =>
         r.archived
-          ? { type: "cannot", what: `done ${store.taskRef(taskId)}`, why: "it archived its project" }
+          ? {
+              type: "cannot",
+              what: `done ${store.taskRef(taskId)}`,
+              why: "it archived its project",
+            }
           : taskDraft("done", taskId, day, before),
     );
   }
@@ -340,17 +417,25 @@ export class Desk {
     taskId: number,
     name: string,
     opts: { whole?: boolean } = {},
-  ): { error: string } | { title: string; turnId?: number; done: Promise<ActionResult> } {
+  ):
+    | { error: string }
+    | { title: string; turnId?: number; done: Promise<ActionResult> } {
     const task = store.getTask(taskId);
-    if (!task) return { error: `no task ${store.taskRef(taskId)}` };
+    if (!task) {
+      return { error: `no task ${store.taskRef(taskId)}` };
+    }
     const config = this.config();
     const spec = actionNamed(config, name);
     if (!spec) {
       const names = registeredActions(config).map((a) => a.name);
-      return { error: `no action ${name}: there are ${names.join(", ") || "none"}` };
+      return {
+        error: `no action ${name}: there are ${names.join(", ") || "none"}`,
+      };
     }
     const why = whyNot(spec, task);
-    if (why) return { error: why };
+    if (why) {
+      return { error: why };
+    }
     return this.startAction(config, task, spec, undefined, opts.whole);
   }
 
@@ -362,21 +447,37 @@ export class Desk {
   async prepareAction(
     taskId: number,
     name: string,
-  ): Promise<{ type: "ready" } | { type: "needs"; need: PathNeed } | { type: "failed"; error: string }> {
+  ): Promise<
+    | { type: "ready" }
+    | { type: "needs"; need: PathNeed }
+    | { type: "failed"; error: string }
+  > {
     const task = store.getTask(taskId);
-    if (!task) return { type: "failed", error: `no task ${store.taskRef(taskId)}` };
+    if (!task) {
+      return { type: "failed", error: `no task ${store.taskRef(taskId)}` };
+    }
     const spec = actionNamed(this.config(), name);
-    if (!spec) return { type: "failed", error: `no action ${name}` };
+    if (!spec) {
+      return { type: "failed", error: `no action ${name}` };
+    }
     const why = whyNotOffered(spec, task);
-    if (why) return { type: "failed", error: why };
-    if (!makesCheckout(spec, task)) return { type: "ready" };
+    if (why) {
+      return { type: "failed", error: why };
+    }
+    if (!makesCheckout(spec, task)) {
+      return { type: "ready" };
+    }
     const made = await this.cannotAsync(
       `checkout ${store.taskRef(taskId)}`,
       "it made a worktree",
       () => projects.ensureCheckout(this.config(), taskId),
     );
-    if (made.type === "needs-path") return { type: "needs", need: made.need };
-    if (made.type === "failed") return made;
+    if (made.type === "needs-path") {
+      return { type: "needs", need: made.need };
+    }
+    if (made.type === "failed") {
+      return made;
+    }
     return { type: "ready" };
   }
 
@@ -395,7 +496,9 @@ export class Desk {
 
   guideReview(taskId: number): ActionResult | { error: string } {
     const task = store.getTask(taskId);
-    if (!task) return { error: `no task ${store.taskRef(taskId)}` };
+    if (!task) {
+      return { error: `no task ${store.taskRef(taskId)}` };
+    }
     return guideReview(task);
   }
 
@@ -411,29 +514,41 @@ export class Desk {
     output: string,
   ): Promise<{ text: string; failed?: boolean } | null> {
     const task = store.getTask(taskId);
-    if (!task) return null;
+    if (!task) {
+      return null;
+    }
     const ref = store.taskRef(taskId);
     const { end, notes, status } = reviewExit(posts, output);
     if (end === ReviewEnd.posted) {
       const closed = await this.close(taskId);
-      const warn = closed.warnings.length ? ` (${closed.warnings.join("; ")})` : "";
+      const warn = closed.warnings.length
+        ? ` (${closed.warnings.join("; ")})`
+        : "";
       return { text: `${ref}: ${status}; closed${warn}` };
     }
     if (end === ReviewEnd.approved) {
       store.addTurn({ taskId, role: TurnRole.trigger, body: status! });
       return { text: `${ref}: ${status}` };
     }
-    if (!notes) return status ? { text: `${ref}: ${status}` } : null;
+    if (!notes) {
+      return status ? { text: `${ref}: ${status}` } : null;
+    }
     const heard = await this.say(
       taskId,
       `My notes from the guided review in Plannotator (with the review findings riker posted there that I kept):\n\n${notes}`,
     );
-    if (heard) return { text: `Your review notes went to ${ref}'s agent` };
+    if (heard) {
+      return { text: `Your review notes went to ${ref}'s agent` };
+    }
     const started = await this.startAgent(taskId);
-    if (started.type === "started" || started.type === "queued")
+    if (started.type === "started" || started.type === "queued") {
       return { text: `${ref}'s agent resumed with your review notes` };
-    if (started.type === "needs")
-      return { text: `Your review notes are on ${ref}: s starts its agent with them` };
+    }
+    if (started.type === "needs") {
+      return {
+        text: `Your review notes are on ${ref}: s starts its agent with them`,
+      };
+    }
     return {
       text: `Your review notes are on ${ref}, but its agent did not start: ${started.error}`,
       failed: true,
@@ -446,14 +561,18 @@ export class Desk {
     spec: ActionSpec,
     event?: ActionEvent,
     whole = false,
-  ): { error: string } | { title: string; turnId?: number; done: Promise<ActionResult> } {
+  ):
+    | { error: string }
+    | { title: string; turnId?: number; done: Promise<ActionResult> } {
     if (spec.via === ActionVia.agent) {
       const text = invocation(spec, task);
       return {
         title: spec.title,
         done: this.say(task.id, text).then((ok) => ({
           ok,
-          text: ok ? `${spec.title}: told the agent` : `${spec.name}: the agent did not get it`,
+          text: ok
+            ? `${spec.title}: told the agent`
+            : `${spec.name}: the agent did not get it`,
         })),
       };
     }
@@ -463,9 +582,13 @@ export class Desk {
       task,
       spec,
       event,
-      pr && this.options.reviews ? { pr, source: this.options.reviews, whole } : undefined,
+      pr && this.options.reviews
+        ? { pr, source: this.options.reviews, whole }
+        : undefined,
     );
-    if ("error" in run) return run;
+    if ("error" in run) {
+      return run;
+    }
     return { title: spec.title, turnId: run.turnId, done: run.done };
   }
 
@@ -475,34 +598,59 @@ export class Desk {
   // waits for them to open it. Returns the names queued.
   private autoRuns: Promise<void> = Promise.resolve();
 
-  fireActions(event: ActionEvent, taskId: number, message?: MessageRow | null): string[] {
+  fireActions(
+    event: ActionEvent,
+    taskId: number,
+    message?: MessageRow | null,
+  ): string[] {
     const task = store.getTask(taskId);
-    if (!task || task.kind === Kind.home) return [];
+    if (!task || task.kind === Kind.home) {
+      return [];
+    }
     const queued: string[] = [];
     for (const spec of triggeredBy(this.config(), event, task, message)) {
-      if (!store.claimActionRun(taskId, spec.name, event)) continue;
+      if (!store.claimActionRun(taskId, spec.name, event)) {
+        continue;
+      }
       queued.push(spec.name);
       this.autoRuns = this.autoRuns
         .then(async () => {
           const config = this.config();
           const fresh = store.getTask(taskId);
-          if (!fresh) return;
+          if (!fresh) {
+            return;
+          }
           // A run that never started is not kept as run: the next such
           // event tries again.
           if (capReached(config)) {
             store.releaseActionRun(taskId, spec.name, event);
-            log.info("auto action skipped: spend cap", { task: taskId, action: spec.name, event });
+            log.info("auto action skipped: spend cap", {
+              task: taskId,
+              action: spec.name,
+              event,
+            });
             return;
           }
           const started = this.startAction(config, fresh, spec, event);
           if ("error" in started) {
             store.releaseActionRun(taskId, spec.name, event);
-            log.warn("auto action not started", { task: taskId, action: spec.name, event, error: started.error });
+            log.warn("auto action not started", {
+              task: taskId,
+              action: spec.name,
+              event,
+              error: started.error,
+            });
             return;
           }
           await started.done;
         })
-        .catch((err: unknown) => log.error("auto action failed", { task: taskId, action: spec.name, err }));
+        .catch((err: unknown) =>
+          log.error("auto action failed", {
+            task: taskId,
+            action: spec.name,
+            err,
+          }),
+        );
     }
     return queued;
   }
@@ -517,8 +665,13 @@ export class Desk {
   afterTriage(outcome: TriageOutcome, message: MessageRow | null): void {
     this.runEffects(outcome.effects);
     // Your own line and a timer are not something that came in.
-    if (outcome.taskId === null || outcome.verdict === "own" || outcome.verdict === "timer")
+    if (
+      outcome.taskId === null ||
+      outcome.verdict === "own" ||
+      outcome.verdict === "timer"
+    ) {
       return;
+    }
     this.fireActions(ActionEvent.triaged, outcome.taskId, message);
   }
 
@@ -547,8 +700,10 @@ export class Desk {
 
   archiveProject(projectId: number) {
     const name = store.getProject(projectId)?.name ?? String(projectId);
-    return this.cannotAsync(`project_archive ${name}`, "it archived a project", () =>
-      projects.archiveProject(projectId),
+    return this.cannotAsync(
+      `project_archive ${name}`,
+      "it archived a project",
+      () => projects.archiveProject(projectId),
     );
   }
 
@@ -560,7 +715,9 @@ export class Desk {
 
   async adoptStray(stray: Stray, projectId: number): Promise<TaskRow> {
     const project = store.getProject(projectId);
-    if (!project) throw new Error(`no project ${projectId}`);
+    if (!project) {
+      throw new Error(`no project ${projectId}`);
+    }
     return this.cannotAsync("adopt", "it adopted a claude", () =>
       adoptStray(this.config(), stray, project),
     );
@@ -618,7 +775,9 @@ export class Desk {
   // the move archived the project it left.
   async moveTask(taskId: number, projectId: number): Promise<void> {
     const task = store.getTask(taskId);
-    if (!task) return;
+    if (!task) {
+      return;
+    }
     const from = task.project_id ? store.getProject(task.project_id) : null;
     const day = localDay(new Date());
     const before = snapshot(taskId, day);
@@ -638,8 +797,14 @@ export class Desk {
 
   private async placeTask(task: TaskRow, projectId: number): Promise<void> {
     const taskId = task.id;
-    if (task.triage_reason && task.channel !== "owner" && task.project_id !== projectId) {
-      const before = task.project_id ? store.getProject(task.project_id)?.name : null;
+    if (
+      task.triage_reason &&
+      task.channel !== "owner" &&
+      task.project_id !== projectId
+    ) {
+      const before = task.project_id
+        ? store.getProject(task.project_id)?.name
+        : null;
       correct(
         this.config(),
         {
@@ -651,31 +816,47 @@ export class Desk {
         this.learnedNotice,
       );
     }
-    if (store.latestSession(taskId)?.kind === SessionKind.tmux)
+    if (store.latestSession(taskId)?.kind === SessionKind.tmux) {
       await projects.moveTask(this.config(), taskId, projectId);
-    else store.updateTask(taskId, { project_id: projectId });
+    } else {
+      store.updateTask(taskId, { project_id: projectId });
+    }
     const goal = task.goal_id ? store.getGoal(task.goal_id) : null;
-    if (goal && goal.project_id !== projectId) store.updateTask(taskId, { goal_id: null });
+    if (goal && goal.project_id !== projectId) {
+      store.updateTask(taskId, { goal_id: null });
+    }
   }
 
   retitle(taskId: number, title: string): void {
-    this.onTask("retitle", taskId, () => store.updateTask(taskId, { title: title.trim() }));
+    this.onTask("retitle", taskId, () =>
+      store.updateTask(taskId, { title: title.trim() }),
+    );
   }
 
   link(taskId: number, url: string, title: string | null, by: string) {
-    return this.onTask("link", taskId, () => store.addTaskLink(taskId, url, title, by));
+    return this.onTask("link", taskId, () =>
+      store.addTaskLink(taskId, url, title, by),
+    );
   }
 
   unlink(taskId: number, url: string): boolean {
-    return this.onTask("unlink", taskId, () => store.removeTaskLink(taskId, url));
+    return this.onTask("unlink", taskId, () =>
+      store.removeTaskLink(taskId, url),
+    );
   }
 
   // ── a project's manager (core/manager.ts) ─────────────────────────────
 
   // The owner talks to a project on its row: its manager is made the first
   // time, and every line after continues the same conversation.
-  async sayToProject(projectId: number, text: string, author = "you"): Promise<boolean> {
-    if (!text.trim() || !store.getProject(projectId)) return false;
+  async sayToProject(
+    projectId: number,
+    text: string,
+    author = "you",
+  ): Promise<boolean> {
+    if (!text.trim() || !store.getProject(projectId)) {
+      return false;
+    }
     const manager = store.ensureManager(projectId);
     return this.say(manager.id, text, author);
   }
@@ -692,21 +873,38 @@ export class Desk {
     by = "you",
   ): { ok: true; project: ProjectRow } | { ok: false; why: string } {
     const task = store.getTask(taskId);
-    if (!task) return { ok: false, why: `no task ${taskId}` };
+    if (!task) {
+      return { ok: false, why: `no task ${taskId}` };
+    }
     const ref = store.taskRef(taskId);
-    if (task.kind === Kind.manager) return { ok: false, why: `${ref} is already a manager` };
-    if (task.kind === Kind.home || task.kind === Kind.system)
+    if (task.kind === Kind.manager) {
+      return { ok: false, why: `${ref} is already a manager` };
+    }
+    if (task.kind === Kind.home || task.kind === Kind.system) {
       return { ok: false, why: `${ref} is Riker's own, not project work` };
+    }
     const project = task.project_id ? store.getProject(task.project_id) : null;
-    if (!project) return { ok: false, why: `${ref} is in no project: move it into one first` };
+    if (!project) {
+      return {
+        ok: false,
+        why: `${ref} is in no project: move it into one first`,
+      };
+    }
     const had = store.managerOf(project.id);
-    if (had)
-      return { ok: false, why: `${project.name} already has a manager (${store.taskRef(had.id)})` };
-    if (this.drivers.for(task).isLive(task))
+    if (had) {
+      return {
+        ok: false,
+        why: `${project.name} already has a manager (${store.taskRef(had.id)})`,
+      };
+    }
+    if (this.drivers.for(task).isLive(task)) {
       return { ok: false, why: `${ref}'s agent is running: stop it first` };
+    }
     this.onTask("make manager", taskId, () =>
       store.batch(() => {
-        if (task.status !== TaskStatus.open) store.reopen(taskId);
+        if (task.status !== TaskStatus.open) {
+          store.reopen(taskId);
+        }
         store.updateTask(taskId, {
           kind: Kind.manager,
           agent_state: AgentState.none,
@@ -725,14 +923,18 @@ export class Desk {
 
   // Where the project stands, in its manager's or the owner's words.
   setStanding(projectId: number, text: string, by = "you"): void {
-    store.updateProject(projectId, { standing: text.trim(), standing_at: now() });
+    store.updateProject(projectId, {
+      standing: text.trim(),
+      standing_at: now(),
+    });
     const manager = store.managerOf(projectId);
-    if (manager && !by.startsWith("manager "))
+    if (manager && !by.startsWith("manager ")) {
       store.addTurn({
         taskId: manager.id,
         role: TurnRole.trigger,
         body: `${by} wrote the standing:\n${text.trim()}`,
       });
+    }
   }
 
   // A project's doc off the project: only Riker's row goes.
@@ -757,16 +959,24 @@ export class Desk {
   // ── drafts ────────────────────────────────────────────────────────────
 
   async send(taskId: number): Promise<string> {
-    return this.cannotAsync(`send ${store.taskRef(taskId)}`, "it sent the draft", async () => {
-      return sendPending(this.config(), taskId, this.drafts);
-    });
+    return this.cannotAsync(
+      `send ${store.taskRef(taskId)}`,
+      "it sent the draft",
+      async () => {
+        return sendPending(this.config(), taskId, this.drafts);
+      },
+    );
   }
 
   editDraft(taskId: number, text: string): boolean {
-    const before = this.cannot(`edit ${store.taskRef(taskId)}`, "the draft is edited again, not undone", () =>
-      editPending(taskId, text, this.drafts),
+    const before = this.cannot(
+      `edit ${store.taskRef(taskId)}`,
+      "the draft is edited again, not undone",
+      () => editPending(taskId, text, this.drafts),
     );
-    if (before === null) return false;
+    if (before === null) {
+      return false;
+    }
     correct(
       this.config(),
       { taskId, what: "edited the draft before sending", before, after: text },
@@ -776,21 +986,25 @@ export class Desk {
   }
 
   redraft(taskId: number, instruction: string): void {
-    this.cannot(`redraft ${store.taskRef(taskId)}`, "it asked the agent for a new draft", () => {
-      const pending = store.pendingAction(taskId);
-      correct(
-        this.config(),
-        {
-          taskId,
-          what: "asked for a redraft",
-          before: pending?.turn.action ?? null,
-          note: instruction,
-        },
-        this.learnedNotice,
-      );
-      store.retirePendingActions(taskId);
-      void this.say(taskId, `Redraft the reply: ${instruction}`);
-    });
+    this.cannot(
+      `redraft ${store.taskRef(taskId)}`,
+      "it asked the agent for a new draft",
+      () => {
+        const pending = store.pendingAction(taskId);
+        correct(
+          this.config(),
+          {
+            taskId,
+            what: "asked for a redraft",
+            before: pending?.turn.action ?? null,
+            note: instruction,
+          },
+          this.learnedNotice,
+        );
+        store.retirePendingActions(taskId);
+        void this.say(taskId, `Redraft the reply: ${instruction}`);
+      },
+    );
   }
 
   // ── the task's place on the rail ──────────────────────────────────────
@@ -808,13 +1022,27 @@ export class Desk {
   // ── timers (core/timers.ts) ───────────────────────────────────────────
 
   // Wake the task's agent at a time, once, with what to do then.
-  followup(taskId: number, at: Date, note: string, by = this.undos.by()): TimerRow {
-    return this.onTask("follow-up", taskId, () => addFollowup(taskId, at, note, by));
+  followup(
+    taskId: number,
+    at: Date,
+    note: string,
+    by = this.undos.by(),
+  ): TimerRow {
+    return this.onTask("follow-up", taskId, () =>
+      addFollowup(taskId, at, note, by),
+    );
   }
 
   // Wake it on a rule ("weekdays 09:00"), every time.
-  schedule(taskId: number, rule: string, note: string, by = this.undos.by()): TimerRow {
-    return this.onTask("schedule", taskId, () => addSchedule(taskId, rule, note, by));
+  schedule(
+    taskId: number,
+    rule: string,
+    note: string,
+    by = this.undos.by(),
+  ): TimerRow {
+    return this.onTask("schedule", taskId, () =>
+      addSchedule(taskId, rule, note, by),
+    );
   }
 
   // Its follow-ups and schedules, or one of them, cancelled. A reminder is
@@ -823,8 +1051,14 @@ export class Desk {
     return this.onTask("unschedule", taskId, () => {
       const gone = store
         .timersForTask(taskId)
-        .filter((t) => t.kind !== TimerKind.remind && (timerId === undefined || t.id === timerId));
-      for (const t of gone) store.setTimerState(t.id, TimerState.cancelled);
+        .filter(
+          (t) =>
+            t.kind !== TimerKind.remind &&
+            (timerId === undefined || t.id === timerId),
+        );
+      for (const t of gone) {
+        store.setTimerState(t.id, TimerState.cancelled);
+      }
       return gone;
     });
   }
@@ -851,7 +1085,9 @@ export class Desk {
   // LEARNED.md from tasks triage never saw.
   async ignore(taskId: number, why = ""): Promise<void> {
     const task = store.getTask(taskId);
-    if (!task) return;
+    if (!task) {
+      return;
+    }
     const worked = store
       .turnsForTask(taskId)
       .some((t) => t.role === TurnRole.agent || t.role === TurnRole.you);
@@ -863,20 +1099,27 @@ export class Desk {
       const by = this.undos.by();
       void this.drivers.for(task).stop(task);
       taskDropped(taskId, by, why);
-      for (const m of store.messagesForTask(taskId))
+      for (const m of store.messagesForTask(taskId)) {
         store.fileMessage(m.id, Verdict.fyi, `ignored by ${by}`, null);
+      }
     });
   }
 
   // A done or dropped task open again. Its agent does not start: s does.
   reopen(taskId: number): string {
     const task = store.getTask(taskId);
-    if (!task) return `no task ${taskId}`;
+    if (!task) {
+      return `no task ${taskId}`;
+    }
     const ref = store.taskRef(taskId);
     // Refused inside onTask too, so a reopen that changed nothing is no entry.
     return this.onTask("reopen", taskId, () => {
-      if (task.status !== TaskStatus.done && task.status !== TaskStatus.dropped)
+      if (
+        task.status !== TaskStatus.done &&
+        task.status !== TaskStatus.dropped
+      ) {
         return `${ref} is not done or dropped`;
+      }
       taskReopened(taskId, this.undos.by());
       return `${ref} is open again${inTmux(task) ? "; s starts its agent" : ""}`;
     });
@@ -885,7 +1128,9 @@ export class Desk {
   setPriority(taskId: number, priority: Priority): void {
     this.onTask("priority", taskId, () => {
       const task = store.getTask(taskId);
-      if (!task || task.priority === priority) return;
+      if (!task || task.priority === priority) {
+        return;
+      }
       store.updateTask(taskId, { priority, priority_pinned: 1 });
       correct(
         this.config(),
@@ -903,11 +1148,14 @@ export class Desk {
   setKind(taskId: number, kind: Kind): void {
     this.onTask("kind", taskId, () => {
       const task = store.getTask(taskId);
-      if (!task || task.kind === kind) return;
+      if (!task || task.kind === kind) {
+        return;
+      }
       store.batch(() => {
         store.updateTask(taskId, { kind });
-        if (kind === Kind.coding && task.agent_state === AgentState.none)
+        if (kind === Kind.coding && task.agent_state === AgentState.none) {
           holdForStart(taskId);
+        }
       });
       correct(
         this.config(),
@@ -923,22 +1171,42 @@ export class Desk {
   }
 
   // Today's Wins: at most MAX_WINS, pinned or unpinned by the owner.
-  setWin(taskId: number, on: boolean, at = new Date()): { ok: boolean; text: string } {
-    return this.onTask(on ? "win" : "unwin", taskId, () => {
-      const day = localDay(at);
-      const wins = store.winsOn(day);
-      const ref = store.taskRef(taskId);
-      if (!on) {
-        if (!wins.includes(taskId)) return { ok: true, text: `${ref} is not a Win today` };
-        store.removeWin(day, taskId);
-        return { ok: true, text: `${ref} is no longer a Win today` };
-      }
-      if (wins.includes(taskId)) return { ok: true, text: `${ref} is a Win today already` };
-      if (wins.length >= MAX_WINS)
-        return { ok: false, text: `Today has ${MAX_WINS} Wins: unpin one first` };
-      store.addWin(day, taskId);
-      return { ok: true, text: `${ref} is a Win today (${wins.length + 1}/${MAX_WINS})` };
-    }, at);
+  setWin(
+    taskId: number,
+    on: boolean,
+    at = new Date(),
+  ): { ok: boolean; text: string } {
+    return this.onTask(
+      on ? "win" : "unwin",
+      taskId,
+      () => {
+        const day = localDay(at);
+        const wins = store.winsOn(day);
+        const ref = store.taskRef(taskId);
+        if (!on) {
+          if (!wins.includes(taskId)) {
+            return { ok: true, text: `${ref} is not a Win today` };
+          }
+          store.removeWin(day, taskId);
+          return { ok: true, text: `${ref} is no longer a Win today` };
+        }
+        if (wins.includes(taskId)) {
+          return { ok: true, text: `${ref} is a Win today already` };
+        }
+        if (wins.length >= MAX_WINS) {
+          return {
+            ok: false,
+            text: `Today has ${MAX_WINS} Wins: unpin one first`,
+          };
+        }
+        store.addWin(day, taskId);
+        return {
+          ok: true,
+          text: `${ref} is a Win today (${wins.length + 1}/${MAX_WINS})`,
+        };
+      },
+      at,
+    );
   }
 
   // A task's story on, off, or back to its project's and config's say.
@@ -951,34 +1219,54 @@ export class Desk {
   }
 
   // A project's journal, or the default for its tasks' stories.
-  setProjectSwitch(projectId: number, which: "journal" | "story", value: SwitchValue): string {
-    return this.cannot(which, "a project's switches are not kept for undo; set it back", () => {
-      store.updateProject(projectId, { [which]: switchColumn(value) });
-      const project = store.getProject(projectId)!;
-      if (which === "journal")
-        return `${project.name} ${switchWords("journal", journalSwitch(this.config(), project))}`;
-      const said = value === SwitchValue.default ? "follows config" : value;
-      return `${project.name}: its tasks' stories ${said} unless a task says otherwise`;
-    });
+  setProjectSwitch(
+    projectId: number,
+    which: "journal" | "story",
+    value: SwitchValue,
+  ): string {
+    return this.cannot(
+      which,
+      "a project's switches are not kept for undo; set it back",
+      () => {
+        store.updateProject(projectId, { [which]: switchColumn(value) });
+        const project = store.getProject(projectId)!;
+        if (which === "journal") {
+          return `${project.name} ${switchWords("journal", journalSwitch(this.config(), project))}`;
+        }
+        const said = value === SwitchValue.default ? "follows config" : value;
+        return `${project.name}: its tasks' stories ${said} unless a task says otherwise`;
+      },
+    );
   }
 
   // The owner's line on a task's story, or one taken off. Each is a new
   // version; story_undo steps back.
   pinStory(taskId: number, line: string, off: boolean): string {
-    return this.cannot(off ? "unpin" : "pin", "a story keeps every version; story_undo steps back one", () => {
-      const v = pin(taskId, line, off);
-      const ref = store.taskRef(taskId);
-      if (!v) return off ? `${ref}: no such pinned line` : `${ref}: pinned already`;
-      return off ? `${ref}: unpinned` : `${ref}: pinned`;
-    });
+    return this.cannot(
+      off ? "unpin" : "pin",
+      "a story keeps every version; story_undo steps back one",
+      () => {
+        const v = pin(taskId, line, off);
+        const ref = store.taskRef(taskId);
+        if (!v) {
+          return off ? `${ref}: no such pinned line` : `${ref}: pinned already`;
+        }
+        return off ? `${ref}: unpinned` : `${ref}: pinned`;
+      },
+    );
   }
 
   // The story as markdown for the owner's reader and $EDITOR, with when
   // and by whom; null when no session has been written up yet.
   storyDoc(taskId: number, all = false): { text: string; asOf: string } | null {
     const v = store.currentStory(taskId);
-    if (!v) return null;
-    return { text: storyMarkdown(v, all), asOf: `${v.at.slice(0, 16).replace("T", " ")} by ${v.by}` };
+    if (!v) {
+      return null;
+    }
+    return {
+      text: storyMarkdown(v, all),
+      asOf: `${v.at.slice(0, 16).replace("T", " ")} by ${v.by}`,
+    };
   }
 
   // Every part's heading with nothing under it: a story the owner starts.
@@ -988,13 +1276,24 @@ export class Desk {
 
   // The owner's rewrite of a story, from $EDITOR: a new version.
   editStory(taskId: number, text: string): { ok: boolean; text: string } {
-    return this.cannot("story edit", "a story keeps every version; story_undo steps back one", () => {
-      const ref = store.taskRef(taskId);
-      const said = editStory(taskId, text);
-      if ("error" in said) return { ok: false, text: `${ref}: story not saved: ${said.error}` };
-      if (!said.version) return { ok: true, text: `${ref}: story unchanged` };
-      return { ok: true, text: `${ref}: story saved as a new version (story_undo steps back)` };
-    });
+    return this.cannot(
+      "story edit",
+      "a story keeps every version; story_undo steps back one",
+      () => {
+        const ref = store.taskRef(taskId);
+        const said = editStory(taskId, text);
+        if ("error" in said) {
+          return { ok: false, text: `${ref}: story not saved: ${said.error}` };
+        }
+        if (!said.version) {
+          return { ok: true, text: `${ref}: story unchanged` };
+        }
+        return {
+          ok: true,
+          text: `${ref}: story saved as a new version (story_undo steps back)`,
+        };
+      },
+    );
   }
 
   // A project's journal file and what it says, for the reader and $EDITOR.
@@ -1005,35 +1304,61 @@ export class Desk {
 
   // The owner's journal edit, made on a copy opened at `base`: laid over
   // the file as it is now, so an entry written meanwhile is kept.
-  saveJournal(projectId: number, base: string, edited: string): { ok: boolean; text: string } {
+  saveJournal(
+    projectId: number,
+    base: string,
+    edited: string,
+  ): { ok: boolean; text: string } {
     const project = store.getProject(projectId);
-    if (!project) return { ok: false, text: "That project is gone" };
-    return this.cannot("journal edit", "it is a file: edit it again to take it back", () => {
-      const said = saveJournalEdit(project, base, edited);
-      const name = `${project.name} journal`;
-      switch (said) {
-        case JournalSave.unchanged:
-          return { ok: true, text: `${name}: unchanged` };
-        case JournalSave.saved:
-          return { ok: true, text: `${name}: saved` };
-        case JournalSave.merged:
-          return { ok: true, text: `${name}: saved, with what Riker wrote while you edited` };
-        case JournalSave.conflict:
-          return { ok: false, text: `${name}: not saved: Riker wrote to the lines you edited while you had it open` };
-      }
-    });
+    if (!project) {
+      return { ok: false, text: "That project is gone" };
+    }
+    return this.cannot(
+      "journal edit",
+      "it is a file: edit it again to take it back",
+      () => {
+        const said = saveJournalEdit(project, base, edited);
+        const name = `${project.name} journal`;
+        switch (said) {
+          case JournalSave.unchanged:
+            return { ok: true, text: `${name}: unchanged` };
+          case JournalSave.saved:
+            return { ok: true, text: `${name}: saved` };
+          case JournalSave.merged:
+            return {
+              ok: true,
+              text: `${name}: saved, with what Riker wrote while you edited`,
+            };
+          case JournalSave.conflict:
+            return {
+              ok: false,
+              text: `${name}: not saved: Riker wrote to the lines you edited while you had it open`,
+            };
+        }
+      },
+    );
   }
 
   undoStory(taskId: number): string {
-    return this.cannot("story undo", "the version undone stays in the history", () => {
-      const v = undoStory(taskId);
-      const ref = store.taskRef(taskId);
-      return v ? `${ref}: story back to the version before` : `${ref}: no earlier story version`;
-    });
+    return this.cannot(
+      "story undo",
+      "the version undone stays in the history",
+      () => {
+        const v = undoStory(taskId);
+        const ref = store.taskRef(taskId);
+        return v
+          ? `${ref}: story back to the version before`
+          : `${ref}: no earlier story version`;
+      },
+    );
   }
 
   toggleWin(taskId: number, at = new Date()): { ok: boolean; text: string } {
-    return this.setWin(taskId, !store.winsOn(localDay(at)).includes(taskId), at);
+    return this.setWin(
+      taskId,
+      !store.winsOn(localDay(at)).includes(taskId),
+      at,
+    );
   }
 
   // A task waits on others; each is told nothing, the waiting one hears
@@ -1042,12 +1367,25 @@ export class Desk {
     return this.onTask("block_on", taskId, () => {
       const task = store.getTask(taskId);
       const blocker = store.getTask(blockerId);
-      if (!task || !blocker) throw new Error(`no task ${store.taskRef(blockerId)}`);
-      if (taskId === blockerId) throw new Error("a task cannot wait on itself");
-      if (blocker.status === TaskStatus.done || blocker.status === TaskStatus.dropped)
-        throw new Error(`${store.taskRef(blockerId)} is ${blocker.status} already`);
-      if (waitsOn(blockerId, taskId))
-        throw new Error(`${store.taskRef(blockerId)} already waits on ${store.taskRef(taskId)}`);
+      if (!task || !blocker) {
+        throw new Error(`no task ${store.taskRef(blockerId)}`);
+      }
+      if (taskId === blockerId) {
+        throw new Error("a task cannot wait on itself");
+      }
+      if (
+        blocker.status === TaskStatus.done ||
+        blocker.status === TaskStatus.dropped
+      ) {
+        throw new Error(
+          `${store.taskRef(blockerId)} is ${blocker.status} already`,
+        );
+      }
+      if (waitsOn(blockerId, taskId)) {
+        throw new Error(
+          `${store.taskRef(blockerId)} already waits on ${store.taskRef(taskId)}`,
+        );
+      }
       store.batch(() => {
         store.addBlocker(taskId, blockerId, by);
         store.addTurn({
@@ -1064,8 +1402,11 @@ export class Desk {
   unblock(taskId: number, blockerId?: number): string {
     return this.onTask("unblock", taskId, () => {
       const had = store.blockersOf(taskId);
-      const gone = blockerId === undefined ? had : had.filter((id) => id === blockerId);
-      if (gone.length === 0) return `${store.taskRef(taskId)} was not blocked by that`;
+      const gone =
+        blockerId === undefined ? had : had.filter((id) => id === blockerId);
+      if (gone.length === 0) {
+        return `${store.taskRef(taskId)} was not blocked by that`;
+      }
       store.batch(() => {
         store.removeBlocker(taskId, blockerId);
         store.addTurn({
@@ -1116,7 +1457,9 @@ export class Desk {
 
   readResult(taskId: number): void {
     const task = store.getTask(taskId);
-    if (task?.unread_result) store.updateTask(taskId, { unread_result: 0 });
+    if (task?.unread_result) {
+      store.updateTask(taskId, { unread_result: 0 });
+    }
   }
 
   // ── FYIs and ideas ────────────────────────────────────────────────────
@@ -1125,7 +1468,9 @@ export class Desk {
   runEffects(effects: TriageEffect[]): void {
     for (const effect of effects) {
       const task = store.getTask(effect.taskId);
-      if (!task) continue;
+      if (!task) {
+        continue;
+      }
       if (effect.type === "timer") {
         this.timerFired(task, effect.turnId, effect.reason);
         continue;
@@ -1148,15 +1493,22 @@ export class Desk {
   private timerFired(task: TaskRow, turnId: number, reason: string): void {
     const driver = this.drivers.for(task);
     if (!inTmux(task)) {
-      if (task.kind === Kind.general || task.kind === Kind.reply) driver.wake(task, reason);
+      if (task.kind === Kind.general || task.kind === Kind.reply) {
+        driver.wake(task, reason);
+      }
       return;
     }
     store.setPending([turnId], true);
-    if (driver.isLive(task)) void driver.deliver(task);
-    else if (driver.resumes(task))
+    if (driver.isLive(task)) {
+      void driver.deliver(task);
+    } else if (driver.resumes(task)) {
       void driver.start(task).catch((err: unknown) =>
-        log.warn("timer resume failed", { task: task.id, err: errorMessage(err) }),
+        log.warn("timer resume failed", {
+          task: task.id,
+          err: errorMessage(err),
+        }),
       );
+    }
   }
 
   // Triage again, as a new run. A message on a task is refused: a second
@@ -1165,16 +1517,22 @@ export class Desk {
   // failure here is the owner's to see, so it is not retried for them.
   async retriage(messageId: number): Promise<RetriageResult> {
     const message = store.getMessage(messageId);
-    if (!message) return { ok: false, why: "no such message" };
-    if (message.task_id !== null)
+    if (!message) {
+      return { ok: false, why: "no such message" };
+    }
+    if (message.task_id !== null) {
       return {
         ok: false,
         why: `it is on ${store.taskRef(message.task_id)}: use ignore instead`,
       };
+    }
     const judge = this.options.triage;
-    if (!judge) return { ok: false, why: "no triage is installed" };
-    if (!store.claimMessage(messageId))
+    if (!judge) {
+      return { ok: false, why: "no triage is installed" };
+    }
+    if (!store.claimMessage(messageId)) {
       return { ok: false, why: "triage is running on it now" };
+    }
     try {
       const outcome = await judge.again(message, this.config());
       this.afterTriage(outcome, message);
@@ -1196,9 +1554,13 @@ export class Desk {
   heldToTask(messageId: number): TaskRow | null {
     return this.undos.track(() => {
       const message = store.getMessage(messageId);
-      if (!message || message.task_id !== null) return null;
+      if (!message || message.task_id !== null) {
+        return null;
+      }
       const outcome = this.options.triage?.fromHeld(message, this.config());
-      if (!outcome) return this.fyiToTask(messageId);
+      if (!outcome) {
+        return this.fyiToTask(messageId);
+      }
       this.afterTriage(outcome, message);
       return outcome.taskId === null ? null : store.getTask(outcome.taskId);
     }, madeTask);
@@ -1208,7 +1570,9 @@ export class Desk {
   fyiToTask(messageId: number): TaskRow | null {
     return this.undos.track(() => {
       const m = store.getMessage(messageId);
-      if (!m) return null;
+      if (!m) {
+        return null;
+      }
       const task = store.batch(() => {
         const created = store.createTask({
           title: m.title.slice(0, 120) || m.body.slice(0, 80),
@@ -1258,7 +1622,9 @@ export class Desk {
 
   ideaToTask(ideaId: number): TaskRow | null {
     const idea = store.openIdeas().find((i) => i.id === ideaId);
-    if (!idea) return null;
+    if (!idea) {
+      return null;
+    }
     const task = this.newTask(idea.title, Kind.task, idea.body);
     store.ideaTasked(ideaId, task.id);
     return task;
@@ -1269,27 +1635,41 @@ export class Desk {
   // y on a System task: the onboarding offer starts its interview; anything
   // else writes the proposed docs.
   acceptDocs(taskId: number): string {
-    return this.cannot(`accept ${store.taskRef(taskId)}`, "it wrote the proposed docs", () => {
-      const task = store.getTask(taskId);
-      if (!task || task.kind !== Kind.system) return "not a System task";
-      if (!hasOpenProposals(taskId) && onboardingTask()?.id === taskId)
-        return this.onboard();
-      return this.closedDocs(task, acceptProposals(taskId));
-    });
+    return this.cannot(
+      `accept ${store.taskRef(taskId)}`,
+      "it wrote the proposed docs",
+      () => {
+        const task = store.getTask(taskId);
+        if (!task || task.kind !== Kind.system) {
+          return "not a System task";
+        }
+        if (!hasOpenProposals(taskId) && onboardingTask()?.id === taskId) {
+          return this.onboard();
+        }
+        return this.closedDocs(task, acceptProposals(taskId));
+      },
+    );
   }
 
   rejectDocs(taskId: number): string {
-    return this.cannot(`reject ${store.taskRef(taskId)}`, "it closed the proposal", () => {
-      const task = store.getTask(taskId);
-      if (!task || task.kind !== Kind.system) return "not a System task";
-      return this.closedDocs(task, rejectProposals(taskId));
-    });
+    return this.cannot(
+      `reject ${store.taskRef(taskId)}`,
+      "it closed the proposal",
+      () => {
+        const task = store.getTask(taskId);
+        if (!task || task.kind !== Kind.system) {
+          return "not a System task";
+        }
+        return this.closedDocs(task, rejectProposals(taskId));
+      },
+    );
   }
 
   // A System task y or x closed takes its interview's window with it.
   private closedDocs(task: TaskRow, said: string): string {
-    if (store.getTask(task.id)?.status !== TaskStatus.open && inTmux(task))
+    if (store.getTask(task.id)?.status !== TaskStatus.open && inTmux(task)) {
       void this.drivers.for(task).close(task);
+    }
     return said;
   }
 
@@ -1318,7 +1698,9 @@ export class Desk {
         .for(started)
         .start(started, { noWorktree: true })
         .then((result) => {
-          if (result.type !== "failed" && result.type !== "needs") return;
+          if (result.type !== "failed" && result.type !== "needs") {
+            return;
+          }
           store.addTurn({
             taskId: started.id,
             role: TurnRole.trigger,
@@ -1351,7 +1733,9 @@ export class Desk {
 
   // The hooks are offered once, with the first project made or adopted.
   offerHooksOnce(): boolean {
-    if (store.kvGet(HOOKS_OFFERED)) return false;
+    if (store.kvGet(HOOKS_OFFERED)) {
+      return false;
+    }
     store.kvSet(HOOKS_OFFERED, "1");
     return true;
   }
@@ -1370,8 +1754,12 @@ function madeTask(task: TaskRow | null): UndoDraft | null {
 }
 
 function waitsOn(from: number, to: number, seen = new Set<number>()): boolean {
-  if (from === to) return true;
-  if (seen.has(from)) return false;
+  if (from === to) {
+    return true;
+  }
+  if (seen.has(from)) {
+    return false;
+  }
   seen.add(from);
   return store.blockersOf(from).some((id) => waitsOn(id, to, seen));
 }

@@ -106,8 +106,7 @@ export const GH_READS = [
 // Rules match a command's prefix, and each part of `a && b` must match on its
 // own; `cd` into another folder never does, nor `git -C <dir> log` a
 // `git log` rule. Said to every headless shell.
-export const SHELL_HOWTO =
-  `Run one command per Bash call, written out in full and starting with the command itself: no \`cd <dir> &&\` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). A quoted argument may span lines, blank ones too, but one with a line starting with # (a Markdown heading) is denied: such text goes in a file. Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout. Run git in the folder you start in, never with -C <dir>: write \`git log ...\`, not \`git -C /path log ...\`. A denied call means the command did not match, not that Bash is off: write it again that way (Riker's tools as ${TOOLS_NAME} <command>) and try once more before giving up. Never ask the owner to allow a command: they cannot, Riker sets what you may run.`;
+export const SHELL_HOWTO = `Run one command per Bash call, written out in full and starting with the command itself: no \`cd <dir> &&\` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). A quoted argument may span lines, blank ones too, but one with a line starting with # (a Markdown heading) is denied: such text goes in a file. Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout. Run git in the folder you start in, never with -C <dir>: write \`git log ...\`, not \`git -C /path log ...\`. A denied call means the command did not match, not that Bash is off: write it again that way (Riker's tools as ${TOOLS_NAME} <command>) and try once more before giving up. Never ask the owner to allow a command: they cannot, Riker sets what you may run.`;
 
 export const DENIED_STEP = "denied: ";
 // Said beside a denied connector call: what the owner sets to let it run.
@@ -131,7 +130,9 @@ export function lastDenials(turns: TurnRow[]): string[] {
 
 // The tool a denied call named: "Bash", "mcp__claude_ai_Claude_Docs__batch".
 export function deniedTool(call: string): string {
-  const text = call.startsWith(DENIED_STEP) ? call.slice(DENIED_STEP.length) : call;
+  const text = call.startsWith(DENIED_STEP)
+    ? call.slice(DENIED_STEP.length)
+    : call;
   return text.split(" ")[0] ?? "";
 }
 
@@ -155,7 +156,9 @@ export function refusalLines(steps: string[]): string[] {
 export function deniedNote(turns: TurnRow[]): string {
   const steps = stepsOf(lastAgentTurn(turns));
   const denied = steps.filter((s) => s.startsWith(DENIED_STEP));
-  if (!denied.length) return "";
+  if (!denied.length) {
+    return "";
+  }
   const shell = denied.filter((s) => !deniedTool(s).startsWith("mcp__"));
   const connector = denied.filter((s) => deniedTool(s).startsWith("mcp__"));
   const grants = steps.filter((s) => s.startsWith(GRANT_STEP));
@@ -191,8 +194,9 @@ export function resolveCapability(
   const server = config.servers[name] ?? base?.server;
   const tools = config.tools[name] ?? base?.tools;
   if (!server || !tools) {
-    if (!config.plugins[name] && !config.commands[name])
+    if (!config.plugins[name] && !config.commands[name]) {
       log.warn("unknown capability, nothing granted", { capability: name });
+    }
     return [];
   }
   if (!NAME.test(server)) {
@@ -277,8 +281,12 @@ export function claudeDir(): string {
 // Where an installed plugin lives, by "name@marketplace" or bare name, or a
 // folder named outright.
 export function pluginDir(ref: string): string | undefined {
-  if (isAbsolute(ref)) return existsSync(ref) ? ref : undefined;
-  if (!PLUGIN.test(ref)) return undefined;
+  if (isAbsolute(ref)) {
+    return existsSync(ref) ? ref : undefined;
+  }
+  if (!PLUGIN.test(ref)) {
+    return undefined;
+  }
   let installed: InstalledPlugins;
   try {
     const file = join(claudeDir(), "plugins", "installed_plugins.json");
@@ -299,14 +307,24 @@ function splitRules(text: string): string[] {
   let depth = 0;
   let current = "";
   for (const ch of text) {
-    if (ch === "(") depth++;
-    if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "(") {
+      depth++;
+    }
+    if (ch === ")") {
+      depth = Math.max(0, depth - 1);
+    }
     if (depth === 0 && (ch === "," || ch === " ")) {
-      if (current) rules.push(current);
+      if (current) {
+        rules.push(current);
+      }
       current = "";
-    } else current += ch;
+    } else {
+      current += ch;
+    }
   }
-  if (current) rules.push(current);
+  if (current) {
+    rules.push(current);
+  }
   return rules.map((r) => r.replace(/^["']|["']$/g, "")).filter(Boolean);
 }
 
@@ -314,18 +332,27 @@ function splitRules(text: string): string[] {
 // never invoke it.
 export function declaredRules(markdown: string): string[] | null {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(markdown);
-  if (!match) return [];
+  if (!match) {
+    return [];
+  }
   const lines = match[1]!.split(/\r?\n/);
-  if (lines.some((l) => /^disable-model-invocation:\s*true\s*$/.test(l)))
+  if (lines.some((l) => /^disable-model-invocation:\s*true\s*$/.test(l))) {
     return null;
+  }
   const at = lines.findIndex((l) => l.startsWith("allowed-tools:"));
-  if (at < 0) return [];
+  if (at < 0) {
+    return [];
+  }
   const value = lines[at]!.slice("allowed-tools:".length).trim();
-  if (value) return splitRules(value.replace(/^\[|\]$/g, ""));
+  if (value) {
+    return splitRules(value.replace(/^\[|\]$/g, ""));
+  }
   const items: string[] = [];
   for (const line of lines.slice(at + 1)) {
     const item = /^\s*-\s*(.+)$/.exec(line);
-    if (!item) break;
+    if (!item) {
+      break;
+    }
     items.push(...splitRules(item[1]!));
   }
   return items;
@@ -333,7 +360,9 @@ export function declaredRules(markdown: string): string[] | null {
 
 function markdownUnder(path: string): string[] {
   try {
-    if (statSync(path).isFile()) return path.endsWith(".md") ? [path] : [];
+    if (statSync(path).isFile()) {
+      return path.endsWith(".md") ? [path] : [];
+    }
     return readdirSync(path, { recursive: true })
       .map((f) => join(path, String(f)))
       .filter((f) => f.endsWith(".md") && statSync(f).isFile());
@@ -375,7 +404,11 @@ export function pluginWidens(dir: string, commands: string[]): string[] {
   const extra = new Set<string>();
   for (const file of pluginSkillFiles(dir)) {
     const rules = declaredRules(readFileSync(file, "utf8"));
-    for (const rule of rules ?? []) if (!granted.has(rule)) extra.add(rule);
+    for (const rule of rules ?? []) {
+      if (!granted.has(rule)) {
+        extra.add(rule);
+      }
+    }
   }
   return [...extra];
 }
@@ -385,7 +418,9 @@ export function resolvePlugin(
   config: RikerConfig["capabilities"],
 ): string | undefined {
   const ref = config.plugins[name];
-  if (!ref) return undefined;
+  if (!ref) {
+    return undefined;
+  }
   const dir = pluginDir(ref);
   if (!dir) {
     log.warn("plugin not installed, nothing loaded", {
@@ -416,10 +451,7 @@ export interface Grant {
   commands: string[];
 }
 
-export function capabilityGrant(
-  role: Role,
-  config: RikerConfig,
-): Grant {
+export function capabilityGrant(role: Role, config: RikerConfig): Grant {
   const caps = config.capabilities;
   const granted = config.capabilities.grants[role] ?? [];
   const commands = [
@@ -459,21 +491,27 @@ export function grantHint(
   file = paths.config(),
 ): string | null {
   const match = MCP_TOOL.exec(tool);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const [, server, bare] = match as unknown as [string, string, string];
   const caps = config.capabilities;
   const key = `capabilities.grants.${role}`;
   const candidates = Object.entries(CAPABILITIES).filter(
     ([name, spec]) => (caps.servers[name] ?? spec.server) === server,
   );
-  if (!candidates.length) return null;
+  if (!candidates.length) {
+    return null;
+  }
   const granted = new Set(caps.grants[role] ?? []);
   // A capability that has it by default beats one that needs a tools
   // override, and a read beats a write.
   const byDefault = candidates.find(([, spec]) => spec.tools.includes(bare));
   const byOverride = candidates.find(([, spec]) => spec.writes?.includes(bare));
   const found = byDefault ?? byOverride;
-  if (!found) return `${tool}: no capability in Riker grants it (connector writes other than Claude Docs are never allowed).`;
+  if (!found) {
+    return `${tool}: no capability in Riker grants it (connector writes other than Claude Docs are never allowed).`;
+  }
   const [name] = found;
   if (granted.has(name)) {
     return `${tool}: "${name}" is in ${key}, but its tools leave "${bare}" out: list it in capabilities.tools["${name}"] in ${file}.`;
@@ -518,15 +556,15 @@ export function connectorNote(
 }
 
 // How to work with Claude Docs headless, once a role may read or make them.
-export function docsNote(
-  role: Role,
-  config: RikerConfig,
-): string {
+export function docsNote(role: Role, config: RikerConfig): string {
   const caps = config.capabilities;
   const granted = (caps.grants[role] ?? []).filter(
-    (name) => (caps.servers[name] ?? CAPABILITIES[name]?.server) === DOCS_SERVER,
+    (name) =>
+      (caps.servers[name] ?? CAPABILITIES[name]?.server) === DOCS_SERVER,
   );
-  if (!granted.length) return "";
+  if (!granted.length) {
+    return "";
+  }
   const writes = granted.includes("docs.write");
   const link =
     role === "general"
@@ -547,18 +585,12 @@ export function docsNote(
 }
 
 // Extra --allowedTools entries a role gets from its granted capabilities.
-export function capabilityAllow(
-  role: Role,
-  config: RikerConfig,
-): string[] {
+export function capabilityAllow(role: Role, config: RikerConfig): string[] {
   return capabilityGrant(role, config).allow;
 }
 
 // One prompt line naming the commands a role was granted.
-export function grantedNote(
-  role: Role,
-  config: RikerConfig,
-): string {
+export function grantedNote(role: Role, config: RikerConfig): string {
   const { commands } = capabilityGrant(role, config);
   return commands.length
     ? `The owner also granted these commands on Bash: ${commands.join(", ")}.`

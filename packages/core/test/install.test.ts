@@ -51,8 +51,11 @@ afterEach(() => {
     ["STARSHIP_CONFIG", saved.starship],
     ["PATH", saved.path],
   ] as const) {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
   }
 });
 

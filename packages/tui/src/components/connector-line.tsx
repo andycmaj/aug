@@ -12,7 +12,11 @@ import { dailyCap, usd } from "@riker/core/spend";
 import { LinkMark } from "./link-mark";
 
 // The tracked link, or the status read as one before the first change.
-export function linkOf(links: Record<string, Link>, name: string, s: ConnectorStatus): Link {
+export function linkOf(
+  links: Record<string, Link>,
+  name: string,
+  s: ConnectorStatus,
+): Link {
   return links[name] ?? foldConnector(null, s, Date.now());
 }
 
@@ -25,7 +29,9 @@ export function spendWords(
   text: string;
   level: "ok" | "near" | "capped";
 } {
-  if (cap === null) return { text: `${usd(spent)} today`, level: "ok" };
+  if (cap === null) {
+    return { text: `${usd(spent)} today`, level: "ok" };
+  }
   return {
     text: `${usd(spent)}/${usd(cap)} today`,
     level: spent >= cap ? "capped" : spent >= cap * 0.8 ? "near" : "ok",
@@ -44,7 +50,9 @@ export function ConnectorLine() {
     riker.engine.connections().flatMap((c) => {
       const s = riker.status()[c.name];
       // A quiet one is shown once it is turned on.
-      if (!s || (c.quietWhenOff && s.state === "off")) return [];
+      if (!s || (c.quietWhenOff && s.state === "off")) {
+        return [];
+      }
       return [{ name: c.name, link: linkOf(riker.links(), c.name, s) }];
     });
   return (

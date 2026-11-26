@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "options": { "typeAware": true },
+  "categories": { "correctness": "off" },
+  "rules": {
+    "curly": ["error", "all"],
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      // A default case is a deliberate catch-all.
+      { "considerDefaultExhaustiveForUnions": true }
+    ]
+  },
+  "overrides": [
+    // bun-types types expect(...).rejects matchers as returning void, but
+    // they return a promise a test must await.
+    {
+      "files": ["packages/*/test/**"],
+      "rules": { "typescript/await-thenable": "off" }
+    }
+  ]
+}

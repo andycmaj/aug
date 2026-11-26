@@ -14,9 +14,12 @@ const hasTmux = Bun.spawnSync(["tmux", "-V"]).exitCode === 0;
 const servers: string[] = [];
 
 function tmux(socket: string, ...args: string[]): string {
-  const run = Bun.spawnSync(["tmux", "-L", socket, "-f", "/dev/null", ...args], {
-    env: { ...process.env, TMUX: "" },
-  });
+  const run = Bun.spawnSync(
+    ["tmux", "-L", socket, "-f", "/dev/null", ...args],
+    {
+      env: { ...process.env, TMUX: "" },
+    },
+  );
   return run.stdout.toString().trim();
 }
 
@@ -28,7 +31,9 @@ function server(tag: string): string {
 
 async function until(check: () => boolean): Promise<void> {
   for (let i = 0; i < 50; i++) {
-    if (check()) return;
+    if (check()) {
+      return;
+    }
     await Bun.sleep(50);
   }
   throw new Error("timed out");
@@ -45,11 +50,19 @@ function clients(socket: string): { name: string; session: string }[] {
 }
 
 afterEach(() => {
-  for (const s of servers.splice(0)) tmux(s, "kill-server");
+  for (const s of servers.splice(0)) {
+    tmux(s, "kill-server");
+  }
 });
 
 function windows(socket: string): string[] {
-  return tmux(socket, "list-windows", "-a", "-F", "#{session_name} #{window_id}")
+  return tmux(
+    socket,
+    "list-windows",
+    "-a",
+    "-F",
+    "#{session_name} #{window_id}",
+  )
     .split("\n")
     .filter(Boolean);
 }
@@ -68,7 +81,18 @@ async function withViewer() {
   const argv = new TmuxMux(s).viewerArgv("riker-view-test", projId, windowId);
   // The host runs a shell-command string through sh, so quote each arg.
   const shell = argv.map((a) => `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
-  tmux(host, "new-session", "-d", "-x", "100", "-y", "30", "-s", "riker", shell);
+  tmux(
+    host,
+    "new-session",
+    "-d",
+    "-x",
+    "100",
+    "-y",
+    "30",
+    "-s",
+    "riker",
+    shell,
+  );
   await until(() => windows(s).includes(`riker-view-test ${windowId}`));
   return { s, host, projId, outerId, windowId };
 }
@@ -80,7 +104,9 @@ describe.skipIf(!hasTmux)("viewer session", () => {
       `riker-view-test ${windowId}`,
     ]);
     // tmux 3.7's choose-tree draws an empty tree while any group exists.
-    expect(tmux(s, "list-sessions", "-F", "#{session_grouped}").split("\n")).not.toContain("1");
+    expect(
+      tmux(s, "list-sessions", "-F", "#{session_grouped}").split("\n"),
+    ).not.toContain("1");
   });
 
   test("only Riker's own client stays in it; anyone else lands in the project", async () => {
@@ -98,14 +124,24 @@ describe.skipIf(!hasTmux)("viewer session", () => {
     await Bun.sleep(50);
     tmux(s, "switch-client", "-c", other, "-t", "riker-view-test");
 
-    await until(() => clients(s).filter((c) => c.session === "proj").length === 2);
-    expect(clients(s).find((c) => c.name === rikerClient)?.session).toBe("riker-view-test");
+    await until(
+      () => clients(s).filter((c) => c.session === "proj").length === 2,
+    );
+    expect(clients(s).find((c) => c.name === rikerClient)?.session).toBe(
+      "riker-view-test",
+    );
     expect(tmux(s, "show-options", "-v", "-t", "proj:", "prefix")).toBe("");
   });
 
   test("jumping to a viewed window lands in the project, not the viewer", async () => {
     const { s, host, projId, windowId } = await withViewer();
-    tmux(host, "new-window", "-t", "riker:", `env -u TMUX tmux -L ${s} attach -t outer`);
+    tmux(
+      host,
+      "new-window",
+      "-t",
+      "riker:",
+      `env -u TMUX tmux -L ${s} attach -t outer`,
+    );
     await until(() => clients(s).length === 2);
     const other = clients(s).find((c) => c.session === "outer")?.name ?? "";
 
@@ -113,9 +149,13 @@ describe.skipIf(!hasTmux)("viewer session", () => {
     // viewer, with no prefix and no status bar.
     await new TmuxMux(s).switchClient(projId, windowId);
 
-    await until(() => clients(s).find((c) => c.name === other)?.session !== "outer");
+    await until(
+      () => clients(s).find((c) => c.name === other)?.session !== "outer",
+    );
     expect(clients(s).find((c) => c.name === other)?.session).toBe("proj");
-    expect(tmux(s, "display", "-p", "-c", other, "#{window_id}")).toBe(windowId);
+    expect(tmux(s, "display", "-p", "-c", other, "#{window_id}")).toBe(
+      windowId,
+    );
   });
 
   test("moving a viewed window takes it out of the project, not the viewer", async () => {
@@ -142,13 +182,18 @@ describe.skipIf(!hasTmux)("viewer session", () => {
       rows: 30,
       env: { TMUX: "" },
       onData: (data) => {
-        const replies = terminalReplies(decoder.decode(data, { stream: true }), {
-          cursor: [0, 0],
-          foreground: "#ffffff",
-          background: "#000000",
-          clipboard: () => "hello",
-        });
-        if (replies) viewer.write(replies);
+        const replies = terminalReplies(
+          decoder.decode(data, { stream: true }),
+          {
+            cursor: [0, 0],
+            foreground: "#ffffff",
+            background: "#000000",
+            clipboard: () => "hello",
+          },
+        );
+        if (replies) {
+          viewer.write(replies);
+        }
       },
       onExit: () => {},
     });
@@ -179,7 +224,18 @@ describe.skipIf(!hasTmux)("viewer session", () => {
     const argv = new TmuxMux(s).viewerArgv("riker-view-test", projId, windowId);
     const host = server("host");
     const shell = argv.map((a) => `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
-    tmux(host, "new-session", "-d", "-x", "100", "-y", "30", "-s", "riker", shell);
+    tmux(
+      host,
+      "new-session",
+      "-d",
+      "-x",
+      "100",
+      "-y",
+      "30",
+      "-s",
+      "riker",
+      shell,
+    );
     await until(() => windows(s).includes(`riker-view-test ${windowId}`));
     expect(tmux(s, "show-options", "-sv", "get-clipboard")).toBe("off");
     expect(tmux(s, "show-options", "-sv", "set-clipboard")).toBe("off");
@@ -200,21 +256,46 @@ describe.skipIf(!hasTmux)("split pane", () => {
     const claude = tmux(s, "display", "-p", "-t", windowId, "#{pane_id}");
     const mux = new TmuxMux(s);
 
-    const paneId = await mux.splitPane({ paneId: claude, cwd: "/tmp", argv: ["cat"], zoom: true });
-    expect(tmux(s, "display", "-p", "-t", "riker-view-test:", "#{pane_id} #{window_zoomed_flag}")).toBe(
-      `${paneId} 1`,
+    const paneId = await mux.splitPane({
+      paneId: claude,
+      cwd: "/tmp",
+      argv: ["cat"],
+      zoom: true,
+    });
+    expect(
+      tmux(
+        s,
+        "display",
+        "-p",
+        "-t",
+        "riker-view-test:",
+        "#{pane_id} #{window_zoomed_flag}",
+      ),
+    ).toBe(`${paneId} 1`);
+    expect(windows(s).filter((w) => w.endsWith(` ${windowId}`))).toHaveLength(
+      2,
     );
-    expect(windows(s).filter((w) => w.endsWith(` ${windowId}`))).toHaveLength(2);
     expect(await mux.paneAlive(paneId)).toBe(true);
 
     // Riker's lines still reach claude, not the viewer that has focus.
     await mux.sendLine(windowId, "hello");
-    await until(() => tmux(s, "capture-pane", "-p", "-t", claude).includes("hello"));
+    await until(() =>
+      tmux(s, "capture-pane", "-p", "-t", claude).includes("hello"),
+    );
     expect(tmux(s, "capture-pane", "-p", "-t", paneId)).not.toContain("hello");
 
     tmux(s, "kill-pane", "-t", paneId);
     expect(await mux.paneAlive(paneId)).toBe(false);
-    expect(tmux(s, "display", "-p", "-t", windowId, "#{window_panes} #{window_zoomed_flag}")).toBe("1 0");
+    expect(
+      tmux(
+        s,
+        "display",
+        "-p",
+        "-t",
+        windowId,
+        "#{window_panes} #{window_zoomed_flag}",
+      ),
+    ).toBe("1 0");
   });
 
   test("the exit code reaches the file a waiting caller reads", async () => {
@@ -224,8 +305,19 @@ describe.skipIf(!hasTmux)("split pane", () => {
     const exitFile = `${tmpdir()}/riker-pane-exit-${process.pid}`;
     const mux = new TmuxMux(s);
 
-    const paneId = await mux.splitPane({ paneId: claude, cwd: "/tmp", argv: ["sh", "-c", "exit 10"], zoom: false, exitFile });
-    await until(() => !tmux(s, "list-panes", "-a", "-F", "#{pane_id}").split("\n").includes(paneId));
+    const paneId = await mux.splitPane({
+      paneId: claude,
+      cwd: "/tmp",
+      argv: ["sh", "-c", "exit 10"],
+      zoom: false,
+      exitFile,
+    });
+    await until(
+      () =>
+        !tmux(s, "list-panes", "-a", "-F", "#{pane_id}")
+          .split("\n")
+          .includes(paneId),
+    );
     expect(readFileSync(exitFile, "utf8").trim()).toBe("10");
     rmSync(exitFile, { force: true });
   });
@@ -235,8 +327,12 @@ describe.skipIf(!hasTmux)("split pane", () => {
     tmux(s, "new-session", "-d", "-s", "proj");
     const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
     await new TmuxMux(s).tagWindow(windowId, 7);
-    expect(tmux(s, "display", "-p", "-t", windowId, "#{@riker_task}")).toBe("7");
-    expect(tmux(s, "display", "-p", "-t", windowId, "#{@riker_tools}")).toContain("riker-tools.ts");
+    expect(tmux(s, "display", "-p", "-t", windowId, "#{@riker_task}")).toBe(
+      "7",
+    );
+    expect(
+      tmux(s, "display", "-p", "-t", windowId, "#{@riker_tools}"),
+    ).toContain("riker-tools.ts");
   });
 });
 
@@ -257,7 +353,10 @@ describe.skipIf(!hasTmux)("window panes", () => {
 describe.skipIf(!hasTmux)("strict state", () => {
   test("no server is empty, strict or not", async () => {
     const mux = new TmuxMux(server("none"));
-    expect(await mux.state({ strict: true })).toEqual({ sessions: [], windows: [] });
+    expect(await mux.state({ strict: true })).toEqual({
+      sessions: [],
+      windows: [],
+    });
   });
 });
 
@@ -267,15 +366,22 @@ describe.skipIf(!hasTmux)("host window", () => {
     return { TMUX: `/tmp/whatever,${pid},0`, TMUX_PANE: pane };
   }
 
-  async function hostWith(env: Record<string, string>, s: string): Promise<string | null> {
+  async function hostWith(
+    env: Record<string, string>,
+    s: string,
+  ): Promise<string | null> {
     const saved = { TMUX: process.env.TMUX, TMUX_PANE: process.env.TMUX_PANE };
     Object.assign(process.env, env);
     try {
       return await new TmuxMux(s).hostWindow();
     } finally {
-      for (const [k, v] of Object.entries(saved))
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
+      }
     }
   }
 
@@ -291,7 +397,9 @@ describe.skipIf(!hasTmux)("host window", () => {
     const s = server("s");
     tmux(s, "new-session", "-d", "-s", "proj");
     const pane = tmux(s, "display", "-p", "-t", "proj:", "#{pane_id}");
-    expect(await hostWith({ TMUX: "/tmp/other,1,0", TMUX_PANE: pane }, s)).toBeNull();
+    expect(
+      await hostWith({ TMUX: "/tmp/other,1,0", TMUX_PANE: pane }, s),
+    ).toBeNull();
     expect(await hostWith({ TMUX: "", TMUX_PANE: "" }, s)).toBeNull();
   });
 });
@@ -324,15 +432,22 @@ describe.skipIf(!hasTmux)("a server that lost its socket", () => {
     return { env: { TMUX: `${path},${pid},0`, TMUX_PANE: pane }, pid, path };
   }
 
-  async function withEnv<T>(env: Record<string, string>, run: () => Promise<T>): Promise<T> {
+  async function withEnv<T>(
+    env: Record<string, string>,
+    run: () => Promise<T>,
+  ): Promise<T> {
     const saved = { TMUX: process.env.TMUX, TMUX_PANE: process.env.TMUX_PANE };
     Object.assign(process.env, env);
     try {
       return await run();
     } finally {
-      for (const [k, v] of Object.entries(saved))
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
+      }
     }
   }
 
@@ -340,9 +455,23 @@ describe.skipIf(!hasTmux)("a server that lost its socket", () => {
     const s = server("lost");
     const host = rikerOnLostServer(s);
     // The second server, as the engine's new-session made it.
-    Bun.spawnSync(["tmux", "-L", s, "-f", "/dev/null", "new-session", "-d", "-s", "agents", "cat"], {
-      env: { ...process.env, TMUX: "" },
-    });
+    Bun.spawnSync(
+      [
+        "tmux",
+        "-L",
+        s,
+        "-f",
+        "/dev/null",
+        "new-session",
+        "-d",
+        "-s",
+        "agents",
+        "cat",
+      ],
+      {
+        env: { ...process.env, TMUX: "" },
+      },
+    );
     expect(Number(tmux(s, "display", "-p", "#{pid}"))).not.toBe(host.pid);
     const mux = new TmuxMux(s);
     const seen = await withEnv(host.env, async () => ({
@@ -360,7 +489,9 @@ describe.skipIf(!hasTmux)("a server that lost its socket", () => {
     const state = await withEnv(host.env, () => mux.state());
     expect(state.sessions.map((x) => x.name).sort()).toEqual(["proj", "riker"]);
     expect(Number(tmux(s, "display", "-p", "#{pid}"))).toBe(host.pid);
-    expect(await withEnv(host.env, () => mux.hostServer())).toMatchObject({ at: "here" });
+    expect(await withEnv(host.env, () => mux.hostServer())).toMatchObject({
+      at: "here",
+    });
   });
 
   test("a server not Riker's own is left alone", async () => {
@@ -369,7 +500,9 @@ describe.skipIf(!hasTmux)("a server that lost its socket", () => {
     const mux = new TmuxMux(s);
     const state = await withEnv({ TMUX: "", TMUX_PANE: "" }, () => mux.state());
     expect(state.sessions).toEqual([]);
-    expect(await withEnv({ TMUX: "", TMUX_PANE: "" }, () => mux.hostServer())).toEqual({ at: "none" });
+    expect(
+      await withEnv({ TMUX: "", TMUX_PANE: "" }, () => mux.hostServer()),
+    ).toEqual({ at: "none" });
     expect(host.pid).toBeGreaterThan(0);
   });
 });
@@ -392,7 +525,11 @@ describe.skipIf(!hasTmux)("paneInfo", () => {
 // pins viewerMayHang to the tmux the tests run on, either way round.
 describe.skipIf(!hasTmux)("viewer beside a terminal of another size", () => {
   // null when tmux did not answer in time: a hung server never does.
-  function within(socket: string, ms: number, ...args: string[]): string | null {
+  function within(
+    socket: string,
+    ms: number,
+    ...args: string[]
+  ): string | null {
     const run = Bun.spawnSync(["tmux", "-L", socket, ...args], {
       env: { ...process.env, TMUX: "" },
       timeout: ms,
@@ -414,25 +551,69 @@ describe.skipIf(!hasTmux)("viewer beside a terminal of another size", () => {
     const version = await mux.version();
 
     // Your terminal on the project, then Riker's viewer at the sizes that hung.
-    const attach = ["env", "-u", "TMUX", "tmux", "-L", s, "attach", "-t", "proj"];
+    const attach = [
+      "env",
+      "-u",
+      "TMUX",
+      "tmux",
+      "-L",
+      s,
+      "attach",
+      "-t",
+      "proj",
+    ];
     const quote = (argv: string[]) =>
       argv.map((a) => `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
-    tmux(host, "new-session", "-d", "-x", "115", "-y", "51", "-s", "you", quote(attach));
-    await until(() => (within(s, 1000, "list-clients") ?? "").split("\n").length === 1);
+    tmux(
+      host,
+      "new-session",
+      "-d",
+      "-x",
+      "115",
+      "-y",
+      "51",
+      "-s",
+      "you",
+      quote(attach),
+    );
+    await until(
+      () => (within(s, 1000, "list-clients") ?? "").split("\n").length === 1,
+    );
     const viewer = mux.viewerArgv("riker-view-test", projId, windowId);
-    tmux(host, "new-session", "-d", "-x", "68", "-y", "48", "-s", "riker", quote(viewer));
+    tmux(
+      host,
+      "new-session",
+      "-d",
+      "-x",
+      "68",
+      "-y",
+      "48",
+      "-s",
+      "riker",
+      quote(viewer),
+    );
     await Bun.sleep(1500);
 
-    const answered = within(s, 2000, "list-clients", "-F", "#{client_width}x#{client_height}");
+    const answered = within(
+      s,
+      2000,
+      "list-clients",
+      "-F",
+      "#{client_width}x#{client_height}",
+    );
     try {
       expect({ version, hung: answered === null }).toEqual({
         version,
         hung: viewerMayHang(version),
       });
-      if (answered !== null) expect(answered.split("\n").sort()).toEqual(["115x51", "68x48"]);
+      if (answered !== null) {
+        expect(answered.split("\n").sort()).toEqual(["115x51", "68x48"]);
+      }
     } finally {
       // kill-server needs the server to answer; a hung one has to be killed.
-      if (answered === null) process.kill(serverPid, "SIGKILL");
+      if (answered === null) {
+        process.kill(serverPid, "SIGKILL");
+      }
     }
   }, 20_000);
 });
@@ -449,9 +630,13 @@ describe.skipIf(!hasTmux)("long text", () => {
       title: "Review #12",
       kind: "coding",
       channel: "github",
-      summary: "+ a changed line of the pull request under review\n".repeat(2000),
+      summary: "+ a changed line of the pull request under review\n".repeat(
+        2000,
+      ),
     });
-    const launch = codingLaunch(config(), task, { note: "look at the parser first ".repeat(400) });
+    const launch = codingLaunch(config(), task, {
+      note: "look at the parser first ".repeat(400),
+    });
     const mux = new TmuxMux(s);
     // Same command line, with a program that exits instead of claude.
     const window = await mux.newWindow({
@@ -469,7 +654,14 @@ describe.skipIf(!hasTmux)("long text", () => {
     const out = `${tmpdir()}/riker-paste-${process.pid}`;
     rmSync(out, { force: true });
     // Raw, so the line is not cut at the terminal's canonical limit.
-    tmux(s, "new-session", "-d", "-s", "proj", `stty raw -echo; head -c 60001 > ${out}`);
+    tmux(
+      s,
+      "new-session",
+      "-d",
+      "-s",
+      "proj",
+      `stty raw -echo; head -c 60001 > ${out}`,
+    );
     const windowId = tmux(s, "display", "-p", "-t", "proj:", "#{window_id}");
     const text = "b".repeat(60000);
     await new TmuxMux(s).sendLine(windowId, text);

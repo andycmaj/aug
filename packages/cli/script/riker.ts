@@ -34,13 +34,19 @@ for (;;) {
     { stdio: ["inherit", "inherit", "inherit"] },
   );
   const code = await proc.exited;
-  if (code !== RESTART_CODE) process.exit(code);
+  if (code !== RESTART_CODE) {
+    process.exit(code);
+  }
   const now = Date.now();
   recent = [...recent.filter((t) => now - t < WINDOW_MS), now];
   if (recent.length > MAX_RESTARTS) {
-    console.error(`riker: restarted ${MAX_RESTARTS} times in a minute; giving up (see ~/.riker/riker.log)`);
+    console.error(
+      `riker: restarted ${MAX_RESTARTS} times in a minute; giving up (see ~/.riker/riker.log)`,
+    );
     process.exit(code);
   }
-  console.error("riker: restarting after a fatal UI error (see ~/.riker/riker.log)");
+  console.error(
+    "riker: restarting after a fatal UI error (see ~/.riker/riker.log)",
+  );
   await Bun.sleep(1000);
 }

@@ -19,11 +19,15 @@ export type GithubComment = {
 
 // Sent through the plugin's client, so a Send waits out a rate limit with
 // the rest of Riker's calls.
-export const githubComment = (client: GithubClient): DraftKind<GithubComment> => ({
+export const githubComment = (
+  client: GithubClient,
+): DraftKind<GithubComment> => ({
   type: "github_comment",
   build(message, answer) {
     const meta = messageMeta(message);
-    if (meta.channel !== "github" || !meta.repo || !meta.number) return null;
+    if (meta.channel !== "github" || !meta.repo || !meta.number) {
+      return null;
+    }
     const isPr = meta.type === "PullRequest";
     const close =
       answer.kind === "close_issue" && !isPr
@@ -33,7 +37,13 @@ export const githubComment = (client: GithubClient): DraftKind<GithubComment> =>
           : answer.kind === "approve_pr" && isPr
             ? ("approve" as const)
             : undefined;
-    return { type: "github_comment", repo: meta.repo, number: meta.number, body: answer.text, close };
+    return {
+      type: "github_comment",
+      repo: meta.repo,
+      number: meta.number,
+      body: answer.text,
+      close,
+    };
   },
   describe(action) {
     const what =

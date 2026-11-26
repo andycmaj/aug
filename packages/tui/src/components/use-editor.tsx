@@ -6,7 +6,12 @@ import { useFocus } from "@andycmaj/opentui-app";
 import { useToast } from "../context/toast";
 import { useRiker, ViewMode } from "../context/riker";
 import { useTerminals } from "../context/terminals";
-import { draftFile, readDraft, removeDraft, writeDraft } from "@riker/core/drafts";
+import {
+  draftFile,
+  readDraft,
+  removeDraft,
+  writeDraft,
+} from "@riker/core/drafts";
 import { taskRef } from "@riker/core/rows";
 import type { TaskRow } from "@riker/core/types";
 
@@ -46,43 +51,60 @@ export function useEditor() {
 
   function editDraft(task: TaskRow): false | void {
     const pending = riker.pendingAction(task.id);
-    if (!pending) return false;
+    if (!pending) {
+      return false;
+    }
     const ref = taskRef(task.id);
     const file = draftFile(ref);
     writeDraft(file, desk.drafts.text(pending.action));
     openEditor(file, `draft for ${ref}`, () => {
       const text = readDraft(file);
-      if (text && desk.editDraft(task.id, text)) showToast("Draft updated");
+      if (text && desk.editDraft(task.id, text)) {
+        showToast("Draft updated");
+      }
     });
   }
 
   // The brief in $EDITOR, while the agent has not started from it yet.
   function editBrief(task: TaskRow): false | void {
-    if (!desk.briefEditable(task.id)) return false;
+    if (!desk.briefEditable(task.id)) {
+      return false;
+    }
     const ref = taskRef(task.id);
     const file = draftFile(ref, "brief");
     writeDraft(file, task.summary ? `${task.summary}\n` : "");
     openEditor(file, `brief for ${ref}`, () => {
       const text = readDraft(file)?.trim();
       removeDraft(file);
-      if (text === undefined || text === task.summary.trim()) return;
-      if (desk.editBrief(task.id, text)) showToast(`${ref}: brief updated`);
-      else if (!text) showToast("An empty brief was not saved", 3000, "error");
+      if (text === undefined || text === task.summary.trim()) {
+        return;
+      }
+      if (desk.editBrief(task.id, text)) {
+        showToast(`${ref}: brief updated`);
+      } else if (!text) {
+        showToast("An empty brief was not saved", 3000, "error");
+      }
     });
   }
 
   // A project's brief, goals and docs in one file.
   function editProject(projectId: number): false | void {
     const text = desk.projectDoc(projectId);
-    if (text === null) return false;
+    if (text === null) {
+      return false;
+    }
     const file = draftFile(`project-${projectId}`);
     writeDraft(file, text);
     openEditor(file, "project brief", () => {
       const next = readDraft(file);
       removeDraft(file);
-      if (next === null) return;
+      if (next === null) {
+        return;
+      }
       const said = desk.editProject(projectId, next);
-      if (said) showToast(said);
+      if (said) {
+        showToast(said);
+      }
     });
   }
 
@@ -103,8 +125,14 @@ export function useEditor() {
         return;
       }
       const said = desk.editStory(task.id, text);
-      if (said.ok) removeDraft(file);
-      showToast(said.ok ? said.text : `${said.text} (kept in ${file})`, said.ok ? 3000 : 8000, said.ok ? "info" : "error");
+      if (said.ok) {
+        removeDraft(file);
+      }
+      showToast(
+        said.ok ? said.text : `${said.text} (kept in ${file})`,
+        said.ok ? 3000 : 8000,
+        said.ok ? "info" : "error",
+      );
     });
   }
 
@@ -113,7 +141,9 @@ export function useEditor() {
   // the same lines keeps its copy and says where.
   function editJournal(projectId: number): false | void {
     const found = desk.journal(projectId);
-    if (!found) return false;
+    if (!found) {
+      return false;
+    }
     const file = draftFile(`project-${projectId}`, "journal");
     writeDraft(file, found.text);
     openEditor(file, "journal", (code) => {
@@ -123,8 +153,14 @@ export function useEditor() {
         return;
       }
       const said = desk.saveJournal(projectId, found.text, text);
-      if (said.ok) removeDraft(file);
-      showToast(said.ok ? said.text : `${said.text}; your copy is in ${file}`, said.ok ? 3000 : 10000, said.ok ? "info" : "error");
+      if (said.ok) {
+        removeDraft(file);
+      }
+      showToast(
+        said.ok ? said.text : `${said.text}; your copy is in ${file}`,
+        said.ok ? 3000 : 10000,
+        said.ok ? "info" : "error",
+      );
     });
   }
 

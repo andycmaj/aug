@@ -110,7 +110,9 @@ describe("lanes", () => {
               { hasPendingAction },
               today,
             );
-            if (col) expect(shown.has(col)).toBe(true);
+            if (col) {
+              expect(shown.has(col)).toBe(true);
+            }
           }
         }
       }
@@ -177,7 +179,9 @@ describe("rail", () => {
     expect(
       rail[0].items.map((i) => (i.type === "task" ? i.task.title : "")),
     ).toEqual(["finished", "early", "watched", "late"]);
-    expect(rail[1].items.map((i) => i.key)).toEqual([`t${watched.id}@watching`]);
+    expect(rail[1].items.map((i) => i.key)).toEqual([
+      `t${watched.id}@watching`,
+    ]);
     expect(
       flattenRail(rail).some((i) => i.type === "task" && i.task.id === gone.id),
     ).toBe(false);
@@ -252,8 +256,18 @@ describe("rail", () => {
       channel: "github",
       createdAt: at(4),
     });
-    store.addTaskLink(tagged.id, "https://github.com/northwind/web/pull/91", "the pull request to review", REVIEW_LINK_BY);
-    store.addTaskLink(early.id, "https://github.com/northwind/web/pull/92", "the pull request to review", REVIEW_LINK_BY);
+    store.addTaskLink(
+      tagged.id,
+      "https://github.com/northwind/web/pull/91",
+      "the pull request to review",
+      REVIEW_LINK_BY,
+    );
+    store.addTaskLink(
+      early.id,
+      "https://github.com/northwind/web/pull/92",
+      "the pull request to review",
+      REVIEW_LINK_BY,
+    );
     const reviews = store.tasksFromReviewRequests(REVIEW_LINK_BY);
     expect([...reviews].sort()).toEqual([tagged.id, early.id].sort());
     // Asked again later: it has waited since then, so it goes last.
@@ -266,7 +280,9 @@ describe("rail", () => {
       now: new Date(at(12)),
     });
     const section = rail.find((s) => s.section === "reviews")!;
-    const rows = section.items.flatMap((x) => (x.type === "task" ? [[x.task.title, x.at]] : []));
+    const rows = section.items.flatMap((x) =>
+      x.type === "task" ? [[x.task.title, x.at]] : [],
+    );
     expect(rows).toEqual([
       ["tagged on web#91", at(5)],
       ["asked on web#92", at(9)],
@@ -324,7 +340,9 @@ describe("rail", () => {
     routeTimer(fired[0]!);
     expect(store.getTask(t.id)!.status).toBe("open");
     expect(store.getTask(t.id)!.remind_at).toBeNull();
-    expect(store.turnsForTask(t.id).at(-1)!.body).toBe("You asked to be reminded about this today");
+    expect(store.turnsForTask(t.id).at(-1)!.body).toBe(
+      "You asked to be reminded about this today",
+    );
     expect(fireDue(new Date(at(3)))).toEqual([]);
   });
 });
@@ -344,14 +362,46 @@ describe("projects on the rail", () => {
   }
 
   test("each active project is a row in Tasks with its open tasks under it, then tasks in no project", () => {
-    const api = store.createProject({ name: "api", tmuxSession: "api", repos: ["acme/api"] });
+    const api = store.createProject({
+      name: "api",
+      tmuxSession: "api",
+      repos: ["acme/api"],
+    });
     const old = store.createProject({ name: "old", tmuxSession: "old" });
     store.archiveProject(old.id);
-    const a = store.createTask({ title: "a", kind: Kind.coding, channel: "owner", projectId: api.id, createdAt: at(2) });
-    store.createTask({ title: "b", kind: Kind.coding, channel: "owner", projectId: api.id, createdAt: at(1) });
-    const c = store.createTask({ title: "c", kind: Kind.coding, channel: "owner", projectId: api.id });
-    store.createTask({ title: "loose", kind: Kind.task, channel: "owner", createdAt: at(0) });
-    store.createTask({ title: "archived's", kind: Kind.coding, channel: "owner", projectId: old.id, createdAt: at(3) });
+    const a = store.createTask({
+      title: "a",
+      kind: Kind.coding,
+      channel: "owner",
+      projectId: api.id,
+      createdAt: at(2),
+    });
+    store.createTask({
+      title: "b",
+      kind: Kind.coding,
+      channel: "owner",
+      projectId: api.id,
+      createdAt: at(1),
+    });
+    const c = store.createTask({
+      title: "c",
+      kind: Kind.coding,
+      channel: "owner",
+      projectId: api.id,
+    });
+    store.createTask({
+      title: "loose",
+      kind: Kind.task,
+      channel: "owner",
+      createdAt: at(0),
+    });
+    store.createTask({
+      title: "archived's",
+      kind: Kind.coding,
+      channel: "owner",
+      projectId: old.id,
+      createdAt: at(3),
+    });
     store.updateTask(a.id, { agent_state: AgentState.working });
     taskClosed(c.id);
 
@@ -366,14 +416,31 @@ describe("projects on the rail", () => {
       repos: ["acme/api"],
     });
     expect(
-      rows.map((i) => (i.type === "task" ? `${i.task.title}:${i.group ?? "-"}` : i.key)),
-    ).toEqual([`p${api.id}`, `b:${api.id}`, `a:${api.id}`, "loose:-", "archived's:-"]);
+      rows.map((i) =>
+        i.type === "task" ? `${i.task.title}:${i.group ?? "-"}` : i.key,
+      ),
+    ).toEqual([
+      `p${api.id}`,
+      `b:${api.id}`,
+      `a:${api.id}`,
+      "loose:-",
+      "archived's:-",
+    ]);
     expect(rail[1].count).toBe(4);
   });
 
   test("the interview's project of one is not a row: its task is under System", () => {
-    const solo = store.createProject({ name: "docs", tmuxSession: "docs", solo: true });
-    const t = store.createTask({ title: "interview", kind: Kind.system, channel: "owner", projectId: solo.id });
+    const solo = store.createProject({
+      name: "docs",
+      tmuxSession: "docs",
+      solo: true,
+    });
+    const t = store.createTask({
+      title: "interview",
+      kind: Kind.system,
+      channel: "owner",
+      projectId: solo.id,
+    });
     const keys = flattenRail(railNow()).map((i) => i.key);
     expect(keys).not.toContain(`p${solo.id}`);
     expect(keys).toContain(`t${t.id}`);
@@ -387,8 +454,17 @@ describe("projects on the rail", () => {
 
   test("a folded project keeps its row and hides its tasks; the count does not change", () => {
     const api = store.createProject({ name: "api", tmuxSession: "api" });
-    const t = store.createTask({ title: "a", kind: Kind.coding, channel: "owner", projectId: api.id });
-    const loose = store.createTask({ title: "loose", kind: Kind.task, channel: "owner" });
+    const t = store.createTask({
+      title: "a",
+      kind: Kind.coding,
+      channel: "owner",
+      projectId: api.id,
+    });
+    const loose = store.createTask({
+      title: "loose",
+      kind: Kind.task,
+      channel: "owner",
+    });
     const folded = foldRail(railNow(), new Set([api.id]));
     const keys = flattenRail(folded).map((i) => i.key);
     expect(keys).toContain(`p${api.id}`);
@@ -419,10 +495,28 @@ describe("the rail's status filter", () => {
   function setup() {
     const api = store.createProject({ name: "api", tmuxSession: "api" });
     const web = store.createProject({ name: "web", tmuxSession: "web" });
-    const working = store.createTask({ title: "working", kind: Kind.coding, channel: "owner", projectId: api.id });
-    const asks = store.createTask({ title: "asks", kind: Kind.coding, channel: "owner", projectId: web.id });
-    const saved = store.createTask({ title: "saved", kind: Kind.coding, channel: "owner" });
-    const mine = store.createTask({ title: "mine", kind: Kind.task, channel: "owner" });
+    const working = store.createTask({
+      title: "working",
+      kind: Kind.coding,
+      channel: "owner",
+      projectId: api.id,
+    });
+    const asks = store.createTask({
+      title: "asks",
+      kind: Kind.coding,
+      channel: "owner",
+      projectId: web.id,
+    });
+    const saved = store.createTask({
+      title: "saved",
+      kind: Kind.coding,
+      channel: "owner",
+    });
+    const mine = store.createTask({
+      title: "mine",
+      kind: Kind.task,
+      channel: "owner",
+    });
     store.updateTask(working.id, { agent_state: AgentState.working });
     store.updateTask(asks.id, { agent_state: AgentState.waiting });
     store.updateTask(saved.id, { agent_state: AgentState.stopped });
@@ -432,8 +526,9 @@ describe("the rail's status filter", () => {
   test("every lane but done has a pill, and each lane only one", () => {
     const lanes = RAIL_FILTERS.flatMap((f) => f.lanes);
     expect(new Set(lanes).size).toBe(lanes.length);
-    for (const lane of Object.values(Lane))
+    for (const lane of Object.values(Lane)) {
       expect(filterOf(lane) === null).toBe(lane === Lane.done);
+    }
   });
 
   test("no filter shows everything", () => {
@@ -446,7 +541,11 @@ describe("the rail's status filter", () => {
     const { api, web, working, saved } = setup();
     const keys = (active: RailFilter[]) =>
       flattenRail(filterRail(railNow(), new Set(active))).map((i) => i.key);
-    expect(keys(["working"])).toEqual([`t${store.homeTask().id}`, `p${api.id}`, `t${working.id}`]);
+    expect(keys(["working"])).toEqual([
+      `t${store.homeTask().id}`,
+      `p${api.id}`,
+      `t${working.id}`,
+    ]);
     expect(keys(["working", "stopped"])).toEqual([
       `t${store.homeTask().id}`,
       `p${api.id}`,
@@ -478,8 +577,10 @@ describe("the rail's status filter", () => {
 
   test("a section's count is what the filter left in it", () => {
     setup();
-    const tasks = filterRail(railNow(), new Set<RailFilter>(["open", "stopped"]))
-      .find((s) => s.section === "tasks")!;
+    const tasks = filterRail(
+      railNow(),
+      new Set<RailFilter>(["open", "stopped"]),
+    ).find((s) => s.section === "tasks")!;
     expect(tasks.count).toBe(2);
   });
 
@@ -509,7 +610,9 @@ describe("the rail's status filter", () => {
     } while (active.size > 0);
     expect(seen).toEqual(["asks", "working", "stopped", "open", "all"]);
     // From a mix of pills, f starts over at one.
-    expect([...cycleFilter(new Set<RailFilter>(["open", "working"]), counts)]).toEqual(["asks"]);
+    expect([
+      ...cycleFilter(new Set<RailFilter>(["open", "working"]), counts),
+    ]).toEqual(["asks"]);
   });
 });
 
@@ -535,13 +638,19 @@ describe("status model (docs/rail-status-design.md)", () => {
     expect(lane()).toBe(Lane.working);
     store.updateTask(t.id, { agent_state: AgentState.waiting });
     expect(lane({ hasPendingAction: true })).toBe(Lane.waiting);
-    store.updateTask(t.id, { agent_state: AgentState.stopped, merged_at: null });
+    store.updateTask(t.id, {
+      agent_state: AgentState.stopped,
+      merged_at: null,
+    });
     expect(lane()).toBe(Lane.stopped);
   });
 
   test("every lane has a pill, or is left out on purpose", () => {
-    for (const lane of Object.values(Lane))
-      expect(filterOf(lane) !== null || UNFILTERED_LANES.includes(lane)).toBe(true);
+    for (const lane of Object.values(Lane)) {
+      expect(filterOf(lane) !== null || UNFILTERED_LANES.includes(lane)).toBe(
+        true,
+      );
+    }
     expect(RAIL_FILTERS.length).toBeLessThanOrEqual(9);
   });
 
@@ -570,7 +679,11 @@ describe("status model (docs/rail-status-design.md)", () => {
     const c = coding("c");
     taskClosed(b.id);
     const rail = railWith([c.id, b.id]);
-    expect(rail.map((s) => s.section).slice(0, 3)).toEqual(["home", "wins", "tasks"]);
+    expect(rail.map((s) => s.section).slice(0, 3)).toEqual([
+      "home",
+      "wins",
+      "tasks",
+    ]);
     const wins = rail.find((s) => s.section === "wins")!;
     // A done Win has no row of its own: its row under Wins is the one.
     expect(wins.items.map((i) => i.key)).toEqual([`t${c.id}@wins`, `t${b.id}`]);
@@ -600,10 +713,17 @@ describe("status model (docs/rail-status-design.md)", () => {
         [gone.id, at(7)],
       ]),
     });
-    expect(rail.map((s) => s.section).slice(0, 3)).toEqual(["home", "due", "wins"]);
+    expect(rail.map((s) => s.section).slice(0, 3)).toEqual([
+      "home",
+      "due",
+      "wins",
+    ]);
     const due = rail.find((s) => s.section === "due")!;
     // Oldest first, like every heading; a closed task does not ring.
-    expect(due.items.map((i) => i.key)).toEqual([`t${a.id}@due`, `t${b.id}@due`]);
+    expect(due.items.map((i) => i.key)).toEqual([
+      `t${a.id}@due`,
+      `t${b.id}@due`,
+    ]);
     expect(due.items.every((i) => i.type === "task" && i.copy)).toBe(true);
     expect(due.count).toBe(2);
     // It stays where it sits too.

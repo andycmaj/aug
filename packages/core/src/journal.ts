@@ -13,7 +13,13 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import type { RikerConfig } from "./config";
-import { digestLinks, digestWanted, journalSwitch, lines, storySwitch } from "./digests";
+import {
+  digestLinks,
+  digestWanted,
+  journalSwitch,
+  lines,
+  storySwitch,
+} from "./digests";
 import { watchSession } from "./digest-watcher";
 import { EndReason } from "./lifecycle";
 import { logger } from "./log";
@@ -62,7 +68,9 @@ export function slug(name: string): string {
 export function projectDir(project: ProjectRow): string {
   const key = `journal.dir.${project.id}`;
   const known = store.kvGet(key);
-  if (known) return known;
+  if (known) {
+    return known;
+  }
   const dir = join(paths.home(), "projects", slug(project.name));
   store.kvSet(key, dir);
   return dir;
@@ -98,8 +106,12 @@ const OUTCOME_WORDS: Record<string, string> = {
 
 function list(label: string, field: string): string | null {
   const items = lines(field);
-  if (!items.length) return null;
-  if (items.length === 1 && label !== "Learned" && label !== "Next") return `${label}: ${items[0]}`;
+  if (!items.length) {
+    return null;
+  }
+  if (items.length === 1 && label !== "Learned" && label !== "Next") {
+    return `${label}: ${items[0]}`;
+  }
   return `${label}:\n${items.map((i) => `- ${i}`).join("\n")}`;
 }
 
@@ -108,7 +120,9 @@ export function renderEntry(task: TaskRow, d: DigestRow): string {
   const linkParts = [
     links.pr ? `PR ${links.pr}` : null,
     links.branch ? `branch ${links.branch}` : null,
-    ...(links.docs ?? []).map((l) => `doc ${l.title ? `${l.title} ` : ""}${l.url}`),
+    ...(links.docs ?? []).map(
+      (l) => `doc ${l.title ? `${l.title} ` : ""}${l.url}`,
+    ),
   ].filter(Boolean);
   const parts = [
     `${stamp(d.at)}  ${store.taskRef(task.id)}  ${task.title}  (${d.by === "agent" ? "agent" : "written up by the watcher"})\nOutcome: ${OUTCOME_WORDS[d.outcome] ?? d.outcome}`,
@@ -123,19 +137,26 @@ export function renderEntry(task: TaskRow, d: DigestRow): string {
   return parts.filter(Boolean).join("\n\n");
 }
 
-const EVENT_WORDS: Partial<Record<TaskEventKind, (e: TaskEventRow) => string>> = {
-  [TaskEventKind.created]: () => "made",
-  [TaskEventKind.done]: (e) => (e.detail ? `done (closed by ${e.detail})` : "done"),
-  [TaskEventKind.dropped]: () => "dropped",
-  [TaskEventKind.later]: () => "put away for later",
-  [TaskEventKind.reopened]: () => "reopened",
-  [TaskEventKind.merged]: () => "merged",
-  [TaskEventKind.unmerged]: () => "merge undone",
-  [TaskEventKind.finished]: (e) => `agent finished${e.detail ? `: ${e.detail}` : ""}`,
-  [TaskEventKind.ended]: () => "session ended",
-};
+const EVENT_WORDS: Partial<Record<TaskEventKind, (e: TaskEventRow) => string>> =
+  {
+    [TaskEventKind.created]: () => "made",
+    [TaskEventKind.done]: (e) =>
+      e.detail ? `done (closed by ${e.detail})` : "done",
+    [TaskEventKind.dropped]: () => "dropped",
+    [TaskEventKind.later]: () => "put away for later",
+    [TaskEventKind.reopened]: () => "reopened",
+    [TaskEventKind.merged]: () => "merged",
+    [TaskEventKind.unmerged]: () => "merge undone",
+    [TaskEventKind.finished]: (e) =>
+      `agent finished${e.detail ? `: ${e.detail}` : ""}`,
+    [TaskEventKind.ended]: () => "session ended",
+  };
 
-export function renderLine(task: TaskRow, e: TaskEventRow, words?: string): string {
+export function renderLine(
+  task: TaskRow,
+  e: TaskEventRow,
+  words?: string,
+): string {
   const said = words ?? EVENT_WORDS[e.kind]?.(e) ?? e.kind;
   return `${stamp(e.at)}  ${store.taskRef(task.id)}  ${said}  (${task.title})`;
 }
@@ -148,7 +169,9 @@ export function statusLines(project: ProjectRow): string[] {
   return open.map((t) => {
     const d = store.latestDigest(t.id);
     const ref = store.taskRef(t.id);
-    if (!d) return `${ref}  ${t.title}: no session written up yet`;
+    if (!d) {
+      return `${ref}  ${t.title}: no session written up yet`;
+    }
     const next = lines(d.next)[0];
     return `${ref}  ${t.title}: ${OUTCOME_WORDS[d.outcome] ?? d.outcome}${next ? `; next: ${next}` : ""}`;
   });
@@ -158,16 +181,28 @@ export function statusLines(project: ProjectRow): string[] {
 // in the status block, one line.
 export function standingLine(project: ProjectRow): string[] {
   const text = lines(project.standing).join("; ");
-  return text ? [`Standing (${stamp(project.standing_at ?? project.updated_at)}): ${text}`] : [];
+  return text
+    ? [
+        `Standing (${stamp(project.standing_at ?? project.updated_at)}): ${text}`,
+      ]
+    : [];
 }
 
 // ── placing it in the file ──────────────────────────────────────────────
 
-function between(text: string, begin: string, end: string): { start: number; stop: number } | null {
+function between(
+  text: string,
+  begin: string,
+  end: string,
+): { start: number; stop: number } | null {
   const a = text.indexOf(begin);
-  if (a < 0) return null;
+  if (a < 0) {
+    return null;
+  }
   const b = text.indexOf(end, a + begin.length);
-  if (b < 0) return null;
+  if (b < 0) {
+    return null;
+  }
   return { start: a + begin.length, stop: b };
 }
 
@@ -181,19 +216,29 @@ export interface Placed {
 
 // Split a journal block into its entries, each with its month; text before
 // the first entry marker (the owner's) stays first.
-function entriesOf(block: string): { lead: string; entries: { month: string; text: string }[] } {
+function entriesOf(block: string): {
+  lead: string;
+  entries: { month: string; text: string }[];
+} {
   const entries: { month: string; text: string }[] = [];
   const leadLines: string[] = [];
   let cur: { month: string; lines: string[] } | null = null;
   for (const line of block.split("\n")) {
     const m = line.trim().match(ENTRY_LINE);
     if (m) {
-      if (cur) entries.push({ month: cur.month, text: cur.lines.join("\n") });
+      if (cur) {
+        entries.push({ month: cur.month, text: cur.lines.join("\n") });
+      }
       cur = { month: m[1], lines: [line] };
-    } else if (cur) cur.lines.push(line);
-    else leadLines.push(line);
+    } else if (cur) {
+      cur.lines.push(line);
+    } else {
+      leadLines.push(line);
+    }
   }
-  if (cur) entries.push({ month: cur.month, text: cur.lines.join("\n") });
+  if (cur) {
+    entries.push({ month: cur.month, text: cur.lines.join("\n") });
+  }
   return { lead: leadLines.join("\n"), entries };
 }
 
@@ -210,14 +255,21 @@ function joinBlock(lead: string, entries: string[]): string {
 // months rolled out. Text outside the markers is left as it was.
 export function placeEntry(
   file: string,
-  opts: { title: string; entry: string; month: string; status: string[] | null },
+  opts: {
+    title: string;
+    entry: string;
+    month: string;
+    status: string[] | null;
+  },
 ): Placed {
   let text = file;
   let remarked = false;
   if (!between(text, MARK.begin, MARK.end)) {
     remarked = file.trim().length > 0;
     const head = file.trim() ? "" : `${opts.title}\n\n`;
-    const status = opts.status ? `${MARK.statusBegin}\n${MARK.statusEnd}\n\n` : "";
+    const status = opts.status
+      ? `${MARK.statusBegin}\n${MARK.statusEnd}\n\n`
+      : "";
     text = `${head}${status}${MARK.begin}\n${MARK.end}\n${file.trim() ? `\n${file}` : ""}`;
   }
   if (opts.status) {
@@ -227,7 +279,9 @@ export function placeEntry(
       text = `${text.slice(0, at)}${MARK.statusBegin}\n${MARK.statusEnd}\n\n${text.slice(at)}`;
       s = between(text, MARK.statusBegin, MARK.statusEnd)!;
     }
-    const body = opts.status.length ? `\nNow:\n${opts.status.map((l) => `- ${l}`).join("\n")}\n` : "\n";
+    const body = opts.status.length
+      ? `\nNow:\n${opts.status.map((l) => `- ${l}`).join("\n")}\n`
+      : "\n";
     text = `${text.slice(0, s.start)}${body}${text.slice(s.stop)}`;
   }
   const j = between(text, MARK.begin, MARK.end)!;
@@ -235,8 +289,11 @@ export function placeEntry(
   const rolled = new Map<string, string[]>();
   const kept: string[] = [];
   for (const e of entries) {
-    if (e.month === opts.month) kept.push(e.text);
-    else rolled.set(e.month, [...(rolled.get(e.month) ?? []), e.text]);
+    if (e.month === opts.month) {
+      kept.push(e.text);
+    } else {
+      rolled.set(e.month, [...(rolled.get(e.month) ?? []), e.text]);
+    }
   }
   const fresh = `${MARK.entry(opts.month)}\n${opts.entry}`;
   text = `${text.slice(0, j.start)}${joinBlock(lead, [fresh, ...kept])}${text.slice(j.stop)}`;
@@ -244,10 +301,15 @@ export function placeEntry(
 }
 
 // Entries rolled out of the journal, laid on top of a month's file.
-export function placeRolled(file: string, title: string, entries: string[]): string {
+export function placeRolled(
+  file: string,
+  title: string,
+  entries: string[],
+): string {
   let text = file;
-  if (!between(text, MARK.begin, MARK.end))
+  if (!between(text, MARK.begin, MARK.end)) {
     text = `${file.trim() ? `${file.trimEnd()}\n\n` : `${title}\n\n`}${MARK.begin}\n${MARK.end}\n`;
+  }
   const j = between(text, MARK.begin, MARK.end)!;
   const { lead, entries: had } = entriesOf(text.slice(j.start, j.stop));
   return `${text.slice(0, j.start)}${joinBlock(lead, [...entries, ...had.map((e) => e.text)])}${text.slice(j.stop)}`;
@@ -274,25 +336,41 @@ function writeAtomic(file: string, text: string): void {
 // The journal is a doc of its project, so every brief there names it.
 function register(project: ProjectRow, file: string): void {
   const url = `file://${file}`;
-  if (store.linksForProject(project.id).some((l) => l.url === url)) return;
+  if (store.linksForProject(project.id).some((l) => l.url === url)) {
+    return;
+  }
   store.addProjectLink(project.id, url, JOURNAL_LINK_TITLE, "riker");
 }
 
-export function writeJournal(project: ProjectRow, entry: string, at: string): string {
+export function writeJournal(
+  project: ProjectRow,
+  entry: string,
+  at: string,
+): string {
   const file = journalFile(project);
   const month = monthOf(at);
   const placed = placeEntry(readOr(file), {
     title: `${project.name}: journal`,
     entry,
     month,
-    status: [...standingLine(store.getProject(project.id) ?? project), ...statusLines(project)],
+    status: [
+      ...standingLine(store.getProject(project.id) ?? project),
+      ...statusLines(project),
+    ],
   });
   for (const [m, entries] of placed.rolled) {
     const archive = archiveFile(project, m);
-    writeAtomic(archive, placeRolled(readOr(archive), `${project.name}: journal, ${m}`, entries));
+    writeAtomic(
+      archive,
+      placeRolled(readOr(archive), `${project.name}: journal, ${m}`, entries),
+    );
   }
   writeAtomic(file, placed.text);
-  if (placed.remarked) log.info("journal markers were gone; put back at the top", { project: project.id });
+  if (placed.remarked) {
+    log.info("journal markers were gone; put back at the top", {
+      project: project.id,
+    });
+  }
   register(project, file);
   return file;
 }
@@ -304,7 +382,9 @@ const CURSOR = "journal.events";
 // A finished session's digest: the one `done` wrote just before the event.
 function digestFor(task: TaskRow, e: TaskEventRow): DigestRow | null {
   const d = store.latestDigest(task.id);
-  if (!d) return null;
+  if (!d) {
+    return null;
+  }
   const gap = Date.parse(e.at) - Date.parse(d.at);
   return gap >= -1000 && gap < 60_000 ? d : null;
 }
@@ -322,18 +402,30 @@ function doneSince(sessionId: string, e: TaskEventRow): boolean {
 // What one event adds: an entry, a line, or nothing.
 async function heard(config: RikerConfig, e: TaskEventRow): Promise<void> {
   const task = store.getTask(e.task_id);
-  if (!task) return;
+  if (!task) {
+    return;
+  }
   const project = task.project_id ? store.getProject(task.project_id) : null;
   const journal = journalSwitch(config, project).on && project !== null;
 
   if (e.kind === TaskEventKind.ended) {
     const session = e.detail ? store.getSession(e.detail) : null;
-    if (!session || session.end_reason === EndReason.restart) return;
-    if (doneSince(session.id, e)) return;
-    if (!digestWanted(config, task)) return;
+    if (!session || session.end_reason === EndReason.restart) {
+      return;
+    }
+    if (doneSince(session.id, e)) {
+      return;
+    }
+    if (!digestWanted(config, task)) {
+      return;
+    }
     const watched = await watchSession(config, task, session);
-    if (watched.digest && storySwitch(config, task).on) storyFromDigest(watched.digest);
-    if (!journal || !project) return;
+    if (watched.digest && storySwitch(config, task).on) {
+      storyFromDigest(watched.digest);
+    }
+    if (!journal || !project) {
+      return;
+    }
     writeJournal(
       project,
       watched.digest
@@ -343,13 +435,17 @@ async function heard(config: RikerConfig, e: TaskEventRow): Promise<void> {
     );
     return;
   }
-  if (!journal || !project) return;
+  if (!journal || !project) {
+    return;
+  }
   if (e.kind === TaskEventKind.finished) {
     const d = digestFor(task, e);
     writeJournal(project, d ? renderEntry(task, d) : renderLine(task, e), e.at);
     return;
   }
-  if (EVENT_WORDS[e.kind]) writeJournal(project, renderLine(task, e), e.at);
+  if (EVENT_WORDS[e.kind]) {
+    writeJournal(project, renderLine(task, e), e.at);
+  }
 }
 
 let running = false;
@@ -358,7 +454,9 @@ let running = false;
 // event: history writes nothing. One at a time, in order; a watcher call
 // in the middle holds the rest until it is back.
 export async function journalTick(config: RikerConfig): Promise<number> {
-  if (running) return 0;
+  if (running) {
+    return 0;
+  }
   running = true;
   try {
     const cursor = store.kvGet(CURSOR);
@@ -371,7 +469,11 @@ export async function journalTick(config: RikerConfig): Promise<number> {
       try {
         await heard(config, e);
       } catch (err) {
-        log.error("journal event failed", { event: e.id, task: e.task_id, err: err instanceof Error ? err.name : "error" });
+        log.error("journal event failed", {
+          event: e.id,
+          task: e.task_id,
+          err: err instanceof Error ? err.name : "error",
+        });
       }
       store.kvSet(CURSOR, String(e.id));
     }
@@ -398,19 +500,36 @@ export function journalMarkdown(file: string): string {
   const out: string[] = [];
   const nextText = (i: number) => src.slice(i + 1).find((l) => l.trim()) ?? "";
   src.forEach((line, i) => {
-    if (line === "Now:") out.push("## Now");
-    else if (STAMPED.test(line))
-      out.push(nextText(i).startsWith("Outcome:") ? `### ${line}` : `- ${line}`);
-    else if (!out.some((l) => l.trim()) && line.trim() && !line.startsWith("#")) out.push(`# ${line}`);
-    else out.push(line);
+    if (line === "Now:") {
+      out.push("## Now");
+    } else if (STAMPED.test(line)) {
+      out.push(
+        nextText(i).startsWith("Outcome:") ? `### ${line}` : `- ${line}`,
+      );
+    } else if (
+      !out.some((l) => l.trim()) &&
+      line.trim() &&
+      !line.startsWith("#")
+    ) {
+      out.push(`# ${line}`);
+    } else {
+      out.push(line);
+    }
   });
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return out
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 // The journal's file and what it says now, or null before its first entry.
-export function readJournal(project: ProjectRow): { file: string; text: string } | null {
+export function readJournal(
+  project: ProjectRow,
+): { file: string; text: string } | null {
   const file = journalFile(project);
-  if (!existsSync(file)) return null;
+  if (!existsSync(file)) {
+    return null;
+  }
   return { file, text: readOr(file) };
 }
 
@@ -427,12 +546,20 @@ export type JournalSave = (typeof JournalSave)[keyof typeof JournalSave];
 // The owner's edit, made on a copy of the file as it was at `base`. The
 // engine may have written an entry since; saving the copy whole would drop
 // it, so the edit goes over the file as it is now (git merge-file).
-export function saveJournalEdit(project: ProjectRow, base: string, edited: string): JournalSave {
-  if (edited === base) return JournalSave.unchanged;
+export function saveJournalEdit(
+  project: ProjectRow,
+  base: string,
+  edited: string,
+): JournalSave {
+  if (edited === base) {
+    return JournalSave.unchanged;
+  }
   const file = journalFile(project);
   const now = readOr(file);
   const merged = mergeText(edited, base, now);
-  if (merged === null) return JournalSave.conflict;
+  if (merged === null) {
+    return JournalSave.conflict;
+  }
   writeAtomic(file, merged);
   return now === base ? JournalSave.saved : JournalSave.merged;
 }

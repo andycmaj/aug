@@ -3,7 +3,12 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { db, openDb, TABLES, Table, tableVersions, useDb } from "../src/db";
-import { readModel, readTables, type ReadModel, type ReadName } from "../src/read-model";
+import {
+  readModel,
+  readTables,
+  type ReadModel,
+  type ReadName,
+} from "../src/read-model";
 import * as store from "../src/store";
 import {
   Kind,
@@ -22,7 +27,12 @@ import { freshHome } from "./support/helpers";
 beforeEach(() => freshHome());
 
 function task(title: string, extra: Partial<store.NewTask> = {}): TaskRow {
-  return store.createTask({ title, kind: Kind.general, channel: "owner", ...extra });
+  return store.createTask({
+    title,
+    kind: Kind.general,
+    channel: "owner",
+    ...extra,
+  });
 }
 
 function changedTables(before: Record<Table, number>): Table[] {
@@ -63,7 +73,9 @@ describe("table versions", () => {
     useDb(mine);
     const before = tableVersions();
     theirs
-      .query("INSERT INTO hub (topic, title, body, author, created_at) VALUES ('t', 't', 'b', 'agent', 'now')")
+      .query(
+        "INSERT INTO hub (topic, title, body, author, created_at) VALUES ('t', 't', 'b', 'agent', 'now')",
+      )
       .run();
     expect(changedTables(before)).toEqual([Table.knowledge]);
     mine.close();
@@ -74,7 +86,9 @@ describe("table versions", () => {
 describe("read model", () => {
   test("a read tracks its tables before it queries", () => {
     const tracked: Table[][] = [];
-    const reads = readModel((tables) => tracked.push([...tables]), { isLive: () => false });
+    const reads = readModel((tables) => tracked.push([...tables]), {
+      isLive: () => false,
+    });
     const t = task("one");
     reads.turns(t.id);
     reads.task(t.id);
@@ -86,7 +100,11 @@ describe("read model", () => {
   test("every read declares the tables its queries touch", () => {
     const project = store.createProject({ name: "p", tmuxSession: "p" });
     const goal = store.addGoal(project.id, "ship");
-    const plain = task("plain", { projectId: project.id, threadKey: "slack:C1:1", goalId: goal.id });
+    const plain = task("plain", {
+      projectId: project.id,
+      threadKey: "slack:C1:1",
+      goalId: goal.id,
+    });
     const withPr = task("pr", {
       projectId: project.id,
       threadKey: "github:o/r#7",
@@ -107,15 +125,37 @@ describe("read model", () => {
     })!;
     store.fileMessage(message.id, Verdict.task, "test", withPr.id);
     store.addTurn({ taskId: plain.id, role: TurnRole.agent, body: "hi" });
-    store.createSession({ id: "s1", taskId: plain.id, kind: SessionKind.tmux, cwd: "/", startedBy: "riker" });
+    store.createSession({
+      id: "s1",
+      taskId: plain.id,
+      kind: SessionKind.tmux,
+      cwd: "/",
+      startedBy: "riker",
+    });
     store.addTaskLink(plain.id, "https://example.com", null, "you");
     store.addProjectLink(project.id, "https://example.com/doc", null, "you");
-    store.addProposal({ taskId: plain.id, doc: "PERSONA.md", source: ProposalSource.evolve, base: "", proposed: "x" });
+    store.addProposal({
+      taskId: plain.id,
+      doc: "PERSONA.md",
+      source: ProposalSource.evolve,
+      base: "",
+      proposed: "x",
+    });
     store.addIdea("idea", "body", plain.id);
     store.addNote("you", NoteLabel.note, "hi");
     store.addKnowledge("t", "t", "b", "you");
     store.addWin(localDay(new Date()), plain.id);
-    store.addSpend({ day: localDay(new Date()), taskId: plain.id, role: SpendRole.general, model: "sonnet", costUsd: 0.1, input: 1, output: 1, cacheRead: 0, cacheWrite: 0 });
+    store.addSpend({
+      day: localDay(new Date()),
+      taskId: plain.id,
+      role: SpendRole.general,
+      model: "sonnet",
+      costUsd: 0.1,
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
 
     const queried: string[] = [];
     const d = db();
@@ -168,11 +208,20 @@ describe("read model", () => {
       spendOn: (r) => r.spendOn("2026-11-15"),
       taskSpend: (r) => r.taskSpend(plain.id),
       spendReport: (r) => r.spendReport(DEFAULT_CONFIG, new Date()),
-      winsDay: (r) => [r.winsDay(localDay(new Date()), new Date()), r.winsDay("2026-11-15", new Date())],
-      winDetail: (r) => [r.winDetail(plain.id, localDay(new Date())), r.winDetail(withPr.id, localDay(new Date()))],
+      winsDay: (r) => [
+        r.winsDay(localDay(new Date()), new Date()),
+        r.winsDay("2026-11-15", new Date()),
+      ],
+      winDetail: (r) => [
+        r.winDetail(plain.id, localDay(new Date())),
+        r.winDetail(withPr.id, localDay(new Date())),
+      ],
     };
     const known = new Set<string>(TABLES);
-    for (const [name, call] of Object.entries(calls) as [ReadName, (r: ReadModel) => unknown][]) {
+    for (const [name, call] of Object.entries(calls) as [
+      ReadName,
+      (r: ReadModel) => unknown,
+    ][]) {
       queried.length = 0;
       call(reads);
       const touched = new Set(
@@ -184,15 +233,27 @@ describe("read model", () => {
       );
       // Reads that create a missing row (home) write; the write is not a read.
       // The fake desk's isLive asks nothing of the database.
-      if (name !== "isLive") expect({ read: name, queried: queried.length > 0 }).toEqual({ read: name, queried: true });
+      if (name !== "isLive") {
+        expect({ read: name, queried: queried.length > 0 }).toEqual({
+          read: name,
+          queried: true,
+        });
+      }
       const writes = queried.some((q) => /^\s*(INSERT|UPDATE|DELETE)/i.test(q));
-      if (name !== "home") expect({ read: name, writes }).toEqual({ read: name, writes: false });
-      for (const table of touched)
-        expect({ read: name, table, declared: readTables(name).includes(table as Table) }).toEqual({
+      if (name !== "home") {
+        expect({ read: name, writes }).toEqual({ read: name, writes: false });
+      }
+      for (const table of touched) {
+        expect({
+          read: name,
+          table,
+          declared: readTables(name).includes(table as Table),
+        }).toEqual({
           read: name,
           table,
           declared: true,
         });
+      }
     }
     d.query = query;
   });

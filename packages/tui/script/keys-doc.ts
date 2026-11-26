@@ -7,8 +7,9 @@ import { withKeysData } from "../src/keys-doc";
 const page = join(import.meta.dir, "../../../docs/keyboard.html");
 const before = readFileSync(page, "utf8");
 const after = withKeysData(before);
-if (after === before) console.log("docs/keyboard.html is up to date");
-else {
+if (after === before) {
+  console.log("docs/keyboard.html is up to date");
+} else {
   writeFileSync(page, after);
   console.log("wrote docs/keyboard.html");
 }

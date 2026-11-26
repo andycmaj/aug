@@ -89,7 +89,9 @@ export function tokenUsage(
   event: Pick<StreamEvent, "usage">,
 ): TokenUsage | undefined {
   const u = event.usage;
-  if (!u) return undefined;
+  if (!u) {
+    return undefined;
+  }
   return {
     input: u.input_tokens ?? 0,
     output: u.output_tokens ?? 0,
@@ -158,18 +160,35 @@ export function claudeArgs(call: BrainCall): string[] {
     "--setting-sources",
     call.settingSources ?? "",
   ];
-  if (call.model) args.push("--model", call.model);
-  if (call.system) args.push("--append-system-prompt", call.system);
-  if (call.schema) args.push("--json-schema", JSON.stringify(call.schema));
-  if (call.resume && call.fork)
-    args.push("--resume", call.resume, "--fork-session", "--no-session-persistence");
-  else if (call.resume) args.push("--resume", call.resume);
-  else if (call.sessionId) args.push("--session-id", call.sessionId);
-  else args.push("--no-session-persistence");
+  if (call.model) {
+    args.push("--model", call.model);
+  }
+  if (call.system) {
+    args.push("--append-system-prompt", call.system);
+  }
+  if (call.schema) {
+    args.push("--json-schema", JSON.stringify(call.schema));
+  }
+  if (call.resume && call.fork) {
+    args.push(
+      "--resume",
+      call.resume,
+      "--fork-session",
+      "--no-session-persistence",
+    );
+  } else if (call.resume) {
+    args.push("--resume", call.resume);
+  } else if (call.sessionId) {
+    args.push("--session-id", call.sessionId);
+  } else {
+    args.push("--no-session-persistence");
+  }
   // A plugin brings its hooks along; they'd reopen what skipping user
   // settings closed, so they're off.
   if (call.pluginDirs?.length) {
-    for (const dir of call.pluginDirs) args.push("--plugin-dir", dir);
+    for (const dir of call.pluginDirs) {
+      args.push("--plugin-dir", dir);
+    }
     args.push("--settings", JSON.stringify({ disableAllHooks: true }));
   }
   args.push("--tools", (call.tools ?? []).join(","));
@@ -177,12 +196,16 @@ export function claudeArgs(call: BrainCall): string[] {
     args.push("--permission-mode", "dontAsk");
     args.push("--allowedTools", ...call.allow);
   }
-  if (call.disallow?.length) args.push("--disallowedTools", ...call.disallow);
+  if (call.disallow?.length) {
+    args.push("--disallowedTools", ...call.disallow);
+  }
   // claude.ai connectors load even with --setting-sources "". A call with no
   // mcp__ rule can't run one, yet a resumed session that loads them late
   // appends their 35 schemas (removal, then addition) each turn and misses
   // the prompt cache: the whole context re-written (AUG-0160). Load none.
-  if (!wantsMcp(call)) args.push("--strict-mcp-config");
+  if (!wantsMcp(call)) {
+    args.push("--strict-mcp-config");
+  }
   return args;
 }
 
@@ -207,7 +230,10 @@ export interface StreamEvent {
   duration_ms?: number;
   is_error?: boolean;
   parent_tool_use_id?: string | null;
-  permission_denials?: { tool_name?: string; tool_input?: Record<string, unknown> }[];
+  permission_denials?: {
+    tool_name?: string;
+    tool_input?: Record<string, unknown>;
+  }[];
   // On the result event: the whole process's cost so far, and this turn's
   // tokens (a persistent session's total grows turn by turn).
   total_cost_usd?: number;
@@ -238,7 +264,9 @@ const DENIED_INPUT_CHARS = 160;
 export function deniedCalls(event: StreamEvent): string[] {
   return (event.permission_denials ?? []).map((d) => {
     const command = d.tool_input?.command;
-    if (typeof command === "string") return `${d.tool_name ?? "tool"} ${command}`;
+    if (typeof command === "string") {
+      return `${d.tool_name ?? "tool"} ${command}`;
+    }
     const input = JSON.stringify(d.tool_input ?? {});
     const short =
       input.length > DENIED_INPUT_CHARS
@@ -256,7 +284,9 @@ export function describeStep(
   const pick = (...keys: string[]) => {
     for (const key of keys) {
       const value = input[key];
-      if (typeof value === "string" && value) return value;
+      if (typeof value === "string" && value) {
+        return value;
+      }
     }
     return "";
   };
@@ -290,24 +320,31 @@ export function parseStreamLine(
   acc: StreamAcc,
   onTool?: (call: ToolCall) => void,
 ): void {
-  if (!line.trim()) return;
+  if (!line.trim()) {
+    return;
+  }
   let event: StreamEvent;
   try {
     event = JSON.parse(line) as StreamEvent;
   } catch {
     return;
   }
-  if (event.session_id) acc.sessionId = event.session_id;
+  if (event.session_id) {
+    acc.sessionId = event.session_id;
+  }
   if (event.type === "assistant" && !event.parent_tool_use_id) {
-    if (event.message?.usage) acc.context = contextTokens(event.message.usage);
+    if (event.message?.usage) {
+      acc.context = contextTokens(event.message.usage);
+    }
     for (const part of event.message?.content ?? []) {
       if (part.type === "tool_use" && part.name !== "StructuredOutput") {
         onStep?.(describeStep(part.name ?? "tool", part.input));
-        if (onTool && part.id)
+        if (onTool && part.id) {
           (acc.pending ??= new Map()).set(part.id, {
             name: part.name ?? "tool",
             input: part.input ?? {},
           });
+        }
       } else if (part.type === "text" && part.text) {
         acc.text = part.text;
       }
@@ -316,14 +353,20 @@ export function parseStreamLine(
   if (event.type === "user" && onTool && acc.pending?.size) {
     const content = event.message?.content;
     for (const part of Array.isArray(content) ? content : []) {
-      if (part.type !== "tool_result" || !part.tool_use_id) continue;
+      if (part.type !== "tool_result" || !part.tool_use_id) {
+        continue;
+      }
       const call = acc.pending.get(part.tool_use_id);
-      if (!call) continue;
+      if (!call) {
+        continue;
+      }
       acc.pending.delete(part.tool_use_id);
       onTool({ ...call, response: part.content });
     }
   }
-  if (event.type === "result") acc.result = event;
+  if (event.type === "result") {
+    acc.result = event;
+  }
 }
 
 export async function claudeBrain(call: BrainCall): Promise<BrainResult> {
@@ -337,7 +380,7 @@ export async function claudeBrain(call: BrainCall): Promise<BrainResult> {
   });
   const abort = () => proc.kill();
   call.signal?.addEventListener("abort", abort);
-  proc.stdin.write(call.prompt);
+  await proc.stdin.write(call.prompt);
   await proc.stdin.end();
 
   const acc: StreamAcc = { text: "", result: null, sessionId: null };
@@ -365,7 +408,9 @@ export async function claudeBrain(call: BrainCall): Promise<BrainResult> {
     );
   }
   const denied = deniedCalls(acc.result);
-  if (denied.length) log.warn("permission denied", { denied, allow: call.allow ?? [] });
+  if (denied.length) {
+    log.warn("permission denied", { denied, allow: call.allow ?? [] });
+  }
   return {
     text: acc.result.result ?? acc.text,
     structured: acc.result.structured_output ?? null,

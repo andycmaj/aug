@@ -74,7 +74,13 @@ describe("the moves bus", () => {
   });
 
   test("done on a branch with unmerged commits and no PR closes it and says so", async () => {
-    const task = store.createTask({ title: "Stream Deck", kind: Kind.coding, channel: "owner", repo: "acme/api", branch: "deck" });
+    const task = store.createTask({
+      title: "Stream Deck",
+      kind: Kind.coding,
+      channel: "owner",
+      repo: "acme/api",
+      branch: "deck",
+    });
     fake.merged.set("deck", false);
     fake.ahead.set("deck", 4);
     const move = ask("done", { task: store.taskRef(task.id) });
@@ -87,7 +93,10 @@ describe("the moves bus", () => {
   test("two drains at once never run a move twice", async () => {
     const task = engine.desk.newTask("Ping Sam", Kind.general);
     ask("tell", { task: store.taskRef(task.id), text: "hello" });
-    const [a, b] = await Promise.all([engine.drainMoves(), engine.drainMoves()]);
+    const [a, b] = await Promise.all([
+      engine.drainMoves(),
+      engine.drainMoves(),
+    ]);
     expect(a + b).toBe(1);
   });
 
@@ -100,8 +109,9 @@ describe("the moves bus", () => {
     expect(store.getMove(noTask.id)!.result).toBe("no task RIKER-0999");
     expect(store.getMove(noVerb.id)!.result).toStartWith("no move explode");
     expect(store.getMove(noArg.id)!.result).toBe("remind needs --days");
-    for (const m of [noTask, noVerb, noArg])
+    for (const m of [noTask, noVerb, noArg]) {
       expect(store.getMove(m.id)!.status).toBe(MoveStatus.failed);
+    }
   });
 
   test("a move older than a minute expires instead of running", async () => {
@@ -143,13 +153,17 @@ describe("the moves bus when changes counts trigger rows (bun 1.3)", () => {
   beforeEach(() => {
     Database.prototype.query = function (this: Database, sql: string) {
       const statement = plainQuery.call(this, sql);
-      if (wrapped.has(statement)) return statement;
+      if (wrapped.has(statement)) {
+        return statement;
+      }
       wrapped.add(statement);
       const plainRun = statement.run.bind(statement);
       const total = () =>
-        (plainQuery.call(this, "SELECT total_changes() AS n").get() as {
-          n: number;
-        }).n;
+        (
+          plainQuery.call(this, "SELECT total_changes() AS n").get() as {
+            n: number;
+          }
+        ).n;
       statement.run = (...params: SQLQueryBindings[]) => {
         const before = total();
         const result = plainRun(...params);
@@ -181,7 +195,10 @@ describe("the moves bus when changes counts trigger rows (bun 1.3)", () => {
   test("two drains at once still never run a move twice", async () => {
     const task = engine.desk.newTask("Ping Sam", Kind.general);
     ask("tell", { task: store.taskRef(task.id), text: "hello" });
-    const [a, b] = await Promise.all([engine.drainMoves(), engine.drainMoves()]);
+    const [a, b] = await Promise.all([
+      engine.drainMoves(),
+      engine.drainMoves(),
+    ]);
     expect(a + b).toBe(1);
   });
 
@@ -249,7 +266,9 @@ describe("start", () => {
     });
     expect(out).toEqual({
       ok: true,
-      result: expect.stringContaining(`started ${store.taskRef(task.id)}'s coding agent`),
+      result: expect.stringContaining(
+        `started ${store.taskRef(task.id)}'s coding agent`,
+      ),
     });
     expect(store.getTask(task.id)!.worktree).toBeTruthy();
   });
@@ -272,7 +291,11 @@ describe("start", () => {
     const out = await engine.runMove("start", { task: ref, repo: "acme/api" });
     expect(out.ok).toBe(false);
     expect(out.result).toContain("needs path");
-    const again = await engine.runMove("start", { task: ref, repo: "acme/api", path: "/src/api2" });
+    const again = await engine.runMove("start", {
+      task: ref,
+      repo: "acme/api",
+      path: "/src/api2",
+    });
     expect(again.ok).toBe(true);
     expect(fake.worktrees[0].repoPath).toBe("/src/api2");
   });
@@ -291,7 +314,10 @@ describe("start", () => {
 describe("telling a coding agent", () => {
   async function started(title = "Add a flag") {
     const task = engine.desk.newTask(title, Kind.coding);
-    await engine.runMove("start", { task: store.taskRef(task.id), repo: "acme/api" });
+    await engine.runMove("start", {
+      task: store.taskRef(task.id),
+      repo: "acme/api",
+    });
     return task;
   }
 
@@ -302,15 +328,23 @@ describe("telling a coding agent", () => {
 
   test("a line for a running claude is typed into its window", async () => {
     const task = await started();
-    const out = await engine.runMove("tell", { task: store.taskRef(task.id), text: "also check s" });
+    const out = await engine.runMove("tell", {
+      task: store.taskRef(task.id),
+      text: "also check s",
+    });
     expect(out.result).toBe(`told ${store.taskRef(task.id)}'s agent`);
-    expect(fake.sent).toEqual([{ windowId: fake.windows[0].id, text: "also check s" }]);
+    expect(fake.sent).toEqual([
+      { windowId: fake.windows[0].id, text: "also check s" },
+    ]);
   });
 
   test("a line for a stopped claude waits for start, which resumes with it once", async () => {
     const task = await started();
     stopClaude(task.id);
-    const out = await engine.runMove("tell", { task: store.taskRef(task.id), text: "can't re-attach with s" });
+    const out = await engine.runMove("tell", {
+      task: store.taskRef(task.id),
+      text: "can't re-attach with s",
+    });
     expect(out.result).toContain("when it starts");
     expect(fake.sent).toEqual([]);
 
@@ -327,7 +361,10 @@ describe("telling a coding agent", () => {
     const task = engine.desk.newTask("Add a flag", Kind.coding);
     await engine.desk.say(task.id, "use the new parser");
     await engine.desk.say(task.id, "and keep the old flag");
-    await engine.runMove("start", { task: store.taskRef(task.id), repo: "acme/api" });
+    await engine.runMove("start", {
+      task: store.taskRef(task.id),
+      repo: "acme/api",
+    });
     const first = fake.windows[0].argv.at(-1)!;
     expect(first).toContain("use the new parser");
     expect(first).toContain("and keep the old flag");
@@ -335,15 +372,23 @@ describe("telling a coding agent", () => {
 
   test("start's note reaches a claude that is already running", async () => {
     const task = await started();
-    await engine.runMove("start", { task: store.taskRef(task.id), note: "look at #12 too" });
+    await engine.runMove("start", {
+      task: store.taskRef(task.id),
+      note: "look at #12 too",
+    });
     expect(fake.windows).toHaveLength(1);
-    expect(fake.sent).toEqual([{ windowId: fake.windows[0].id, text: "look at #12 too" }]);
+    expect(fake.sent).toEqual([
+      { windowId: fake.windows[0].id, text: "look at #12 too" },
+    ]);
   });
 });
 
 describe("making and placing tasks", () => {
   test("a coding task made from another, in a named project, takes its repo", async () => {
-    const project = await engine.desk.createProject("aug-bootstrap", "acme/api");
+    const project = await engine.desk.createProject(
+      "aug-bootstrap",
+      "acme/api",
+    );
     const parent = engine.desk.newTask("JOB.md is empty", Kind.general);
     const out = await engine.runMove(
       "new",
@@ -358,7 +403,9 @@ describe("making and placing tasks", () => {
     );
     expect(out.ok).toBe(true);
     const made = store.listTasks().find((t) => t.title === "Fill in JOB.md")!;
-    expect(out.result).toStartWith(`${store.taskRef(made.id)} made (coding in project aug-bootstrap, repo acme/api)`);
+    expect(out.result).toStartWith(
+      `${store.taskRef(made.id)} made (coding in project aug-bootstrap, repo acme/api)`,
+    );
     expect(made).toMatchObject({
       kind: Kind.coding,
       project_id: project.id,
@@ -382,18 +429,19 @@ describe("making and placing tasks", () => {
     });
     expect(out).toEqual({
       ok: false,
-      result: "no project aug-bootstrap. Projects: riker-mvp. Make one with project_new.",
+      result:
+        "no project aug-bootstrap. Projects: riker-mvp. Make one with project_new.",
     });
     expect(store.listTasks()).toHaveLength(0);
   });
 
   test("a bad kind or repo is refused before anything is made", async () => {
-    expect((await engine.runMove("new", { title: "x", kind: "home" })).result).toStartWith(
-      "kind must be",
-    );
-    expect((await engine.runMove("new", { title: "x", repo: "nope" })).result).toBe(
-      "nope is not owner/repo",
-    );
+    expect(
+      (await engine.runMove("new", { title: "x", kind: "home" })).result,
+    ).toStartWith("kind must be");
+    expect(
+      (await engine.runMove("new", { title: "x", repo: "nope" })).result,
+    ).toBe("nope is not owner/repo");
     expect(store.listTasks()).toHaveLength(0);
   });
 
@@ -425,25 +473,45 @@ describe("making and placing tasks", () => {
   });
 
   test("a brief can be rewritten until the agent starts", async () => {
-    const task = engine.desk.newTask("Add a flag", Kind.coding, "add --dry-run");
+    const task = engine.desk.newTask(
+      "Add a flag",
+      Kind.coding,
+      "add --dry-run",
+    );
     const t = store.taskRef(task.id);
     const out = await engine.runMove("brief", {
       task: t,
       text: "  add --dry-run to sync, and test it\n",
     });
     expect(out).toEqual({ ok: true, result: `${t}'s brief rewritten` });
-    expect(store.getTask(task.id)!.summary).toBe("add --dry-run to sync, and test it");
+    expect(store.getTask(task.id)!.summary).toBe(
+      "add --dry-run to sync, and test it",
+    );
 
-    store.createSession({ id: "s1", taskId: task.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "owner" });
-    const late = await engine.runMove("brief", { task: t, text: "something else" });
+    store.createSession({
+      id: "s1",
+      taskId: task.id,
+      kind: SessionKind.tmux,
+      cwd: "/w",
+      startedBy: "owner",
+    });
+    const late = await engine.runMove("brief", {
+      task: t,
+      text: "something else",
+    });
     expect(late.ok).toBe(false);
     expect(late.result).toContain("already started");
-    expect(store.getTask(task.id)!.summary).toBe("add --dry-run to sync, and test it");
+    expect(store.getTask(task.id)!.summary).toBe(
+      "add --dry-run to sync, and test it",
+    );
   });
 
   test("an empty brief is refused", async () => {
     const task = engine.desk.newTask("Add a flag", Kind.general, "keep me");
-    const out = await engine.runMove("brief", { task: store.taskRef(task.id), text: "   " });
+    const out = await engine.runMove("brief", {
+      task: store.taskRef(task.id),
+      text: "   ",
+    });
     expect(out.ok).toBe(false);
     expect(store.getTask(task.id)!.summary).toBe("keep me");
   });
@@ -452,7 +520,11 @@ describe("making and placing tasks", () => {
     const parent = engine.desk.newTask(parentTitle, Kind.general);
     await engine.runMove(
       "new",
-      { title: "Fill in JOB.md", kind: "coding", from: store.taskRef(parent.id) },
+      {
+        title: "Fill in JOB.md",
+        kind: "coding",
+        from: store.taskRef(parent.id),
+      },
       by,
     );
     const made = store.listTasks().find((t) => t.title === "Fill in JOB.md")!;
@@ -463,7 +535,9 @@ describe("making and placing tasks", () => {
     const { parent, made, last } = await child("JOB.md is empty");
     await engine.runMove("done", { task: store.taskRef(made.id) });
     expect(last().role).toBe("trigger");
-    expect(last().body).toBe(`${store.taskRef(made.id)} marked done by you: Fill in JOB.md`);
+    expect(last().body).toBe(
+      `${store.taskRef(made.id)} marked done by you: Fill in JOB.md`,
+    );
     // done again (close after the agent closed it) says nothing new
     const count = store.turnsForTask(parent.id).length;
     await engine.desk.close(made.id);
@@ -472,8 +546,17 @@ describe("making and placing tasks", () => {
 
   test("when its agent finishes, the result line goes back to the task it came from", async () => {
     const { parent, made, last } = await child("JOB.md is empty");
-    store.createSession({ id: "s1", taskId: made.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "riker" });
-    handleDone({ taskId: made.id, sessionId: "s1" }, { summary: "JOB.md written; 3 sections" });
+    store.createSession({
+      id: "s1",
+      taskId: made.id,
+      kind: SessionKind.tmux,
+      cwd: "/w",
+      startedBy: "riker",
+    });
+    handleDone(
+      { taskId: made.id, sessionId: "s1" },
+      { summary: "JOB.md written; 3 sections" },
+    );
     expect(store.getTask(made.id)!.status).toBe(TaskStatus.done);
     expect(last().body).toBe(
       `${store.taskRef(made.id)} finished: Fill in JOB.md\nResult: JOB.md written; 3 sections`,
@@ -485,7 +568,13 @@ describe("making and placing tasks", () => {
 
   test("an agent that finishes but leaves the task to its owner says so, then the close follows", async () => {
     const { made, last } = await child("JOB.md is empty");
-    store.createSession({ id: "s1", taskId: made.id, kind: SessionKind.tmux, cwd: "/w", startedBy: "owner" });
+    store.createSession({
+      id: "s1",
+      taskId: made.id,
+      kind: SessionKind.tmux,
+      cwd: "/w",
+      startedBy: "owner",
+    });
     handleDone({ taskId: made.id, sessionId: "s1" }, { summary: "PR opened" });
     expect(last().body).toBe(
       `${store.taskRef(made.id)} finished; it waits for the owner: Fill in JOB.md\nResult: PR opened`,
@@ -498,15 +587,21 @@ describe("making and placing tasks", () => {
 
   test("a task made from nothing tells no one", async () => {
     const made = engine.desk.newTask("Alone", Kind.general);
-    const before = store.listTasks().flatMap((t) => store.turnsForTask(t.id)).length;
+    const before = store
+      .listTasks()
+      .flatMap((t) => store.turnsForTask(t.id)).length;
     await engine.desk.close(made.id);
-    expect(store.listTasks().flatMap((t) => store.turnsForTask(t.id)).length).toBe(before);
+    expect(
+      store.listTasks().flatMap((t) => store.turnsForTask(t.id)).length,
+    ).toBe(before);
   });
 });
 
 describe("projects", () => {
   test("project_new refuses a name already taken", async () => {
-    expect((await engine.runMove("project_new", { name: "web" })).ok).toBe(true);
+    expect((await engine.runMove("project_new", { name: "web" })).ok).toBe(
+      true,
+    );
     expect((await engine.runMove("project_new", { name: "Web" })).result).toBe(
       "there is already a project web",
     );
@@ -521,7 +616,9 @@ describe("projects", () => {
 
   test("archiving a project with open tasks needs force", async () => {
     const project = await engine.desk.createProject("web");
-    engine.desk.newTask("open one", Kind.general, "", { projectId: project.id });
+    engine.desk.newTask("open one", Kind.general, "", {
+      projectId: project.id,
+    });
     const refused = await engine.runMove("project_archive", { project: "web" });
     expect(refused.ok).toBe(false);
     expect(refused.result).toContain("--force yes");
@@ -540,9 +637,29 @@ describe("what an agent may ask for", () => {
     const mine = engine.desk.newTask("mine", Kind.general);
     const other = engine.desk.newTask("other", Kind.general);
     const by = `agent ${store.taskRef(mine.id)}`;
-    expect((await engine.runMove("new", { title: "follow-up", from: store.taskRef(mine.id) }, by)).ok).toBe(true);
-    expect((await engine.runMove("wait_on", { task: store.taskRef(mine.id), who: "Sam" }, by)).ok).toBe(true);
-    const theirs = await engine.runMove("priority", { task: store.taskRef(other.id), level: "urgent" }, by);
+    expect(
+      (
+        await engine.runMove(
+          "new",
+          { title: "follow-up", from: store.taskRef(mine.id) },
+          by,
+        )
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await engine.runMove(
+          "wait_on",
+          { task: store.taskRef(mine.id), who: "Sam" },
+          by,
+        )
+      ).ok,
+    ).toBe(true);
+    const theirs = await engine.runMove(
+      "priority",
+      { task: store.taskRef(other.id), level: "urgent" },
+      by,
+    );
     expect(theirs).toEqual({
       ok: false,
       result: `an agent changes only its own task (${store.taskRef(mine.id)}), or one it made`,
@@ -554,16 +671,38 @@ describe("what an agent may ask for", () => {
     const other = engine.desk.newTask("other", Kind.general);
     const by = `agent ${store.taskRef(mine.id)}`;
     // No --from: an agent's task is made from its own.
-    const made = await engine.runMove("new", { title: "check back on the rollout" }, by);
+    const made = await engine.runMove(
+      "new",
+      { title: "check back on the rollout" },
+      by,
+    );
     expect(made.ok).toBe(true);
-    const child = store.listTasks().find((t) => t.title === "check back on the rollout")!;
+    const child = store
+      .listTasks()
+      .find((t) => t.title === "check back on the rollout")!;
     expect(child.from_task_id).toBe(mine.id);
     const ref = store.taskRef(child.id);
-    expect((await engine.runMove("remind", { task: ref, days: "3" }, by)).ok).toBe(true);
+    expect(
+      (await engine.runMove("remind", { task: ref, days: "3" }, by)).ok,
+    ).toBe(true);
     expect(store.getTask(child.id)!.status).toBe(TaskStatus.later);
-    expect((await engine.runMove("priority", { task: ref, level: "urgent" }, by)).ok).toBe(true);
-    expect((await engine.runMove("followup", { task: ref, in: "1d", note: "is it out?" }, by)).ok).toBe(true);
-    const refused = await engine.runMove("remind", { task: store.taskRef(other.id), days: "3" }, by);
+    expect(
+      (await engine.runMove("priority", { task: ref, level: "urgent" }, by)).ok,
+    ).toBe(true);
+    expect(
+      (
+        await engine.runMove(
+          "followup",
+          { task: ref, in: "1d", note: "is it out?" },
+          by,
+        )
+      ).ok,
+    ).toBe(true);
+    const refused = await engine.runMove(
+      "remind",
+      { task: store.taskRef(other.id), days: "3" },
+      by,
+    );
     expect(refused).toEqual({
       ok: false,
       result: `an agent changes only its own task (${store.taskRef(mine.id)}), or one it made`,
@@ -585,21 +724,50 @@ describe("what an agent may ask for", () => {
       by,
     );
     expect(made.ok).toBe(true);
-    const child = store.listTasks().find((t) => t.title === "split out the library")!;
+    const child = store
+      .listTasks()
+      .find((t) => t.title === "split out the library")!;
     const ref = store.taskRef(child.id);
-    expect((await engine.runMove("project", { task: ref, project: "lib" }, by)).ok).toBe(true);
+    expect(
+      (await engine.runMove("project", { task: ref, project: "lib" }, by)).ok,
+    ).toBe(true);
     expect(store.getTask(child.id)!.project_id).toBe(lib.id);
-    expect((await engine.runMove("block_on", { task: ref, on: store.taskRef(mine.id) }, by)).ok).toBe(true);
+    expect(
+      (
+        await engine.runMove(
+          "block_on",
+          { task: ref, on: store.taskRef(mine.id) },
+          by,
+        )
+      ).ok,
+    ).toBe(true);
     expect(store.blockersOf(child.id)).toEqual([mine.id]);
-    expect((await engine.runMove("retitle", { task: ref, title: "the library, split" }, by)).ok).toBe(true);
+    expect(
+      (
+        await engine.runMove(
+          "retitle",
+          { task: ref, title: "the library, split" },
+          by,
+        )
+      ).ok,
+    ).toBe(true);
 
     const refusal = {
       ok: false,
       result: `an agent changes only its own task (${store.taskRef(mine.id)}), or one it made`,
     };
-    const unrelated = await engine.runMove("project", { task: store.taskRef(other.id), project: "lib" }, by);
+    const unrelated = await engine.runMove(
+      "project",
+      { task: store.taskRef(other.id), project: "lib" },
+      by,
+    );
     expect(unrelated).toEqual(refusal);
-    const cousin = engine.desk.newTask("made from the other", Kind.general, "", { fromTaskId: other.id });
+    const cousin = engine.desk.newTask(
+      "made from the other",
+      Kind.general,
+      "",
+      { fromTaskId: other.id },
+    );
     expect(store.getTask(cousin.id)!.from_task_id).toBe(other.id);
     const theirs = await engine.runMove(
       "block_on",
@@ -613,13 +781,21 @@ describe("what an agent may ask for", () => {
   test("new --remind puts the task away in the same move", async () => {
     const mine = engine.desk.newTask("mine", Kind.general);
     const by = `agent ${store.taskRef(mine.id)}`;
-    const made = await engine.runMove("new", { title: "nudge Sam", remind: "3" }, by);
+    const made = await engine.runMove(
+      "new",
+      { title: "nudge Sam", remind: "3" },
+      by,
+    );
     expect(made.ok).toBe(true);
     expect(made.result).toContain("put away until");
     const child = store.listTasks().find((t) => t.title === "nudge Sam")!;
     expect(child.status).toBe(TaskStatus.later);
-    expect(store.timersForTask(child.id).map((t) => t.kind)).toEqual(["remind"]);
-    expect((await engine.runMove("new", { title: "x", remind: "0" }, by)).ok).toBe(false);
+    expect(store.timersForTask(child.id).map((t) => t.kind)).toEqual([
+      "remind",
+    ]);
+    expect(
+      (await engine.runMove("new", { title: "x", remind: "0" }, by)).ok,
+    ).toBe(false);
   });
 
   test("it sets a follow-up on its own task, but not a schedule", async () => {
@@ -627,11 +803,17 @@ describe("what an agent may ask for", () => {
     const by = `agent ${store.taskRef(mine.id)}`;
     const set = await engine.runMove(
       "followup",
-      { task: store.taskRef(mine.id), in: "1d", note: "check the PR again and report" },
+      {
+        task: store.taskRef(mine.id),
+        in: "1d",
+        note: "check the PR again and report",
+      },
       by,
     );
     expect(set.ok).toBe(true);
-    expect(set.result).toMatch(/^T\d+: RIKER-\d+ follow-up in (23h|1d): check the PR again and report$/);
+    expect(set.result).toMatch(
+      /^T\d+: RIKER-\d+ follow-up in (23h|1d): check the PR again and report$/,
+    );
     const schedule = await engine.runMove(
       "schedule",
       { rule: "weekdays 09:00", task: store.taskRef(mine.id) },
@@ -646,10 +828,18 @@ describe("what an agent may ask for", () => {
     const ref = store.taskRef(task.id);
     const neither = await engine.runMove("followup", { task: ref, note: "x" });
     expect(neither.result).toBe("followup needs --in or --at, not both");
-    const bad = await engine.runMove("followup", { task: ref, in: "soon", note: "x" });
+    const bad = await engine.runMove("followup", {
+      task: ref,
+      in: "soon",
+      note: "x",
+    });
     expect(bad.ok).toBe(false);
     expect(bad.result).toContain("30m, 3h, 1d or 2w");
-    const past = await engine.runMove("followup", { task: ref, at: "2001-01-01T09:00", note: "x" });
+    const past = await engine.runMove("followup", {
+      task: ref,
+      at: "2001-01-01T09:00",
+      note: "x",
+    });
     expect(past.result).toContain("in the past");
     expect(store.timersForTask(task.id)).toEqual([]);
   });
@@ -657,7 +847,11 @@ describe("what an agent may ask for", () => {
   test("schedule --brief makes a task to run on the rule", async () => {
     const out = await engine.runMove(
       "schedule",
-      { rule: "every weekday at 9am", brief: "Summarize my open PRs", title: "PR summary" },
+      {
+        rule: "every weekday at 9am",
+        brief: "Summarize my open PRs",
+        title: "PR summary",
+      },
       "assistant",
     );
     expect(out.ok).toBe(true);
@@ -672,7 +866,10 @@ describe("what an agent may ask for", () => {
   });
 
   test("schedule refuses a rule it cannot read, and makes nothing", async () => {
-    const out = await engine.runMove("schedule", { rule: "fortnightly", brief: "x" });
+    const out = await engine.runMove("schedule", {
+      rule: "fortnightly",
+      brief: "x",
+    });
     expect(out.ok).toBe(false);
     expect(store.listTasks()).toEqual([]);
   });
@@ -691,7 +888,11 @@ describe("what an agent may ask for", () => {
 
   test("ctrl+z takes back a follow-up", async () => {
     const task = engine.desk.newTask("t", Kind.general);
-    await engine.runMove("followup", { task: store.taskRef(task.id), in: "1h", note: "a" }, "assistant");
+    await engine.runMove(
+      "followup",
+      { task: store.taskRef(task.id), in: "1h", note: "a" },
+      "assistant",
+    );
     expect(store.timersForTask(task.id)).toHaveLength(1);
     const undone = await engine.desk.undo();
     expect(undone.ok).toBe(true);
@@ -700,18 +901,32 @@ describe("what an agent may ask for", () => {
 
   test("a task's timers show in what riker-tools task prints", async () => {
     const task = engine.desk.newTask("t", Kind.general);
-    await engine.runMove("followup", { task: store.taskRef(task.id), in: "3h", note: "look again" });
-    expect(taskDetail(store.getTask(task.id)!)).toMatch(/Timer T\d+: follow-up in [23]h: look again/);
+    await engine.runMove("followup", {
+      task: store.taskRef(task.id),
+      in: "3h",
+      note: "look again",
+    });
+    expect(taskDetail(store.getTask(task.id)!)).toMatch(
+      /Timer T\d+: follow-up in [23]h: look again/,
+    );
   });
 
   test("it makes a project and a task in it", async () => {
     const mine = engine.desk.newTask("mine", Kind.general);
     const by = `agent ${store.taskRef(mine.id)}`;
-    const project = await engine.runMove("project_new", { name: "2027-scaling-plan" }, by);
+    const project = await engine.runMove(
+      "project_new",
+      { name: "2027-scaling-plan" },
+      by,
+    );
     expect(project.ok).toBe(true);
     const task = await engine.runMove(
       "new",
-      { title: "create initial scaling challenges doc", project: "2027-scaling-plan", from: store.taskRef(mine.id) },
+      {
+        title: "create initial scaling challenges doc",
+        project: "2027-scaling-plan",
+        from: store.taskRef(mine.id),
+      },
       by,
     );
     expect(task.ok).toBe(true);
@@ -743,7 +958,11 @@ describe("links", () => {
     const ref = store.taskRef(task.id);
     const first = await engine.runMove("link", { task: ref, url: ` ${doc} ` });
     expect(first).toEqual({ ok: true, result: `linked ${doc} to ${ref}` });
-    const again = await engine.runMove("link", { task: ref, url: doc, title: "the plan" });
+    const again = await engine.runMove("link", {
+      task: ref,
+      url: doc,
+      title: "the plan",
+    });
     expect(again.result).toBe(`linked the plan (${doc}) to ${ref}`);
     await engine.runMove("link", { task: ref, url: doc });
     const links = store.linksForTask(task.id);
@@ -762,7 +981,10 @@ describe("links", () => {
       "Http://example.test/a%20b",
     ];
     for (const url of urls) {
-      const out = await engine.runMove("link", { task: ref, url: `  ${url}\n` });
+      const out = await engine.runMove("link", {
+        task: ref,
+        url: `  ${url}\n`,
+      });
       expect(out).toEqual({ ok: true, result: `linked ${url} to ${ref}` });
     }
     expect(store.linksForTask(task.id).map((l) => l.url)).toEqual(urls);
@@ -780,8 +1002,15 @@ describe("links", () => {
     mkdirSync(dirname(proof), { recursive: true });
     writeFileSync(proof, "red, then green");
     for (const url of [proof, `file://${proof}`, `FILE://${proof}`]) {
-      const out = await engine.runMove("link", { task: ref, url, title: "Proof" });
-      expect(out).toEqual({ ok: true, result: `linked Proof (${url}) to ${ref}` });
+      const out = await engine.runMove("link", {
+        task: ref,
+        url,
+        title: "Proof",
+      });
+      expect(out).toEqual({
+        ok: true,
+        result: `linked Proof (${url}) to ${ref}`,
+      });
     }
     expect(store.linksForTask(task.id).map((l) => l.url)).toEqual([
       proof,
@@ -811,22 +1040,42 @@ describe("links", () => {
       "",
     ];
     for (const url of bad) {
-      const out = await engine.runMove("link", { task: store.taskRef(task.id), url });
+      const out = await engine.runMove("link", {
+        task: store.taskRef(task.id),
+        url,
+      });
       expect(out.ok).toBe(false);
     }
-    const out = await engine.runMove("link", { task: store.taskRef(task.id), url: "javascript:alert(1)" });
-    expect(out.result).toBe("javascript:alert(1) is not an http(s) URL or a file's absolute path");
+    const out = await engine.runMove("link", {
+      task: store.taskRef(task.id),
+      url: "javascript:alert(1)",
+    });
+    expect(out.result).toBe(
+      "javascript:alert(1) is not an http(s) URL or a file's absolute path",
+    );
     expect(store.linksForTask(task.id)).toEqual([]);
   });
 
   test("project_link takes the same links, and project_unlink matches as given", async () => {
     await engine.runMove("project_new", { name: "Launch" });
     const url = "HTTPS://Docs.Example.com/Spec";
-    const out = await engine.runMove("project_link", { project: "Launch", url: ` ${url} ` });
+    const out = await engine.runMove("project_link", {
+      project: "Launch",
+      url: ` ${url} `,
+    });
     expect(out.ok).toBe(true);
-    const bad = await engine.runMove("project_link", { project: "Launch", url: "file:///nope/x.md" });
-    expect(bad).toEqual({ ok: false, result: "/nope/x.md is not a file on disk" });
-    const off = await engine.runMove("project_unlink", { project: "Launch", url });
+    const bad = await engine.runMove("project_link", {
+      project: "Launch",
+      url: "file:///nope/x.md",
+    });
+    expect(bad).toEqual({
+      ok: false,
+      result: "/nope/x.md is not a file on disk",
+    });
+    const off = await engine.runMove("project_unlink", {
+      project: "Launch",
+      url,
+    });
     expect(off).toEqual({ ok: true, result: `unlinked ${url} from Launch` });
   });
 
@@ -834,8 +1083,14 @@ describe("links", () => {
     const task = engine.desk.newTask("Plan the launch", Kind.general);
     const ref = store.taskRef(task.id);
     await engine.runMove("link", { task: ref, url: doc });
-    const miss = await engine.runMove("unlink", { task: ref, url: "https://x.test" });
-    expect(miss).toEqual({ ok: false, result: `${ref} has no link https://x.test. Links: ${doc}` });
+    const miss = await engine.runMove("unlink", {
+      task: ref,
+      url: "https://x.test",
+    });
+    expect(miss).toEqual({
+      ok: false,
+      result: `${ref} has no link https://x.test. Links: ${doc}`,
+    });
     const out = await engine.runMove("unlink", { task: ref, url: doc });
     expect(out).toEqual({ ok: true, result: `unlinked ${doc} from ${ref}` });
     expect(store.linksForTask(task.id)).toEqual([]);
@@ -845,10 +1100,18 @@ describe("links", () => {
     const mine = engine.desk.newTask("mine", Kind.general);
     const other = engine.desk.newTask("other", Kind.general);
     const by = `agent ${store.taskRef(mine.id)}`;
-    const own = await engine.runMove("link", { task: store.taskRef(mine.id), url: doc }, by);
+    const own = await engine.runMove(
+      "link",
+      { task: store.taskRef(mine.id), url: doc },
+      by,
+    );
     expect(own.ok).toBe(true);
     expect(store.linksForTask(mine.id)[0].added_by).toBe(by);
-    const theirs = await engine.runMove("link", { task: store.taskRef(other.id), url: doc }, by);
+    const theirs = await engine.runMove(
+      "link",
+      { task: store.taskRef(other.id), url: doc },
+      by,
+    );
     expect(theirs.ok).toBe(false);
   });
 
@@ -857,7 +1120,9 @@ describe("links", () => {
     store.addTaskLink(task.id, doc, "the plan", "you");
     expect(taskDetail(task)).toContain(`Link: the plan ${doc}`);
     expect(codingBrief(config(), task)).toContain(`Link: the plan ${doc}`);
-    expect(movesHelp()).toContain("- move link RIKER-0000 <url> [--title <what it is, in a few words>]");
+    expect(movesHelp()).toContain(
+      "- move link RIKER-0000 <url> [--title <what it is, in a few words>]",
+    );
   });
 });
 

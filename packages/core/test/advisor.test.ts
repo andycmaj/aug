@@ -41,10 +41,16 @@ describe("the Advisor remembers what it already said", () => {
     expect(prompt).toContain(
       `[dismissed, 2026-11-18] Ping Acme on the renewal (about ${store.taskRef(renewal)})`,
     );
-    expect(prompt).toContain(`[approved as ${store.taskRef(made)}, 2026-11-16] Chase the invoice`);
-    expect(prompt).toContain("[open in the Inbox, 2026-10-17] Old but still open");
+    expect(prompt).toContain(
+      `[approved as ${store.taskRef(made)}, 2026-11-16] Chase the invoice`,
+    );
+    expect(prompt).toContain(
+      "[open in the Inbox, 2026-10-17] Old but still open",
+    );
     expect(prompt).not.toContain("Old and gone");
-    expect(calls[0].system).toContain("dismissed means the owner does not want it");
+    expect(calls[0].system).toContain(
+      "dismissed means the owner does not want it",
+    );
   });
 
   test("ideas about closed tasks stay out of the prompt but still hold a repeat back", async () => {
@@ -57,7 +63,9 @@ describe("the Advisor remembers what it already said", () => {
     }));
     expect((await runAdvisor(config(), AT, true)).added).toBe(0);
     expect(calls[0].prompt).not.toContain("Follow up on the ledger");
-    expect(calls[0].prompt).toContain("[dismissed, 2026-11-17] Plan the offsite");
+    expect(calls[0].prompt).toContain(
+      "[dismissed, 2026-11-17] Plan the offsite",
+    );
   });
 
   test("an idea about a task whose idea was dismissed is refused, under any title", async () => {
@@ -66,19 +74,40 @@ describe("the Advisor remembers what it already said", () => {
     ideaAt("Ping Acme on the renewal", renewal, IdeaStatus.dismissed, 10);
     fakeBrain(() => ({
       ideas: [
-        { title: "Acme renewal is slipping", body: "b", task: store.taskRef(renewal) },
-        { title: "Hiring loop has no owner", body: "b", task: store.taskRef(other) },
+        {
+          title: "Acme renewal is slipping",
+          body: "b",
+          task: store.taskRef(renewal),
+        },
+        {
+          title: "Hiring loop has no owner",
+          body: "b",
+          task: store.taskRef(other),
+        },
       ],
     }));
     expect((await runAdvisor(config(), AT, true)).added).toBe(1);
-    expect(store.openIdeas().map((i) => i.title)).toEqual(["Hiring loop has no owner"]);
+    expect(store.openIdeas().map((i) => i.title)).toEqual([
+      "Hiring loop has no owner",
+    ]);
   });
 
   test("a dismissal older than the window no longer holds its task back", async () => {
     const renewal = task("Renewal for Acme");
-    ideaAt("Ping Acme on the renewal", renewal, IdeaStatus.dismissed, PAST_IDEAS_DAYS + 2);
+    ideaAt(
+      "Ping Acme on the renewal",
+      renewal,
+      IdeaStatus.dismissed,
+      PAST_IDEAS_DAYS + 2,
+    );
     fakeBrain(() => ({
-      ideas: [{ title: "Acme renewal is slipping", body: "b", task: store.taskRef(renewal) }],
+      ideas: [
+        {
+          title: "Acme renewal is slipping",
+          body: "b",
+          task: store.taskRef(renewal),
+        },
+      ],
     }));
     expect((await runAdvisor(config(), AT, true)).added).toBe(1);
   });

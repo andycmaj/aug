@@ -15,7 +15,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 const LONG =
@@ -38,7 +40,10 @@ test("the Canvas shows a brief's paragraphs, labels and indentation", async () =
   const engine = installFixture("demo");
   engine.desk.newTask("Readable brief render", Kind.coding, BRIEF);
 
-  const setup = await testRender(() => <App engine={engine} />, { width: 120, height: 50 });
+  const setup = await testRender(() => <App engine={engine} />, {
+    width: 120,
+    height: 50,
+  });
   destroy = () => setup.renderer.destroy();
   const settle = async (ms = 40) => {
     await Bun.sleep(ms);
@@ -51,19 +56,27 @@ test("the Canvas shows a brief's paragraphs, labels and indentation", async () =
     await settle();
   };
   await press("\\", { ctrl: true });
-  for (const c of "Readable brief render") setup.mockInput.pressKey(c);
+  for (const c of "Readable brief render") {
+    setup.mockInput.pressKey(c);
+  }
   await settle();
   await press("RETURN");
   const end = Date.now() + 3000;
-  while (!frame().includes("indentmarker") && Date.now() < end) await settle(20);
+  while (!frame().includes("indentmarker") && Date.now() < end) {
+    await settle(20);
+  }
 
   const shown = frame();
   // BRIEF_FRAMES=<file> keeps the frame for a look.
-  if (process.env.BRIEF_FRAMES) writeFileSync(process.env.BRIEF_FRAMES, `${shown}\n`);
+  if (process.env.BRIEF_FRAMES) {
+    writeFileSync(process.env.BRIEF_FRAMES, `${shown}\n`);
+  }
   const rows = shown.split("\n");
   const at = (marker: string) => {
     const i = rows.findIndex((r) => r.includes(marker));
-    if (i < 0) throw new Error(`no ${marker} on the Canvas:\n${shown}`);
+    if (i < 0) {
+      throw new Error(`no ${marker} on the Canvas:\n${shown}`);
+    }
     return i;
   };
   // The Canvas starts at the column the brief's label sits at.

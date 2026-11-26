@@ -88,7 +88,9 @@ describe("writing", () => {
   test("rolls over past maxBytes, keeping one old file", () => {
     freshHome({ log: { enabled: true, level: "info", maxBytes: 200 } });
     const log = logger("x");
-    for (let i = 0; i < 10; i++) log.info(`line ${i}`, { pad: "x".repeat(40) });
+    for (let i = 0; i < 10; i++) {
+      log.info(`line ${i}`, { pad: "x".repeat(40) });
+    }
     expect(existsSync(`${paths.log()}.1`)).toBe(true);
     expect(readFileSync(paths.log(), "utf8").length).toBeLessThanOrEqual(200);
     expect(read()).toContain("line 9");

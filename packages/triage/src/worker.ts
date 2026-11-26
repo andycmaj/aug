@@ -30,15 +30,28 @@ export function retryDelayMs(attempts: number): number {
 // they answer, they do not ask, and one ends the burst before it.
 export function nextBatch(due: readonly MessageRow[]): MessageRow[] {
   const first = due[0];
-  if (!first) return [];
-  if (first.from_me) return [first];
+  if (!first) {
+    return [];
+  }
+  if (first.from_me) {
+    return [first];
+  }
   const batch = [first];
   for (const m of due.slice(1)) {
-    if (m.thread_key !== first.thread_key) continue;
+    if (m.thread_key !== first.thread_key) {
+      continue;
+    }
     // The owner answered in between: what comes after is a new turn.
-    if (m.from_me) break;
+    if (m.from_me) {
+      break;
+    }
     const last = batch[batch.length - 1]!;
-    if (Date.parse(m.received_at) - Date.parse(last.received_at) > BATCH_WINDOW_MS) break;
+    if (
+      Date.parse(m.received_at) - Date.parse(last.received_at) >
+      BATCH_WINDOW_MS
+    ) {
+      break;
+    }
     batch.push(m);
   }
   return batch;
@@ -48,7 +61,9 @@ export function nextBatch(due: readonly MessageRow[]): MessageRow[] {
 // message's text in order, each named when more than one person wrote.
 export function combined(batch: readonly MessageRow[]): MessageRow {
   const lead = batch[batch.length - 1]!;
-  if (batch.length === 1) return lead;
+  if (batch.length === 1) {
+    return lead;
+  }
   const authors = new Set(batch.map((m) => m.author));
   const body = batch
     .map((m) => (authors.size > 1 ? `${m.author_name}: ${m.body}` : m.body))
@@ -78,7 +93,9 @@ export async function triageNext(
   const batch = nextBatch(store.dueMessages(at.toISOString())).filter((m) =>
     store.claimMessage(m.id),
   );
-  if (batch.length === 0) return null;
+  if (batch.length === 0) {
+    return null;
+  }
   const claimed = batch.map((m) => store.getMessage(m.id)!);
   const lead = claimed[claimed.length - 1]!;
   const earlier = claimed.slice(0, -1);
@@ -91,12 +108,17 @@ export async function triageNext(
     // the same retry, with nothing filed.
     done({ ok: false });
     log.error("triage threw", { message: lead.id, err });
-    for (const m of claimed) retryOrGiveUp(m, at);
+    for (const m of claimed) {
+      retryOrGiveUp(m, at);
+    }
     throw err;
   }
   done({ verdict: outcome.verdict, batch: claimed.length });
-  if (outcome.verdict === "failed")
-    for (const m of claimed) retryOrGiveUp(m, at);
+  if (outcome.verdict === "failed") {
+    for (const m of claimed) {
+      retryOrGiveUp(m, at);
+    }
+  }
   return { messages: claimed.map((m) => m.id), outcome };
 }
 
@@ -107,5 +129,7 @@ function retryOrGiveUp(m: MessageRow, at: Date): void {
       ? new Date(at.getTime() + retryDelayMs(attempts)).toISOString()
       : null;
   store.settleMessage(m.id, MessageState.failed, next);
-  if (!next) log.warn("triage gave up", { message: m.id, attempts });
+  if (!next) {
+    log.warn("triage gave up", { message: m.id, attempts });
+  }
 }

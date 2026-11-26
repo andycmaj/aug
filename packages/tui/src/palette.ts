@@ -69,7 +69,9 @@ export function paletteEntries(
 ): PaletteEntry[] {
   const byCmd = new Map<string, PaletteEntry>();
   for (const b of bindings) {
-    if (SKIP.has(b.cmd)) continue;
+    if (SKIP.has(b.cmd)) {
+      continue;
+    }
     const seen = byCmd.get(b.cmd);
     if (seen) {
       seen.hint = `${seen.hint}/${b.keys}`;
@@ -97,16 +99,14 @@ export function paletteEntries(
   );
   const loose = extras
     .filter((e) => e.relevant?.(ctx) ?? true)
-    .map(
-      (e): PaletteEntry => ({
-        id: e.id,
-        label: e.label,
-        hint: e.hint,
-        group: e.group,
-        inContext: e.inContext ?? false,
-        run: e.run,
-      }),
-    );
+    .map((e): PaletteEntry => ({
+      id: e.id,
+      label: e.label,
+      hint: e.hint,
+      group: e.group,
+      inContext: e.inContext ?? false,
+      run: e.run,
+    }));
   // An extra about the row (a task action) goes with the row's keys, not
   // after everything, where the list's window would leave it unseen.
   const rowEnd = keyed.findLastIndex((e) => e.group === PaletteGroup.row) + 1;

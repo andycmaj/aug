@@ -14,7 +14,13 @@ import {
   type InboxRow,
 } from "../src/inbox";
 import * as store from "../src/store";
-import { IdeaStatus, Kind, MessageState, Verdict, type MessageRow } from "../src/types";
+import {
+  IdeaStatus,
+  Kind,
+  MessageState,
+  Verdict,
+  type MessageRow,
+} from "../src/types";
 import { freshHome } from "./support/helpers";
 
 beforeEach(() => freshHome());
@@ -35,7 +41,12 @@ function message(extra: Partial<store.NewMessage> = {}): MessageRow {
   })!;
 }
 
-function filed(verdict: Verdict | null, reason: string | null, task = false, extra: Partial<store.NewMessage> = {}) {
+function filed(
+  verdict: Verdict | null,
+  reason: string | null,
+  task = false,
+  extra: Partial<store.NewMessage> = {},
+) {
   const m = message(extra);
   const taskId = task
     ? store.createTask({ title: "t", kind: Kind.task, channel: "slack" }).id
@@ -79,7 +90,10 @@ describe("each row says where it went", () => {
     const done = store.addIdea("Old idea", "body", null);
     store.setIdeaStatus(done.id, IdeaStatus.dismissed);
     const rows = byKey(inboxRows());
-    expect(rows.get(`i${open.id}`)).toMatchObject({ source: "advisor", result: InboxResult.idea });
+    expect(rows.get(`i${open.id}`)).toMatchObject({
+      source: "advisor",
+      result: InboxResult.idea,
+    });
     expect(rows.get(`i${done.id}`)!.result).toBe(InboxResult.dismissed);
   });
 
@@ -102,9 +116,14 @@ describe("the badge counts what is on you", () => {
     message();
     failedTriage("2026-11-05T11:00:00.000Z");
     store.addIdea("idea", "body", null);
-    store.setIdeaStatus(store.addIdea("gone", "body", null).id, IdeaStatus.dismissed);
+    store.setIdeaStatus(
+      store.addIdea("gone", "body", null).id,
+      IdeaStatus.dismissed,
+    );
     expect(inboxCount()).toBe(2);
-    expect(inboxRows().filter((r) => inFilter(r, InboxFilter.attention))).toHaveLength(2);
+    expect(
+      inboxRows().filter((r) => inFilter(r, InboxFilter.attention)),
+    ).toHaveLength(2);
   });
 });
 
@@ -116,11 +135,18 @@ describe("filters", () => {
     filed(Verdict.fyi, "a newsletter");
     filed(null, "a greeting; waits for the ask");
     filed(null, "your own message", false, { fromMe: true });
-    store.setIdeaStatus(store.addIdea("gone", "body", null).id, IdeaStatus.dismissed);
+    store.setIdeaStatus(
+      store.addIdea("gone", "body", null).id,
+      IdeaStatus.dismissed,
+    );
     const rows = inboxRows();
-    const shown = rows.filter((r) => inFilter(r, InboxFilter.actionable)).map((r) => r.result);
+    const shown = rows
+      .filter((r) => inFilter(r, InboxFilter.actionable))
+      .map((r) => r.result);
     expect(shown.sort()).toEqual([InboxResult.fyi, InboxResult.task].sort());
-    expect(rows.filter((r) => inFilter(r, InboxFilter.all))).toHaveLength(rows.length);
+    expect(rows.filter((r) => inFilter(r, InboxFilter.all))).toHaveLength(
+      rows.length,
+    );
   });
 
   // AUG-0140: x reads any message, and a read one asks nothing more of you,
@@ -131,10 +157,16 @@ describe("filters", () => {
     const failed = failedTriage();
     const untriaged = message();
     expect(inboxCount()).toBe(1);
-    for (const m of [made, joined, failed, untriaged]) store.markMessageRead(m.id);
+    for (const m of [made, joined, failed, untriaged]) {
+      store.markMessageRead(m.id);
+    }
     const rows = inboxRows();
-    expect(rows.filter((r) => inFilter(r, InboxFilter.actionable))).toHaveLength(0);
-    expect(rows.filter((r) => inFilter(r, InboxFilter.attention))).toHaveLength(0);
+    expect(
+      rows.filter((r) => inFilter(r, InboxFilter.actionable)),
+    ).toHaveLength(0);
+    expect(rows.filter((r) => inFilter(r, InboxFilter.attention))).toHaveLength(
+      0,
+    );
     expect(inboxCount()).toBe(0);
     // Still under all, and what it made is still made.
     expect(rows.filter((r) => inFilter(r, InboxFilter.all))).toHaveLength(4);
@@ -173,8 +205,14 @@ describe("private bodies stay short", () => {
   });
 
   test("a GitHub row's subject is its title", () => {
-    message({ channel: "github", title: "acme/api#12 issue: export drops transfers", body: "long body" });
-    expect(inboxRows()[0]!.subject).toBe("acme/api#12 issue: export drops transfers");
+    message({
+      channel: "github",
+      title: "acme/api#12 issue: export drops transfers",
+      body: "long body",
+    });
+    expect(inboxRows()[0]!.subject).toBe(
+      "acme/api#12 issue: export drops transfers",
+    );
   });
 
   test("the body is capped until revealed", () => {

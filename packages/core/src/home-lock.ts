@@ -41,15 +41,23 @@ export function claimHome(opts: ClaimOptions = {}): Claim {
       return { ok: true };
     } catch {
       const held = holder();
-      if (held === pid) return { ok: true };
-      if (held !== null && alive(held)) return { ok: false, pid: held };
+      if (held === pid) {
+        return { ok: true };
+      }
+      if (held !== null && alive(held)) {
+        return { ok: false, pid: held };
+      }
       rmSync(paths.lock(), { force: true });
     }
   }
   const held = holder();
-  return held === pid || held === null ? { ok: true } : { ok: false, pid: held };
+  return held === pid || held === null
+    ? { ok: true }
+    : { ok: false, pid: held };
 }
 
 export function releaseHome(pid = process.pid): void {
-  if (holder() === pid) rmSync(paths.lock(), { force: true });
+  if (holder() === pid) {
+    rmSync(paths.lock(), { force: true });
+  }
 }

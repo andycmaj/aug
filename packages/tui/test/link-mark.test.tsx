@@ -19,7 +19,11 @@ import { LINK_FRAMES, LINK_STILL, type Link } from "@riker/core/link-state";
 import { TerminalHost } from "../src/components/agent-terminal";
 import { LinkMark, useLinkFrame } from "../src/components/link-mark";
 import { MotionContext } from "../src/context/motion";
-import { TerminalsProvider, useTerminals, type TermRequest } from "../src/context/terminals";
+import {
+  TerminalsProvider,
+  useTerminals,
+  type TermRequest,
+} from "../src/context/terminals";
 import { keymap } from "../src/keymap";
 
 let destroy: (() => void) | undefined;
@@ -35,10 +39,22 @@ async function mountTerm(request: Omit<TermRequest, "id" | "title" | "kind">) {
               {(() => {
                 const terminals = useTerminals();
                 let pane: Renderable | undefined;
-                onMount(() => terminals.open({ id: "t", title: "T", kind: "agent", ...request }));
+                onMount(() =>
+                  terminals.open({
+                    id: "t",
+                    title: "T",
+                    kind: "agent",
+                    ...request,
+                  }),
+                );
                 return (
                   <Pane name="canvas" ref={(r) => (pane = r)}>
-                    <TerminalHost id="t" attached={() => true} pane={() => pane} onDetach={() => {}} />
+                    <TerminalHost
+                      id="t"
+                      attached={() => true}
+                      pane={() => pane}
+                      onDetach={() => {}}
+                    />
                   </Pane>
                 );
               })()}
@@ -66,8 +82,12 @@ async function mountTerm(request: Omit<TermRequest, "id" | "title" | "kind">) {
 }
 
 test("a terminal is connecting until its first output, then attached", async () => {
-  const { frameWith } = await mountTerm({ argv: ["sh", "-c", "sleep 0.4; printf hello; sleep 5"] });
-  expect(await frameWith(`[${LINK_STILL} connecting]`)).toContain(`[${LINK_STILL} connecting]`);
+  const { frameWith } = await mountTerm({
+    argv: ["sh", "-c", "sleep 0.4; printf hello; sleep 5"],
+  });
+  expect(await frameWith(`[${LINK_STILL} connecting]`)).toContain(
+    `[${LINK_STILL} connecting]`,
+  );
   const after = await frameWith("[attached]");
   expect(after).toContain("hello");
   expect(after).not.toContain("connecting");
@@ -75,7 +95,9 @@ test("a terminal is connecting until its first output, then attached", async () 
 
 test("a terminal that exits before any output fails with why", async () => {
   const { frameWith } = await mountTerm({ argv: ["sh", "-c", "exit 3"] });
-  expect(await frameWith("[exited 3 before any output]")).toContain("[exited 3 before any output]");
+  expect(await frameWith("[exited 3 before any output]")).toContain(
+    "[exited 3 before any output]",
+  );
 });
 
 test("a terminal that never answers fails at its timeout, and connects if it answers late", async () => {
@@ -83,13 +105,19 @@ test("a terminal that never answers fails at its timeout, and connects if it ans
     argv: ["sh", "-c", "sleep 0.8; printf late; sleep 5"],
     connectMs: 300,
   });
-  expect(await frameWith("[✕ no answer after 0.3s]")).toContain("[✕ no answer after 0.3s]");
+  expect(await frameWith("[✕ no answer after 0.3s]")).toContain(
+    "[✕ no answer after 0.3s]",
+  );
   const after = await frameWith("[attached]");
   expect(after).toContain("late");
 });
 
 test("LinkMark animates only while connecting, with motion on", async () => {
-  const [link, setLink] = createSignal<Link>({ phase: "connecting", reason: null, since: 0 });
+  const [link, setLink] = createSignal<Link>({
+    phase: "connecting",
+    reason: null,
+    since: 0,
+  });
   const setup = await testRender(
     () => (
       <ThemeProvider>
@@ -108,8 +136,12 @@ test("LinkMark animates only while connecting, with motion on", async () => {
   while (seen.size < 2 && Date.now() < end) {
     await Bun.sleep(50);
     await setup.renderOnce();
-    const mark = [...setup.captureCharFrame()].find((c) => (LINK_FRAMES as readonly string[]).includes(c));
-    if (mark) seen.add(mark);
+    const mark = [...setup.captureCharFrame()].find((c) =>
+      (LINK_FRAMES as readonly string[]).includes(c),
+    );
+    if (mark) {
+      seen.add(mark);
+    }
   }
   expect(seen.size).toBeGreaterThanOrEqual(2);
 

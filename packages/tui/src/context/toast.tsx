@@ -34,7 +34,11 @@ export interface Toasts {
   // Oldest first: the last is the one shown, and the one Esc dismisses.
   errors: Accessor<ErrorToast[]>;
   // `duration` is the info toast's; an error ignores it.
-  showToast: (message: string, duration?: number, variant?: ToastVariant) => void;
+  showToast: (
+    message: string,
+    duration?: number,
+    variant?: ToastVariant,
+  ) => void;
   // The newest error; false when none is up.
   dismissError: () => boolean;
   clearToast: () => void;
@@ -51,7 +55,9 @@ export function createToasts(): Toasts {
   let nextId = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const stopTimer = () => {
-    if (timer) clearTimeout(timer);
+    if (timer) {
+      clearTimeout(timer);
+    }
     timer = null;
   };
 
@@ -64,8 +70,9 @@ export function createToasts(): Toasts {
     if (variant === ToastVariant.error) {
       setErrors((list) => {
         const top = list[list.length - 1];
-        if (top?.message === message)
+        if (top?.message === message) {
           return [...list.slice(0, -1), { ...top, id, times: top.times + 1 }];
+        }
         return [...list, { id, message, times: 1 }].slice(-MAX_ERRORS);
       });
       return;
@@ -80,7 +87,9 @@ export function createToasts(): Toasts {
   };
 
   const dismissError = () => {
-    if (errors().length === 0) return false;
+    if (errors().length === 0) {
+      return false;
+    }
     setErrors((list) => list.slice(0, -1));
     return true;
   };
@@ -91,7 +100,14 @@ export function createToasts(): Toasts {
     setErrors([]);
   };
 
-  return { info, errors, showToast, dismissError, clearToast, dispose: stopTimer };
+  return {
+    info,
+    errors,
+    showToast,
+    dismissError,
+    clearToast,
+    dispose: stopTimer,
+  };
 }
 
 const [ToastContext, useToast] = createRequiredContext<Toasts>("Toast");
@@ -100,5 +116,9 @@ export { useToast };
 export function ToastProvider(props: ParentProps) {
   const toasts = createToasts();
   onCleanup(toasts.dispose);
-  return <ToastContext.Provider value={toasts}>{props.children}</ToastContext.Provider>;
+  return (
+    <ToastContext.Provider value={toasts}>
+      {props.children}
+    </ToastContext.Provider>
+  );
 }

@@ -504,6 +504,14 @@ Tests live beside their package (`packages/<name>/test/`).
 
 ## TypeScript
 
+- `bun run lint` is oxlint then `oxfmt --check`; show it passing beside
+  `bun run typecheck`. oxlint (`.oxlintrc.json`) wants every `if`, `else`,
+  `for` and `while` body braced, nested ones too, and runs type-aware rules
+  on the real compiler: no floating or misused promises, no `await` on a
+  non-promise, no switch that misses a case of its union without a
+  `default`. oxfmt (`.oxfmtrc.json`) is prettier's style at 80 columns and
+  leaves Markdown and template literal contents alone. `bun run format`
+  fixes the braces and the formatting; the rest is by hand.
 - Never use `any`. Node/Bun types only.
 - Comments explain why, not what. No JSDoc.
 - Enums as `const X = {...} as const`, never TS `enum`.

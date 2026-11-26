@@ -28,7 +28,9 @@ describe("merged's look", () => {
 
   test("a lane with no Nerd Font mark keeps its own", () => {
     for (const lane of Object.keys(LANE_META) as Lane[]) {
-      if (lane === Lane.merged) continue;
+      if (lane === Lane.merged) {
+        continue;
+      }
       expect(laneMeta(lane, true).mark).toBe(LANE_META[lane].mark);
     }
   });
@@ -37,7 +39,9 @@ describe("merged's look", () => {
 describe("Nerd Font detection", () => {
   let dir: string | undefined;
   afterEach(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("config says, when it says", () => {
@@ -61,7 +65,9 @@ describe("the rail's merged row", () => {
   afterEach(() => {
     destroy?.();
     const home = process.env.RIKER_HOME;
-    if (home) rmSync(home, { recursive: true, force: true });
+    if (home) {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   for (const nerd of [true, false]) {

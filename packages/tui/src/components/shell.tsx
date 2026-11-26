@@ -71,7 +71,9 @@ export function useShell(opts: {
   };
 
   const toggleView = () =>
-    riker.setMode(riker.mode() === ViewMode.chat ? ViewMode.board : ViewMode.chat);
+    riker.setMode(
+      riker.mode() === ViewMode.chat ? ViewMode.board : ViewMode.chat,
+    );
   const pollNow = () => {
     showToast("Checking GitHub and Slack...");
     void riker.engine.pollNow();
@@ -85,12 +87,17 @@ export function useShell(opts: {
       riker.setMode(ViewMode.board);
       return;
     }
-    if (focus.isPaneFocused("canvas")) focus.setActivePane("rail");
+    if (focus.isPaneFocused("canvas")) {
+      focus.setActivePane("rail");
+    }
     riker.goTo(key);
   };
   const history = (direction: 1 | -1) => {
-    if (!riker.history(direction))
-      showToast(direction < 0 ? "Nowhere further back" : "Nowhere further forward");
+    if (!riker.history(direction)) {
+      showToast(
+        direction < 0 ? "Nowhere further back" : "Nowhere further forward",
+      );
+    }
   };
   // Newest move first; one that cannot be undone, or whose task changed
   // since, says so and leaves the stack, so ctrl+z again reaches the one
@@ -98,7 +105,12 @@ export function useShell(opts: {
   const undo = () =>
     void riker.desk.undo().then(
       (r) => showToast(r.text, r.ok ? 3000 : 5000, r.ok ? "info" : "error"),
-      (err) => showToast(`Could not undo: ${err instanceof Error ? err.message : String(err)}`, 5000, "error"),
+      (err) =>
+        showToast(
+          `Could not undo: ${err instanceof Error ? err.message : String(err)}`,
+          5000,
+          "error",
+        ),
     );
   const advisor = () => {
     showToast("The Advisor is reading your work...");
@@ -142,9 +154,12 @@ export function useShell(opts: {
   // key. Back leaves the dialog, the box or the agent before going back, so it
   // lands on the rail, never typing into a box or attached to a terminal.
   const leaveAll = () => {
-    if (focus.isModalOpen()) closeModal();
-    if (focus.isPaneFocused("canvas") || focus.isPaneFocused("input"))
+    if (focus.isModalOpen()) {
+      closeModal();
+    }
+    if (focus.isPaneFocused("canvas") || focus.isPaneFocused("input")) {
       focus.setActivePane("rail");
+    }
   };
   useScope(
     "app",
@@ -187,7 +202,9 @@ export function useShell(opts: {
     const result = keymap.dispatchCommand(cmd, {
       focused: focus.activePaneTarget() ?? null,
     });
-    if (!result.ok) log.info(`palette: ${cmd} did not run (${result.reason})`);
+    if (!result.ok) {
+      log.info(`palette: ${cmd} did not run (${result.reason})`);
+    }
   };
 
   function Palette(props: {
@@ -208,12 +225,17 @@ export function useShell(opts: {
         inContext: e.inContext,
         run: () => {
           const cmd = e.cmd;
-          if (cmd) runCommand(cmd);
-          else e.run?.();
+          if (cmd) {
+            runCommand(cmd);
+          } else {
+            e.run?.();
+          }
         },
       }));
     const title = () => {
-      if (riker.paletteMode() === PaletteMode.ALL) return "All commands";
+      if (riker.paletteMode() === PaletteMode.ALL) {
+        return "All commands";
+      }
       const subject = props.subject?.();
       return subject ? `Commands · ${subject}` : "Commands";
     };
@@ -241,9 +263,7 @@ export function useShell(opts: {
           <FocusHelp
             ctx={() => props.ctx()}
             onClose={closeModal}
-            header={
-              riker.mode() === ViewMode.chat ? <RailLegend /> : undefined
-            }
+            header={riker.mode() === ViewMode.chat ? <RailLegend /> : undefined}
             footer={
               <text fg={theme.textMuted}>
                 Nothing goes out until you press y and confirm.

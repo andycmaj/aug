@@ -21,7 +21,9 @@ export function slackReply(
     type: "slack_reply",
     build(message, answer) {
       const meta = messageMeta(message);
-      if (meta.channel !== "slack" || !meta.slackChannel) return null;
+      if (meta.channel !== "slack" || !meta.slackChannel) {
+        return null;
+      }
       const threadTs = meta.thread_ts ?? (meta.dm ? null : meta.ts);
       return {
         type: "slack_reply",

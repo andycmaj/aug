@@ -17,13 +17,14 @@ test("TermView shows the terminal its id names after the id changes", async () =
         {(() => {
           const terminals = useTerminals();
           onMount(() => {
-            for (const n of [1, 2])
+            for (const n of [1, 2]) {
               terminals.open({
                 id: `view-${n}`,
                 title: `T${n}`,
                 kind: "agent",
                 argv: ["sh", "-c", `printf 'screen-of-task-${n}'; sleep 5`],
               });
+            }
           });
           return <TermView id={id()} />;
         })()}

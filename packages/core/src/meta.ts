@@ -45,7 +45,9 @@ const str = (v: unknown): string | null =>
   typeof v === "string" && v ? v : null;
 
 function requestedOf(v: unknown): ReviewRequested | null {
-  if (!v || typeof v !== "object") return null;
+  if (!v || typeof v !== "object") {
+    return null;
+  }
   const r = v as Record<string, unknown>;
   return {
     me: r.me === true,
