@@ -126,6 +126,9 @@ function actionSystem(spec: ActionSpec): string {
 function actionPrompt(
   spec: ActionSpec,
   task: TaskRow,
+  // Where the call runs: when it is the checkout, the model is told so,
+  // or the path alone has it reach for git -C, which no rule allows.
+  cwd: string,
   forked: boolean,
   as: string,
   // The guide's job, appended to the skill's args.
@@ -141,7 +144,7 @@ function actionPrompt(
     `Task ${store.taskRef(task.id)}: ${task.title}`,
     task.summary ? labeled("Brief", task.summary) : "",
     task.repo ? `Repo: ${task.repo}` : "",
-    task.worktree ? `Checkout: ${task.worktree} (branch ${task.branch ?? "unknown"})` : "",
+    checkoutLine(task, cwd),
     ...store.linksForTask(task.id).map((l) => `Link: ${linkLine(l)}`),
     projectContext(task),
     forked
@@ -155,6 +158,14 @@ function actionPrompt(
   ]
     .filter((line, i, all) => line !== "" || all[i - 1] !== "")
     .join("\n");
+}
+
+function checkoutLine(task: TaskRow, cwd: string): string {
+  if (!task.worktree) return "";
+  const branch = `branch ${task.branch ?? "unknown"}`;
+  return task.worktree === cwd
+    ? `Checkout: you run in it (${branch}), so run git there as is, never with -C.`
+    : `Checkout: ${task.worktree} (${branch})`;
 }
 
 // The guide's patch: against the PR's base, so a PR stacked on another
@@ -367,7 +378,7 @@ async function run(
       return await runGuide(config, task, spec, turn, event, shape, plan, steps, timing, context);
     }
     const result = await think({
-      prompt: actionPrompt(spec, task, Boolean(shape.session), shape.as),
+      prompt: actionPrompt(spec, task, shape.cwd, Boolean(shape.session), shape.as),
       system: actionSystem(spec),
       model: spec.model ?? config.brain.agentModel,
       cwd: shape.cwd,
@@ -487,7 +498,7 @@ async function runGuide(
     plan: plan.batches,
     commits,
     progress,
-    prompt: (job) => actionPrompt(spec, task, false, shape.as, job, context),
+    prompt: (job) => actionPrompt(spec, task, shape.cwd, false, shape.as, job, context),
     ask: async (prompt, label) => {
       const result = await think({
         prompt,
