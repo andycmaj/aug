@@ -1,0 +1,27 @@
+# Site demo for Riker, run against RIKER_FIXTURE=demo (`bun run demo`): a
+# fictional morning, no network, no AI, nothing sends.
+# Recorded by opentui-app's apps/site/scripts/record.ts.
+wait 1000
+key j j          # rail: down to the overtime ask
+key return       # open it on the Canvas
+wait 1800
+key esc          # back to the rail
+key j j          # the CSV bug: its PR, the agent's report, a drafted close-out
+key return
+wait 1800
+key y            # send asks first, showing the exact words and where they go
+wait 2200
+key esc          # cancel: nothing sent
+wait 600
+key v            # the Board
+wait 1500
+key 2            # Columns: every task by what its agent is doing
+wait 1800
+key 4            # Inbox: what triage saw and what it became
+wait 1800
+key v            # back to chat
+wait 600
+key ?            # help
+wait 1800
+key esc
+wait 800
