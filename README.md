@@ -137,7 +137,9 @@ read their own defaults under what you write:
   "brain": {
     "triageModel": "haiku",
     "agentModel": "sonnet",
-    "assistantModel": "sonnet"
+    "assistantModel": "sonnet",
+    "assistantSimpleModel": "haiku",
+    "projectManagerModel": "sonnet"
   },
   "opener": "open",
   "maxActiveAgents": 4,
@@ -192,6 +194,16 @@ so a turn whose session last answered more than `idleMinutes` ago starts a new
 one that reads the conversation back, rather than paying to re-write the whole
 old one. Home also starts over once its context passes `homeMaxTokens`. `0`
 turns either off.
+
+`brain.assistantSimpleModel` (haiku by default, `""` turns it off) answers a Home line that is one short move or lookup ("start RIKER-0012",
+"what is waiting?", "make a task called ...") on a cheaper model. A session
+keeps the model it started on, since the prompt cache is per model: the
+cheaper one only starts with a new session, and a line that needs
+`assistantModel` after it starts another.
+
+`brain.projectManagerModel` is what a project's manager runs on (unset, it
+is `assistantModel`). A manager's session keeps its model too: changing it
+starts each manager on a new session at its next turn.
 
 `triage.escalate` says what else may become a task without you. On GitHub
 that is the notification reasons listed (by default: assigned to you, a

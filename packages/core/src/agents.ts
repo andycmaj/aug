@@ -10,7 +10,12 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { assistantCall, rememberWhere, whereThingsStand } from "./assistant";
-import { managerCall, pictureKey, projectPicture } from "./manager";
+import {
+  managerCall,
+  managerModel,
+  pictureKey,
+  projectPicture,
+} from "./manager";
 import { think, BrainError, type BrainCall } from "./brain";
 import {
   capabilityAllow,
@@ -28,6 +33,7 @@ import {
 import type { RikerConfig, ConfigSource } from "./config";
 import { now, writeWhenFree } from "./db";
 import { DocName, forPrompt } from "./docs";
+import { homeModel } from "./home-model";
 import { docsBlock } from "./prompts";
 import { changedFiles, snapshotDir } from "./files";
 import { Drafts, lastIncoming } from "./outbound";
@@ -509,9 +515,21 @@ export class AgentPool {
     const runsRiker = home || project !== null;
     const prior = chatResume(taskId, history);
     const priorRow = prior ? store.getSession(prior) : null;
-    const left = priorRow
+    const idle = priorRow
       ? leaveSession(priorRow, history, runsRiker, config)
       : null;
+    // Home picks its model per turn; a session keeps the model it started on.
+    const pick = home
+      ? homeModel(config, history, priorRow && !idle ? priorRow : null)
+      : null;
+    // A manager's session too keeps its model: a changed projectManagerModel
+    // starts a new one rather than re-write the cache on the new model.
+    const was = priorRow?.model ?? config.brain.assistantModel;
+    const managerLeave =
+      project && priorRow && !idle && was !== managerModel(config)
+        ? `model ${was} to ${managerModel(config)}`
+        : null;
+    const left = idle ?? pick?.leave ?? managerLeave;
     if (left) {
       log.info("new session", { task: taskId, left: prior, why: left });
     }
@@ -569,21 +587,41 @@ export class AgentPool {
         ? projectPicture(project, config)
         : "";
     try {
+      const call = pick
+        ? assistantCall(
+            config,
+            history,
+            reason,
+            resume,
+            where,
+            lines,
+            pick.model,
+          )
+        : project
+          ? managerCall(
+              config,
+              task,
+              project,
+              history,
+              reason,
+              resume,
+              where,
+              lines,
+            )
+          : generalCall(config, task, history, reason, Boolean(resume));
+      if (!resume && call.model) {
+        store.updateSession(sessionId, { model: call.model });
+      }
+      if (pick) {
+        log.info("home model", {
+          task: taskId,
+          model: pick.model,
+          simple: pick.simple,
+          resume: !!resume,
+        });
+      }
       const result = await think({
-        ...(home
-          ? assistantCall(config, history, reason, resume, where, lines)
-          : project
-            ? managerCall(
-                config,
-                task,
-                project,
-                history,
-                reason,
-                resume,
-                where,
-                lines,
-              )
-            : generalCall(config, task, history, reason, Boolean(resume))),
+        ...call,
         cwd,
         ...(resume ? { resume } : { sessionId }),
         spend: {

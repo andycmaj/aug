@@ -23,7 +23,21 @@ where its cost goes.
    re-writes everything anyway), or when Home's context is past
    `config.chat.homeMaxTokens` (60k, `sessions.context_tokens`). No session
    means a new `--session-id`.
-3. **Call.** `assistantCall` (`core/assistant.ts`) builds it:
+3. **Model.** `homeModel` (`core/home-model.ts`) picks it. A turn whose
+   owner words since the last answer are one short line that is a single
+   move or lookup (start, stop or done on one task, what is waiting, show a
+   task, make a task with a given title) and names no project is simple
+   (`simpleAsk`), and runs on `config.brain.assistantSimpleModel` when that
+   is set; everything else runs on `assistantModel`. The prompt cache is per
+   model, so a session keeps the model it started on (`sessions.model`): a
+   simple turn on a warm `assistantModel` session stays on it, and a turn
+   that needs `assistantModel` leaves a session on the simple model for a
+   new one. The simple model only starts with a session that starts anyway.
+   A project's manager (`core/manager.ts`) is not routed: even a short line
+   on its row asks it to judge the plan (unblock the next task, start an
+   agent, rewrite the standing), so it runs on `brain.projectManagerModel`
+   (`assistantModel` when unset), and leaves a session started on another.
+4. **Call.** `assistantCall` (`core/assistant.ts`) builds it:
    - `system`: `assistantSystem(config)`, the role, the riker-tools commands,
      the moves, grants (`grantedNote`, `connectorNote`, `docsNote`) and the
      brain docs (PERSONA, JOB, LEARNED).
@@ -35,17 +49,18 @@ where its cost goes.
      granted capability is a plugin.
    - `allow`: `assistantAllow(config)`, riker-tools and gh reads, the reads,
      Write in the doc drafts folder, and `capabilityAllow("assistant")`.
-   - `model`: `config.brain.assistantModel` (sonnet by default).
+   - `model`: what `homeModel` picked: `config.brain.assistantModel`
+     (sonnet by default), or `assistantSimpleModel` (haiku by default, `""` off).
    - `env`: `RIKER_ASKED_BY` is `askedVia(place)` when the turn answers a
      line heard elsewhere (`SLACK_ASKER` for Slack), so that plugin's guard
      holds the moves that start or end work for the owner's yes there.
    - `system`: core's words plus each plugin's `assistant` lines (GitHub's
      gh reads, Slack's hold).
-4. **Run.** `think()` (`core/brain.ts`) runs `claude` with `claudeArgs(call)`
+5. **Run.** `think()` (`core/brain.ts`) runs `claude` with `claudeArgs(call)`
    and `brainEnv(call)`, in `paths.work(taskId)`. Steps stream onto the turn
    row as they come. A move the Assistant makes goes through `riker-tools move`
    to the engine (`core/moves.ts`), which runs it on the desk.
-5. **Finish.** The answer lands on the turn. Denied calls become `denied:`
+6. **Finish.** The answer lands on the turn. Denied calls become `denied:`
    steps plus a `grant:` step naming the config key (`grantSteps`), and the
    next turn's prompt names them. `turnFinished` (`core/lifecycle.ts`) moves
    the session on. `recordSpend` writes the call's cost to `spend`.
@@ -54,7 +69,7 @@ where its cost goes.
 
 ```
 claude -p --output-format stream-json --verbose --setting-sources ""
-  --model <assistantModel> --append-system-prompt <system>
+  --model <homeModel's pick> --append-system-prompt <system>
   --resume <id> | --session-id <id>
   --tools Bash,Write,Read,Grep,Glob,WebSearch,WebFetch
   --permission-mode dontAsk --allowedTools <assistantAllow>
@@ -108,6 +123,26 @@ start of the context (the system prompt: a grant, a brain doc edit, the
 moves list) and the new turn itself. A grant change also changes what the
 session was told it may do (Knowledge #26); nothing starts a new session for
 it, so it waits for the idle hour or the size bound.
+
+## Simple turns on the cheaper model
+
+`bun packages/core/script/home-model-eval.ts [--models haiku,sonnet]
+[--out runs.json] [ask ...]` runs real Home asks, each on a new session in a
+scratch `RIKER_HOME` seeded the same way, and prints each model's steps,
+answer, tokens and cost. Only the Assistant's calls reach claude.
+
+Measured on claude 2.1.322, the default eight asks (two status lookups, two
+task lookups, done, stop, start, make a task with a title), one each:
+
+| Model | Cost per ask | Time per ask | Cache write per ask |
+|---|---|---|---|
+| haiku | $0.0024 | 4.3s | 8.7–9.2k |
+| sonnet | $0.0355 | 4.2s | 7.8–8.1k |
+
+Both made the same move on every move ask, and both lookups named the
+right tasks. Sonnet's lists were fuller ("what is waiting?" listed every
+open task, haiku only the one waiting on the owner); haiku once added a
+brief nobody asked for to a task it made.
 
 ## Checking it
 

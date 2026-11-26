@@ -131,6 +131,11 @@ export function managerPrompt(
     .join("\n");
 }
 
+// The model a project's manager runs on.
+export function managerModel(config: RikerConfig): string {
+  return config.brain.projectManagerModel || config.brain.assistantModel;
+}
+
 export function managerCall(
   config: RikerConfig,
   manager: TaskRow,
@@ -154,7 +159,7 @@ export function managerCall(
       Boolean(resume),
     ),
     system: managerSystem(config, project, lines),
-    model: config.brain.assistantModel,
+    model: managerModel(config),
     tools: [...ASSISTANT_TOOLS, ...grant.tools],
     allow: assistantAllow(config),
     pluginDirs: grant.pluginDirs,

@@ -275,6 +275,8 @@ export function assistantCall(
   resume: string | undefined,
   where: string,
   lines: readonly string[] = [],
+  // The model homeModel picked for this turn.
+  model: string = config.brain.assistantModel,
 ): Pick<
   BrainCall,
   "prompt" | "system" | "model" | "tools" | "allow" | "pluginDirs" | "env"
@@ -290,7 +292,7 @@ export function assistantCall(
       resume ? heardWhere(resume) : null,
     ),
     system: assistantSystem(config, lines),
-    model: config.brain.assistantModel,
+    model,
     tools: [...ASSISTANT_TOOLS, ...grant.tools],
     allow: assistantAllow(config),
     pluginDirs: grant.pluginDirs,
