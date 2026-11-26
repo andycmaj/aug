@@ -138,18 +138,43 @@ jobs:
           gh release edit "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md" --draft=false
 
       # Tells the project website (andycmaj/opentui-app) to re-record Riker's
-      # demo and keybindings from the new release. Needs a fine-grained PAT
-      # with Contents: read and write on andycmaj/opentui-app in the
-      # SITE_DISPATCH_TOKEN secret; skipped until that is set.
-      - name: Notify the website
+      # demo and keybindings from the new release. Authenticates as the
+      # opentui-site-dispatch GitHub App (Contents: read and write, installed
+      # only on andycmaj/opentui-app) with an installation token that expires
+      # within the hour. Needs the App's client ID in the SITE_APP_CLIENT_ID
+      # variable and its private key in the SITE_APP_KEY secret; skipped until
+      # both are set. Setup: "App release notifications" in
+      # andycmaj/opentui-app apps/site/README.md.
+      - name: Check for the site dispatch App
+        id: site-app
         env:
-          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          CLIENT_ID: ${{ vars.SITE_APP_CLIENT_ID }}
+          KEY: ${{ secrets.SITE_APP_KEY }}
+        run: |
+          if [ -z "$CLIENT_ID" ] || [ -z "$KEY" ]; then
+            echo "::notice title=Website not notified::SITE_APP_CLIENT_ID variable or SITE_APP_KEY secret not set; skipping the site dispatch"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint a site dispatch token
+        id: site-token
+        if: steps.site-app.outputs.enabled == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.SITE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SITE_APP_KEY }}
+          owner: andycmaj
+          repositories: opentui-app
+          permission-contents: write
+
+      - name: Notify the website
+        if: steps.site-app.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ steps.site-token.outputs.token }}
           TAG: ${{ needs.version.outputs.tag }}
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "SITE_DISPATCH_TOKEN not set; skipping"
-            exit 0
-          fi
           gh api repos/andycmaj/opentui-app/dispatches \
             -f event_type=app-released \
             -f "client_payload[app]=riker" \
