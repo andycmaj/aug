@@ -3,6 +3,7 @@
 // with. Plain TypeScript: runs under bare `bun`, no Solid preload, so a hook
 // costs a process start and one SQLite write.
 
+import { readFileSync } from "node:fs";
 import { defineCommand, runMain, type ArgsDef } from "citty";
 import { envVar } from "@riker/core/brand";
 import { adoptHook, paneEnv } from "@riker/core/adopt";
@@ -17,7 +18,7 @@ import { handleDone, handleHook, type HookEnv, type HookPayload } from "@riker/c
 import { loadConfig } from "@riker/core/config";
 import { Drafts } from "@riker/core/outbound";
 import { rikerPlugins } from "@riker/tui/plugins";
-import { configureLog, logger } from "@riker/core/log";
+import { configureLog, errorMessage, logger } from "@riker/core/log";
 import {
   findProject,
   findTasks,
@@ -264,15 +265,32 @@ const note = defineCommand({
     description: "Leave a live handoff note for other agents",
   },
   args: {
-    body: { type: "positional", required: true },
+    body: { type: "positional", required: false, description: "the note (or --file)" },
     label: { type: "string", default: "note", description: labels.join(" | ") },
+    file: {
+      type: "string",
+      description: "read the note from a file (- for stdin): long text, or quotes and $ a shell would mangle",
+    },
   },
-  run({ args }) {
+  async run({ args }) {
     const label = (
       labels.includes(args.label) ? args.label : "note"
     ) as NoteLabel;
+    let body = String(args.body ?? "");
+    if (args.file) {
+      try {
+        body = args.file === "-" ? await Bun.stdin.text() : readFileSync(args.file, "utf8");
+      } catch (err) {
+        console.error(`riker-tools note: cannot read ${args.file}: ${errorMessage(err)}`);
+        process.exit(1);
+      }
+    }
+    if (!body.trim()) {
+      console.error("riker-tools note: say what, or --file <path>");
+      process.exit(1);
+    }
     const taskId = Number(envVar("TASK_ID")) || null;
-    store.addNote(author(), label, String(args.body), taskId);
+    store.addNote(author(), label, body.trim(), taskId);
     console.log("posted");
   },
 });

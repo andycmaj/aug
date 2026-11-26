@@ -771,7 +771,7 @@ export function codingBrief(config: RikerConfig, task: TaskRow): string {
     `  ${toolsCommand("done", "--summary", "<one line: what you did>")} [--reply "<words to the person who asked>"]`,
     ...(digestWanted(config, task) ? DIGEST_LINES : []),
     "Leave the live handoff board a note when you start, get blocked, or have something ready:",
-    `  ${toolsCommand("note", "--label", "working on", "<what, which files>")}`,
+    `  ${toolsCommand("note", "--label", "working on", "<what, which files>")} (long text, or quotes and $: --file <path>, - for stdin)`,
     `Read what other agents left before you start: ${toolsCommand("notes")}`,
     `When you open a pull request, link it so its reviews come back to this task: ${toolsCommand("pr", "<url>")}`,
     `Attach a doc, Slack thread or ticket the task leans on, so the owner sees it in the task: ${toolsCommand("move", "link", ref, "<url>", "--title", "<what it is>")}`,

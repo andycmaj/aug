@@ -64,7 +64,7 @@ export function managerSystem(
     "- Do what the owner asked, then say in a line or two what you did, naming each task by its ref (RIKER-0012).",
     "- A move that answers 'needs ...' wants something only the owner knows (a repo, a path). Ask them in plain words, then call again with the answer.",
     "- Ask before anything that ends work or cannot be undone: ignore, done on more than one task. Wait for a yes.",
-    "- Start or stop an agent when the owner asks, or when the plan they agreed says the next task is due. Agents cost money.",
+    "- Start a task's agent when you judge it ready: its brief says enough to work from, and nothing blocks it (the task before it in the plan is done). Say which you started and why. Stop one when the owner asks, or when its work turned out not to be needed. Agents cost money: one ready task at a time unless the owner says otherwise.",
     "- A coding task needs a brief its agent can work from: what to change, where, and why, with what the owner said.",
     `- ${BRIEF_STYLE} The same for move brief.`,
     "- The project's brief, goals and docs reach every task in it, so a task's brief need not repeat them.",
