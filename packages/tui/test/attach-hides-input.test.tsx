@@ -14,7 +14,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 // A stand-in agent: says it is up, then echoes each byte it gets.
@@ -31,7 +33,9 @@ async function boot() {
   const csv = store
     .listTasks()
     .find((t) => t.title === "CSV import fails on a BOM");
-  if (!csv) throw new Error("demo has no CSV task");
+  if (!csv) {
+    throw new Error("demo has no CSV task");
+  }
   const isLive = engine.desk.isLive.bind(engine.desk);
   engine.desk.isLive = (t) => t.id === csv.id || isLive(t);
   engine.desk.viewer = async () => ({ argv: AGENT });
@@ -52,12 +56,16 @@ async function boot() {
     await settle();
   };
   const type = async (text: string) => {
-    for (const c of text) setup.mockInput.pressKey(c);
+    for (const c of text) {
+      setup.mockInput.pressKey(c);
+    }
     await settle();
   };
   const frameWith = async (want: string) => {
     const end = Date.now() + 3000;
-    while (!frame().includes(want) && Date.now() < end) await settle(20);
+    while (!frame().includes(want) && Date.now() < end) {
+      await settle(20);
+    }
     return frame();
   };
   return { press, type, frame, frameWith, settle };

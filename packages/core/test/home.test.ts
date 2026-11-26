@@ -34,13 +34,21 @@ describe("Home", () => {
     const home = store.homeTask();
     expect(store.homeTask().id).toBe(home.id);
     expect(home.kind).toBe(Kind.home);
-    store.createTask({ title: "real work", kind: Kind.general, channel: "owner" });
+    store.createTask({
+      title: "real work",
+      kind: Kind.general,
+      channel: "owner",
+    });
     expect(store.listTasks().map((t) => t.title)).toEqual(["real work"]);
   });
 
   test("sits first on the rail, in a section of its own", () => {
     const home = store.homeTask();
-    const work = store.createTask({ title: "w", kind: Kind.general, channel: "owner" });
+    const work = store.createTask({
+      title: "w",
+      kind: Kind.general,
+      channel: "owner",
+    });
     const rail = buildRail({
       home,
       tasks: [work],
@@ -59,15 +67,28 @@ describe("Home", () => {
       kind: Kind.general,
       channel: "owner",
     });
-    say(home.id, `make a coding task for @${store.taskRef(job.id)} in riker-mvp`);
-    await new AgentPool({ config: withLimit(4) }).request(home.id, "the owner typed", "owner");
+    say(
+      home.id,
+      `make a coding task for @${store.taskRef(job.id)} in riker-mvp`,
+    );
+    await new AgentPool({ config: withLimit(4) }).request(
+      home.id,
+      "the owner typed",
+      "owner",
+    );
 
     const call = calls[0];
     expect(call.tools).toContain("Bash");
-    const shell = call.allow!.filter((a) => a.startsWith("Bash(") && !a.startsWith("Bash(gh "));
+    const shell = call.allow!.filter(
+      (a) => a.startsWith("Bash(") && !a.startsWith("Bash(gh "),
+    );
     expect(shell).toHaveLength(3);
     expect(shell).toContain("Bash(riker-tools:*)");
-    expect(shell.some((a) => a.startsWith("Bash(bun /") && a.endsWith("riker-tools.ts:*)"))).toBe(true);
+    expect(
+      shell.some(
+        (a) => a.startsWith("Bash(bun /") && a.endsWith("riker-tools.ts:*)"),
+      ),
+    ).toBe(true);
     expect(call.env).toMatchObject({ RIKER_ASKED_BY: "assistant" });
     expect(call.env!.PATH).toStartWith(`${process.env.RIKER_HOME}/bin:`);
     expect(call.schema).toBeUndefined();
@@ -106,8 +127,16 @@ describe("Home", () => {
   });
 
   test("a general agent's tools know which task is asking", async () => {
-    const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
-    await new AgentPool({ config: withLimit(4) }).request(task.id, "go", "owner");
+    const task = store.createTask({
+      title: "t",
+      kind: Kind.general,
+      channel: "owner",
+    });
+    await new AgentPool({ config: withLimit(4) }).request(
+      task.id,
+      "go",
+      "owner",
+    );
     expect(calls[0].env).toMatchObject({ RIKER_TASK_ID: String(task.id) });
     expect(calls[0].env!.PATH).toStartWith(`${process.env.RIKER_HOME}/bin:`);
   });
@@ -115,12 +144,20 @@ describe("Home", () => {
 
 test("a general agent may run Riker's lookups and the agent moves, nothing else", async () => {
   const { generalAllow } = await import("../src/agents");
-  const bash = generalAllow(config()).filter((r) => r.includes("riker-tools.ts"));
+  const bash = generalAllow(config()).filter((r) =>
+    r.includes("riker-tools.ts"),
+  );
   expect(bash.some((r) => r.endsWith("riker-tools.ts move new:*)"))).toBe(true);
   expect(bash.some((r) => r.endsWith("riker-tools.ts projects:*)"))).toBe(true);
-  expect(bash.some((r) => r.endsWith("riker-tools.ts move project_new:*)"))).toBe(true);
   expect(
-    bash.some((r) => ["move done", "move start", "move project_archive"].some((m) => r.includes(m))),
+    bash.some((r) => r.endsWith("riker-tools.ts move project_new:*)")),
+  ).toBe(true);
+  expect(
+    bash.some((r) =>
+      ["move done", "move start", "move project_archive"].some((m) =>
+        r.includes(m),
+      ),
+    ),
   ).toBe(false);
 });
 
@@ -135,7 +172,9 @@ test("a general agent's riker-tools rules match the bun path written either way"
 
 test("riker-tools on a headless agent's PATH runs riker-tools", async () => {
   const { toolsEnv } = await import("../src/self");
-  const run = Bun.spawnSync(["riker-tools", "projects"], { env: { ...process.env, ...toolsEnv() } });
+  const run = Bun.spawnSync(["riker-tools", "projects"], {
+    env: { ...process.env, ...toolsEnv() },
+  });
   expect(run.exitCode).toBe(0);
   expect(run.stdout.toString()).toContain("no projects");
 });
@@ -161,11 +200,17 @@ test("a denied call is kept on the turn, and the next turn is told not to repeat
       denied: calls.length === 1 ? [denied] : [],
     };
   });
-  const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
+  const task = store.createTask({
+    title: "t",
+    kind: Kind.general,
+    channel: "owner",
+  });
   const pool = new AgentPool({ config: withLimit(4) });
   await pool.request(task.id, "go", "owner");
   await Bun.sleep(10);
-  const first = store.turnsForTask(task.id).findLast((t) => t.role === TurnRole.agent)!;
+  const first = store
+    .turnsForTask(task.id)
+    .findLast((t) => t.role === TurnRole.agent)!;
   expect(JSON.parse(first.steps)).toContain(`denied: ${denied}`);
 
   await pool.request(task.id, "again", "owner");
@@ -181,7 +226,8 @@ test("a denied call is kept on the turn, and the next turn is told not to repeat
 });
 
 test("a denied Docs call says on the turn what to grant, and the next turn is told it", async () => {
-  const denied = 'mcp__claude_ai_Claude_Docs__batch {"container":{"kind":"project"}}';
+  const denied =
+    'mcp__claude_ai_Claude_Docs__batch {"container":{"kind":"project"}}';
   setBrain(async (call) => {
     calls.push(call);
     return {
@@ -193,18 +239,26 @@ test("a denied Docs call says on the turn what to grant, and the next turn is to
       denied: calls.length === 1 ? [denied] : [],
     };
   });
-  const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
+  const task = store.createTask({
+    title: "t",
+    kind: Kind.general,
+    channel: "owner",
+  });
   const pool = new AgentPool({ config: withLimit(4) });
   await pool.request(task.id, "go", "owner");
   await Bun.sleep(10);
-  const first = store.turnsForTask(task.id).findLast((t) => t.role === TurnRole.agent)!;
+  const first = store
+    .turnsForTask(task.id)
+    .findLast((t) => t.role === TurnRole.agent)!;
   const { paths } = await import("../src/paths");
   const grant = `grant: mcp__claude_ai_Claude_Docs__batch: add "docs.write" to capabilities.grants.general in ${paths.config()}.`;
   expect(JSON.parse(first.steps)).toEqual([`denied: ${denied}`, grant]);
 
   await pool.request(task.id, "how do I enable it", "owner");
   await Bun.sleep(10);
-  expect(calls[1].prompt).toContain('add "docs.write" to capabilities.grants.general');
+  expect(calls[1].prompt).toContain(
+    'add "docs.write" to capabilities.grants.general',
+  );
   expect(calls[1].system).toContain("capabilities.grants.general");
 });
 
@@ -230,7 +284,11 @@ test("a doc a headless agent makes is linked to its task; Home links nothing by 
       isError: false,
     };
   });
-  const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
+  const task = store.createTask({
+    title: "t",
+    kind: Kind.general,
+    channel: "owner",
+  });
   const pool = new AgentPool({ config: withLimit(4) });
   await pool.request(task.id, "put it in a doc", "owner");
   await Bun.sleep(10);
@@ -260,7 +318,9 @@ describe("a chat turn leaves a session the cache has lost, or Home's grown too b
 
   // The last answer, as though it finished this many minutes ago.
   function lastAnswerAgo(taskId: number, minutes: number) {
-    const answer = store.turnsForTask(taskId).findLast((t) => t.role === TurnRole.agent)!;
+    const answer = store
+      .turnsForTask(taskId)
+      .findLast((t) => t.role === TurnRole.agent)!;
     store.updateTurn(answer.id, {
       finished_at: new Date(Date.now() - minutes * 60_000).toISOString(),
     });
@@ -325,7 +385,11 @@ describe("a chat turn leaves a session the cache has lost, or Home's grown too b
 
   test("a task's Q/A leaves an idle session but not a big one", async () => {
     contextBrain(200_000);
-    const task = store.createTask({ title: "t", kind: Kind.general, channel: "owner" });
+    const task = store.createTask({
+      title: "t",
+      kind: Kind.general,
+      channel: "owner",
+    });
     const pool = new AgentPool({ config: withLimit(4) });
     say(task.id, "look into it");
     await pool.request(task.id, "go", "owner");
@@ -347,11 +411,22 @@ describe("what the plugins tell the Assistant", () => {
     const engine = new Engine({
       config: testConfig(),
       offline: true,
-      plugins: [{ name: "chat", assistant: () => ["## Chat", "- Look things up with chat-cli."] }],
+      plugins: [
+        {
+          name: "chat",
+          assistant: () => ["## Chat", "- Look things up with chat-cli."],
+        },
+      ],
     });
     await engine.pool.request(home.id, "the owner typed", "owner");
-    await new AgentPool({ config: withLimit(4) }).request(home.id, "again", "owner");
-    expect(calls[0]!.system).toContain("## Chat\n- Look things up with chat-cli.");
+    await new AgentPool({ config: withLimit(4) }).request(
+      home.id,
+      "again",
+      "owner",
+    );
+    expect(calls[0]!.system).toContain(
+      "## Chat\n- Look things up with chat-cli.",
+    );
     expect(calls[1]!.system).not.toContain("## Chat");
     expect(calls[1]!.system).not.toContain("## GitHub");
     expect(calls[1]!.system).not.toContain("A line from Slack");
@@ -359,11 +434,25 @@ describe("what the plugins tell the Assistant", () => {
 
   test("a line heard elsewhere is answered there, and the turn asks as from there", async () => {
     const home = store.homeTask();
-    store.addTurn({ taskId: home.id, role: TurnRole.you, author: heardVia("Chat"), body: "stop RIKER-0002" });
-    await new AgentPool({ config: withLimit(4) }).request(home.id, "the owner typed", "owner");
-    expect(calls[0]!.env).toMatchObject({ RIKER_ASKED_BY: "assistant via Chat" });
-    expect(calls[0]!.prompt).toContain("The owner wrote from Chat (your answer goes back there");
-    expect(transcript(store.turnsForTask(home.id))).toContain("wrote from Chat");
+    store.addTurn({
+      taskId: home.id,
+      role: TurnRole.you,
+      author: heardVia("Chat"),
+      body: "stop RIKER-0002",
+    });
+    await new AgentPool({ config: withLimit(4) }).request(
+      home.id,
+      "the owner typed",
+      "owner",
+    );
+    expect(calls[0]!.env).toMatchObject({
+      RIKER_ASKED_BY: "assistant via Chat",
+    });
+    expect(calls[0]!.prompt).toContain(
+      "The owner wrote from Chat (your answer goes back there",
+    );
+    expect(transcript(store.turnsForTask(home.id))).toContain(
+      "wrote from Chat",
+    );
   });
 });
-

@@ -9,7 +9,11 @@ import {
   taskLine,
 } from "../src/lookup";
 import { setMux } from "../src/mux";
-import { applyProjectDoc, parseProjectDoc, renderProjectDoc } from "../src/project-doc";
+import {
+  applyProjectDoc,
+  parseProjectDoc,
+  renderProjectDoc,
+} from "../src/project-doc";
 import * as store from "../src/store";
 import { GoalStatus, Kind, TaskStatus } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
@@ -34,21 +38,50 @@ describe("project brief, goals and docs", () => {
   test("moves write the brief, add goals and attach docs", async () => {
     const p = ledger();
     expect(
-      await engine.runMove("project_brief", { project: "ledger", text: " Ship the ledger export. " }),
+      await engine.runMove("project_brief", {
+        project: "ledger",
+        text: " Ship the ledger export. ",
+      }),
     ).toEqual({ ok: true, result: "Ledger's brief rewritten" });
-    const goal = await engine.runMove("goal_new", { project: "Ledger", title: "CSV export works" });
+    const goal = await engine.runMove("goal_new", {
+      project: "Ledger",
+      title: "CSV export works",
+    });
     const g = store.goalsForProject(p.id)[0];
-    expect(goal.result).toBe(`${store.goalRef(g.id)} added to Ledger: CSV export works`);
-    const link = await engine.runMove("project_link", { project: "Ledger", url: notion, title: "the plan" });
+    expect(goal.result).toBe(
+      `${store.goalRef(g.id)} added to Ledger: CSV export works`,
+    );
+    const link = await engine.runMove("project_link", {
+      project: "Ledger",
+      url: notion,
+      title: "the plan",
+    });
     expect(link.result).toBe(`linked the plan (${notion}) to Ledger`);
     expect(store.getProject(p.id)!.brief).toBe("Ship the ledger export.");
-    expect(store.linksForProject(p.id).map((l) => [l.url, l.title])).toEqual([[notion, "the plan"]]);
+    expect(store.linksForProject(p.id).map((l) => [l.url, l.title])).toEqual([
+      [notion, "the plan"],
+    ]);
 
-    const bad = await engine.runMove("project_link", { project: "Ledger", url: "javascript:alert(1)" });
+    const bad = await engine.runMove("project_link", {
+      project: "Ledger",
+      url: "javascript:alert(1)",
+    });
     expect(bad.ok).toBe(false);
-    const miss = await engine.runMove("project_unlink", { project: "Ledger", url: "https://x.test" });
-    expect(miss.result).toBe(`Ledger has no link https://x.test. Links: ${notion}`);
-    expect((await engine.runMove("project_unlink", { project: "Ledger", url: notion })).ok).toBe(true);
+    const miss = await engine.runMove("project_unlink", {
+      project: "Ledger",
+      url: "https://x.test",
+    });
+    expect(miss.result).toBe(
+      `Ledger has no link https://x.test. Links: ${notion}`,
+    );
+    expect(
+      (
+        await engine.runMove("project_unlink", {
+          project: "Ledger",
+          url: notion,
+        })
+      ).ok,
+    ).toBe(true);
     expect(store.linksForProject(p.id)).toEqual([]);
   });
 
@@ -56,17 +89,31 @@ describe("project brief, goals and docs", () => {
     const p = ledger();
     const g = store.addGoal(p.id, "CSV export works");
     const ref = store.goalRef(g.id);
-    expect((await engine.runMove("goal_set", { goal: ref, status: "met" })).result).toBe(
-      `${ref} [met] CSV export works`,
-    );
+    expect(
+      (await engine.runMove("goal_set", { goal: ref, status: "met" })).result,
+    ).toBe(`${ref} [met] CSV export works`);
     expect(store.getGoal(g.id)!.met_at).not.toBeNull();
-    await engine.runMove("goal_set", { goal: ref.toLowerCase(), status: "open", title: "CSV and XLSX" });
-    expect(store.getGoal(g.id)).toMatchObject({ status: "open", met_at: null, title: "CSV and XLSX" });
+    await engine.runMove("goal_set", {
+      goal: ref.toLowerCase(),
+      status: "open",
+      title: "CSV and XLSX",
+    });
+    expect(store.getGoal(g.id)).toMatchObject({
+      status: "open",
+      met_at: null,
+      title: "CSV and XLSX",
+    });
     const bad = await engine.runMove("goal_set", { goal: ref, status: "done" });
-    expect(bad).toEqual({ ok: false, result: "status must be open | met | dropped: got done" });
+    expect(bad).toEqual({
+      ok: false,
+      result: "status must be open | met | dropped: got done",
+    });
     const none = await engine.runMove("goal_set", { goal: ref });
     expect(none.result).toBe("goal_set needs --status or --title");
-    const missing = await engine.runMove("goal_set", { goal: "G999", status: "met" });
+    const missing = await engine.runMove("goal_set", {
+      goal: "G999",
+      status: "met",
+    });
     expect(missing.result).toBe("no goal G999.");
   });
 
@@ -74,19 +121,40 @@ describe("project brief, goals and docs", () => {
     const p = ledger();
     const g = store.addGoal(p.id, "CSV export works");
     const ref = store.goalRef(g.id);
-    const made = await engine.runMove("new", { title: "Write the exporter", goal: ref });
+    const made = await engine.runMove("new", {
+      title: "Write the exporter",
+      goal: ref,
+    });
     const task = store.listTasks().at(-1)!;
-    expect(made.result).toBe(`${store.taskRef(task.id)} made (general in project Ledger for ${ref})`);
+    expect(made.result).toBe(
+      `${store.taskRef(task.id)} made (general in project Ledger for ${ref})`,
+    );
     expect(task).toMatchObject({ project_id: p.id, goal_id: g.id });
 
-    const loose = await engine.runMove("new", { title: "Tidy", project: "Ledger" });
+    const loose = await engine.runMove("new", {
+      title: "Tidy",
+      project: "Ledger",
+    });
     const tidy = store.listTasks().at(-1)!;
-    expect(loose.result).toContain(`It serves no goal; Ledger's are ${ref} CSV export works.`);
-    expect((await engine.runMove("goal", { task: store.taskRef(tidy.id), goal: ref })).ok).toBe(true);
+    expect(loose.result).toContain(
+      `It serves no goal; Ledger's are ${ref} CSV export works.`,
+    );
+    expect(
+      (
+        await engine.runMove("goal", {
+          task: store.taskRef(tidy.id),
+          goal: ref,
+        })
+      ).ok,
+    ).toBe(true);
     expect(store.getTask(tidy.id)!.goal_id).toBe(g.id);
 
     const other = store.createProject({ name: "Other", tmuxSession: "other" });
-    const wrong = await engine.runMove("new", { title: "x", project: "Other", goal: ref });
+    const wrong = await engine.runMove("new", {
+      title: "x",
+      project: "Other",
+      goal: ref,
+    });
     expect(wrong.result).toBe(`no goal ${ref} in Other.`);
     expect(store.goalsForProject(other.id)).toEqual([]);
   });
@@ -95,8 +163,14 @@ describe("project brief, goals and docs", () => {
     const p = ledger();
     store.createProject({ name: "Other", tmuxSession: "other" });
     const g = store.addGoal(p.id, "CSV export works");
-    const task = engine.desk.newTask("x", Kind.general, "", { projectId: p.id, goalId: g.id });
-    await engine.runMove("project", { task: store.taskRef(task.id), project: "Other" });
+    const task = engine.desk.newTask("x", Kind.general, "", {
+      projectId: p.id,
+      goalId: g.id,
+    });
+    await engine.runMove("project", {
+      task: store.taskRef(task.id),
+      project: "Other",
+    });
     expect(store.getTask(task.id)!.goal_id).toBeNull();
   });
 
@@ -105,9 +179,21 @@ describe("project brief, goals and docs", () => {
     const g = store.addGoal(p.id, "CSV export works");
     const task = engine.desk.newTask("x", Kind.coding, "", { projectId: p.id });
     const by = `agent ${store.taskRef(task.id)}`;
-    const goal = await engine.runMove("goal", { task: store.taskRef(task.id), goal: store.goalRef(g.id) }, by);
+    const goal = await engine.runMove(
+      "goal",
+      { task: store.taskRef(task.id), goal: store.goalRef(g.id) },
+      by,
+    );
     expect(goal.ok).toBe(true);
-    expect((await engine.runMove("project_link", { project: "Ledger", url: notion }, by)).ok).toBe(true);
+    expect(
+      (
+        await engine.runMove(
+          "project_link",
+          { project: "Ledger", url: notion },
+          by,
+        )
+      ).ok,
+    ).toBe(true);
     for (const [verb, args] of [
       ["project_brief", { project: "Ledger", text: "mine now" }],
       ["goal_new", { project: "Ledger", title: "more" }],
@@ -125,15 +211,27 @@ describe("progress against goals", () => {
     const csv = store.addGoal(p.id, "CSV export works");
     const xlsx = store.addGoal(p.id, "XLSX export works");
     store.addGoal(p.id, "PDF");
-    store.updateGoal(store.goalsForProject(p.id)[2].id, { status: GoalStatus.dropped });
+    store.updateGoal(store.goalsForProject(p.id)[2].id, {
+      status: GoalStatus.dropped,
+    });
     store.updateGoal(csv.id, { status: GoalStatus.met });
-    const a = engine.desk.newTask("a", Kind.general, "", { projectId: p.id, goalId: csv.id });
-    engine.desk.newTask("b", Kind.general, "", { projectId: p.id, goalId: xlsx.id });
-    const loose = engine.desk.newTask("c", Kind.general, "", { projectId: p.id });
+    const a = engine.desk.newTask("a", Kind.general, "", {
+      projectId: p.id,
+      goalId: csv.id,
+    });
+    engine.desk.newTask("b", Kind.general, "", {
+      projectId: p.id,
+      goalId: xlsx.id,
+    });
+    const loose = engine.desk.newTask("c", Kind.general, "", {
+      projectId: p.id,
+    });
     store.updateTask(a.id, { status: TaskStatus.done });
 
     const progress = projectProgress(p);
-    expect(progress.goals.map((g) => [g.goal.title, g.done, g.open, g.tasks.length])).toEqual([
+    expect(
+      progress.goals.map((g) => [g.goal.title, g.done, g.open, g.tasks.length]),
+    ).toEqual([
       ["CSV export works", 1, 0, 1],
       ["XLSX export works", 0, 1, 1],
       ["PDF", 0, 0, 0],
@@ -143,8 +241,12 @@ describe("progress against goals", () => {
 
     const detail = projectDetail(store.getProject(p.id)!);
     expect(detail).toContain("No brief yet.");
-    expect(detail).toContain(`${store.goalRef(csv.id)} [met] CSV export works: 1/1 tasks done`);
-    expect(detail).toContain(`${store.goalRef(xlsx.id)} [open] XLSX export works: 0/1 tasks done`);
+    expect(detail).toContain(
+      `${store.goalRef(csv.id)} [met] CSV export works: 1/1 tasks done`,
+    );
+    expect(detail).toContain(
+      `${store.goalRef(xlsx.id)} [open] XLSX export works: 0/1 tasks done`,
+    );
     expect(detail).not.toContain("PDF");
     expect(detail).toContain(`Open tasks for no goal:\n  ${taskLine(loose)}`);
   });
@@ -156,7 +258,10 @@ describe("what a task in a project is told", () => {
     store.updateProject(p.id, { brief: "Ship the ledger export." });
     const g = store.addGoal(p.id, "CSV export works");
     store.addProjectLink(p.id, notion, "the plan", "you");
-    const task = engine.desk.newTask("x", Kind.coding, "do x", { projectId: p.id, goalId: g.id });
+    const task = engine.desk.newTask("x", Kind.coding, "do x", {
+      projectId: p.id,
+      goalId: g.id,
+    });
     const ref = store.goalRef(g.id);
     const context = projectContext(task);
     expect(context).toBe(
@@ -187,7 +292,9 @@ describe("the project file the owner edits", () => {
     const g = store.addGoal(p.id, "CSV export works");
     store.addProjectLink(p.id, notion, "the plan", "you");
     const text = renderProjectDoc(store.getProject(p.id)!, config());
-    expect(text).toContain(`## Goals\n- [ ] ${store.goalRef(g.id)} CSV export works`);
+    expect(text).toContain(
+      `## Goals\n- [ ] ${store.goalRef(g.id)} CSV export works`,
+    );
     expect(text).toContain(`## Docs\n- the plan ${notion}`);
     expect(parseProjectDoc(text)).toEqual({
       brief: "Ship the ledger export.",
@@ -203,7 +310,10 @@ describe("the project file the owner edits", () => {
     const csv = store.addGoal(p.id, "CSV export works");
     const pdf = store.addGoal(p.id, "PDF export");
     store.addProjectLink(p.id, notion, "the plan", "you");
-    const task = engine.desk.newTask("x", Kind.general, "", { projectId: p.id, goalId: csv.id });
+    const task = engine.desk.newTask("x", Kind.general, "", {
+      projectId: p.id,
+      goalId: csv.id,
+    });
     const edited = [
       "# Ledger",
       "Ship the export.",
@@ -220,7 +330,9 @@ describe("the project file the owner edits", () => {
     expect(applyProjectDoc(testConfig(), p.id, edited, "you")).toBe(
       "Ledger: brief rewritten, 1 goal added, 1 goal changed, 1 goal dropped, docs updated",
     );
-    expect(store.getProject(p.id)!.brief).toBe("Ship the export.\n\nBoth formats, by Friday.");
+    expect(store.getProject(p.id)!.brief).toBe(
+      "Ship the export.\n\nBoth formats, by Friday.",
+    );
     const goals = store.goalsForProject(p.id);
     expect(goals.map((g) => [g.id, g.title, g.status])).toEqual([
       [csv.id, "CSV export, all columns", GoalStatus.met],

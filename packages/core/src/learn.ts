@@ -98,8 +98,12 @@ export function applyLesson(
   }
   // After the heading's last line, before the next heading.
   let insert = at + 1;
-  while (insert < lines.length && !lines[insert].startsWith("## ")) insert++;
-  while (insert > at + 1 && lines[insert - 1].trim() === "") insert--;
+  while (insert < lines.length && !lines[insert].startsWith("## ")) {
+    insert++;
+  }
+  while (insert > at + 1 && lines[insert - 1].trim() === "") {
+    insert--;
+  }
   lines.splice(insert, 0, line);
   return { text: lines.join("\n"), line };
 }
@@ -127,7 +131,9 @@ export async function learnFrom(
   config: RikerConfig,
   c: CorrectionRow,
 ): Promise<string | null> {
-  if (!config.learning) return null;
+  if (!config.learning) {
+    return null;
+  }
   const learned = readDoc(DocName.learned);
   const result = await think({
     prompt: `${describeCorrection(c)}\n\nCurrent LEARNED.md:\n${learned}`,
@@ -138,7 +144,9 @@ export async function learnFrom(
     spend: { role: SpendRole.learn },
   });
   const lesson = result.structured as Lesson | null;
-  if (!lesson || lesson.skip || !lesson.text?.trim()) return null;
+  if (!lesson || lesson.skip || !lesson.text?.trim()) {
+    return null;
+  }
   const { text, line } = applyLesson(
     learned,
     lesson,
@@ -159,7 +167,9 @@ export function correct(
   const row = store.addCorrection(c);
   void learnFrom(config, row)
     .then((line) => {
-      if (line) onLearned?.(line);
+      if (line) {
+        onLearned?.(line);
+      }
     })
     .catch(() => {});
 }

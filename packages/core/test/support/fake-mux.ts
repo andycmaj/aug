@@ -15,7 +15,11 @@ import type {
 // tmux and wt in memory. Records what Riker asked for so tests can read it.
 export class FakeMux implements Mux {
   sessions: MuxSession[] = [];
-  windows: (MuxWindow & { cwd: string; env: Record<string, string>; argv: string[] })[] = [];
+  windows: (MuxWindow & {
+    cwd: string;
+    env: Record<string, string>;
+    argv: string[];
+  })[] = [];
   worktrees: (Worktree & { path: string })[] = [];
   removed: { repoPath: string; branch: string }[] = [];
   sent: { windowId: string; text: string }[] = [];
@@ -40,7 +44,9 @@ export class FakeMux implements Mux {
 
   async state(opts: { strict?: boolean } = {}): Promise<MuxState> {
     if (this.stateFails) {
-      if (opts.strict) throw new Error(this.stateFails);
+      if (opts.strict) {
+        throw new Error(this.stateFails);
+      }
       return { sessions: [], windows: [] };
     }
     return {
@@ -55,15 +61,24 @@ export class FakeMux implements Mux {
   }
 
   async newSession(name: string): Promise<MuxSession> {
-    const session = { id: `$${this.next++}`, name, projectId: null, viewer: false };
+    const session = {
+      id: `$${this.next++}`,
+      name,
+      projectId: null,
+      viewer: false,
+    };
     this.sessions.push(session);
     return { ...session };
   }
 
   async tagSession(sessionId: string, projectId: number): Promise<void> {
-    if (this.tagFails) throw new Error(this.tagFails);
+    if (this.tagFails) {
+      throw new Error(this.tagFails);
+    }
     const s = this.sessions.find((s) => s.id === sessionId);
-    if (!s) throw new Error(`no session ${sessionId}`);
+    if (!s) {
+      throw new Error(`no session ${sessionId}`);
+    }
     s.projectId = projectId;
   }
 
@@ -78,12 +93,19 @@ export class FakeMux implements Mux {
       argv: w.argv,
     };
     this.windows.push(window);
-    return { id: window.id, sessionId: w.sessionId, name: w.name, taskId: null };
+    return {
+      id: window.id,
+      sessionId: w.sessionId,
+      name: w.name,
+      taskId: null,
+    };
   }
 
   async tagWindow(windowId: string, taskId: number): Promise<void> {
     const w = this.windows.find((w) => w.id === windowId);
-    if (!w) throw new Error(`no window ${windowId}`);
+    if (!w) {
+      throw new Error(`no window ${windowId}`);
+    }
     w.taskId = taskId;
   }
 
@@ -101,9 +123,15 @@ export class FakeMux implements Mux {
     this.windows = this.windows.filter((w) => w.sessionId !== sessionId);
   }
 
-  async moveWindow(windowId: string, _fromSessionId: string, toSessionId: string): Promise<void> {
+  async moveWindow(
+    windowId: string,
+    _fromSessionId: string,
+    toSessionId: string,
+  ): Promise<void> {
     const w = this.windows.find((w) => w.id === windowId);
-    if (w) w.sessionId = toSessionId;
+    if (w) {
+      w.sessionId = toSessionId;
+    }
   }
 
   async sendLine(windowId: string, text: string): Promise<void> {
@@ -134,8 +162,23 @@ export class FakeMux implements Mux {
     return `tmux attach -t ${windowId ? `${sessionId}:${windowId}` : sessionId}`;
   }
 
-  viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {
-    return ["tmux", "new-session", "-s", viewerName, ";", "link-window", "-s", windowId, "-t", `=${viewerName}:`];
+  viewerArgv(
+    viewerName: string,
+    sessionId: string,
+    windowId: string,
+  ): string[] {
+    return [
+      "tmux",
+      "new-session",
+      "-s",
+      viewerName,
+      ";",
+      "link-window",
+      "-s",
+      windowId,
+      "-t",
+      `=${viewerName}:`,
+    ];
   }
 
   panePids = new Map<string, number>();
@@ -143,7 +186,9 @@ export class FakeMux implements Mux {
   // In the fake a pane id is its window id.
   async paneInfo(paneId: string): Promise<PaneInfo | null> {
     const w = this.windows.find((w) => w.id === paneId);
-    if (!w) return null;
+    if (!w) {
+      return null;
+    }
     const s = this.sessions.find((s) => s.id === w.sessionId);
     return {
       windowId: w.id,
@@ -178,7 +223,9 @@ export class FakeMux implements Mux {
 
   async watch(onChange: () => void, signal: AbortSignal): Promise<void> {
     this.watchers.push(onChange);
-    await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve()));
+    await new Promise<void>((resolve) =>
+      signal.addEventListener("abort", () => resolve()),
+    );
     this.watchers = this.watchers.filter((w) => w !== onChange);
   }
 
@@ -191,7 +238,10 @@ export class FakeMux implements Mux {
   keysRead = 0;
   baseTip = 1;
 
-  async branchMerged(_repoPath: string, branch: string): Promise<string | false | null> {
+  async branchMerged(
+    _repoPath: string,
+    branch: string,
+  ): Promise<string | false | null> {
     this.mergedAsked.push(branch);
     return this.merged.get(branch) ?? null;
   }
@@ -205,38 +255,56 @@ export class FakeMux implements Mux {
 
   // A branch's tip is what the test says of it: setting merged is the refs
   // moving.
-  async mergeKeys(_repoPath: string, branches: string[]): Promise<Map<string, string> | null> {
+  async mergeKeys(
+    _repoPath: string,
+    branches: string[],
+  ): Promise<Map<string, string> | null> {
     this.keysRead++;
-    return new Map(branches.map((b) => [b, `${String(this.merged.get(b))} ${this.baseTip}`]));
+    return new Map(
+      branches.map((b) => [b, `${String(this.merged.get(b))} ${this.baseTip}`]),
+    );
   }
 
   inspectCheckout(path: string): CheckoutState {
-    if (this.gone.has(path)) return { kind: "missing" };
+    if (this.gone.has(path)) {
+      return { kind: "missing" };
+    }
     return this.checkouts.get(path) ?? { kind: "checkout", repos: [] };
   }
 
   async findCheckouts(): Promise<FoundCheckout[]> {
     return [...this.checkouts]
       .filter(([path, c]) => c.kind === "checkout" && !this.gone.has(path))
-      .map(([path, c]) => ({ path, repos: c.kind === "checkout" ? c.repos : [] }));
+      .map(([path, c]) => ({
+        path,
+        repos: c.kind === "checkout" ? c.repos : [],
+      }));
   }
 
   async clone(repo: string, dest: string): Promise<void> {
-    if (this.cloneFails) throw new Error(this.cloneFails);
+    if (this.cloneFails) {
+      throw new Error(this.cloneFails);
+    }
     this.cloned.push({ repo, dest });
     this.checkouts.set(dest, { kind: "checkout", repos: [repo] });
   }
 
   async worktree(w: Worktree): Promise<MadeWorktree> {
-    const branch = w.branch.startsWith("pr:") ? `pr-head-${w.branch.slice(3)}` : w.branch;
+    const branch = w.branch.startsWith("pr:")
+      ? `pr-head-${w.branch.slice(3)}`
+      : w.branch;
     const path = `${w.repoPath}.${branch}`;
     this.worktrees.push({ ...w, path });
-    if (!this.checkouts.has(path)) this.checkouts.set(path, { kind: "worktree", main: w.repoPath });
+    if (!this.checkouts.has(path)) {
+      this.checkouts.set(path, { kind: "worktree", main: w.repoPath });
+    }
     return { path, branch };
   }
 
   async removeWorktree(repoPath: string, branch: string): Promise<void> {
-    if (this.removeFails) throw new Error(this.removeFails);
+    if (this.removeFails) {
+      throw new Error(this.removeFails);
+    }
     this.removed.push({ repoPath, branch });
   }
 }

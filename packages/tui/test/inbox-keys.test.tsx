@@ -15,7 +15,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 async function boot() {
@@ -42,9 +44,13 @@ async function boot() {
   // The Inbox keeps its search across tab switches (and so across tests):
   // / with one shown clears it.
   const find = async (words: string) => {
-    if (setup.captureCharFrame().includes('/ "')) await press("/");
+    if (setup.captureCharFrame().includes('/ "')) {
+      await press("/");
+    }
     await press("/");
-    for (const c of words) setup.mockInput.pressKey(c);
+    for (const c of words) {
+      setup.mockInput.pressKey(c);
+    }
     setup.mockInput.pressEnter();
     await settle();
   };
@@ -90,7 +96,9 @@ test("x dismisses every message that joined a task, and the task stays", async (
   expect(frame()).not.toContain("Zebra one");
   expect(frame()).toContain("2 joined a task");
   await press("x");
-  for (const m of joined) expect(store.getMessage(m.id)!.read_at).not.toBeNull();
+  for (const m of joined) {
+    expect(store.getMessage(m.id)!.read_at).not.toBeNull();
+  }
   expect(store.getTask(RUTH_TASK)!.status).toBe(TaskStatus.open);
   expect(frame()).toContain("Nothing matches");
 });

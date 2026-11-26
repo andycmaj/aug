@@ -9,12 +9,17 @@ beforeEach(() => freshHome());
 describe("home lock", () => {
   test("a second riker on the same home is refused, naming the first", () => {
     expect(claimHome({ pid: 100, alive: () => true })).toEqual({ ok: true });
-    expect(claimHome({ pid: 200, alive: () => true })).toEqual({ ok: false, pid: 100 });
+    expect(claimHome({ pid: 200, alive: () => true })).toEqual({
+      ok: false,
+      pid: 100,
+    });
   });
 
   test("a lock left by a riker that is gone is taken over", () => {
     writeFileSync(paths.lock(), "100\n");
-    expect(claimHome({ pid: 200, alive: (pid) => pid !== 100 })).toEqual({ ok: true });
+    expect(claimHome({ pid: 200, alive: (pid) => pid !== 100 })).toEqual({
+      ok: true,
+    });
     expect(readFileSync(paths.lock(), "utf8").trim()).toBe("200");
   });
 

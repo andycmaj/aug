@@ -47,7 +47,10 @@ type Env = Record<string, string | undefined>;
 export const envName = (name: string) => `${ENV_PREFIX}${name}`;
 
 // RIKER_<name>, else the AUG_<name> an older Riker (aug) set.
-export function envVar(name: string, from: Env = process.env): string | undefined {
+export function envVar(
+  name: string,
+  from: Env = process.env,
+): string | undefined {
   return from[`${ENV_PREFIX}${name}`] ?? from[`${LEGACY.envPrefix}${name}`];
 }
 
@@ -65,7 +68,10 @@ export const optionFormat = (name: string) =>
   `#{?${option(name)},#{${option(name)}},#{${legacyOption(name)}}}`;
 
 // Claude Code entrypoints of claudes Riker runs itself.
-export const OWN_ENTRYPOINTS: readonly string[] = [ENTRYPOINT, LEGACY.entrypoint];
+export const OWN_ENTRYPOINTS: readonly string[] = [
+  ENTRYPOINT,
+  LEGACY.entrypoint,
+];
 
 // RIKER-0076, AUG-0076, riker76, aug-76 or a bare 76 (with an optional @): the
 // task number, else null.

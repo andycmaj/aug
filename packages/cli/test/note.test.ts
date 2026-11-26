@@ -13,7 +13,12 @@ const TOOLS = join(import.meta.dir, "../src/riker-tools.ts");
 
 function run(home: string, args: string[], stdin?: string) {
   const proc = Bun.spawnSync(["bun", TOOLS, "note", ...args], {
-    env: { ...process.env, RIKER_HOME: home, RIKER_TASK_ID: "", RIKER_ASKED_BY: "" },
+    env: {
+      ...process.env,
+      RIKER_HOME: home,
+      RIKER_TASK_ID: "",
+      RIKER_ASKED_BY: "",
+    },
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
   });
   return {
@@ -45,7 +50,11 @@ describe("riker-tools note", () => {
     const home = mkdtempSync(join(tmpdir(), "riker-note-"));
     expect(run(home, ["--file", "-"], tricky).code).toBe(0);
     expect(run(home, ["plain words"]).code).toBe(0);
-    expect(notes(home).map((n) => n.body).sort()).toEqual([tricky, "plain words"].sort());
+    expect(
+      notes(home)
+        .map((n) => n.body)
+        .sort(),
+    ).toEqual([tricky, "plain words"].sort());
   }, 30_000);
 
   test("no body and no file, or a file that is not there, is refused", () => {

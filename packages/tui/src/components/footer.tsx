@@ -49,10 +49,12 @@ export function useFocusBindings(
   const reachable = useReachableBindings();
   const kittyKeys = useKittyKeys();
   return () =>
-    helpBindings(reachable(), { ...ctx(), kittyKeys: kittyKeys() }).map((b) => ({
-      ...b,
-      keys: keyLabel(b.keys),
-    }));
+    helpBindings(reachable(), { ...ctx(), kittyKeys: kittyKeys() }).map(
+      (b) => ({
+        ...b,
+        keys: keyLabel(b.keys),
+      }),
+    );
 }
 
 // Drop hints from the end until the line fits, but keep "? help" last: it is
@@ -63,8 +65,12 @@ export function fitHints(items: HelpItem[], width: number): HelpItem[] {
   let budget = width - (help ? cost(help) : 0);
   const out: HelpItem[] = [];
   for (const item of items) {
-    if (item === help) continue;
-    if (budget - cost(item) < 0) break;
+    if (item === help) {
+      continue;
+    }
+    if (budget - cost(item) < 0) {
+      break;
+    }
     budget -= cost(item);
     out.push(item);
   }
@@ -111,7 +117,8 @@ export function RikerFooter(props: {
       <text flexShrink={0}>
         <span
           style={{
-            fg: riker.mode() === ViewMode.chat ? theme.primary : theme.textMuted,
+            fg:
+              riker.mode() === ViewMode.chat ? theme.primary : theme.textMuted,
             attributes: riker.mode() === ViewMode.chat ? 1 : 0,
           }}
         >
@@ -120,7 +127,8 @@ export function RikerFooter(props: {
         <span style={{ fg: theme.textMuted }}> | </span>
         <span
           style={{
-            fg: riker.mode() === ViewMode.board ? theme.primary : theme.textMuted,
+            fg:
+              riker.mode() === ViewMode.board ? theme.primary : theme.textMuted,
             attributes: riker.mode() === ViewMode.board ? 1 : 0,
           }}
         >

@@ -10,7 +10,11 @@ import * as store from "@riker/core/store";
 import { addFollowup, addSchedule } from "@riker/core/timers";
 import { Kind, TaskStatus, TimerState, TurnRole } from "@riker/core/types";
 import { FakeMux } from "@riker/core/test/support/fake-mux";
-import { fakeBrain, freshHome, testConfig } from "@riker/core/test/support/helpers";
+import {
+  fakeBrain,
+  freshHome,
+  testConfig,
+} from "@riker/core/test/support/helpers";
 
 const local = (day: number, h: number, m = 0) => new Date(2026, 10, day, h, m);
 
@@ -24,7 +28,11 @@ beforeEach(() => {
   fakeBrain(() => {
     throw new Error("a timer never asks the model");
   });
-  engine = new Engine({ config: testConfig(), plugins: [triagePlugin()], offline: true });
+  engine = new Engine({
+    config: testConfig(),
+    plugins: [triagePlugin()],
+    offline: true,
+  });
   woke = [];
   engine.pool.request = (taskId: number, reason: string) => {
     woke.push({ taskId, reason });
@@ -42,7 +50,12 @@ async function tick(at: Date): Promise<number> {
 describe("a follow-up", () => {
   test("fires once and wakes the agent with its note", async () => {
     const task = engine.desk.newTask("Watch the deploy PR", Kind.general);
-    const timer = addFollowup(task.id, local(21, 9), "check the PR again and report", "agent RIKER-0001");
+    const timer = addFollowup(
+      task.id,
+      local(21, 9),
+      "check the PR again and report",
+      "agent RIKER-0001",
+    );
     expect(await tick(local(21, 8))).toBe(0);
     expect(woke).toEqual([]);
 
@@ -50,7 +63,9 @@ describe("a follow-up", () => {
     expect(store.getTimer(timer.id)!.state).toBe(TimerState.done);
     const line = store.turnsForTask(task.id).at(-1)!;
     expect(line.role).toBe(TurnRole.trigger);
-    expect(line.body).toBe("Follow-up set by agent RIKER-0001 came due: check the PR again and report");
+    expect(line.body).toBe(
+      "Follow-up set by agent RIKER-0001 came due: check the PR again and report",
+    );
     expect(woke).toEqual([{ taskId: task.id, reason: line.body }]);
 
     // Once: the next ticks find nothing.
@@ -61,10 +76,14 @@ describe("a follow-up", () => {
     expect(store.ringingTimers().size).toBe(0);
 
     // On the Inbox, under its task, with the chain that routed it.
-    const row = inboxRows().find((r) => r.type === "message" && r.message.channel === "timer")!;
+    const row = inboxRows().find(
+      (r) => r.type === "message" && r.message.channel === "timer",
+    )!;
     expect(row.result).toBe(InboxResult.timer);
     expect(row.taskId).toBe(task.id);
-    const [run] = store.triageRunsFor(row.type === "message" ? row.message.id : 0);
+    const [run] = store.triageRunsFor(
+      row.type === "message" ? row.message.id : 0,
+    );
     expect(run!.rule).toBe("timer");
   });
 
@@ -76,7 +95,9 @@ describe("a follow-up", () => {
     addFollowup(theirs.id, local(21, 9), "b", "assistant");
     addFollowup(slack.id, local(21, 9), "c", "assistant via Slack");
     await tick(local(21, 9));
-    expect([...store.ringingTimers().keys()].sort()).toEqual([mine.id, theirs.id, slack.id].sort());
+    expect([...store.ringingTimers().keys()].sort()).toEqual(
+      [mine.id, theirs.id, slack.id].sort(),
+    );
     engine.desk.seenTimers(mine.id);
     expect(store.ringingTimers().has(mine.id)).toBe(false);
     expect(store.ringingTimers().size).toBe(2);
@@ -130,8 +151,18 @@ describe("a follow-up", () => {
 
 describe("a schedule", () => {
   test("opens its task again each time and wakes it, moving to the next time", async () => {
-    const task = engine.desk.newTask("PR summary", Kind.general, "Summarize my open PRs");
-    const timer = addSchedule(task.id, "weekdays 09:00", "Summarize my open PRs", "you", local(20, 10));
+    const task = engine.desk.newTask(
+      "PR summary",
+      Kind.general,
+      "Summarize my open PRs",
+    );
+    const timer = addSchedule(
+      task.id,
+      "weekdays 09:00",
+      "Summarize my open PRs",
+      "you",
+      local(20, 10),
+    );
     await tick(local(23, 9));
     expect(woke).toHaveLength(1);
     expect(store.turnsForTask(task.id).at(-1)!.body).toBe(
@@ -159,7 +190,9 @@ describe("a reminder", () => {
     store.remindAt(task.id, local(21, 7).toISOString());
     await tick(local(21, 7));
     expect(store.getTask(task.id)!.status).toBe(TaskStatus.open);
-    expect(store.turnsForTask(task.id).at(-1)!.body).toBe("You asked to be reminded about this today");
+    expect(store.turnsForTask(task.id).at(-1)!.body).toBe(
+      "You asked to be reminded about this today",
+    );
     expect(woke).toEqual([]);
     expect(store.ringingTimers().has(task.id)).toBe(true);
   });
@@ -190,13 +223,19 @@ describe("Riker died between firing and routing", () => {
     addFollowup(task.id, local(21, 9), "look again", "you");
     // Fired (the message is on the inbox), never triaged.
     expect(engine.fireTimers(local(21, 9))).toBe(1);
-    const restarted = new Engine({ config: testConfig(), plugins: [triagePlugin()], offline: true });
+    const restarted = new Engine({
+      config: testConfig(),
+      plugins: [triagePlugin()],
+      offline: true,
+    });
     restarted.pool.request = (taskId: number, reason: string) => {
       woke.push({ taskId, reason });
       return null;
     };
     await restarted.resumeTriage();
     restarted.stop();
-    expect(woke).toEqual([{ taskId: task.id, reason: "Follow-up set by you came due: look again" }]);
+    expect(woke).toEqual([
+      { taskId: task.id, reason: "Follow-up set by you came due: look again" },
+    ]);
   });
 });

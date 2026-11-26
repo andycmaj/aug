@@ -1,11 +1,22 @@
 // Riker's words for a guide run (@riker/code-review-plannotator does the run):
 // the action's turn, and how the task's actions name reopening its review.
 
-import { reviewNotes, type SavedGuide } from "@riker/code-review-plannotator/guide";
-import { GuideStage, type GuideProgress } from "@riker/code-review-plannotator/progress";
+import {
+  reviewNotes,
+  type SavedGuide,
+} from "@riker/code-review-plannotator/guide";
+import {
+  GuideStage,
+  type GuideProgress,
+} from "@riker/code-review-plannotator/progress";
 import type { RikerConfig } from "./config";
 import { reviewedPr } from "./pr";
-import { ActionOutput, makesCheckout, registeredActions, whyNotOffered } from "./task-actions";
+import {
+  ActionOutput,
+  makesCheckout,
+  registeredActions,
+  whyNotOffered,
+} from "./task-actions";
 import type { TaskRow } from "./types";
 
 // The line a review task gets when it arrives: the guide is there to run,
@@ -18,7 +29,9 @@ export function guideOffer(
   const spec = registeredActions(config).find(
     (a) => a.output === ActionOutput.guide && whyNotOffered(a, task) === null,
   );
-  if (!spec) return null;
+  if (!spec) {
+    return null;
+  }
   const key = spec.key ? `\`${spec.key}\`, or ` : "";
   const checkout = makesCheckout(spec, task)
     ? `it makes the worktree on ${task.branch ?? "its branch"} (no agent starts), then `
@@ -120,14 +133,20 @@ function decisionOf(output: string): Decision {
   const lines = output.trim().split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i]!.trim();
-    if (!line.startsWith("{")) continue;
+    if (!line.startsWith("{")) {
+      continue;
+    }
     try {
-      const record = JSON.parse(lines.slice(i).join("\n")) as Record<string, unknown>;
-      if (typeof record.decision === "string")
+      const record = JSON.parse(lines.slice(i).join("\n")) as Record<
+        string,
+        unknown
+      >;
+      if (typeof record.decision === "string") {
         return {
           decision: record.decision,
           message: typeof record.message === "string" ? record.message : "",
         };
+      }
     } catch {
       // Not the record: read on.
     }
@@ -139,7 +158,9 @@ function decisionOf(output: string): Decision {
 // an "Approved with Notes" heading, for the agent; an older Plannotator
 // said "The user approved."
 function bareApproval(decision: string | null, message: string): boolean {
-  if (decision === "approved") return !/approved with notes/i.test(message);
+  if (decision === "approved") {
+    return !/approved with notes/i.test(message);
+  }
   return decision === null && /^The user approved\.?$/i.test(message.trim());
 }
 
@@ -161,19 +182,36 @@ export function reviewExit(
   const { decision, message } = decisionOf(output);
   const said = decision === "dismissed" ? null : reviewNotes(message);
   if (posts !== "github") {
-    if (bareApproval(decision, message))
-      return { end: ReviewEnd.approved, notes: null, status: "Self-review: approved, no comments" };
+    if (bareApproval(decision, message)) {
+      return {
+        end: ReviewEnd.approved,
+        notes: null,
+        status: "Self-review: approved, no comments",
+      };
+    }
     return said
       ? { end: ReviewEnd.notes, notes: said, status: null }
       : { end: ReviewEnd.none, notes: null, status: null };
   }
-  if (!said) return { end: ReviewEnd.none, notes: null, status: "Nothing was posted to GitHub" };
+  if (!said) {
+    return {
+      end: ReviewEnd.none,
+      notes: null,
+      status: "Nothing was posted to GitHub",
+    };
+  }
   const lines = said.split("\n").filter((l) => l.trim());
-  if (decision !== "approved" && lines.length === 1 && POSTED.test(lines[0]!))
-    return { end: ReviewEnd.posted, notes: null, status: lines[0]!.trim().slice(0, 200) };
+  if (decision !== "approved" && lines.length === 1 && POSTED.test(lines[0]!)) {
+    return {
+      end: ReviewEnd.posted,
+      notes: null,
+      status: lines[0]!.trim().slice(0, 200),
+    };
+  }
   return {
     end: ReviewEnd.none,
     notes: null,
-    status: "Not posted to GitHub: Plannotator's Post to GitHub sends a review (your notes are in guide-feedback.md)",
+    status:
+      "Not posted to GitHub: Plannotator's Post to GitHub sends a review (your notes are in guide-feedback.md)",
   };
 }

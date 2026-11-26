@@ -25,7 +25,14 @@ import { timerLine, timerRef } from "@riker/core/timers";
 import { StepDecision } from "@riker/core/types";
 import type { HelpCtx } from "../keymap";
 import type { Actions, Dialogs } from "./actions";
-import { askSearch, ExpandList, FilterPills, listCursor, selColor, when } from "./expand-list";
+import {
+  askSearch,
+  ExpandList,
+  FilterPills,
+  listCursor,
+  selColor,
+  when,
+} from "./expand-list";
 
 type Handler = () => false | void;
 
@@ -45,11 +52,13 @@ export function useInboxTab(opts: {
   const rows = createMemo(() =>
     all().filter((r) => inFilter(r, filter()) && matchesQuery(r, query())),
   );
-  const row = (): InboxRow | null => rows()[cursor.index(rows().length)] ?? null;
+  const row = (): InboxRow | null =>
+    rows()[cursor.index(rows().length)] ?? null;
   const counts = createMemo(() => {
     const out = {} as Record<InboxFilter, number>;
-    for (const f of INBOX_FILTERS)
+    for (const f of INBOX_FILTERS) {
       out[f.filter] = all().filter((r) => inFilter(r, f.filter)).length;
+    }
     return out;
   });
 
@@ -58,20 +67,29 @@ export function useInboxTab(opts: {
     setRevealed(null);
   };
 
-  const onRow = (fn: (r: InboxRow) => false | void): Handler => () => {
-    if (!opts.active()) return false;
-    const r = row();
-    if (!r) return false;
-    return fn(r);
-  };
-  const onMessage = (fn: (r: Extract<InboxRow, { type: "message" }>) => false | void) =>
-    onRow((r) => (r.type === "message" ? fn(r) : false));
+  const onRow =
+    (fn: (r: InboxRow) => false | void): Handler =>
+    () => {
+      if (!opts.active()) {
+        return false;
+      }
+      const r = row();
+      if (!r) {
+        return false;
+      }
+      return fn(r);
+    };
+  const onMessage = (
+    fn: (r: Extract<InboxRow, { type: "message" }>) => false | void,
+  ) => onRow((r) => (r.type === "message" ? fn(r) : false));
 
   // The task an Inbox row points at: what Start and Move act on. An open
   // idea's task is only what it is about, so it is not one.
   const task = () => {
     const r = row();
-    if (!opts.active() || !r) return null;
+    if (!opts.active() || !r) {
+      return null;
+    }
     const id = r.type === "message" ? r.taskId : r.idea.made_task_id;
     return id === null ? null : riker.task(id);
   };
@@ -79,12 +97,16 @@ export function useInboxTab(opts: {
   const commands: Record<string, Handler> = {
     [Commands.INBOX_EXPAND]: onRow((r) => cursor.toggle(r.key)),
     [Commands.INBOX_FILTER]: () => {
-      if (!opts.active()) return false;
+      if (!opts.active()) {
+        return false;
+      }
       setFilter(nextFilter(filter()));
       cursor.reset();
     },
     [Commands.INBOX_SEARCH]: () => {
-      if (!opts.active()) return false;
+      if (!opts.active()) {
+        return false;
+      }
       askSearch(
         opts.dialogs,
         query(),
@@ -99,32 +121,48 @@ export function useInboxTab(opts: {
       );
     },
     [Commands.INBOX_GO]: onRow((r) => {
-      if (r.taskId === null) return false;
+      if (r.taskId === null) {
+        return false;
+      }
       opts.actions.goToTask(r.taskId);
     }),
     [Commands.MAKE_TASK]: onRow((r) => {
-      if (r.type === "idea" ? r.result !== InboxResult.idea : r.taskId !== null) return false;
+      if (
+        r.type === "idea" ? r.result !== InboxResult.idea : r.taskId !== null
+      ) {
+        return false;
+      }
       opts.actions.inboxMakeTask(r);
     }),
     [Commands.DISMISS_IDEA]: onRow((r) => {
-      if (r.type !== "idea" || r.result !== InboxResult.idea) return false;
+      if (r.type !== "idea" || r.result !== InboxResult.idea) {
+        return false;
+      }
       opts.actions.inboxDismiss(r);
     }),
     [Commands.INBOX_READ]: onMessage((r) => {
-      if (r.read) return false;
+      if (r.read) {
+        return false;
+      }
       opts.actions.inboxDismiss(r);
     }),
     [Commands.IGNORE]: onMessage((r) => {
-      if (r.result !== InboxResult.task) return false;
+      if (r.result !== InboxResult.task) {
+        return false;
+      }
       return opts.actions.inboxIgnore(r);
     }),
     [Commands.OPEN_URL]: onMessage((r) => opts.actions.openMessage(r.message)),
     [Commands.INBOX_NOISE]: onMessage((r) => {
-      if (r.taskId !== null) return false;
+      if (r.taskId !== null) {
+        return false;
+      }
       opts.actions.noiseFilter(r.message);
     }),
     [Commands.INBOX_RETRIAGE]: onMessage((r) => {
-      if (r.taskId !== null) return false;
+      if (r.taskId !== null) {
+        return false;
+      }
       void opts.actions.retriage(r.message);
     }),
     [Commands.INBOX_BODY]: onMessage((r) => {
@@ -135,9 +173,16 @@ export function useInboxTab(opts: {
 
   const ctx = (): Partial<HelpCtx> => {
     const r = row();
-    if (!r) return { item: null };
+    if (!r) {
+      return { item: null };
+    }
     return {
-      item: r.type === "idea" ? "idea" : r.result === InboxResult.fyi ? "fyi" : "message",
+      item:
+        r.type === "idea"
+          ? "idea"
+          : r.result === InboxResult.fyi
+            ? "fyi"
+            : "message",
       inboxTask: r.taskId !== null,
       handled: r.type === "idea" && r.result !== InboxResult.idea,
       inboxRead: r.type === "message" && r.read,
@@ -196,7 +241,9 @@ function Upcoming(props: { width: number }) {
   return (
     <box flexDirection="column" flexShrink={0} paddingBottom={1}>
       <text fg={theme.textMuted}>
-        {timers().length ? "Coming up" : "Nothing coming up: move followup or schedule sets one."}
+        {timers().length
+          ? "Coming up"
+          : "Nothing coming up: move followup or schedule sets one."}
       </text>
       <For each={timers().slice(0, UPCOMING)}>
         {(t) => (
@@ -237,10 +284,13 @@ function InboxView(props: {
           ? theme.success
           : theme.info;
 
-  const subjectWidth = () => Math.max(16, props.width - 7 - 8 - 16 - 16 - 22 - 12);
+  const subjectWidth = () =>
+    Math.max(16, props.width - 7 - 8 - 16 - 16 - 22 - 12);
 
   const ref = (row: InboxRow) => {
-    if (row.taskId === null) return "";
+    if (row.taskId === null) {
+      return "";
+    }
     const t = riker.task(row.taskId);
     const project = t?.project_id ? riker.project(t.project_id)?.name : null;
     // An idea's task is only what it is about until approving it
@@ -298,10 +348,17 @@ function InboxView(props: {
                 <text fg={fg(theme.text)} width={16} flexShrink={0}>
                   {truncate(row.from, 16)}
                 </text>
-                <text fg={fg(row.read ? theme.textMuted : theme.text)} flexGrow={1}>
+                <text
+                  fg={fg(row.read ? theme.textMuted : theme.text)}
+                  flexGrow={1}
+                >
                   {truncate(row.subject, subjectWidth())}
                 </text>
-                <text fg={fg(tone(resultTone(row.result)))} width={16} flexShrink={0}>
+                <text
+                  fg={fg(tone(resultTone(row.result)))}
+                  width={16}
+                  flexShrink={0}
+                >
                   {row.type === "message" && row.folded.length > 0
                     ? `${row.folded.length + 1} joined a task`
                     : RESULT_WORDS[row.result]}
@@ -312,7 +369,13 @@ function InboxView(props: {
               </>
             );
           }}
-          detail={(row) => <Detail row={row} revealed={props.revealed === row.key} width={props.width} />}
+          detail={(row) => (
+            <Detail
+              row={row}
+              revealed={props.revealed === row.key}
+              width={props.width}
+            />
+          )}
         />
       </Show>
     </box>
@@ -334,7 +397,9 @@ interface VerdictJson {
 }
 
 function readJson<T>(text: string | null): T | null {
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
   try {
     return JSON.parse(text) as T;
   } catch {
@@ -354,21 +419,33 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
   const latest = () => runs()[0] ?? null;
 
   return (
-    <box flexDirection="column" paddingLeft={2} paddingTop={1} paddingBottom={1} backgroundColor={theme.contentPane}>
+    <box
+      flexDirection="column"
+      paddingLeft={2}
+      paddingTop={1}
+      paddingBottom={1}
+      backgroundColor={theme.contentPane}
+    >
       <Show
         when={props.row.type === "message" ? props.row : null}
         fallback={
           <Show when={props.row.type === "idea" ? props.row : null}>
             {(idea: () => Extract<InboxRow, { type: "idea" }>) => (
               <box flexDirection="column">
-                <text fg={theme.text} wrapMode="word">{idea().idea.body}</text>
+                <text fg={theme.text} wrapMode="word">
+                  {idea().idea.body}
+                </text>
                 <text fg={theme.textMuted}>
                   {[
-                    idea().idea.task_id ? `about ${taskRef(idea().idea.task_id!)}` : null,
+                    idea().idea.task_id
+                      ? `about ${taskRef(idea().idea.task_id!)}`
+                      : null,
                     idea().idea.made_task_id
                       ? `${RESULT_WORDS[idea().result]}: ${taskRef(idea().idea.made_task_id!)}`
                       : RESULT_WORDS[idea().result],
-                    idea().result === InboxResult.idea ? "m approve · x dismiss" : null,
+                    idea().result === InboxResult.idea
+                      ? "m approve · x dismiss"
+                      : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}
@@ -383,7 +460,13 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
             <Show
               when={latest()}
               fallback={
-                <text fg={msg().result === InboxResult.untriaged ? theme.warning : theme.textMuted}>
+                <text
+                  fg={
+                    msg().result === InboxResult.untriaged
+                      ? theme.warning
+                      : theme.textMuted
+                  }
+                >
                   {msg().result === InboxResult.untriaged
                     ? "Waiting for the triage worker. Shift+U runs it now."
                     : `filed before triage kept its chain: ${msg().message.reason ?? RESULT_WORDS[msg().result]}`}
@@ -392,16 +475,31 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
             >
               {(run: () => InboxRun) => {
                 const verdict = () => readJson<VerdictJson>(run().run.verdict);
-                const input = () => readJson<Record<string, unknown>>(run().run.input) ?? {};
+                const input = () =>
+                  readJson<Record<string, unknown>>(run().run.input) ?? {};
                 return (
                   <box flexDirection="column">
                     <For each={run().steps}>
                       {(step) => (
                         <text>
-                          <span style={{ fg: step.decision === StepDecision.claim ? theme.success : theme.textMuted }}>
+                          <span
+                            style={{
+                              fg:
+                                step.decision === StepDecision.claim
+                                  ? theme.success
+                                  : theme.textMuted,
+                            }}
+                          >
                             {step.decision === StepDecision.claim ? "● " : "· "}
                           </span>
-                          <span style={{ fg: step.decision === StepDecision.claim ? theme.text : theme.textMuted }}>
+                          <span
+                            style={{
+                              fg:
+                                step.decision === StepDecision.claim
+                                  ? theme.text
+                                  : theme.textMuted,
+                            }}
+                          >
                             {step.rule.padEnd(14)}
                           </span>
                           <span style={{ fg: theme.textMuted }}>
@@ -416,7 +514,12 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
                           {truncate(
                             v().error
                               ? `model: failed (${v().error})`
-                              : `model: ${[v().verdict, v().priority, v().title ? `"${v().title}"` : null, v().project ? `project ${v().project}` : null]
+                              : `model: ${[
+                                  v().verdict,
+                                  v().priority,
+                                  v().title ? `"${v().title}"` : null,
+                                  v().project ? `project ${v().project}` : null,
+                                ]
                                   .filter(Boolean)
                                   .join(" · ")}`,
                             width(),
@@ -428,7 +531,9 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
                       {truncate(
                         [
                           input().dm ? "a DM" : null,
-                          input().openOnThread ? `open on the thread: ${String(input().openOnThread)}` : null,
+                          input().openOnThread
+                            ? `open on the thread: ${String(input().openOnThread)}`
+                            : null,
                           !input().openOnThread && input().lastOnThread
                             ? `last on the thread: ${String(input().lastOnThread)}`
                             : null,
@@ -448,16 +553,23 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
                 {shownBody(msg().message.body, props.revealed)}
               </text>
             </box>
-            <Show when={!props.revealed && msg().message.body.length > BODY_CHARS}>
+            <Show
+              when={!props.revealed && msg().message.body.length > BODY_CHARS}
+            >
               <text fg={theme.textMuted}>Shift+B shows the whole message.</text>
             </Show>
             <Show when={msg().folded.length > 0}>
               <box flexDirection="column" marginTop={1}>
-                <text fg={theme.textMuted}>{`${msg().folded.length} earlier on ${taskRef(msg().taskId!)}:`}</text>
+                <text
+                  fg={theme.textMuted}
+                >{`${msg().folded.length} earlier on ${taskRef(msg().taskId!)}:`}</text>
                 <For each={msg().folded}>
                   {(m) => (
                     <text fg={theme.textMuted}>
-                      {truncate(`  ${localStamp(m.received_at)} · ${m.author_name} · ${subjectOf(m)}`, width())}
+                      {truncate(
+                        `  ${localStamp(m.received_at)} · ${m.author_name} · ${subjectOf(m)}`,
+                        width(),
+                      )}
                     </text>
                   )}
                 </For>
@@ -465,7 +577,9 @@ function Detail(props: { row: InboxRow; revealed: boolean; width: number }) {
             </Show>
             <Show when={runs().length > 1}>
               <box flexDirection="column" marginTop={1}>
-                <text fg={theme.textMuted}>{`${runs().length - 1} earlier run${runs().length > 2 ? "s" : ""}:`}</text>
+                <text
+                  fg={theme.textMuted}
+                >{`${runs().length - 1} earlier run${runs().length > 2 ? "s" : ""}:`}</text>
                 <For each={runs().slice(1)}>
                   {(r) => (
                     <text fg={theme.textMuted}>

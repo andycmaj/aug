@@ -158,7 +158,11 @@ export function propose(p: Proposal): DocProposalRow {
 // newer plan revises the open one in place.
 export function proposeKnowledge(plan: KnowledgePlan): DocProposalRow {
   const reason = planReason(plan);
-  const fields = { proposed: JSON.stringify(plan), reason, base: snapshot(plan) };
+  const fields = {
+    proposed: JSON.stringify(plan),
+    reason,
+    base: snapshot(plan),
+  };
   const existing = store.openProposalFor(KNOWLEDGE_DOC, ProposalSource.evolve);
   if (existing) {
     store.reviseProposal(existing.id, { ...fields, absorbs: [] });
@@ -170,7 +174,10 @@ export function proposeKnowledge(plan: KnowledgePlan): DocProposalRow {
     });
     return store.getProposal(existing.id)!;
   }
-  const task = systemTask("Knowledge: proposed cleanup", `${reason}\n\n${KEYS}`);
+  const task = systemTask(
+    "Knowledge: proposed cleanup",
+    `${reason}\n\n${KEYS}`,
+  );
   return store.addProposal({
     taskId: task.id,
     doc: KNOWLEDGE_DOC,
@@ -192,14 +199,23 @@ function absorbed(p: DocProposalRow): string[] {
 
 // diff3 by git, which writeReview already needs: `ours` with base-to-theirs
 // applied, or null when both touched the same lines.
-export function mergeText(ours: string, base: string, theirs: string): string | null {
-  if (ours === base) return theirs;
-  if (theirs === base || ours === theirs) return ours;
+export function mergeText(
+  ours: string,
+  base: string,
+  theirs: string,
+): string | null {
+  if (ours === base) {
+    return theirs;
+  }
+  if (theirs === base || ours === theirs) {
+    return ours;
+  }
   const dir = mkdtempSync(join(tmpdir(), "riker-merge-"));
   try {
     const files = { ours, base, theirs };
-    for (const [name, text] of Object.entries(files))
+    for (const [name, text] of Object.entries(files)) {
       writeFileSync(join(dir, name), text);
+    }
     const run = Bun.spawnSync(
       ["git", "merge-file", "-p", "--quiet", "ours", "base", "theirs"],
       { cwd: dir, stdout: "pipe", stderr: "pipe" },
@@ -213,8 +229,12 @@ export function mergeText(ours: string, base: string, theirs: string): string | 
 // What accepting `p` would write now; null when the doc changed since in the
 // lines the proposal edits.
 export function rebased(p: DocProposalRow): string | null {
-  if (!isDocName(p.doc)) return null;
-  if (p.source === ProposalSource.shipped) return shippedText(p.doc);
+  if (!isDocName(p.doc)) {
+    return null;
+  }
+  if (p.source === ProposalSource.shipped) {
+    return shippedText(p.doc);
+  }
   return mergeText(readDoc(p.doc), p.base, p.proposed);
 }
 
@@ -236,7 +256,9 @@ export function hasOpenProposals(taskId: number): boolean {
 // since stays open. One line back.
 export function acceptProposals(taskId: number): string {
   const open = openOn(taskId);
-  if (open.length === 0) return "nothing to accept";
+  if (open.length === 0) {
+    return "nothing to accept";
+  }
   const wrote: string[] = [];
   const held: string[] = [];
   for (const p of open) {
@@ -248,7 +270,9 @@ export function acceptProposals(taskId: number): string {
       );
       continue;
     }
-    if (!isDocName(p.doc)) continue;
+    if (!isDocName(p.doc)) {
+      continue;
+    }
     const doc = p.doc;
     const text = rebased(p);
     if (text === null) {
@@ -258,11 +282,12 @@ export function acceptProposals(taskId: number): string {
     replaceDoc(doc, text);
     const lines = absorbed(p);
     if (lines.length) {
-      if (doc !== DocName.learned)
+      if (doc !== DocName.learned) {
         writeDoc(
           DocName.learned,
           withoutLines(readDoc(DocName.learned), lines),
         );
+      }
       archiveLearned(
         lines,
         doc === DocName.learned ? "compacted" : `absorbed into ${doc}`,
@@ -271,7 +296,9 @@ export function acceptProposals(taskId: number): string {
     store.setProposalStatus(p.id, ProposalStatus.accepted);
     wrote.push(doc);
   }
-  if (held.length === 0) taskClosed(taskId);
+  if (held.length === 0) {
+    taskClosed(taskId);
+  }
   return [
     ...(wrote.length ? [`wrote ${wrote.join(", ")}`] : []),
     ...(held.length ? [`${held.join(", ")} ${STALE}`] : []),
@@ -280,10 +307,13 @@ export function acceptProposals(taskId: number): string {
 
 export function rejectProposals(taskId: number): string {
   const open = openOn(taskId);
-  for (const p of open) store.setProposalStatus(p.id, ProposalStatus.rejected);
+  for (const p of open) {
+    store.setProposalStatus(p.id, ProposalStatus.rejected);
+  }
   taskClosed(taskId);
-  if (store.kvGet(ONBOARD_TASK) === String(taskId) && open.length === 0)
+  if (store.kvGet(ONBOARD_TASK) === String(taskId) && open.length === 0) {
     return "onboarding skipped: the templates stay";
+  }
   return open.length
     ? `kept your ${open.map((p) => p.doc).join(", ")}`
     : "dismissed";
@@ -309,7 +339,9 @@ export async function redraftProposals(
   const open = openOn(taskId).filter(
     (p) => p.source !== ProposalSource.shipped && isDocName(p.doc),
   );
-  if (!notes.trim()) return "nothing to redraft";
+  if (!notes.trim()) {
+    return "nothing to redraft";
+  }
   store.addTurn({
     taskId,
     role: TurnRole.you,
@@ -342,8 +374,13 @@ export async function redraftProposals(
       model: config.brain.assistantModel,
       spend: { role: SpendRole.redraft, taskId },
     });
-    const answer = result.structured as { text?: string; reason?: string } | null;
-    if (!answer?.text?.trim()) continue;
+    const answer = result.structured as {
+      text?: string;
+      reason?: string;
+    } | null;
+    if (!answer?.text?.trim()) {
+      continue;
+    }
     store.reviseProposal(p.id, {
       proposed: answer.text.trimEnd() + "\n",
       reason: answer.reason ?? p.reason,
@@ -375,11 +412,23 @@ export interface ReviewFiles {
 }
 
 // One file's diff by git diff --no-index, its paths cut back to its name.
-function fileDiff(dir: string, name: string, yours: string, proposed: string): string {
+function fileDiff(
+  dir: string,
+  name: string,
+  yours: string,
+  proposed: string,
+): string {
   writeFileSync(join(dir, "yours", name), yours);
   writeFileSync(join(dir, "proposed", name), proposed);
   const run = Bun.spawnSync(
-    ["git", "diff", "--no-index", "--no-color", join("yours", name), join("proposed", name)],
+    [
+      "git",
+      "diff",
+      "--no-index",
+      "--no-color",
+      join("yours", name),
+      join("proposed", name),
+    ],
     { cwd: dir, stdout: "pipe", stderr: "pipe" },
   );
   return run.stdout
@@ -392,7 +441,9 @@ function fileDiff(dir: string, name: string, yours: string, proposed: string): s
 // diff comes from git diff --no-index, its paths cut back to the doc's name.
 export function writeReview(taskId: number): ReviewFiles | null {
   const open = openOn(taskId);
-  if (open.length === 0) return null;
+  if (open.length === 0) {
+    return null;
+  }
   const dir = join(paths.home(), "review", store.taskRef(taskId));
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(join(dir, "yours"), { recursive: true });
@@ -406,10 +457,21 @@ export function writeReview(taskId: number): ReviewFiles | null {
       continue;
     }
     const doc = isDocName(p.doc) ? p.doc : null;
-    if (!doc) continue;
+    if (!doc) {
+      continue;
+    }
     const merged = rebased(p);
-    if (merged === null) stale.push(doc);
-    parts.push(fileDiff(dir, doc, merged === null ? p.base : readDoc(doc), merged ?? p.proposed));
+    if (merged === null) {
+      stale.push(doc);
+    }
+    parts.push(
+      fileDiff(
+        dir,
+        doc,
+        merged === null ? p.base : readDoc(doc),
+        merged ?? p.proposed,
+      ),
+    );
   }
   const diff = join(dir, "proposal.diff");
   writeFileSync(diff, parts.join(""));

@@ -36,7 +36,9 @@ export class ViewportTerminalRenderable extends TextBufferRenderable {
   }
 
   feed(data: Uint8Array | string): void {
-    if (this.term.destroyed) return;
+    if (this.term.destroyed) {
+      return;
+    }
     this.term.feed(data);
     this.dirty = true;
     this.requestRender();
@@ -47,27 +49,35 @@ export class ViewportTerminalRenderable extends TextBufferRenderable {
     const base = this.firstLine ?? maxTop;
     const next = Math.min(maxTop, Math.max(0, base + delta));
     const firstLine = next >= maxTop ? null : next;
-    if (firstLine === this.firstLine) return;
+    if (firstLine === this.firstLine) {
+      return;
+    }
     this.firstLine = firstLine;
     this.dirty = true;
     this.requestRender();
   }
 
   followBottom(): void {
-    if (this.firstLine === null) return;
+    if (this.firstLine === null) {
+      return;
+    }
     this.firstLine = null;
     this.dirty = true;
     this.requestRender();
   }
 
   setVeil(color: RGBA | null): void {
-    if (color === this.veil) return;
+    if (color === this.veil) {
+      return;
+    }
     this.veil = color;
     this.requestRender();
   }
 
   resizeTerminal(cols: number, rows: number): void {
-    if (this.term.destroyed) return;
+    if (this.term.destroyed) {
+      return;
+    }
     this.term.resize(cols, rows);
     this.dirty = true;
     this.requestRender();
@@ -107,6 +117,8 @@ export class ViewportTerminalRenderable extends TextBufferRenderable {
 
   // Not tied to removal: the renderable is re-parented when its pane remounts.
   destroyTerminal(): void {
-    if (!this.term.destroyed) this.term.destroy();
+    if (!this.term.destroyed) {
+      this.term.destroy();
+    }
   }
 }

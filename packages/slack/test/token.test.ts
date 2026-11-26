@@ -4,7 +4,10 @@ import { TokenTransport, type SlackApi } from "../src/token";
 
 // A workspace with many DMs, watched channels and tracked threads: what one
 // poll asks of Slack, counted by method, and how many calls are out at once.
-function fakeSlack(opts: { dms: number; replies?: (thread: string) => unknown[] }) {
+function fakeSlack(opts: {
+  dms: number;
+  replies?: (thread: string) => unknown[];
+}) {
   const calls: string[] = [];
   let inFlight = 0;
   let most = 0;
@@ -42,7 +45,13 @@ function fakeSlack(opts: { dms: number; replies?: (thread: string) => unknown[] 
           messages:
             (params.channel === "D1" || params.channel === "C1") &&
             Number(params.oldest) < 2000000000.0001
-              ? [{ ts: "2000000000.000100", user: "U1", text: `hi from ${params.channel}` }]
+              ? [
+                  {
+                    ts: "2000000000.000100",
+                    user: "U1",
+                    text: `hi from ${params.channel}`,
+                  },
+                ]
               : [],
         };
     }
@@ -51,13 +60,19 @@ function fakeSlack(opts: { dms: number; replies?: (thread: string) => unknown[] 
 }
 
 const tally = (calls: string[]) =>
-  calls.reduce<Record<string, number>>((acc, c) => ({ ...acc, [c]: (acc[c] ?? 0) + 1 }), {});
+  calls.reduce<Record<string, number>>(
+    (acc, c) => ({ ...acc, [c]: (acc[c] ?? 0) + 1 }),
+    {},
+  );
 
 describe("a token poll on a big workspace", () => {
   test("one read per conversation, a few at a time; who I am and names asked once a process", async () => {
     const slack = fakeSlack({
       dms: 40,
-      replies: (ts) => (ts === "100.0" ? [{ ts: "2000000000.000200", user: "U3", text: "reply" }] : []),
+      replies: (ts) =>
+        ts === "100.0"
+          ? [{ ts: "2000000000.000200", user: "U3", text: "reply" }]
+          : [],
     });
     const transport = new TokenTransport("xoxp-test", slack.api);
     const ctx = {
@@ -79,7 +94,11 @@ describe("a token poll on a big workspace", () => {
     expect(slack.most()).toBeGreaterThan(1);
     expect(slack.most()).toBeLessThanOrEqual(13);
     // In the order the reads used to run: DMs, channels, then threads.
-    expect(first.messages.map((m) => m.body)).toEqual(["hi from D1", "hi from C1", "reply"]);
+    expect(first.messages.map((m) => m.body)).toEqual([
+      "hi from D1",
+      "hi from C1",
+      "reply",
+    ]);
     expect(first.messages[0]!.title).toContain("DM with Person U1");
 
     slack.calls.length = 0;

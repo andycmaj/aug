@@ -20,7 +20,9 @@ test("the places list the keys that work there", () => {
   const doc = keysDoc();
   const place = (id: string) => {
     const p = doc.places.find((x) => x.id === id);
-    if (!p) throw new Error(`no place ${id}`);
+    if (!p) {
+      throw new Error(`no place ${id}`);
+    }
     return new Map(p.rows.map((r) => [r.cmd, r.keys]));
   };
   const attached = place("attached");

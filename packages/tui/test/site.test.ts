@@ -16,7 +16,9 @@ test("the site is the index and the two pages, each with the shared nav", () => 
   for (const file of ["index.html", ...SITE_PAGES.map((p) => p.file)]) {
     const html = site[file] ?? "";
     expect(html.match(/<nav class="site-nav"/g)?.length).toBe(1);
-    for (const p of SITE_PAGES) expect(html).toContain(`href="${p.file}"`);
+    for (const p of SITE_PAGES) {
+      expect(html).toContain(`href="${p.file}"`);
+    }
   }
   expect(site["keyboard.html"]).toContain(
     '<a href="keyboard.html" aria-current="page">',
@@ -33,7 +35,9 @@ test("the published keyboard page carries the keymap's data", () => {
 
 test("the pages differ from docs/ only by the nav", () => {
   for (const p of SITE_PAGES) {
-    if (p.file === "keyboard.html") continue;
+    if (p.file === "keyboard.html") {
+      continue;
+    }
     const src = readFileSync(join(DOCS_DIR, p.file), "utf8");
     const out = site[p.file] ?? "";
     expect(out.replace(/\n<style>\n\.site-nav[\s\S]*?<\/nav>/, "")).toBe(src);
@@ -67,11 +71,13 @@ const PRIVATE: [string, RegExp][] = [
 ];
 
 test("nothing on the site looks private", () => {
-  for (const [file, html] of Object.entries(site))
-    for (const [what, re] of PRIVATE)
+  for (const [file, html] of Object.entries(site)) {
+    for (const [what, re] of PRIVATE) {
       expect({ file, what, hit: html.match(re)?.[0] ?? null }).toEqual({
         file,
         what,
         hit: null,
       });
+    }
+  }
 });

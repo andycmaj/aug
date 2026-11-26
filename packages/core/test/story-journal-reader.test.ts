@@ -2,8 +2,20 @@ import { describe, expect, test } from "bun:test";
 import { Engine } from "../src/engine";
 import { docLinks } from "../src/rows";
 import { handleDone } from "../src/hooks";
-import { journalFile, journalMarkdown, journalTick, JournalSave, saveJournalEdit, writeJournal } from "../src/journal";
-import { sessionEnded, sessionStarted, workMerged, EndReason } from "../src/lifecycle";
+import {
+  journalFile,
+  journalMarkdown,
+  journalTick,
+  JournalSave,
+  saveJournalEdit,
+  writeJournal,
+} from "../src/journal";
+import {
+  sessionEnded,
+  sessionStarted,
+  workMerged,
+  EndReason,
+} from "../src/lifecycle";
 import { editStory, parseStory, pin, storyMarkdown } from "../src/story";
 import * as store from "../src/store";
 import { readFileSync } from "node:fs";
@@ -14,7 +26,10 @@ let n = 0;
 
 function setup() {
   freshHome({ journal: { enabled: true }, story: { enabled: true } });
-  const project = store.createProject({ name: `Reader ${++n}`, tmuxSession: `r${n}` });
+  const project = store.createProject({
+    name: `Reader ${++n}`,
+    tmuxSession: `r${n}`,
+  });
   const task = store.createTask({
     title: `Read the thing ${n}`,
     kind: Kind.coding,
@@ -26,17 +41,30 @@ function setup() {
 
 function start(taskId: number) {
   const id = `reader-sess-${++n}`;
-  sessionStarted({ id, taskId, kind: SessionKind.tmux, cwd: "/w", startedBy: "owner" });
+  sessionStarted({
+    id,
+    taskId,
+    kind: SessionKind.tmux,
+    cwd: "/w",
+    startedBy: "owner",
+  });
   return { taskId, sessionId: id };
 }
 
 describe("the story as markdown", () => {
   test("a heading per part, the owner's pins first, empty parts left out", () => {
     const { task } = setup();
-    handleDone(start(task.id), { summary: "did it", digest: { next: ["n1", "n2"] } }, undefined, config());
+    handleDone(
+      start(task.id),
+      { summary: "did it", digest: { next: ["n1", "n2"] } },
+      undefined,
+      config(),
+    );
     pin(task.id, "owner goal");
     const md = storyMarkdown(store.currentStory(task.id));
-    expect(md).toBe("## Pinned by the owner\n\n- owner goal\n\n## Now\n\n- did it\n\n## Next steps\n\n- n1\n- n2");
+    expect(md).toBe(
+      "## Pinned by the owner\n\n- owner goal\n\n## Now\n\n- did it\n\n## Next steps\n\n- n1\n- n2",
+    );
   });
 
   test("for $EDITOR every part's heading is there, empty or not", () => {
@@ -45,26 +73,51 @@ describe("the story as markdown", () => {
   });
 
   test("read back: the same parts, with or without dashes, comments ignored", () => {
-    const parsed = parseStory("<!-- RIKER-1 story -->\n\n## Goals\n\n- ship it\nplain line\n\n## next steps:\n* one\n\n## Now\n");
+    const parsed = parseStory(
+      "<!-- RIKER-1 story -->\n\n## Goals\n\n- ship it\nplain line\n\n## next steps:\n* one\n\n## Now\n",
+    );
     expect(parsed).toEqual({
-      fields: { pinned: "", goals: "ship it\nplain line", now: "", decisions: "", blocked: "", next: "one", questions: "" },
+      fields: {
+        pinned: "",
+        goals: "ship it\nplain line",
+        now: "",
+        decisions: "",
+        blocked: "",
+        next: "one",
+        questions: "",
+      },
     });
   });
 
   test("a line under no part is refused, not dropped", () => {
-    expect(parseStory("stray words\n## Goals\n- g")).toEqual({ error: expect.stringContaining("stray words") });
-    expect(parseStory("## Goals\n- g\n## Ideas\n- i")).toEqual({ error: expect.stringContaining("## Ideas") });
+    expect(parseStory("stray words\n## Goals\n- g")).toEqual({
+      error: expect.stringContaining("stray words"),
+    });
+    expect(parseStory("## Goals\n- g\n## Ideas\n- i")).toEqual({
+      error: expect.stringContaining("## Ideas"),
+    });
   });
 
   test("a rewrite is a new version by the owner; the same parts make none", () => {
     const { task } = setup();
-    handleDone(start(task.id), { summary: "half", digest: { next: ["finish"] } }, undefined, config());
+    handleDone(
+      start(task.id),
+      { summary: "half", digest: { next: ["finish"] } },
+      undefined,
+      config(),
+    );
     const before = store.storiesFor(task.id).length;
-    const same = editStory(task.id, storyMarkdown(store.currentStory(task.id), true));
+    const same = editStory(
+      task.id,
+      storyMarkdown(store.currentStory(task.id), true),
+    );
     expect(same).toEqual({ version: null });
     expect(store.storiesFor(task.id)).toHaveLength(before);
 
-    const md = storyMarkdown(store.currentStory(task.id), true).replace("- finish", "- finish\n- then test");
+    const md = storyMarkdown(store.currentStory(task.id), true).replace(
+      "- finish",
+      "- finish\n- then test",
+    );
     const edited = editStory(task.id, md);
     expect("version" in edited && edited.version?.by).toBe("owner");
     const cur = store.currentStory(task.id)!;
@@ -78,10 +131,22 @@ describe("the story as markdown", () => {
     const engine = new Engine({ config: testConfig() });
     const ref = store.taskRef(task.id);
     expect(engine.desk.storyDoc(task.id)).toBeNull();
-    const saved = engine.desk.editStory(task.id, `${engine.desk.storyTemplate()}\n`.replace("## Goals", "## Goals\n- a goal"));
-    expect(saved).toEqual({ ok: true, text: `${ref}: story saved as a new version (story_undo steps back)` });
+    const saved = engine.desk.editStory(
+      task.id,
+      `${engine.desk.storyTemplate()}\n`.replace(
+        "## Goals",
+        "## Goals\n- a goal",
+      ),
+    );
+    expect(saved).toEqual({
+      ok: true,
+      text: `${ref}: story saved as a new version (story_undo steps back)`,
+    });
     expect(engine.desk.storyDoc(task.id)!.text).toBe("## Goals\n\n- a goal");
-    expect(engine.desk.editStory(task.id, "## Goals\n- a goal")).toEqual({ ok: true, text: `${ref}: story unchanged` });
+    expect(engine.desk.editStory(task.id, "## Goals\n- a goal")).toEqual({
+      ok: true,
+      text: `${ref}: story unchanged`,
+    });
     expect(engine.desk.editStory(task.id, "oops").ok).toBe(false);
     expect((await engine.desk.undo()).text).toContain("story edit");
   });
@@ -92,7 +157,15 @@ describe("the journal as markdown", () => {
     const { project, task } = setup();
     await journalTick(config());
     const ref = start(task.id);
-    handleDone(ref, { summary: "built it", digest: { did: ["the writer"], next: ["toggle"] } }, undefined, config());
+    handleDone(
+      ref,
+      {
+        summary: "built it",
+        digest: { did: ["the writer"], next: ["toggle"] },
+      },
+      undefined,
+      config(),
+    );
     sessionEnded(ref, EndReason.exited);
     workMerged(task.id, "merged by hand");
     await journalTick(config());
@@ -103,8 +176,15 @@ describe("the journal as markdown", () => {
     const r = store.taskRef(task.id);
     expect(md).toStartWith(`# ${project.name}: journal\n`);
     expect(md).toContain("## Now");
-    expect(md).toMatch(new RegExp(`^- \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}  ${r}  merged`, "m"));
-    expect(md).toMatch(new RegExp(`^### \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}  ${r}  ${task.title}  \\(agent\\)$`, "m"));
+    expect(md).toMatch(
+      new RegExp(`^- \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}  ${r}  merged`, "m"),
+    );
+    expect(md).toMatch(
+      new RegExp(
+        `^### \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}  ${r}  ${task.title}  \\(agent\\)$`,
+        "m",
+      ),
+    );
     expect(md).not.toContain("<!--");
     expect(md).toEndWith("My own note.");
     expect(md).toContain("\nOutcome: ready for review");
@@ -118,7 +198,8 @@ describe("the journal as markdown", () => {
 });
 
 describe("saving an edit of the journal", () => {
-  const entry = (n: number) => `2026-11-24 1${n}:00  RIKER-000${n}  made  (task ${n})`;
+  const entry = (n: number) =>
+    `2026-11-24 1${n}:00  RIKER-000${n}  made  (task ${n})`;
 
   function opened() {
     const { project } = setup();
@@ -130,14 +211,21 @@ describe("saving an edit of the journal", () => {
   test("as it was: written whole; the same text: nothing", () => {
     const { project, base } = opened();
     expect(saveJournalEdit(project, base, base)).toBe(JournalSave.unchanged);
-    expect(saveJournalEdit(project, base, `${base}\nMy note.\n`)).toBe(JournalSave.saved);
-    expect(readFileSync(journalFile(project), "utf8")).toBe(`${base}\nMy note.\n`);
+    expect(saveJournalEdit(project, base, `${base}\nMy note.\n`)).toBe(
+      JournalSave.saved,
+    );
+    expect(readFileSync(journalFile(project), "utf8")).toBe(
+      `${base}\nMy note.\n`,
+    );
   });
 
   test("an entry written while it was open is kept beside the owner's note", () => {
     const { project, base } = opened();
     writeJournal(project, entry(2), "2026-11-24T11:00:00Z");
-    const edited = base.replace(/journal\n/, "journal\n\nMy note under the title.\n");
+    const edited = base.replace(
+      /journal\n/,
+      "journal\n\nMy note under the title.\n",
+    );
     expect(saveJournalEdit(project, base, edited)).toBe(JournalSave.merged);
     const now = readFileSync(journalFile(project), "utf8");
     expect(now).toContain("My note under the title.");
@@ -149,7 +237,13 @@ describe("saving an edit of the journal", () => {
     const { project, base } = opened();
     writeJournal(project, entry(2), "2026-11-24T11:00:00Z");
     const engineWrote = readFileSync(journalFile(project), "utf8");
-    expect(saveJournalEdit(project, base, base.replace("(task 1)", "(task 1, edited)"))).toBe(JournalSave.conflict);
+    expect(
+      saveJournalEdit(
+        project,
+        base,
+        base.replace("(task 1)", "(task 1, edited)"),
+      ),
+    ).toBe(JournalSave.conflict);
     expect(readFileSync(journalFile(project), "utf8")).toBe(engineWrote);
   });
 
@@ -157,11 +251,16 @@ describe("saving an edit of the journal", () => {
     const { project, base } = opened();
     const engine = new Engine({ config: testConfig() });
     writeJournal(project, entry(2), "2026-11-24T11:00:00Z");
-    expect(engine.desk.saveJournal(project.id, base, `${base}\nEnd note.\n`)).toEqual({
+    expect(
+      engine.desk.saveJournal(project.id, base, `${base}\nEnd note.\n`),
+    ).toEqual({
       ok: true,
       text: `${project.name} journal: saved, with what Riker wrote while you edited`,
     });
-    expect(engine.desk.saveJournal(project.id, base, base.replace("(task 1)", "(x)")).ok).toBe(false);
+    expect(
+      engine.desk.saveJournal(project.id, base, base.replace("(task 1)", "(x)"))
+        .ok,
+    ).toBe(false);
   });
 });
 

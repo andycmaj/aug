@@ -17,7 +17,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 const CSV = "CSV import fails on a BOM";
@@ -37,7 +39,9 @@ async function boot(kitty: boolean) {
   const log = join(home, "agent-bytes");
   const engine = installFixture("demo");
   const csv = store.listTasks().find((t) => t.title === CSV);
-  if (!csv) throw new Error("demo has no CSV task");
+  if (!csv) {
+    throw new Error("demo has no CSV task");
+  }
   const isLive = engine.desk.isLive.bind(engine.desk);
   engine.desk.isLive = (t) => t.id === csv.id || isLive(t);
   engine.desk.viewer = async () => ({ argv: agent(log) });
@@ -59,12 +63,16 @@ async function boot(kitty: boolean) {
     await settle();
   };
   const type = async (text: string) => {
-    for (const c of text) setup.mockInput.pressKey(c);
+    for (const c of text) {
+      setup.mockInput.pressKey(c);
+    }
     await settle();
   };
   const until = async (ok: () => boolean) => {
     const end = Date.now() + 3000;
-    while (!ok() && Date.now() < end) await settle(20);
+    while (!ok() && Date.now() < end) {
+      await settle(20);
+    }
     return ok();
   };
   const goTo = async (words: string) => {

@@ -2,8 +2,21 @@
 // entry is plain TypeScript, so it runs under bare `bun` without the Solid
 // preload the TUI needs.
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import { ENTRYPOINT, envVar, LEGACY, TOOLS_NAME } from "./brand";
 import { rikerHome } from "./paths";
 
@@ -31,7 +44,11 @@ export function setToolsEntry(path: string): void {
 }
 
 export function toolsEntry(): string {
-  if (!entry) throw new Error("riker-tools entry not set: the entry point calls setToolsEntry");
+  if (!entry) {
+    throw new Error(
+      "riker-tools entry not set: the entry point calls setToolsEntry",
+    );
+  }
   return entry;
 }
 
@@ -43,7 +60,9 @@ export function toolsEntry(): string {
 // agents need its own riker-tools).
 export function lastingEntry(path: string): string {
   const pinned = envVar("TOOLS_ENTRY");
-  if (pinned) return resolve(pinned);
+  if (pinned) {
+    return resolve(pinned);
+  }
   const main = inMainCheckout(path);
   return main && existsSync(main) ? main : path;
 }
@@ -55,18 +74,28 @@ function inMainCheckout(path: string): string | null {
     const dotGit = join(dir, ".git");
     const text = readText(dotGit);
     if (text === undefined) {
-      if (dirname(dir) === dir) return null;
+      if (dirname(dir) === dir) {
+        return null;
+      }
       continue;
     }
     // A directory: this is the main checkout.
-    if (text === null) return null;
+    if (text === null) {
+      return null;
+    }
     const gitdir = /^gitdir:\s*(.+)$/m.exec(text)?.[1]?.trim();
-    if (!gitdir) return null;
+    if (!gitdir) {
+      return null;
+    }
     const worktreeGit = isAbsolute(gitdir) ? gitdir : resolve(dir, gitdir);
     const common = readText(join(worktreeGit, "commondir"))?.trim();
-    if (!common) return null;
+    if (!common) {
+      return null;
+    }
     const commonDir = resolve(worktreeGit, common);
-    if (basename(commonDir) !== ".git") return null;
+    if (basename(commonDir) !== ".git") {
+      return null;
+    }
     return join(dirname(commonDir), relative(dir, path));
   }
 }
@@ -88,7 +117,9 @@ export function toolsMissing(): string | null {
 }
 
 export function toolsArgv(): string[] {
-  return COMPILED ? [process.execPath, TOOLS_SUBCOMMAND] : [process.execPath, toolsEntry()];
+  return COMPILED
+    ? [process.execPath, TOOLS_SUBCOMMAND]
+    : [process.execPath, toolsEntry()];
 }
 
 // Quoted for a shell line (hook commands and the agent's brief are shell).
@@ -112,7 +143,9 @@ export function toolsBin(): string {
   const script = `#!/bin/sh\nexec ${toolsArgv().map(shellQuote).join(" ")} "$@"\n`;
   for (const name of [TOOLS_NAME, LEGACY.toolsName]) {
     const file = join(dir, name);
-    if (existsSync(file) && readFileSync(file, "utf8") === script) continue;
+    if (existsSync(file) && readFileSync(file, "utf8") === script) {
+      continue;
+    }
     mkdirSync(dir, { recursive: true });
     writeFileSync(file, script);
     chmodSync(file, 0o755);
@@ -142,7 +175,9 @@ export function toolsRules(...args: string[]): string[] {
 // in a pane of a task's window, and a claude that loads user settings would
 // have its hooks adopt it into that task (and riker-tools would take the pane's
 // task for its own).
-export function claudeEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
+export function claudeEnv(
+  extra: Record<string, string> = {},
+): Record<string, string | undefined> {
   // The Slack token stays with Riker: an agent's shell never sees it.
   const { TMUX_PANE: _, SLACK_TOKEN: _token, ...env } = process.env;
   return { ...env, ...extra, CLAUDE_CODE_ENTRYPOINT: ENTRYPOINT };

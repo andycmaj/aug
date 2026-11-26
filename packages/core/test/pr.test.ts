@@ -130,7 +130,10 @@ describe("words for it", () => {
 
 describe("what an open PR says at done", () => {
   const PR = "https://github.com/acme/ledger/pull/230";
-  function withPr(state: PrStatusRow["state"], patch: Partial<PrStatusRow> = {}) {
+  function withPr(
+    state: PrStatusRow["state"],
+    patch: Partial<PrStatusRow> = {},
+  ) {
     const t = issueTask();
     linkPr(t.id, PR);
     store.setPrStatus({

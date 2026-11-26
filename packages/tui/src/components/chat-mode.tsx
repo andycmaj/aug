@@ -34,19 +34,33 @@ export function ChatMode() {
   const managerEntries = (): PaletteExtra[] => {
     const item = isPaneFocused("rail") ? riker.cursorItem() : riker.selected();
     if (item?.type === "project") {
-      if (riker.manager(item.project.id)) return [];
-      return overseerCandidates(riker.tasksForProject(item.project.id)).map((t) => ({
-        id: `manager-${t.id}`,
-        group: PaletteGroup.row,
-        label: `Make ${taskRef(t.id)} ${t.title} its manager`,
-        inContext: true,
-        run: () => shell.actions.promoteManager(t),
-      }));
+      if (riker.manager(item.project.id)) {
+        return [];
+      }
+      return overseerCandidates(riker.tasksForProject(item.project.id)).map(
+        (t) => ({
+          id: `manager-${t.id}`,
+          group: PaletteGroup.row,
+          label: `Make ${taskRef(t.id)} ${t.title} its manager`,
+          inContext: true,
+          run: () => shell.actions.promoteManager(t),
+        }),
+      );
     }
-    if (item?.type !== "task") return [];
+    if (item?.type !== "task") {
+      return [];
+    }
     const task = riker.task(item.task.id);
-    if (!task?.project_id || task.kind === Kind.home || task.kind === Kind.system) return [];
-    if (riker.manager(task.project_id)) return [];
+    if (
+      !task?.project_id ||
+      task.kind === Kind.home ||
+      task.kind === Kind.system
+    ) {
+      return [];
+    }
+    if (riker.manager(task.project_id)) {
+      return [];
+    }
     return [
       {
         id: "manager-promote",
@@ -61,33 +75,44 @@ export function ChatMode() {
   // Every action that applies to the row the keys act on, one entry each.
   const taskActionEntries = (): PaletteExtra[] => {
     const item = isPaneFocused("rail") ? riker.cursorItem() : riker.selected();
-    if (item?.type !== "task") return managerEntries();
+    if (item?.type !== "task") {
+      return managerEntries();
+    }
     const task = riker.task(item.task.id);
-    if (!task) return [];
-    return actionsFor(riker.desk.config(), task).map((a): PaletteExtra => ({
-      id: `action-${a.name}`,
-      group: PaletteGroup.row,
-      label: `Action: ${a.title}`,
-      hint: a.key ?? ".",
-      inContext: true,
-      run: () => shell.actions.runAction(task, a.name),
-    })).concat(
-      riker.desk.hasGuideReview(task.id)
-        ? [{
-            id: "action-guide-review",
-            group: PaletteGroup.row,
-            label: `Action: ${OPEN_REVIEW_TITLE}`,
-            hint: ".",
-            inContext: true,
-            run: () => shell.actions.openGuideReview(task),
-          }]
-        : [],
-    ).concat(managerEntries());
+    if (!task) {
+      return [];
+    }
+    return actionsFor(riker.desk.config(), task)
+      .map((a): PaletteExtra => ({
+        id: `action-${a.name}`,
+        group: PaletteGroup.row,
+        label: `Action: ${a.title}`,
+        hint: a.key ?? ".",
+        inContext: true,
+        run: () => shell.actions.runAction(task, a.name),
+      }))
+      .concat(
+        riker.desk.hasGuideReview(task.id)
+          ? [
+              {
+                id: "action-guide-review",
+                group: PaletteGroup.row,
+                label: `Action: ${OPEN_REVIEW_TITLE}`,
+                hint: ".",
+                inContext: true,
+                run: () => shell.actions.openGuideReview(task),
+              },
+            ]
+          : [],
+      )
+      .concat(managerEntries());
   };
 
   // `a` from anywhere (the Board too) lands in Home's box.
   createEffect(() => {
-    if (!riker.wantsInput() || riker.selectedKey() !== `t${riker.homeId}`) return;
+    if (!riker.wantsInput() || riker.selectedKey() !== `t${riker.homeId}`) {
+      return;
+    }
     riker.setWantsInput(false);
     setActivePane("input");
   });
@@ -105,29 +130,39 @@ export function ChatMode() {
   // On a project's row, the line goes to its manager (made on the first).
   const onSay = (text: string) => {
     const item = riker.selected();
-    if (item?.type === "project")
+    if (item?.type === "project") {
       return shell.actions.sayToProject(item.project.id, text);
-    if (item?.type !== "task") return;
+    }
+    if (item?.type !== "task") {
+      return;
+    }
     const task = riker.task(item.task.id);
-    if (task) shell.actions.say(task, text);
+    if (task) {
+      shell.actions.say(task, text);
+    }
   };
 
   const onCompose = (initial: string, keep: (text: string) => void) => {
     const item = riker.selected();
-    if (item?.type === "project")
+    if (item?.type === "project") {
       return shell.actions.compose(
         riker.desk.ensureManager(item.project.id),
         initial,
         keep,
       );
-    if (item?.type !== "task") return;
+    }
+    if (item?.type !== "task") {
+      return;
+    }
     const task = riker.task(item.task.id);
-    if (task) shell.actions.compose(task, initial, keep);
+    if (task) {
+      shell.actions.compose(task, initial, keep);
+    }
   };
 
   const baseCtx = createMemo((): HelpCtx => {
     const item = isPaneFocused("rail") ? riker.cursorItem() : riker.selected();
-    if (!item)
+    if (!item) {
       return {
         item: null,
         kind: null,
@@ -138,6 +173,7 @@ export function ChatMode() {
         started: false,
         pr: false,
       };
+    }
     if (item.type === "project") {
       // A project's row stops its manager's turn.
       const manager = riker.manager(item.project.id);
@@ -167,26 +203,30 @@ export function ChatMode() {
       started: !riker.briefEditable(t.id),
       pr: riker.taskPr(t) !== null,
       closed: isClosed(t),
-      actions: actionsFor(riker.desk.config(), riker.task(t.id) ?? t).map((a) => a.name),
+      actions: actionsFor(riker.desk.config(), riker.task(t.id) ?? t).map(
+        (a) => a.name,
+      ),
     };
   });
 
   // What the palette's context mode is about: the row the keys act on.
   const subject = (): string | null => {
     const item = isPaneFocused("rail") ? riker.cursorItem() : riker.selected();
-    if (!item) return null;
-    if (item.type === "project") return `project ${item.project.name}`;
+    if (!item) {
+      return null;
+    }
+    if (item.type === "project") {
+      return `project ${item.project.name}`;
+    }
     return `${taskRef(item.task.id)} ${item.task.title}`;
   };
 
-  const ctx = createMemo(
-    (): HelpCtx => ({
-      ...baseCtx(),
-      typing: isPaneFocused("input"),
-      filtered: riker.railFilter().size > 0,
-      attached: terminals.attached() !== null,
-    }),
-  );
+  const ctx = createMemo((): HelpCtx => ({
+    ...baseCtx(),
+    typing: isPaneFocused("input"),
+    filtered: riker.railFilter().size > 0,
+    attached: terminals.attached() !== null,
+  }));
 
   return (
     <box

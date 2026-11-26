@@ -10,7 +10,11 @@ import { githubPlugin } from "../src/index";
 beforeEach(() => freshHome());
 
 function issueTask(type: string) {
-  const t = store.createTask({ title: "x", kind: Kind.general, channel: "github" });
+  const t = store.createTask({
+    title: "x",
+    kind: Kind.general,
+    channel: "github",
+  });
   const m = store.insertMessage({
     channel: "github",
     externalId: `gh:${type}`,
@@ -38,7 +42,9 @@ describe("a GitHub draft", () => {
       body: "done",
       close: undefined,
     });
-    expect(drafts.for(issue, { kind: "close_issue", text: "fixed" })).toMatchObject({ close: "issue" });
+    expect(
+      drafts.for(issue, { kind: "close_issue", text: "fixed" }),
+    ).toMatchObject({ close: "issue" });
   });
 
   test("is worded and rewritten by its own kind", () => {

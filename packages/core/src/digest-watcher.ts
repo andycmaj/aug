@@ -54,7 +54,13 @@ function short(v: unknown): string {
 
 function toolLine(p: Part): string {
   const input = p.input ?? {};
-  const what = input.file_path ?? input.command ?? input.pattern ?? input.path ?? input.url ?? "";
+  const what =
+    input.file_path ??
+    input.command ??
+    input.pattern ??
+    input.path ??
+    input.url ??
+    "";
   return `[tool ${p.name ?? "?"}${what ? `: ${short(what)}` : ""}]`;
 }
 
@@ -64,7 +70,9 @@ export function sliceText(jsonl: string): { text: string; changed: boolean } {
   const out: string[] = [];
   let changed = false;
   for (const line of jsonl.split("\n")) {
-    if (!line.trim()) continue;
+    if (!line.trim()) {
+      continue;
+    }
     let e: Entry;
     try {
       e = JSON.parse(line) as Entry;
@@ -73,20 +81,38 @@ export function sliceText(jsonl: string): { text: string; changed: boolean } {
     }
     const content = e.message?.content;
     if (e.type === "user") {
-      if (typeof content === "string" && content.trim()) out.push(`Owner: ${content.trim()}`);
+      if (typeof content === "string" && content.trim()) {
+        out.push(`Owner: ${content.trim()}`);
+      }
       continue;
     }
-    if (e.type !== "assistant" || !Array.isArray(content)) continue;
+    if (e.type !== "assistant" || !Array.isArray(content)) {
+      continue;
+    }
     for (const p of content as Part[]) {
-      if (p.type === "text" && p.text?.trim()) out.push(`Agent: ${p.text.trim()}`);
-      if (p.type !== "tool_use") continue;
+      if (p.type === "text" && p.text?.trim()) {
+        out.push(`Agent: ${p.text.trim()}`);
+      }
+      if (p.type !== "tool_use") {
+        continue;
+      }
       out.push(toolLine(p));
-      if (CHANGING_TOOLS.has(p.name ?? "")) changed = true;
-      if (p.name === "Bash" && /\bgit\s+commit\b/.test(String(p.input?.command ?? ""))) changed = true;
+      if (CHANGING_TOOLS.has(p.name ?? "")) {
+        changed = true;
+      }
+      if (
+        p.name === "Bash" &&
+        /\bgit\s+commit\b/.test(String(p.input?.command ?? ""))
+      ) {
+        changed = true;
+      }
     }
   }
   const text = out.join("\n");
-  return { text: text.length > SLICE_CHARS ? `…\n${text.slice(-SLICE_CHARS)}` : text, changed };
+  return {
+    text: text.length > SLICE_CHARS ? `…\n${text.slice(-SLICE_CHARS)}` : text,
+    changed,
+  };
 }
 
 export function readSlice(path: string, from: number): TranscriptSlice | null {
@@ -142,32 +168,58 @@ function prompt(task: TaskRow, slice: string): string {
 }
 
 // Why a session gets no watcher digest, or null when it should get one.
-export function watchSkip(session: SessionRow, slice: TranscriptSlice | null): string | null {
-  if (!session.transcript_path) return "no transcript to read";
-  if (!slice) return "its transcript could not be read";
-  if (!slice.changed) return "nothing changed";
+export function watchSkip(
+  session: SessionRow,
+  slice: TranscriptSlice | null,
+): string | null {
+  if (!session.transcript_path) {
+    return "no transcript to read";
+  }
+  if (!slice) {
+    return "its transcript could not be read";
+  }
+  if (!slice.changed) {
+    return "nothing changed";
+  }
   return null;
 }
 
 // The watcher's digest for a session, or why there is none, in words the
 // journal's line can carry. The log says ids, never the text.
-export type Watched = { digest: DigestRow; why?: undefined } | { digest: null; why: string };
+export type Watched =
+  | { digest: DigestRow; why?: undefined }
+  | { digest: null; why: string };
 
 export async function watchSession(
   config: RikerConfig,
   task: TaskRow,
   session: SessionRow,
 ): Promise<Watched> {
-  const from = Math.max(0, ...store.digestsForSession(session.id).map((d) => d.covers_to ?? 0));
-  const slice = session.transcript_path ? readSlice(session.transcript_path, from) : null;
+  const from = Math.max(
+    0,
+    ...store.digestsForSession(session.id).map((d) => d.covers_to ?? 0),
+  );
+  const slice = session.transcript_path
+    ? readSlice(session.transcript_path, from)
+    : null;
   const skip = watchSkip(session, slice);
   if (skip || !slice) {
-    log.debug("no watcher digest", { task: task.id, session: session.id, why: skip });
+    log.debug("no watcher digest", {
+      task: task.id,
+      session: session.id,
+      why: skip,
+    });
     return { digest: null, why: skip ?? "nothing changed" };
   }
   if (capReached(config)) {
-    log.info("no watcher digest: daily spend cap", { task: task.id, session: session.id });
-    return { digest: null, why: "not written up: the daily spend cap is reached" };
+    log.info("no watcher digest: daily spend cap", {
+      task: task.id,
+      session: session.id,
+    });
+    return {
+      digest: null,
+      why: "not written up: the daily spend cap is reached",
+    };
   }
   try {
     const result = await think({
@@ -182,13 +234,16 @@ export async function watchSession(
       log.warn("watcher digest failed", { task: task.id, session: session.id });
       return { digest: null, why: "the write-up failed" };
     }
-    const clean = (v: string[] | undefined) => toLines(v).map(redact).join("\n");
+    const clean = (v: string[] | undefined) =>
+      toLines(v).map(redact).join("\n");
     const outcomes = Object.values(DigestOutcome) as string[];
     const digest = store.addDigest({
       task_id: task.id,
       session_id: session.id,
       by: DigestBy.watcher,
-      outcome: outcomes.includes(a.outcome ?? "") ? (a.outcome as DigestOutcome) : DigestOutcome.stopped,
+      outcome: outcomes.includes(a.outcome ?? "")
+        ? (a.outcome as DigestOutcome)
+        : DigestOutcome.stopped,
       goals: "",
       did: clean(a.did),
       decisions: clean(a.decisions),
@@ -202,7 +257,11 @@ export async function watchSession(
     });
     return { digest };
   } catch (err) {
-    log.warn("watcher digest failed", { task: task.id, session: session.id, err: err instanceof Error ? err.name : "error" });
+    log.warn("watcher digest failed", {
+      task: task.id,
+      session: session.id,
+      err: err instanceof Error ? err.name : "error",
+    });
     return { digest: null, why: "the write-up failed" };
   }
 }

@@ -12,7 +12,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 // The rail reuses its rows by position. A write that adds a section above a

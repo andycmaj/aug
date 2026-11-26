@@ -11,7 +11,9 @@ export function fakeReview(port = 0) {
     port,
     async fetch(req) {
       const url = new URL(req.url);
-      if (url.pathname === "/api/diff") return Response.json({ rawPatch: "" });
+      if (url.pathname === "/api/diff") {
+        return Response.json({ rawPatch: "" });
+      }
       calls.push(`${req.method} ${url.pathname}${url.search}`);
       if (req.method === "DELETE") {
         const source = url.searchParams.get("source");
@@ -20,7 +22,10 @@ export function fakeReview(port = 0) {
       }
       const body = (await req.json()) as { annotations: ReviewComment[] };
       held.push(...body.annotations);
-      return Response.json({ ids: body.annotations.map(() => "x") }, { status: 201 });
+      return Response.json(
+        { ids: body.annotations.map(() => "x") },
+        { status: 201 },
+      );
     },
   });
   return { server, calls, held: () => held };

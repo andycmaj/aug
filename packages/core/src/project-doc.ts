@@ -3,7 +3,15 @@
 // the same goal and the tasks pointing at it keep pointing; a line without a
 // ref is a new goal, and a goal whose line is gone is dropped (never deleted).
 
-import { checkMapped, checkRepo, describeProblem, expandHome, mapRepo, repoPath, tildePath } from "./repos";
+import {
+  checkMapped,
+  checkRepo,
+  describeProblem,
+  expandHome,
+  mapRepo,
+  repoPath,
+  tildePath,
+} from "./repos";
 import type { RikerConfig, ConfigSource } from "./config";
 import * as store from "./store";
 import { GoalStatus, type ProjectRow } from "./types";
@@ -26,7 +34,10 @@ export function renderProjectDoc(p: ProjectRow, config: RikerConfig): string {
   const repoLine = (repo: string) => {
     const path = repoPath(config, repo);
     const problem = checkMapped(config, repo);
-    const why = problem && problem.kind !== "unmapped" ? `  <!-- ${describeProblem(repo, problem)} -->` : "";
+    const why =
+      problem && problem.kind !== "unmapped"
+        ? `  <!-- ${describeProblem(repo, problem)} -->`
+        : "";
     return `- ${repo}${path ? `  ${tildePath(path)}` : ""}${why}`;
   };
   return [
@@ -40,7 +51,9 @@ export function renderProjectDoc(p: ProjectRow, config: RikerConfig): string {
     p.brief,
     "",
     GOALS,
-    ...goals.map((g) => `- [${MARK[g.status]}] ${store.goalRef(g.id)} ${g.title}`),
+    ...goals.map(
+      (g) => `- [${MARK[g.status]}] ${store.goalRef(g.id)} ${g.title}`,
+    ),
     "",
     REPOS,
     ...store.projectRepos(p).map(repoLine),
@@ -89,18 +102,28 @@ export function parseProjectDoc(text: string): ParsedProject {
   for (const raw of body.split("\n")) {
     const line = raw.trim();
     const heading = line.toLowerCase();
-    if (heading === GOALS.toLowerCase()) part = "goals";
-    else if (heading === REPOS.toLowerCase()) {
+    if (heading === GOALS.toLowerCase()) {
+      part = "goals";
+    } else if (heading === REPOS.toLowerCase()) {
       part = "repos";
       repos ??= [];
-    } else if (heading === DOCS.toLowerCase()) part = "docs";
-    else if (part === "brief") {
-      if (!(brief.length === 0 && /^# /.test(line))) brief.push(raw);
+    } else if (heading === DOCS.toLowerCase()) {
+      part = "docs";
+    } else if (part === "brief") {
+      if (!(brief.length === 0 && /^# /.test(line))) {
+        brief.push(raw);
+      }
     } else if (part === "goals") {
       const m = line.match(GOAL_LINE);
-      if (!m || !m[3].trim()) continue;
+      if (!m || !m[3].trim()) {
+        continue;
+      }
       const status =
-        m[1] === "-" ? GoalStatus.dropped : m[1] === " " ? GoalStatus.open : GoalStatus.met;
+        m[1] === "-"
+          ? GoalStatus.dropped
+          : m[1] === " "
+            ? GoalStatus.open
+            : GoalStatus.met;
       goals.push({
         id: m[2] ? store.parseGoalRef(m[2]) : null,
         title: m[3].trim(),
@@ -108,10 +131,14 @@ export function parseProjectDoc(text: string): ParsedProject {
       });
     } else if (part === "repos") {
       const m = line.match(REPO_LINE);
-      if (m) repos?.push({ repo: m[1], path: m[2]?.trim() || null });
+      if (m) {
+        repos?.push({ repo: m[1], path: m[2]?.trim() || null });
+      }
     } else {
       const m = line.match(DOC_LINE);
-      if (m) docs.push({ url: m[2], title: m[1]?.trim() || null });
+      if (m) {
+        docs.push({ url: m[2], title: m[1]?.trim() || null });
+      }
     }
   }
   return { brief: brief.join("\n").trim(), goals, repos, docs };
@@ -125,7 +152,9 @@ export function applyProjectDoc(
   by: string,
 ): string {
   const project = store.getProject(projectId);
-  if (!project) return "";
+  if (!project) {
+    return "";
+  }
   const next = parseProjectDoc(text);
   const said: string[] = [];
   return store.batch(() => {
@@ -141,12 +170,16 @@ export function applyProjectDoc(
       const old = g.id !== null ? had.find((h) => h.id === g.id) : undefined;
       if (!old) {
         const made = store.addGoal(projectId, g.title);
-        if (g.status !== GoalStatus.open) store.updateGoal(made.id, { status: g.status });
+        if (g.status !== GoalStatus.open) {
+          store.updateGoal(made.id, { status: g.status });
+        }
         added++;
         continue;
       }
       kept.add(old.id);
-      if (old.title === g.title && old.status === g.status) continue;
+      if (old.title === g.title && old.status === g.status) {
+        continue;
+      }
       store.updateGoal(old.id, {
         title: old.title === g.title ? undefined : g.title,
         status: old.status === g.status ? undefined : g.status,
@@ -154,26 +187,36 @@ export function applyProjectDoc(
       changed++;
     }
     let dropped = 0;
-    for (const old of had)
+    for (const old of had) {
       if (!kept.has(old.id) && old.status !== GoalStatus.dropped) {
         store.updateGoal(old.id, { status: GoalStatus.dropped });
         dropped++;
       }
-    if (added) said.push(`${added} goal${added === 1 ? "" : "s"} added`);
-    if (changed) said.push(`${changed} goal${changed === 1 ? "" : "s"} changed`);
-    if (dropped) said.push(`${dropped} goal${dropped === 1 ? "" : "s"} dropped`);
+    }
+    if (added) {
+      said.push(`${added} goal${added === 1 ? "" : "s"} added`);
+    }
+    if (changed) {
+      said.push(`${changed} goal${changed === 1 ? "" : "s"} changed`);
+    }
+    if (dropped) {
+      said.push(`${dropped} goal${dropped === 1 ? "" : "s"} dropped`);
+    }
 
     const links = store.linksForProject(projectId);
     const urls = new Set(next.docs.map((d) => d.url));
     let docs = 0;
-    for (const l of links)
+    for (const l of links) {
       if (!urls.has(l.url)) {
         store.removeProjectLink(projectId, l.url);
         docs++;
       }
+    }
     for (const d of next.docs) {
       const old = links.find((l) => l.url === d.url);
-      if (old && old.title === d.title) continue;
+      if (old && old.title === d.title) {
+        continue;
+      }
       if (old && d.title === null) {
         // COALESCE keeps an old title; a doc line without one clears it.
         store.removeProjectLink(projectId, d.url);
@@ -181,8 +224,12 @@ export function applyProjectDoc(
       store.addProjectLink(projectId, d.url, d.title, by);
       docs++;
     }
-    if (docs) said.push("docs updated");
-    if (next.repos) said.push(...applyRepos(config, projectId, next.repos));
+    if (docs) {
+      said.push("docs updated");
+    }
+    if (next.repos) {
+      said.push(...applyRepos(config, projectId, next.repos));
+    }
     return said.length ? `${project.name}: ${said.join(", ")}` : "";
   });
 }
@@ -190,10 +237,16 @@ export function applyProjectDoc(
 // The project's list is the file's, in its order. A path sets where the
 // repo is checked out for every project; one that is not a checkout is not
 // saved, and the toast says why. A line without a path leaves the mapping.
-function applyRepos(config: ConfigSource, projectId: number, lines: ParsedRepo[]): string[] {
+function applyRepos(
+  config: ConfigSource,
+  projectId: number,
+  lines: ParsedRepo[],
+): string[] {
   const said: string[] = [];
   const project = store.getProject(projectId);
-  if (!project) return said;
+  if (!project) {
+    return said;
+  }
   const had = store.projectRepos(project);
   const repos = [...new Set(lines.map((l) => checkRepo(l.repo)))];
   if (repos.join("\n") !== had.join("\n")) {
@@ -201,12 +254,16 @@ function applyRepos(config: ConfigSource, projectId: number, lines: ParsedRepo[]
     said.push("repos updated");
   }
   for (const { repo, path } of lines) {
-    if (!path || expandHome(path) === repoPath(config.get(), repo)) continue;
+    if (!path || expandHome(path) === repoPath(config.get(), repo)) {
+      continue;
+    }
     try {
       mapRepo(config, repo, path);
       said.push(`${repo} at ${tildePath(expandHome(path))}`);
     } catch (err) {
-      said.push(`${repo} path not saved: ${err instanceof Error ? err.message : String(err)}`);
+      said.push(
+        `${repo} path not saved: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
   return said;

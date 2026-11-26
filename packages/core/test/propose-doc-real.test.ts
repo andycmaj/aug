@@ -4,7 +4,11 @@
 //   RIKER_REAL_CLAUDE=1 bun test test/propose-doc-real.test.ts
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { ASSISTANT_TOOLS, assistantAllow, assistantSystem } from "../src/assistant";
+import {
+  ASSISTANT_TOOLS,
+  assistantAllow,
+  assistantSystem,
+} from "../src/assistant";
 import { claudeBrain, setBrain, think } from "../src/brain";
 import { openDb, useDb } from "../src/db";
 import { Engine } from "../src/engine";
@@ -17,14 +21,16 @@ import { REAL_JOB } from "./support/doc-fixture";
 import { FakeMux } from "./support/fake-mux";
 import { freshHome, testConfig, config } from "./support/helpers";
 
-describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("propose_doc through real claude", () => {
-  afterAll(() => setBrain(async () => {
-    throw new Error("no brain after the real-claude test");
-  }));
+describe.skipIf(!process.env.RIKER_REAL_CLAUDE)(
+  "propose_doc through real claude",
+  () => {
+    afterAll(() =>
+      setBrain(async () => {
+        throw new Error("no brain after the real-claude test");
+      }),
+    );
 
-  test(
-    "a multi-line Markdown doc is handed in without a denial",
-    async () => {
+    test("a multi-line Markdown doc is handed in without a denial", async () => {
       freshHome();
       // riker-tools runs in its own process: it must see this database.
       useDb(openDb(paths.db()));
@@ -54,7 +60,6 @@ describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("propose_doc through real claude
         .openProposals()
         .find((p) => p.doc === "JOB.md" && p.status === ProposalStatus.open);
       expect(job?.proposed.trim()).toBe(REAL_JOB.trim());
-    },
-    240_000,
-  );
-});
+    }, 240_000);
+  },
+);

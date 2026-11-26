@@ -6,16 +6,31 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { triagePlugin } from "../src/index";
 import { DEFAULT_CONFIG, mergeConfig } from "@riker/core/config";
 import { Engine } from "@riker/core/engine";
-import { inboxCount, inboxRows, InboxFilter, InboxResult, inFilter, rowMessages } from "@riker/core/inbox";
+import {
+  inboxCount,
+  inboxRows,
+  InboxFilter,
+  InboxResult,
+  inFilter,
+  rowMessages,
+} from "@riker/core/inbox";
 import { setMux } from "@riker/core/mux";
 import * as store from "@riker/core/store";
 import { escalation, triage } from "../src/triage";
 import { Kind, type MessageRow } from "@riker/core/types";
 import { FakeMux } from "@riker/core/test/support/fake-mux";
-import { config, fakeBrain, freshHome, testConfig } from "@riker/core/test/support/helpers";
+import {
+  config,
+  fakeBrain,
+  freshHome,
+  testConfig,
+} from "@riker/core/test/support/helpers";
 
 let n = 0;
-function gh(meta: Record<string, unknown>, body = "please take a look"): MessageRow {
+function gh(
+  meta: Record<string, unknown>,
+  body = "please take a look",
+): MessageRow {
   n++;
   return store.insertMessage({
     channel: "github",
@@ -30,7 +45,10 @@ function gh(meta: Record<string, unknown>, body = "please take a look"): Message
   })!;
 }
 
-function slack(meta: Record<string, unknown>, body = "can someone check the cutoff?"): MessageRow {
+function slack(
+  meta: Record<string, unknown>,
+  body = "can someone check the cutoff?",
+): MessageRow {
   n++;
   return store.insertMessage({
     channel: "slack",
@@ -65,38 +83,67 @@ describe("what escalates", () => {
   beforeEach(() => freshHome());
 
   test("GitHub: assigned, mentioned or asked to review by name", () => {
-    expect(escalation(gh({ reason: "assign" }), rules(), none)).toBe("assigned to you");
-    expect(escalation(gh({ reason: "mention" }), rules(), none)).toBe("mentions you");
-    expect(escalation(gh({ reason: "review_requested", requested: { me: true, teams: [] } }), rules(), none)).toBe(
+    expect(escalation(gh({ reason: "assign" }), rules(), none)).toBe(
+      "assigned to you",
+    );
+    expect(escalation(gh({ reason: "mention" }), rules(), none)).toBe(
+      "mentions you",
+    );
+    expect(
+      escalation(
+        gh({ reason: "review_requested", requested: { me: true, teams: [] } }),
+        rules(),
+        none,
+      ),
+    ).toBe("review requested of you");
+    // Who was asked is unknown (the item read was a comment): it escalates.
+    expect(escalation(gh({ reason: "review_requested" }), rules(), none)).toBe(
       "review requested of you",
     );
-    // Who was asked is unknown (the item read was a comment): it escalates.
-    expect(escalation(gh({ reason: "review_requested" }), rules(), none)).toBe("review requested of you");
     expect(escalation(gh({ reason: "comment" }), rules(), none)).toBeNull();
     expect(escalation(gh({ reason: "author" }), rules(), none)).toBeNull();
   });
 
   // On a PR these are the review ask rule's; on an issue they reach here.
   test("GitHub: a team's review request or tag only for a team in triage.reviewTeams", () => {
-    const teamAsked = gh({ reason: "review_requested", requested: { me: false, teams: ["acme/payroll"] } });
+    const teamAsked = gh({
+      reason: "review_requested",
+      requested: { me: false, teams: ["acme/payroll"] },
+    });
     expect(escalation(teamAsked, rules(), none)).toBeNull();
-    expect(escalation(teamAsked, rules(), ["acme/payroll"])).toBe("review requested of acme/payroll");
-    const teamMention = gh({ reason: "team_mention", type: "Issue" }, "@acme/payroll can you check this?");
+    expect(escalation(teamAsked, rules(), ["acme/payroll"])).toBe(
+      "review requested of acme/payroll",
+    );
+    const teamMention = gh(
+      { reason: "team_mention", type: "Issue" },
+      "@acme/payroll can you check this?",
+    );
     expect(escalation(teamMention, rules(), none)).toBeNull();
-    expect(escalation(teamMention, rules(), ["payroll"])).toBe("mentions acme/payroll");
+    expect(escalation(teamMention, rules(), ["payroll"])).toBe(
+      "mentions acme/payroll",
+    );
     expect(escalation(teamMention, rules(), ["acme/infra"])).toBeNull();
   });
 
   test("Slack: a DM or a mention of you", () => {
     expect(escalation(slack({ dm: true }), rules(), none)).toBe("a DM to you");
-    expect(escalation(slack({ mention: true }), rules(), none)).toBe("mentions you");
+    expect(escalation(slack({ mention: true }), rules(), none)).toBe(
+      "mentions you",
+    );
     expect(escalation(slack({}), rules(), none)).toBeNull();
-    expect(escalation(slack({ mention: true }), rules({ slack: ["dm"] }), none)).toBeNull();
+    expect(
+      escalation(slack({ mention: true }), rules({ slack: ["dm"] }), none),
+    ).toBeNull();
   });
 
   test("a partial escalate in config keeps the other defaults", () => {
-    const merged = mergeConfig({ triage: { escalate: { slack: ["dm"] } } } as never);
-    expect(merged.triage.escalate).toEqual({ ...DEFAULT_CONFIG.triage.escalate, slack: ["dm"] });
+    const merged = mergeConfig({
+      triage: { escalate: { slack: ["dm"] } },
+    } as never);
+    expect(merged.triage.escalate).toEqual({
+      ...DEFAULT_CONFIG.triage.escalate,
+      slack: ["dm"],
+    });
     expect(merged.triage.noise).toEqual(DEFAULT_CONFIG.triage.noise);
   });
 });
@@ -120,14 +167,19 @@ describe("work no rule names is held for you", () => {
 
   test("an escalated one still becomes a task", async () => {
     work();
-    const out = await triage(gh({ reason: "review_requested" }), { config: config() });
+    const out = await triage(gh({ reason: "review_requested" }), {
+      config: config(),
+    });
     expect(out.verdict).toBe("coding");
     expect(out.taskId).not.toBeNull();
   });
 
   test("m makes the task its verdict describes, and it leaves needs-you", async () => {
     setMux(new FakeMux());
-    const engine = new Engine({ config: testConfig(), plugins: [triagePlugin()] });
+    const engine = new Engine({
+      config: testConfig(),
+      plugins: [triagePlugin()],
+    });
     work();
     const m = gh({ reason: "comment" });
     await triage(m, { config: config() });
@@ -146,23 +198,38 @@ describe("joined messages fold into one row per task", () => {
   beforeEach(() => freshHome());
 
   test("the newest carries the rest, and is read only when all are", () => {
-    const task = store.createTask({ title: "t", kind: Kind.task, channel: "slack" });
+    const task = store.createTask({
+      title: "t",
+      kind: Kind.task,
+      channel: "slack",
+    });
     const joined = [1, 2, 3].map(() => {
       const m = slack({ mention: true });
-      store.fileMessage(m.id, null, `joined ${store.taskRef(task.id)}`, task.id);
+      store.fileMessage(
+        m.id,
+        null,
+        `joined ${store.taskRef(task.id)}`,
+        task.id,
+      );
       return m;
     });
     const other = slack({ dm: true });
-    const rows = inboxRows().filter((r) => r.type === "message" && r.result === InboxResult.attached);
+    const rows = inboxRows().filter(
+      (r) => r.type === "message" && r.result === InboxResult.attached,
+    );
     expect(rows).toHaveLength(1);
     const [row] = rows;
     expect(row!.key).toBe(`m${joined[2]!.id}`);
-    expect(rowMessages(row!).map((m) => m.id)).toEqual(joined.map((m) => m.id).reverse());
+    expect(rowMessages(row!).map((m) => m.id)).toEqual(
+      joined.map((m) => m.id).reverse(),
+    );
     expect(inboxRows().some((r) => r.key === `m${other.id}`)).toBe(true);
 
     store.markMessageRead(joined[2]!.id);
     expect(inboxRows().find((r) => r.key === row!.key)!.read).toBe(false);
-    for (const m of joined) store.markMessageRead(m.id);
+    for (const m of joined) {
+      store.markMessageRead(m.id);
+    }
     const read = inboxRows().find((r) => r.key === row!.key)!;
     expect(read.read).toBe(true);
     expect(inFilter(read, InboxFilter.actionable)).toBe(false);

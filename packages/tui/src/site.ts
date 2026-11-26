@@ -60,7 +60,9 @@ export function siteNav(current: string): string {
 
 export function withNav(html: string, current: string): string {
   const at = html.indexOf("<body>");
-  if (at < 0) throw new Error(`${current} has no <body>`);
+  if (at < 0) {
+    throw new Error(`${current} has no <body>`);
+  }
   const end = at + "<body>".length;
   return html.slice(0, end) + "\n" + siteNav(current) + html.slice(end);
 }
@@ -73,8 +75,9 @@ function indexPage(): string {
   // stylesheet and end where the rules start.
   const from = head.indexOf(":root {");
   const to = head.indexOf("* { box-sizing", from);
-  if (from < 0 || to < 0)
+  if (from < 0 || to < 0) {
     throw new Error("architecture.html has no :root tokens");
+  }
   const tokens = head.slice(from, to).trimEnd();
   const fonts = head.match(
     /<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com[^>]*>/,
@@ -131,7 +134,9 @@ export function buildSite(): Record<string, string> {
   };
   for (const p of SITE_PAGES) {
     let html = readFileSync(join(DOCS_DIR, p.file), "utf8");
-    if (p.file === "keyboard.html") html = withKeysData(html);
+    if (p.file === "keyboard.html") {
+      html = withKeysData(html);
+    }
     site[p.file] = withNav(html, p.file);
   }
   return site;

@@ -4,7 +4,14 @@
 // it. Each runs `riker` with HOME on a scratch folder, never the real one.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,8 +30,11 @@ afterEach(() => rmSync(home, { recursive: true, force: true }));
 
 function riker(...args: string[]) {
   const env: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env))
-    if (v !== undefined && !/^(RIKER|AUG)_/.test(k)) env[k] = v;
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v !== undefined && !/^(RIKER|AUG)_/.test(k)) {
+      env[k] = v;
+    }
+  }
   env.HOME = home;
   return Bun.spawnSync(["bun", ENTRY, ...args], { env, cwd: ROOT });
 }

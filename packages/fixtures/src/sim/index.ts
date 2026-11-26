@@ -10,13 +10,23 @@ import { slackConfig, slackPlugin } from "@riker/slack";
 import { watch, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { claudeBrain, setBrain, type BrainCall, type BrainResult } from "@riker/core/brain";
+import {
+  claudeBrain,
+  setBrain,
+  type BrainCall,
+  type BrainResult,
+} from "@riker/core/brain";
 import { DEFAULT_CONFIG, fixedConfig } from "@riker/core/config";
 import { openDb, useDb } from "@riker/core/db";
 import { ensureDocs } from "@riker/core/docs";
 import { Engine } from "@riker/core/engine";
 import { configureLog, logger } from "@riker/core/log";
-import { setMux, TmuxMux, type MadeWorktree, type Worktree } from "@riker/core/mux";
+import {
+  setMux,
+  TmuxMux,
+  type MadeWorktree,
+  type Worktree,
+} from "@riker/core/mux";
 import { setSender } from "@riker/core/outbound";
 import { taskPr } from "@riker/core/pr";
 import { setGuidePrReviews } from "@riker/core/run-action";
@@ -80,12 +90,19 @@ function seed(file: string): SimState {
 async function simBrain(call: BrainCall): Promise<BrainResult> {
   // A task action (the guided review) runs only on the owner's word, and
   // a canned answer reviews nothing: it is the one real model call.
-  if (call.spend?.role === SpendRole.action) return claudeBrain(call);
+  if (call.spend?.role === SpendRole.action) {
+    return claudeBrain(call);
+  }
   const result = await demoBrain(call);
   const where = call.prompt.match(/^Where: (.+)$/m)?.[1];
   const props = call.schema?.properties ?? {};
-  if (!("verdict" in props) || !where || typeof result.structured !== "object")
+  if (
+    !("verdict" in props) ||
+    !where ||
+    typeof result.structured !== "object"
+  ) {
     return result;
+  }
   const title = where
     .replace(/^\S+ (PR|issue): /, "")
     .replace(/ \([^)]*\)$/, "");
@@ -95,12 +112,16 @@ async function simBrain(call: BrainCall): Promise<BrainResult> {
 // A task about a sim PR starts in a worktree on that PR's branch, so an
 // agent (or a task action) has a real diff in front of it.
 function simCwd(task: TaskRow, file: string): string | null {
-  if (task.worktree) return task.worktree;
+  if (task.worktree) {
+    return task.worktree;
+  }
   const pr = taskPr(task);
   const s = loadState(file);
   const pull =
     pr?.repo === s.repo ? s.pulls.find((p) => p.number === pr.number) : null;
-  if (!pull || !s.checkout) return null;
+  if (!pull || !s.checkout) {
+    return null;
+  }
   const path = worktreeFor(s.checkout, paths.home(), pull.head);
   store.updateTask(task.id, { worktree: path });
   return path;
@@ -120,8 +141,13 @@ class SimMux extends TmuxMux {
     const n = w.branch.match(/^pr:(\d+)$/)?.[1];
     const s = loadState(this.file);
     const pull = n ? s.pulls.find((p) => p.number === Number(n)) : null;
-    if (!pull || !s.checkout) return super.worktree(w);
-    return { path: worktreeFor(s.checkout, paths.home(), pull.head), branch: w.branch };
+    if (!pull || !s.checkout) {
+      return super.worktree(w);
+    }
+    return {
+      path: worktreeFor(s.checkout, paths.home(), pull.head),
+      branch: w.branch,
+    };
   }
 }
 
@@ -129,10 +155,11 @@ export function installSim(opts: SimOptions): {
   engine: Engine;
   started: () => void;
 } {
-  if (opts.scenario && !SCENARIOS[opts.scenario])
+  if (opts.scenario && !SCENARIOS[opts.scenario]) {
     throw new Error(
       `no scenario "${opts.scenario}" (one of ${Object.keys(SCENARIOS).join(", ")})`,
     );
+  }
   process.env.RIKER_HOME = demoHome(process.env, "riker-sim-");
   useDb(openDb());
   ensureDocs();
@@ -153,7 +180,10 @@ export function installSim(opts: SimOptions): {
       : DEFAULT_CONFIG.brain,
     spend: haiku ? { capEnabled: true, dailyUsd: 2 } : DEFAULT_CONFIG.spend,
     autostart: false,
-    triage: { ...DEFAULT_CONFIG.triage, reviewTeams: [`${SIM_REPO.split("/")[0]}/${SIM_TEAM}`] },
+    triage: {
+      ...DEFAULT_CONFIG.triage,
+      reviewTeams: [`${SIM_REPO.split("/")[0]}/${SIM_TEAM}`],
+    },
     tmuxSocket: "riker-sim",
     log: { enabled: true, level: "info" },
   });
@@ -161,11 +191,14 @@ export function installSim(opts: SimOptions): {
   setMux(new SimMux(config.get().tmuxSocket, file));
   // Its PRs are not on GitHub: a review opens on the worktree, not the PR.
   setGuidePrReviews(false);
-  if (!haiku) setBrain(simBrain);
+  if (!haiku) {
+    setBrain(simBrain);
+  }
   // Send lands on the sim's GitHub as the owner's own doing.
   setSender(async (draft) => {
-    if (draft.type !== "github_comment")
+    if (draft.type !== "github_comment") {
       return "the sim has no Slack: nothing was sent";
+    }
     const action = draft as GithubComment;
     const done = (() => {
       const s = loadState(file);
@@ -174,7 +207,7 @@ export function installSim(opts: SimOptions): {
         applyEvent(s, { type: "comment", pr, by: s.me, body: action.body })
           .said,
       ];
-      if (action.close === "approve")
+      if (action.close === "approve") {
         said.push(
           applyEvent(s, {
             type: "review",
@@ -185,15 +218,21 @@ export function installSim(opts: SimOptions): {
             body: action.body,
           }).said,
         );
-      if (action.close === "merge")
+      }
+      if (action.close === "merge") {
         said.push(applyEvent(s, { type: "merge", pr, by: s.me }).said);
+      }
       saveState(file, s);
       return said.join("; ");
     })();
     return `sim: ${done}`;
   });
   const fake = fileURLToPath(new URL("../fake-claude.ts", import.meta.url));
-  const github = githubPlugin({ api: simApi(file), prs: simPrFetch(file), reviews: simReviews(file) });
+  const github = githubPlugin({
+    api: simApi(file),
+    prs: simPrFetch(file),
+    reviews: simReviews(file),
+  });
   const engine = new Engine({
     config,
     noWorktrees: true,
@@ -211,16 +250,19 @@ export function installSim(opts: SimOptions): {
     // A write to the state file is heard now, not on the next poll.
     let timer: ReturnType<typeof setTimeout> | null = null;
     watch(dirname(file), () => {
-      if (timer) clearTimeout(timer);
+      if (timer) {
+        clearTimeout(timer);
+      }
       timer = setTimeout(() => void github.connector.poll(true), 300);
     });
-    if (opts.scenario)
+    if (opts.scenario) {
       void playScenario(opts.scenario, file, {
         onApplied: (done) => {
           log.info("scenario", { said: done.said });
           linkOpened(loadState(file), done);
         },
       }).catch((err) => log.error("scenario failed", { err }));
+    }
   };
   return { engine, started };
 }

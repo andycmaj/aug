@@ -61,9 +61,19 @@ test("moving around is left out", () => {
 test("a row's actions, the pane's, then anywhere; only app-wide ones are out of context", () => {
   const entries = paletteEntries(
     [
-      binding({ cmd: Commands.VIEW_TOGGLE, keys: "v", scope: "app", desc: "switch Chat / Board" }),
+      binding({
+        cmd: Commands.VIEW_TOGGLE,
+        keys: "v",
+        scope: "app",
+        desc: "switch Chat / Board",
+      }),
       binding({ cmd: Commands.OPEN_URL, keys: "o", desc: "open the link" }),
-      binding({ cmd: Commands.DONE, keys: "d", desc: "mark done", relevant: isTask }),
+      binding({
+        cmd: Commands.DONE,
+        keys: "d",
+        desc: "mark done",
+        relevant: isTask,
+      }),
     ],
     taskCtx,
   );
@@ -80,8 +90,19 @@ test("a move with no key is listed where it applies, after the keys", () => {
     [binding({ cmd: Commands.DONE, keys: "d", relevant: isTask })],
     taskCtx,
     [
-      { id: "advisor", group: "Connections", label: "Run the Advisor now", run: () => ran++ },
-      { id: "never", group: "Docs", label: "Not here", relevant: () => false, run: () => {} },
+      {
+        id: "advisor",
+        group: "Connections",
+        label: "Run the Advisor now",
+        run: () => ran++,
+      },
+      {
+        id: "never",
+        group: "Docs",
+        label: "Not here",
+        relevant: () => false,
+        run: () => {},
+      },
     ],
   );
   expect(entries.map((e) => e.id)).toEqual([Commands.DONE, "advisor"]);
@@ -94,7 +115,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 async function boot(size = { width: 160, height: 45 }) {
@@ -109,7 +132,9 @@ async function boot(size = { width: 160, height: 45 }) {
   };
   await settle();
   const type = async (text: string) => {
-    for (const c of text) setup.mockInput.pressKey(c);
+    for (const c of text) {
+      setup.mockInput.pressKey(c);
+    }
     await settle();
   };
   const enter = async () => {
@@ -208,13 +233,28 @@ test("a row's entry runs on the row the palette was opened over", async () => {
 test("an extra about the row (a task action) sits with the row's keys", () => {
   const entries = paletteEntries(
     [
-      binding({ cmd: Commands.VIEW_TOGGLE, keys: "v", scope: "app", desc: "switch Chat / Board" }),
+      binding({
+        cmd: Commands.VIEW_TOGGLE,
+        keys: "v",
+        scope: "app",
+        desc: "switch Chat / Board",
+      }),
       binding({ cmd: Commands.OPEN_URL, keys: "o", desc: "open the link" }),
-      binding({ cmd: Commands.DONE, keys: "d", desc: "mark done", relevant: isTask }),
+      binding({
+        cmd: Commands.DONE,
+        keys: "d",
+        desc: "mark done",
+        relevant: isTask,
+      }),
     ],
     taskCtx,
     [
-      { id: "advisor", group: "Connections", label: "Run the Advisor now", run: () => {} },
+      {
+        id: "advisor",
+        group: "Connections",
+        label: "Run the Advisor now",
+        run: () => {},
+      },
       {
         id: "action-summarize",
         group: PaletteGroup.row,

@@ -159,7 +159,9 @@ function saveState(state: RemoteState): void {
 // The conversation the triage poller must skip: Riker's own talk with the owner.
 export function remoteChannel(config: ConfigSource): string | undefined {
   const c = remoteConfig.of(config.get());
-  if (!c.enabled) return undefined;
+  if (!c.enabled) {
+    return undefined;
+  }
   return c.channel ?? loadState().channel;
 }
 
@@ -168,10 +170,13 @@ const newer = (a: string, b: string) => Number(a) > Number(b);
 
 // Why the conversation is not the owner's alone, or null when it is.
 export function notPrivate(read: RemoteRead): string | null {
-  if (!read.me) return "could not tell who you are";
+  if (!read.me) {
+    return "could not tell who you are";
+  }
   const others = read.members.filter((m) => m && m !== read.me);
-  if (others.length)
+  if (others.length) {
     return `${read.channel} has ${others.length} other member${others.length === 1 ? "" : "s"}: use your self-DM or a private channel with only you in it`;
+  }
   return null;
 }
 
@@ -187,13 +192,24 @@ export function skipReason(
   me: string,
   posted: Set<string>,
 ): string | null {
-  if (posted.has(msg.ts)) return "riker posted it";
-  if (msg.bot) return "a bot or app wrote it";
-  if (msg.subtype && msg.subtype !== "thread_broadcast")
+  if (posted.has(msg.ts)) {
+    return "riker posted it";
+  }
+  if (msg.bot) {
+    return "a bot or app wrote it";
+  }
+  if (msg.subtype && msg.subtype !== "thread_broadcast") {
     return `subtype ${msg.subtype}`;
-  if (msg.user !== me) return "not the owner";
-  if (!msg.text.trim()) return "empty";
-  if (startsWithMark(msg.text)) return "Riker's answer";
+  }
+  if (msg.user !== me) {
+    return "not the owner";
+  }
+  if (!msg.text.trim()) {
+    return "empty";
+  }
+  if (startsWithMark(msg.text)) {
+    return "Riker's answer";
+  }
   return null;
 }
 
@@ -253,7 +269,9 @@ export function notification(
   const ref = store.taskRef(task.id);
   const agentClosed =
     task.status === TaskStatus.done && task.closed_by === "agent";
-  if (task.status !== TaskStatus.open && !agentClosed) return null;
+  if (task.status !== TaskStatus.open && !agentClosed) {
+    return null;
+  }
   if (state === AgentState.waiting && when.includes("waiting")) {
     const says = (task.agent_says ?? "").trim().slice(0, 500);
     return `${REPLY_MARK} ${ref} is waiting for you: ${task.title}${says ? `\n> ${says.replace(/\n/g, "\n> ")}` : ""}`;
@@ -262,8 +280,9 @@ export function notification(
     state === AgentState.ready &&
     when.includes("finished") &&
     (task.kind === Kind.coding || agentClosed)
-  )
+  ) {
     return `${REPLY_MARK} ${ref} finished${agentClosed ? " and closed itself" : ""}: ${task.title}`;
+  }
   return null;
 }
 
@@ -281,7 +300,9 @@ export class Remote {
   // conversation is not the owner's alone; nothing is lost, the next tick
   // tries again.
   async tick(): Promise<TickResult | null> {
-    if (this.busy) return null;
+    if (this.busy) {
+      return null;
+    }
     this.busy = true;
     try {
       const state = loadState();
@@ -291,12 +312,15 @@ export class Remote {
         saveState(state);
       }
       const read = await this.deps.link.read({
-        channel: remoteConfig.of(this.deps.config.get()).channel ?? state.channel,
+        channel:
+          remoteConfig.of(this.deps.config.get()).channel ?? state.channel,
         since: state.since,
         threads: this.liveThreads(state),
       });
       const refused = notPrivate(read);
-      if (refused) throw new Error(refused);
+      if (refused) {
+        throw new Error(refused);
+      }
       state.channel = read.channel;
       const heard = await this.hear(state, read);
       saveState(state);
@@ -312,11 +336,12 @@ export class Remote {
 
   private liveThreads(state: RemoteState): string[] {
     const cutoff = Date.now() - THREAD_HOURS * 3600_000;
-    for (const [ts, at] of Object.entries(state.threads))
+    for (const [ts, at] of Object.entries(state.threads)) {
       if (Date.parse(at) < cutoff) {
         delete state.threads[ts];
         delete state.about[ts];
       }
+    }
     return Object.entries(state.threads)
       .sort((a, b) => b[1].localeCompare(a[1]))
       .slice(0, MAX_THREADS)
@@ -332,7 +357,9 @@ export class Remote {
     const home = store.homeTask();
     let heard = 0;
     for (const msg of fresh) {
-      if (seen.has(msg.ts)) continue;
+      if (seen.has(msg.ts)) {
+        continue;
+      }
       seen.add(msg.ts);
       const skip = skipReason(msg, read.me, posted);
       // Only the ts and why: message text never reaches the log.
@@ -356,21 +383,23 @@ export class Remote {
       );
       const turn = store
         .turnsForTask(home.id)
-        .findLast(
-          (t) => t.role === TurnRole.you && t.author === SLACK_AUTHOR,
-        );
-      if (turn)
+        .findLast((t) => t.role === TurnRole.you && t.author === SLACK_AUTHOR);
+      if (turn) {
         state.waiting.push({
           turnId: turn.id,
           channel: read.channel,
           threadTs,
           at: new Date().toISOString(),
         });
+      }
       heard++;
       log.info("heard", { ts: msg.ts, thread: threadTs, turn: turn?.id });
     }
-    for (const msg of fresh)
-      if (newer(msg.ts, state.since ?? "0")) state.since = msg.ts;
+    for (const msg of fresh) {
+      if (newer(msg.ts, state.since ?? "0")) {
+        state.since = msg.ts;
+      }
+    }
     return heard;
   }
 
@@ -389,17 +418,24 @@ export class Remote {
     let holds = takeForThread(threadTs);
     if (!holds.length && kind !== "other" && threadTs === msg.ts) {
       const bound = pendingConfirms().filter((p) => p.threadTs);
-      if (bound.length === 1 && bound[0]?.threadTs)
+      if (bound.length === 1 && bound[0]?.threadTs) {
         holds = takeForThread(bound[0].threadTs);
+      }
     }
-    if (!holds.length) return false;
+    if (!holds.length) {
+      return false;
+    }
     const home = store.homeTask();
     const replyIn = holds[0]?.threadTs ?? threadTs;
     if (kind === "yes") {
       const lines: string[] = [];
       for (const h of holds) {
         const outcome = await this.deps.runMove(h.verb, h.args);
-        lines.push(outcome.ok ? outcome.result : `could not ${h.says}: ${outcome.result}`);
+        lines.push(
+          outcome.ok
+            ? outcome.result
+            : `could not ${h.says}: ${outcome.result}`,
+        );
         store.addTurn({
           taskId: home.id,
           role: TurnRole.trigger,
@@ -444,22 +480,35 @@ export class Remote {
     state.seen = Object.fromEntries(
       tasks.map((t) => [String(t.id), t.agent_state]),
     );
-    if (!before) return;
+    if (!before) {
+      return;
+    }
     for (const task of tasks) {
-      if (before[String(task.id)] === task.agent_state) continue;
+      if (before[String(task.id)] === task.agent_state) {
+        continue;
+      }
       const text = notification(task, task.agent_state, when);
-      if (text)
+      if (text) {
         state.outbox.push({ text, about: store.taskRef(task.id) });
+      }
     }
   }
 
   private async flush(state: RemoteState): Promise<void> {
-    if (!state.channel) return;
+    if (!state.channel) {
+      return;
+    }
     while (state.outbox.length) {
       const next = state.outbox[0];
-      if (!next) break;
+      if (!next) {
+        break;
+      }
       // A failed post throws with it still first: the next tick posts it.
-      const ts = await this.deps.link.post(state.channel, next.threadTs, next.text);
+      const ts = await this.deps.link.post(
+        state.channel,
+        next.threadTs,
+        next.text,
+      );
       if (ts) {
         state.posted = [...state.posted, ts].slice(-50);
         if (next.about) {
@@ -475,7 +524,9 @@ export class Remote {
   // The first finished Assistant turn after each waiting line is its answer.
   // Two lines in one thread answered by one turn get one post.
   private async answer(state: RemoteState): Promise<number> {
-    if (!state.waiting.length) return 0;
+    if (!state.waiting.length) {
+      return 0;
+    }
     const home = store.homeTask();
     const agentTurns = store
       .turnsForTask(home.id)
@@ -487,12 +538,18 @@ export class Remote {
     const unheard = state.waiting.some(
       (w) => !agentTurns.some((t) => t.id > w.turnId),
     );
-    if (idle && unheard) this.deps.wake(home.id);
+    if (idle && unheard) {
+      this.deps.wake(home.id);
+    }
     for (const w of [...state.waiting]) {
       const turn = agentTurns.find((t) => t.id > w.turnId);
-      if (turn?.status === TurnStatus.running) continue;
+      if (turn?.status === TurnStatus.running) {
+        continue;
+      }
       const stale = Date.now() - Date.parse(w.at) > ANSWER_MINUTES * 60_000;
-      if (!turn && !stale) continue;
+      if (!turn && !stale) {
+        continue;
+      }
       const key = `${w.threadTs}:${turn?.id ?? "none"}`;
       if (!done.has(key)) {
         let text = turn
@@ -503,11 +560,15 @@ export class Remote {
           const holds = pendingConfirms().filter(
             (p) => p.threadTs === w.threadTs,
           );
-          if (holds.length) text = `${text}\n\n${askYes(holds)}`;
+          if (holds.length) {
+            text = `${text}\n\n${askYes(holds)}`;
+          }
         }
         // A failed post throws with w still waiting: the next tick posts it.
         const ts = await this.deps.link.post(w.channel, w.threadTs, text);
-        if (ts) state.posted = [...state.posted, ts].slice(-50);
+        if (ts) {
+          state.posted = [...state.posted, ts].slice(-50);
+        }
         state.threads[w.threadTs] = new Date().toISOString();
         done.add(key);
         answered++;
@@ -525,7 +586,8 @@ export class Remote {
 }
 
 function answerText(turn: TurnRow): string {
-  if (turn.status === TurnStatus.failed)
+  if (turn.status === TurnStatus.failed) {
     return `That did not work: ${turn.body}`;
+  }
   return turn.body || turn.did || "";
 }

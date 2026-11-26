@@ -4,7 +4,12 @@ import { mergeConfig } from "@riker/core/config";
 import { Engine } from "@riker/core/engine";
 import { claudeEnv } from "@riker/core/self";
 import { runMove } from "@riker/core/moves";
-import { CONFIRM_MINUTES, pendingConfirms, SLACK_ASKER, SLACK_AUTHOR } from "../src/confirm";
+import {
+  CONFIRM_MINUTES,
+  pendingConfirms,
+  SLACK_ASKER,
+  SLACK_AUTHOR,
+} from "../src/confirm";
 import {
   notification,
   REPLY_MARK,
@@ -19,7 +24,13 @@ import { remoteLink, TokenRemoteLink } from "../src/remote-links";
 import { confirmGuard, slackPlugin } from "../src/index";
 import { remoteConfig } from "../src/config";
 import * as store from "@riker/core/store";
-import { AgentState, Kind, TaskStatus, TurnRole, TurnStatus } from "@riker/core/types";
+import {
+  AgentState,
+  Kind,
+  TaskStatus,
+  TurnRole,
+  TurnStatus,
+} from "@riker/core/types";
 import { freshHome, testConfig } from "@riker/core/test/support/helpers";
 
 const ME = "U_ME";
@@ -30,7 +41,8 @@ class FakeLink implements RemoteLink {
   members = [ME];
   messages: RemoteMessage[] = [];
   queries: RemoteQuery[] = [];
-  posts: { channel: string; threadTs?: string; text: string; ts?: string }[] = [];
+  posts: { channel: string; threadTs?: string; text: string; ts?: string }[] =
+    [];
   failPost = false;
   private nextTs = 1000;
 
@@ -45,7 +57,9 @@ class FakeLink implements RemoteLink {
   }
 
   async post(channel: string, threadTs: string | undefined, text: string) {
-    if (this.failPost) throw new Error("slack unreachable");
+    if (this.failPost) {
+      throw new Error("slack unreachable");
+    }
     const ts = String(this.nextTs++ + Date.now() / 1000);
     this.posts.push({ channel, threadTs, text, ts });
     return ts;
@@ -62,9 +76,13 @@ let ran: { verb: string; args: Record<string, string> }[];
 
 // Each message a later ts than the last, as Slack gives them.
 let tick = 0;
-const nowTs = (offset = 0) => (Date.now() / 1000 + offset + tick++ / 1000).toFixed(6);
+const nowTs = (offset = 0) =>
+  (Date.now() / 1000 + offset + tick++ / 1000).toFixed(6);
 
-function owner(text: string, extra: Partial<RemoteMessage> = {}): RemoteMessage {
+function owner(
+  text: string,
+  extra: Partial<RemoteMessage> = {},
+): RemoteMessage {
   return { ts: nowTs(1), user: ME, bot: false, text, ...extra };
 }
 
@@ -74,7 +92,9 @@ async function settled(): Promise<void> {
     const running = store
       .turnsForTask(home.id)
       .some((t) => t.status === TurnStatus.running);
-    if (!running) return;
+    if (!running) {
+      return;
+    }
     await new Promise((r) => setTimeout(r, 5));
   }
 }
@@ -95,14 +115,19 @@ beforeEach(async () => {
   link = new FakeLink();
   ran = [];
   // The Slack plugin's hold, without its pollers: this test drives a Remote.
-  engine = new Engine({ config: testConfig(), plugins: [{ name: "slack", guards: [confirmGuard] }] });
+  engine = new Engine({
+    config: testConfig(),
+    plugins: [{ name: "slack", guards: [confirmGuard] }],
+  });
   remote = new Remote({
     link,
     config: testConfig(),
     say: (id, text, author) => engine.desk.say(id, text, author),
     wake: (id) => {
       const home = store.getTask(id);
-      if (home) engine.drivers.for(home).wake(home, "test");
+      if (home) {
+        engine.drivers.for(home).wake(home, "test");
+      }
     },
     runMove: (verb, args) => {
       ran.push({ verb, args });
@@ -128,7 +153,9 @@ describe("the Slack remote", () => {
     const heard = await remote.tick();
     expect(heard?.heard).toBe(1);
     const home = store.homeTask();
-    const said = store.turnsForTask(home.id).find((t) => t.role === TurnRole.you);
+    const said = store
+      .turnsForTask(home.id)
+      .find((t) => t.role === TurnRole.you);
     expect(said?.author).toBe(SLACK_AUTHOR);
     expect(said?.body).toBe("make a task for the flaky test");
     await settled();
@@ -199,7 +226,9 @@ describe("the Slack remote", () => {
     let n = 0;
     setBrain(async (call) => {
       calls.push(call);
-      if (n++ === 0) await first;
+      if (n++ === 0) {
+        await first;
+      }
       return {
         text: n === 1 ? "about the terminal line" : "about the Slack line",
         structured: null,
@@ -228,7 +257,9 @@ describe("the Slack remote", () => {
 
 describe("the answer as Slack shows it", () => {
   test("bold and headings in Slack's mrkdwn, marked, and clipped", () => {
-    expect(toSlack("## Plan\n**one** thing")).toBe(`${REPLY_MARK} *Plan*\n*one* thing`);
+    expect(toSlack("## Plan\n**one** thing")).toBe(
+      `${REPLY_MARK} *Plan*\n*one* thing`,
+    );
     const long = toSlack("x".repeat(5000));
     expect(long.length).toBeLessThan(3700);
     expect(long).toContain("the rest is in Riker's Home");
@@ -237,10 +268,18 @@ describe("the answer as Slack shows it", () => {
 
 describe("config and links", () => {
   test("off by default, and slower under claude-mcp", () => {
-    expect(remoteConfig.of(mergeConfig({}))).toEqual({ enabled: false, pollSeconds: 15, notify: [] });
+    expect(remoteConfig.of(mergeConfig({}))).toEqual({
+      enabled: false,
+      pollSeconds: 15,
+      notify: [],
+    });
     expect(
-      remoteConfig.of(mergeConfig({ slack: { transport: "claude-mcp" }, remote: { enabled: true } }))
-        .pollSeconds,
+      remoteConfig.of(
+        mergeConfig({
+          slack: { transport: "claude-mcp" },
+          remote: { enabled: true },
+        }),
+      ).pollSeconds,
     ).toBe(60);
   });
 
@@ -248,14 +287,20 @@ describe("config and links", () => {
     const asked: string[] = [];
     const api = async (method: string, params: Record<string, string>) => {
       asked.push(`${method} ${params.channel ?? params.users ?? ""}`);
-      if (method === "auth.test") return { ok: true, user_id: ME };
-      if (method === "conversations.open") return { ok: true, channel: { id: CHANNEL } };
-      if (method === "conversations.info")
+      if (method === "auth.test") {
+        return { ok: true, user_id: ME };
+      }
+      if (method === "conversations.open") {
+        return { ok: true, channel: { id: CHANNEL } };
+      }
+      if (method === "conversations.info") {
         return params.channel === CHANNEL
           ? { ok: true, channel: { id: CHANNEL, is_im: true, user: ME } }
           : { ok: true, channel: { id: params.channel, is_private: false } };
-      if (method === "conversations.history")
+      }
+      if (method === "conversations.history") {
         return { ok: true, messages: [{ ts: "2.0", user: ME, text: "hi" }] };
+      }
       return { ok: true };
     };
     const link = new TokenRemoteLink(api);
@@ -264,7 +309,11 @@ describe("config and links", () => {
     expect(read.members).toEqual([ME]);
     expect(read.messages[0]?.text).toBe("hi");
     expect(asked).toContain(`conversations.open ${ME}`);
-    const pub = await link.read({ channel: "C_PUBLIC", since: "1.0", threads: [] });
+    const pub = await link.read({
+      channel: "C_PUBLIC",
+      since: "1.0",
+      threads: [],
+    });
     expect(pub.members.length).toBeGreaterThan(1);
   });
 
@@ -273,15 +322,24 @@ describe("config and links", () => {
     delete process.env.SLACK_TOKEN;
     const link = remoteLink(mergeConfig({ remote: { enabled: true } }));
     expect("error" in link && link.error).toContain("SLACK_TOKEN");
-    if (prior) process.env.SLACK_TOKEN = prior;
+    if (prior) {
+      process.env.SLACK_TOKEN = prior;
+    }
   });
 
   test("claude-mcp needs the conversation named", async () => {
     const link = remoteLink(
-      mergeConfig({ slack: { transport: "claude-mcp" }, remote: { enabled: true } }),
+      mergeConfig({
+        slack: { transport: "claude-mcp" },
+        remote: { enabled: true },
+      }),
     );
-    if ("error" in link) throw new Error(link.error);
-    await expect(link.read({ since: "1", threads: [] })).rejects.toThrow("remote.channel");
+    if ("error" in link) {
+      throw new Error(link.error);
+    }
+    await expect(link.read({ since: "1", threads: [] })).rejects.toThrow(
+      "remote.channel",
+    );
   });
 
   test("an agent's environment never carries the Slack token", () => {
@@ -296,10 +354,19 @@ describe("config and links", () => {
 
 describe("held moves from Slack", () => {
   // The Assistant asks for `verb` mid-turn, the way riker-tools would.
-  function assistantAsks(verb: string, args: Record<string, string>, says = "I'll do that.") {
+  function assistantAsks(
+    verb: string,
+    args: Record<string, string>,
+    says = "I'll do that.",
+  ) {
     setBrain(async (call) => {
       calls.push(call);
-      const moved = await runMove(engine.desk, verb, args, call.env?.RIKER_ASKED_BY ?? "assistant");
+      const moved = await runMove(
+        engine.desk,
+        verb,
+        args,
+        call.env?.RIKER_ASKED_BY ?? "assistant",
+      );
       held.push(moved.result);
       return {
         text: says,
@@ -316,7 +383,11 @@ describe("held moves from Slack", () => {
 
   beforeEach(() => {
     held = [];
-    task = store.createTask({ title: "flaky test", kind: Kind.general, channel: "owner" });
+    task = store.createTask({
+      title: "flaky test",
+      kind: Kind.general,
+      channel: "owner",
+    });
   });
 
   async function askedInSlack(text: string): Promise<RemoteMessage> {
@@ -344,7 +415,9 @@ describe("held moves from Slack", () => {
     const msg = await askedInSlack(`stop ${ref}`);
     expect(held[0]).toContain("held for the owner's yes");
     expect(ran).toHaveLength(0);
-    expect(link.posts[0]?.text).toContain(`Reply *yes* in this thread to stop the agent on ${ref} (flaky test)`);
+    expect(link.posts[0]?.text).toContain(
+      `Reply *yes* in this thread to stop the agent on ${ref} (flaky test)`,
+    );
 
     link.messages = [owner("yes", { threadTs: msg.ts })];
     await remote.tick();
@@ -355,7 +428,9 @@ describe("held moves from Slack", () => {
     });
     // The yes is not a line for the Assistant; Home has a note of it.
     expect(calls).toHaveLength(1);
-    const notes = store.turnsForTask(store.homeTask().id).filter((t) => t.role === TurnRole.trigger);
+    const notes = store
+      .turnsForTask(store.homeTask().id)
+      .filter((t) => t.role === TurnRole.trigger);
     expect(notes.at(-1)?.body).toContain("said yes to stop the agent on");
     // Said once: a second yes is just a line.
     link.messages = [owner("yes", { threadTs: msg.ts })];
@@ -380,7 +455,9 @@ describe("held moves from Slack", () => {
     link.messages = [owner("no", { threadTs: msg.ts })];
     await remote.tick();
     expect(ran).toHaveLength(0);
-    expect(link.posts.at(-1)?.text).toBe(`${REPLY_MARK} Left as is: mark done ${ref} (flaky test).`);
+    expect(link.posts.at(-1)?.text).toBe(
+      `${REPLY_MARK} Left as is: mark done ${ref} (flaky test).`,
+    );
     expect(store.getTask(task.id)?.status).toBe("open");
   });
 
@@ -401,9 +478,16 @@ describe("held moves from Slack", () => {
     const ref = store.taskRef(task.id);
     assistantAsks("stop", { task: ref });
     const msg = await askedInSlack(`stop ${ref}`);
-    const old = new Date(Date.now() - (CONFIRM_MINUTES + 1) * 60_000).toISOString();
-    const raw = JSON.parse(store.kvGet("slack.remote.confirm") ?? "[]") as { at: string }[];
-    store.kvSet("slack.remote.confirm", JSON.stringify(raw.map((p) => ({ ...p, at: old }))));
+    const old = new Date(
+      Date.now() - (CONFIRM_MINUTES + 1) * 60_000,
+    ).toISOString();
+    const raw = JSON.parse(store.kvGet("slack.remote.confirm") ?? "[]") as {
+      at: string;
+    }[];
+    store.kvSet(
+      "slack.remote.confirm",
+      JSON.stringify(raw.map((p) => ({ ...p, at: old }))),
+    );
     link.messages = [owner("yes", { threadTs: msg.ts })];
     await remote.tick();
     expect(ran).toHaveLength(0);
@@ -420,7 +504,12 @@ describe("held moves from Slack", () => {
   });
 
   test("a move from the terminal Assistant is never held", async () => {
-    const out = await runMove(engine.desk, "stop", { task: store.taskRef(task.id) }, "assistant");
+    const out = await runMove(
+      engine.desk,
+      "stop",
+      { task: store.taskRef(task.id) },
+      "assistant",
+    );
     expect(out.result).toContain("stopped");
     expect(pendingConfirms()).toHaveLength(0);
   });
@@ -428,13 +517,24 @@ describe("held moves from Slack", () => {
 
 describe("notifications", () => {
   async function on(when: NotifyWhen[]) {
-    testConfig().update((c) => ({ ...c, remote: { ...remoteConfig.of(c), notify: when } }));
+    testConfig().update((c) => ({
+      ...c,
+      remote: { ...remoteConfig.of(c), notify: when },
+    }));
     await remote.tick();
   }
 
   test("a coding agent finishing, and one waiting, are posted once; a reply names the task", async () => {
-    const coding = store.createTask({ title: "fix login", kind: Kind.coding, channel: "owner" });
-    const chat = store.createTask({ title: "answer Ruth", kind: Kind.general, channel: "owner" });
+    const coding = store.createTask({
+      title: "fix login",
+      kind: Kind.coding,
+      channel: "owner",
+    });
+    const chat = store.createTask({
+      title: "answer Ruth",
+      kind: Kind.general,
+      channel: "owner",
+    });
     await on(["finished", "waiting"]);
     expect(link.posts).toHaveLength(0);
 
@@ -442,10 +542,15 @@ describe("notifications", () => {
     store.updateTask(chat.id, { agent_state: AgentState.ready });
     await remote.tick();
     const ref = store.taskRef(coding.id);
-    expect(link.posts.map((p) => p.text)).toEqual([`${REPLY_MARK} ${ref} finished: fix login`]);
+    expect(link.posts.map((p) => p.text)).toEqual([
+      `${REPLY_MARK} ${ref} finished: fix login`,
+    ]);
     expect(link.posts[0]?.threadTs).toBeUndefined();
 
-    store.updateTask(chat.id, { agent_state: AgentState.waiting, agent_says: "Send it as is?" });
+    store.updateTask(chat.id, {
+      agent_state: AgentState.waiting,
+      agent_says: "Send it as is?",
+    });
     await remote.tick();
     expect(link.posts.at(-1)?.text).toBe(
       `${REPLY_MARK} ${store.taskRef(chat.id)} is waiting for you: answer Ruth\n> Send it as is?`,
@@ -458,12 +563,18 @@ describe("notifications", () => {
     expect(link.queries.at(-1)?.threads).toContain(finishedTs);
     link.messages = [owner("what changed?", { threadTs: finishedTs })];
     await remote.tick();
-    const said = store.turnsForTask(store.homeTask().id).findLast((t) => t.role === TurnRole.you);
+    const said = store
+      .turnsForTask(store.homeTask().id)
+      .findLast((t) => t.role === TurnRole.you);
     expect(said?.body).toBe(`(About ${ref}) what changed?`);
   });
 
   test("only what was turned on", async () => {
-    const coding = store.createTask({ title: "fix login", kind: Kind.coding, channel: "owner" });
+    const coding = store.createTask({
+      title: "fix login",
+      kind: Kind.coding,
+      channel: "owner",
+    });
     await on(["waiting"]);
     store.updateTask(coding.id, { agent_state: AgentState.ready });
     await remote.tick();
@@ -471,11 +582,19 @@ describe("notifications", () => {
   });
 
   test("work the owner closed is no news", () => {
-    const t = store.createTask({ title: "x", kind: Kind.coding, channel: "owner" });
+    const t = store.createTask({
+      title: "x",
+      kind: Kind.coding,
+      channel: "owner",
+    });
     store.updateTask(t.id, { status: TaskStatus.done, closed_by: "you" });
-    expect(notification(store.getTask(t.id)!, AgentState.ready, ["finished"])).toBeNull();
+    expect(
+      notification(store.getTask(t.id)!, AgentState.ready, ["finished"]),
+    ).toBeNull();
     store.updateTask(t.id, { closed_by: "agent" });
-    expect(notification(store.getTask(t.id)!, AgentState.ready, ["finished"])).toContain("closed itself");
+    expect(
+      notification(store.getTask(t.id)!, AgentState.ready, ["finished"]),
+    ).toContain("closed itself");
   });
 });
 

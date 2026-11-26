@@ -16,7 +16,9 @@ import { reviewInBatches, type GuideAsk } from "../src/run";
 
 function sh(cwd: string, ...args: string[]) {
   const r = Bun.spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe" });
-  if (r.exitCode !== 0) throw new Error(r.stderr.toString());
+  if (r.exitCode !== 0) {
+    throw new Error(r.stderr.toString());
+  }
   return r.stdout.toString();
 }
 const git = (cwd: string, ...a: string[]) =>
@@ -31,7 +33,10 @@ function write(dir: string, files: Record<string, string>) {
 
 // A repo on main with `base`, then a feature branch with one commit per
 // entry of `commits`.
-function repo(base: Record<string, string>, commits: Record<string, string>[]): string {
+function repo(
+  base: Record<string, string>,
+  commits: Record<string, string>[],
+): string {
   const dir = mkdtempSync(join(tmpdir(), "riker-batches-"));
   git(dir, "init", "-q", "-b", "main");
   write(dir, { "README.md": "# r\n", ...base });
@@ -47,7 +52,12 @@ function repo(base: Record<string, string>, commits: Record<string, string>[]): 
 }
 
 function fp(file: string, body: string): FilePatch {
-  return { file, text: `diff --git a/${file} b/${file}\n@@ -1 +1 @@\n${body}\n`, added: 1, removed: 0 };
+  return {
+    file,
+    text: `diff --git a/${file} b/${file}\n@@ -1 +1 @@\n${body}\n`,
+    added: 1,
+    removed: 0,
+  };
 }
 
 describe("cutting the patch", () => {
@@ -110,7 +120,9 @@ describe("related files", () => {
       fp("pkg1/index.ts", "+one"),
       fp("pkg2/index.ts", "+two"),
     ];
-    const groups = relate(files, [["docs/x.md", "docs/y.md", "not/in/patch.ts"]]);
+    const groups = relate(files, [
+      ["docs/x.md", "docs/y.md", "not/in/patch.ts"],
+    ]);
     expect(groups).toEqual([
       ["src/a.ts", "src/b.ts"],
       ["src/calc.ts", "test/calc.test.ts"],
@@ -122,7 +134,8 @@ describe("related files", () => {
   });
 
   test("batches keep related files together, leave lock files out and split what is too big", () => {
-    const big = (n: number) => Array.from({ length: n }, (_, i) => `line ${i}`).join("\n") + "\n";
+    const big = (n: number) =>
+      Array.from({ length: n }, (_, i) => `line ${i}`).join("\n") + "\n";
     const dir = repo({}, [
       { "src/a.ts": big(40), "src/b.ts": big(40) },
       { "lib/c.ts": big(40) },
@@ -133,11 +146,18 @@ describe("related files", () => {
     const plan = planBatches(patch, dir, { budget: 2400, fileMax: 6000 });
     expect(plan.lockfiles).toEqual(["bun.lock"]);
     expect(plan.tooLarge).toEqual(["huge/h.ts"]);
-    expect(plan.batches.map((b) => b.map((f) => f.file))).toEqual([["lib/c.ts"], ["src/a.ts", "src/b.ts"]]);
+    expect(plan.batches.map((b) => b.map((f) => f.file))).toEqual([
+      ["lib/c.ts"],
+      ["src/a.ts", "src/b.ts"],
+    ]);
 
     // A group over the budget is split by folder.
     const tight = planBatches(patch, dir, { budget: 1300, fileMax: 6000 });
-    expect(tight.batches.map((b) => b.map((f) => f.file))).toEqual([["lib/c.ts"], ["src/a.ts"], ["src/b.ts"]]);
+    expect(tight.batches.map((b) => b.map((f) => f.file))).toEqual([
+      ["lib/c.ts"],
+      ["src/a.ts"],
+      ["src/b.ts"],
+    ]);
   });
 });
 
@@ -199,33 +219,80 @@ describe("the base", () => {
 });
 
 describe("the guide's calls", () => {
-  const notes = (files: { file: string; notes?: { lineStart: number; lineEnd: number; text: string }[] }[]) =>
-    "```json\n" + JSON.stringify({ files: files.map((f) => ({ summary: `about ${f.file}`, ...f })) }) + "\n```";
+  const notes = (
+    files: {
+      file: string;
+      notes?: { lineStart: number; lineEnd: number; text: string }[];
+    }[],
+  ) =>
+    "```json\n" +
+    JSON.stringify({
+      files: files.map((f) => ({ summary: `about ${f.file}`, ...f })),
+    }) +
+    "\n```";
 
   test("one batch is one call; several are a call each, then chapters, with every diff in one prompt", async () => {
-    const dir = repo({}, [{ "src/a.ts": "export const a = 1;\n" }, { "lib/b.ts": "export const b = 2;\n" }]);
+    const dir = repo({}, [
+      { "src/a.ts": "export const a = 1;\n" },
+      { "lib/b.ts": "export const b = 2;\n" },
+    ]);
     const patch = patchFor(dir, "main") as Patch;
     const prompts: { label: string; prompt: string }[] = [];
     const ask: GuideAsk = async (prompt, label) => {
       prompts.push({ label, prompt });
-      if (label === "batch 2/2")
-        return { text: notes([{ file: "src/a.ts", notes: [{ lineStart: 1, lineEnd: 1, text: "Bug: a" }] }]), denied: [] };
-      if (label === "batch 1/2") return { text: "not json", denied: ["Bash git diff | head"] };
+      if (label === "batch 2/2") {
+        return {
+          text: notes([
+            {
+              file: "src/a.ts",
+              notes: [{ lineStart: 1, lineEnd: 1, text: "Bug: a" }],
+            },
+          ]),
+          denied: [],
+        };
+      }
+      if (label === "batch 1/2") {
+        return { text: "not json", denied: ["Bash git diff | head"] };
+      }
       return {
-        text: "```json\n" + JSON.stringify({ title: "T", intent: "I", sections: [{ title: "A", overview: "", diffs: [{ file: "src/a.ts" }] }], unplacedFiles: [] }) + "\n```",
+        text:
+          "```json\n" +
+          JSON.stringify({
+            title: "T",
+            intent: "I",
+            sections: [
+              { title: "A", overview: "", diffs: [{ file: "src/a.ts" }] },
+            ],
+            unplacedFiles: [],
+          }) +
+          "\n```",
         denied: [],
       };
     };
     const plan = planBatches(patch, dir, { budget: 100 });
     expect(plan.batches).toHaveLength(2);
-    const ran = await reviewInBatches({ plan, prompt: (job) => `/riker:guide; job: ${job}`, commits: "abc step", ask });
-    if ("error" in ran) throw new Error(ran.error);
+    const ran = await reviewInBatches({
+      plan,
+      prompt: (job) => `/riker:guide; job: ${job}`,
+      commits: "abc step",
+      ask,
+    });
+    if ("error" in ran) {
+      throw new Error(ran.error);
+    }
 
-    expect(prompts.map((p) => p.label)).toEqual(["batch 1/2", "batch 2/2", "chapters"]);
+    expect(prompts.map((p) => p.label)).toEqual([
+      "batch 1/2",
+      "batch 2/2",
+      "chapters",
+    ]);
     expect(prompts[0]!.prompt).toContain("job: notes, batch 1 of 2");
     expect(prompts[0]!.prompt).toContain("- src/a.ts (+1 -0): batch 2");
     // Each file's diff in exactly one prompt, numbered.
-    const withDiff = (file: string) => prompts.filter((p) => p.prompt.includes(`diff --git a/${file}`)).map((p) => p.label);
+    const withDiff = (file: string) =>
+      prompts
+        .filter((p) => p.prompt.includes(`diff --git a/${file}`))
+        .map((p) => p.label);
     expect(withDiff("src/a.ts")).toEqual(["batch 2/2"]);
     expect(withDiff("lib/b.ts")).toEqual(["batch 1/2"]);
     expect(prompts[1]!.prompt).toMatch(/^\s+1 \+export const a = 1;/m);
@@ -237,14 +304,22 @@ describe("the guide's calls", () => {
     expect(ran.denied).toEqual(["Bash git diff | head"]);
     expect(ran.gaps).toEqual(["No review came back for `lib/b.ts`."]);
     // The notes laid into the chapter; the file no chapter named is kept.
-    expect(ran.guide.sections.map((s) => [s.title, s.diffs.map((d) => [d.file, d.notes?.length ?? 0])])).toEqual([
+    expect(
+      ran.guide.sections.map((s) => [
+        s.title,
+        s.diffs.map((d) => [d.file, d.notes?.length ?? 0]),
+      ]),
+    ).toEqual([
       ["A", [["src/a.ts", 1]]],
       ["Other changes", [["lib/b.ts", 0]]],
     ]);
   });
 
   test("a single batch is the whole job; chapters that are not JSON still keep every file", async () => {
-    const dir = repo({}, [{ "src/a.ts": "export const a = 1;\n" }, { "lib/b.ts": "export const b = 2;\n" }]);
+    const dir = repo({}, [
+      { "src/a.ts": "export const a = 1;\n" },
+      { "lib/b.ts": "export const b = 2;\n" },
+    ]);
     const patch = patchFor(dir, "main") as Patch;
 
     const one: string[] = [];
@@ -259,7 +334,10 @@ describe("the guide's calls", () => {
     });
     expect(one).toHaveLength(1);
     expect(one[0]).toContain("job: whole");
-    expect(whole).toMatchObject({ error: expect.stringContaining("not JSON"), answer: "nope" });
+    expect(whole).toMatchObject({
+      error: expect.stringContaining("not JSON"),
+      answer: "nope",
+    });
 
     const split = await reviewInBatches({
       plan: planBatches(patch, dir, { budget: 100 }),
@@ -268,10 +346,19 @@ describe("the guide's calls", () => {
       ask: async (_p, label) =>
         label === "chapters"
           ? { text: "no chapters", denied: [] }
-          : { text: notes([{ file: label === "batch 2/2" ? "src/a.ts" : "lib/b.ts" }]), denied: [] },
+          : {
+              text: notes([
+                { file: label === "batch 2/2" ? "src/a.ts" : "lib/b.ts" },
+              ]),
+              denied: [],
+            },
     });
-    if ("error" in split) throw new Error(split.error);
+    if ("error" in split) {
+      throw new Error(split.error);
+    }
     expect(split.gaps[0]).toContain("The chapters were not written");
-    expect(split.guide.sections.flatMap((s) => s.diffs.map((d) => d.file)).sort()).toEqual(["lib/b.ts", "src/a.ts"]);
+    expect(
+      split.guide.sections.flatMap((s) => s.diffs.map((d) => d.file)).sort(),
+    ).toEqual(["lib/b.ts", "src/a.ts"]);
   });
 });

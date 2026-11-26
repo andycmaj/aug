@@ -9,7 +9,13 @@ beforeEach(() => freshHome());
 
 test("triage's model call is spent as triage", async () => {
   fakeBrain(
-    () => ({ verdict: Verdict.fyi, reason: "x", title: "x", summary: "x", priority: "regular" }),
+    () => ({
+      verdict: Verdict.fyi,
+      reason: "x",
+      title: "x",
+      summary: "x",
+      priority: "regular",
+    }),
     { costUsd: 0.1 },
   );
   const m = store.insertMessage({
@@ -24,5 +30,7 @@ test("triage's model call is spent as triage", async () => {
     meta: { channel: "C1", ts: "1" },
   })!;
   await askVerdict(m, [m], null, config());
-  expect(store.spendByRole(localDay(new Date())).map((r) => r.role)).toEqual(["triage"]);
+  expect(store.spendByRole(localDay(new Date())).map((r) => r.role)).toEqual([
+    "triage",
+  ]);
 });

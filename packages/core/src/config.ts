@@ -219,14 +219,21 @@ type DeepPartial<T> = {
 // leaves only the new key.
 interface LegacyKeys {
   agentsAtOnce?: number;
-  github?: { repos?: Record<string, string>; reviewTeams?: string[] } & Record<string, unknown>;
+  github?: { repos?: Record<string, string>; reviewTeams?: string[] } & Record<
+    string,
+    unknown
+  >;
 }
 
 export function mergeConfig(
   raw: DeepPartial<RikerConfig> & LegacyKeys,
 ): RikerConfig {
   const { agentsAtOnce, github, ...rest } = raw;
-  const { repos: oldRepos, reviewTeams: oldTeams, ...githubRest } = github ?? {};
+  const {
+    repos: oldRepos,
+    reviewTeams: oldTeams,
+    ...githubRest
+  } = github ?? {};
   return {
     ...DEFAULT_CONFIG,
     ...rest,
@@ -241,7 +248,10 @@ export function mergeConfig(
       ...DEFAULT_CONFIG.triage,
       ...raw.triage,
       escalate: { ...DEFAULT_CONFIG.triage.escalate, ...raw.triage?.escalate },
-      reviewTeams: raw.triage?.reviewTeams ?? oldTeams ?? DEFAULT_CONFIG.triage.reviewTeams,
+      reviewTeams:
+        raw.triage?.reviewTeams ??
+        oldTeams ??
+        DEFAULT_CONFIG.triage.reviewTeams,
     },
     log: { ...DEFAULT_CONFIG.log, ...raw.log },
     capabilities: {
@@ -287,7 +297,10 @@ export const CORE_KEYS: ReadonlySet<string> = new Set([
 export function configSection<T extends object>(
   key: string,
   defaults: T,
-  merge: (written: Partial<T>, config: RikerConfig) => T = (written) => ({ ...defaults, ...written }),
+  merge: (written: Partial<T>, config: RikerConfig) => T = (written) => ({
+    ...defaults,
+    ...written,
+  }),
 ): ConfigSection<T> {
   const read = new WeakMap<RikerConfig, T>();
   return {
@@ -295,9 +308,14 @@ export function configSection<T extends object>(
     defaults,
     of(config) {
       const known = read.get(config);
-      if (known) return known;
+      if (known) {
+        return known;
+      }
       const written = config[key];
-      const whole = merge(written && typeof written === "object" ? (written as Partial<T>) : {}, config);
+      const whole = merge(
+        written && typeof written === "object" ? (written as Partial<T>) : {},
+        config,
+      );
       read.set(config, whole);
       return whole;
     },
@@ -347,7 +365,9 @@ export function fileConfig(file = paths.config()): ConfigSource {
   let cachedMtime: number | null = null;
   const get = (): RikerConfig => {
     const mtime = mtimeOf(file);
-    if (cached && mtime === cachedMtime) return cached;
+    if (cached && mtime === cachedMtime) {
+      return cached;
+    }
     cached = readFile(file);
     cachedMtime = mtime;
     return cached;
@@ -366,7 +386,9 @@ export function fileConfig(file = paths.config()): ConfigSource {
 }
 
 // In memory, never the file: tests and the fixture day.
-export function fixedConfig(initial: RikerConfig = DEFAULT_CONFIG): ConfigSource {
+export function fixedConfig(
+  initial: RikerConfig = DEFAULT_CONFIG,
+): ConfigSource {
   let current = initial;
   return {
     get: () => current,

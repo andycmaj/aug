@@ -44,21 +44,24 @@ function expectWriteRefused(
   const tried = steps.some((s) => s.startsWith(`${DOCS}batch`));
   const refused = denied.some((d) => d.startsWith(`${DOCS}batch`));
   expect(tried).toBe(refused);
-  if (refused)
+  if (refused) {
     expect(grantSteps(denied, "general", config)[0]).toContain(
       'add "docs.write" to capabilities.grants.general',
     );
+  }
   expect(result.text).toContain("docs.write");
 }
 
-describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("Claude Docs grants through real claude", () => {
-  afterAll(() => setBrain(async () => {
-    throw new Error("no brain after the real-claude test");
-  }));
+describe.skipIf(!process.env.RIKER_REAL_CLAUDE)(
+  "Claude Docs grants through real claude",
+  () => {
+    afterAll(() =>
+      setBrain(async () => {
+        throw new Error("no brain after the real-claude test");
+      }),
+    );
 
-  test(
-    "ungranted, a doc's create never runs and the turn says what to grant",
-    async () => {
+    test("ungranted, a doc's create never runs and the turn says what to grant", async () => {
       freshHome();
       setBrain(claudeBrain);
       // Some connector grant, as in AUG-0402: with no mcp__ rule at all no
@@ -69,13 +72,9 @@ describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("Claude Docs grants through real
         `Call ${DOCS}batch once with container {"kind":"project","create":{"name":"riker probe","doc":{"markdown":"# riker probe"}}} and batch []. Then stop and say what happened.`,
       );
       expectWriteRefused(config, got);
-    },
-    240_000,
-  );
+    }, 240_000);
 
-  test(
-    "docs.read granted, guide runs and a write still never does",
-    async () => {
+    test("docs.read granted, guide runs and a write still never does", async () => {
       freshHome();
       setBrain(claudeBrain);
       const config = granted(["docs.read"]);
@@ -87,7 +86,6 @@ describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("Claude Docs grants through real
       const denied = got.result.denied ?? [];
       expect(denied.some((d) => d.startsWith(`${DOCS}guide`))).toBe(false);
       expectWriteRefused(config, got);
-    },
-    240_000,
-  );
-});
+    }, 240_000);
+  },
+);

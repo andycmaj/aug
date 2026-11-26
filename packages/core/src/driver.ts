@@ -80,8 +80,12 @@ export interface DriverOptions {
 // there, with their own settings, connectors and permission prompts).
 // Asked of the session too, so a closed interview's window still closes.
 export function inTmux(task: TaskRow): boolean {
-  if (task.kind === Kind.coding) return true;
-  if (task.kind !== Kind.system) return false;
+  if (task.kind === Kind.coding) {
+    return true;
+  }
+  if (task.kind !== Kind.system) {
+    return false;
+  }
   return (
     onboardingTask()?.id === task.id ||
     store.latestSession(task.id)?.kind === SessionKind.tmux
@@ -98,16 +102,18 @@ export class ChatDriver implements AgentDriver {
   async start(task: TaskRow, opts: StartOptions = {}): Promise<StartResult> {
     // Home's agent answers what the owner says; Start would run it with
     // nothing new to answer.
-    if (task.kind === Kind.home)
+    if (task.kind === Kind.home) {
       return { type: "failed", error: "Home has nothing to start: type to it" };
+    }
     const note = opts.note?.trim();
-    if (note)
+    if (note) {
       store.addTurn({
         taskId: task.id,
         role: TurnRole.you,
         author: "you",
         body: note,
       });
+    }
     this.heard(task);
     void this.pool.request(
       task.id,
@@ -173,15 +179,20 @@ export class TmuxDriver implements AgentDriver {
     const noWorktree = opts.noWorktree || Boolean(this.options.noWorktrees);
     // Resuming never asks again: the first start settled repo and branch.
     if (!noWorktree && !resume && !task.worktree) {
-      if (!task.repo)
+      if (!task.repo) {
         return {
           type: "needs",
           need: { what: "repo", choices: repoChoices(config, task) },
         };
+      }
       const problem = checkMapped(config, task.repo);
-      if (problem)
-        return { type: "needs", need: await pathNeed(config, task.repo, problem) };
-      if (opts.branch === undefined)
+      if (problem) {
+        return {
+          type: "needs",
+          need: await pathNeed(config, task.repo, problem),
+        };
+      }
+      if (opts.branch === undefined) {
         return {
           type: "needs",
           need: {
@@ -189,27 +200,36 @@ export class TmuxDriver implements AgentDriver {
             suggested: task.branch ?? projects.defaultBranch(task),
           },
         };
+      }
     }
     // A claude already running only hears the note: no new agent, no slot.
-    if (this.isLive(task)) return this.launch(task, opts, noWorktree, resume);
+    if (this.isLive(task)) {
+      return this.launch(task, opts, noWorktree, resume);
+    }
     // Past Agents at once it waits its turn. The note waits as a pending
     // line, which the start that runs later sends in.
     let waited = false;
     const run = this.pool.claim(task.id, async () => {
-      if (!waited) return this.launch(task, opts, noWorktree, resume);
+      if (!waited) {
+        return this.launch(task, opts, noWorktree, resume);
+      }
       const result = await this.launch(
         task,
         { ...opts, note: undefined },
         noWorktree,
         this.resumes(task),
       );
-      if (result.type !== "started") this.startFailed(task, result);
+      if (result.type !== "started") {
+        this.startFailed(task, result);
+      }
       return result;
     });
-    if (run) return run;
+    if (run) {
+      return run;
+    }
     waited = true;
     const note = opts.note?.trim();
-    if (note)
+    if (note) {
       store.addTurn({
         taskId: task.id,
         role: TurnRole.you,
@@ -217,6 +237,7 @@ export class TmuxDriver implements AgentDriver {
         body: note,
         pending: true,
       });
+    }
     return { type: "queued", reason: this.pool.waitReason() };
   }
 
@@ -286,14 +307,19 @@ export class TmuxDriver implements AgentDriver {
 
   // Claimed before sending, so two lines typed at once are sent once.
   async deliver(task: TaskRow): Promise<boolean> {
-    if (!(await projects.claudeWindow(task.id))) return false;
+    if (!(await projects.claudeWindow(task.id))) {
+      return false;
+    }
     const turns = store.pendingTurns(task.id);
-    if (turns.length === 0) return true;
+    if (turns.length === 0) {
+      return true;
+    }
     const ids = turns.map((t) => t.id);
     store.setPending(ids, false);
     try {
-      if (await projects.tell(task.id, turns.map((t) => t.body).join("\n\n")))
+      if (await projects.tell(task.id, turns.map((t) => t.body).join("\n\n"))) {
         return true;
+      }
     } catch {
       // The window went between the check and the send: the lines wait.
     }

@@ -35,10 +35,16 @@ export function useAgentStart(
 
   async function startAgent(taskId: number, opts: StartOptions = {}) {
     const task = riker.task(taskId);
-    if (!task) return;
+    if (!task) {
+      return;
+    }
     const coding = inTmux(task);
-    if (coding && terminals.forTask(taskId)?.running) return showTask(taskId);
-    if (coding) showToast(`Starting ${taskRef(taskId)}...`);
+    if (coding && terminals.forTask(taskId)?.running) {
+      return showTask(taskId);
+    }
+    if (coding) {
+      showToast(`Starting ${taskRef(taskId)}...`);
+    }
     const result = await desk.startAgent(taskId, opts);
     switch (result.type) {
       case "needs":
@@ -124,7 +130,11 @@ export function useAgentStart(
     });
     dialogs.show(() => (
       <ChoiceModal
-        title={problem.kind === "unmapped" ? `Where is ${repo} checked out?` : `${repo}: ${describeProblem(repo, problem)}`}
+        title={
+          problem.kind === "unmapped"
+            ? `Where is ${repo} checked out?`
+            : `${repo}: ${describeProblem(repo, problem)}`
+        }
         hint="Its worktrees are made from this checkout."
         choices={choices}
         wide

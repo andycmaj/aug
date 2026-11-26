@@ -36,10 +36,19 @@ beforeEach(() => {
   setMux(fake);
 });
 
-async function projectWindow(): Promise<{ projectId: number; windowId: string }> {
+async function projectWindow(): Promise<{
+  projectId: number;
+  windowId: string;
+}> {
   const p = await createProject(config(), { name: "Ledger" });
   const session = fake.sessions.find((s) => s.projectId === p.id)!;
-  const w = await fake.newWindow({ sessionId: session.id, name: "zsh", cwd: "/", env: {}, argv: [] });
+  const w = await fake.newWindow({
+    sessionId: session.id,
+    name: "zsh",
+    cwd: "/",
+    env: {},
+    argv: [],
+  });
   return { projectId: p.id, windowId: w.id };
 }
 
@@ -47,20 +56,28 @@ describe("titles and remotes", () => {
   test("worktree branch first, then the first prompt line, then the window", () => {
     expect(adoptedTitle(git, "anything", "zsh")).toBe("fix-bom");
     const main = { ...git, branch: "main" };
-    expect(adoptedTitle(main, "Make the export\nkeep transfers", "zsh")).toBe("Make the export");
+    expect(adoptedTitle(main, "Make the export\nkeep transfers", "zsh")).toBe(
+      "Make the export",
+    );
     expect(adoptedTitle(main, undefined, "api")).toBe("api");
     expect(adoptedTitle(main, "x".repeat(100), "zsh")).toHaveLength(80);
   });
 
   test("a branch checked out in the main checkout is not the task's name", () => {
     const shared = { ...git, branch: "projects", worktree: false };
-    expect(adoptedTitle(shared, "Retitle adopted tasks", "zsh")).toBe("Retitle adopted tasks");
+    expect(adoptedTitle(shared, "Retitle adopted tasks", "zsh")).toBe(
+      "Retitle adopted tasks",
+    );
     expect(adoptedTitle(shared, undefined, "api")).toBe("api");
   });
 
   test("owner/repo from ssh and https remotes", () => {
-    expect(repoFromRemote("git@github.com:acme/ledger.git")).toBe("acme/ledger");
-    expect(repoFromRemote("https://github.com/acme/ledger")).toBe("acme/ledger");
+    expect(repoFromRemote("git@github.com:acme/ledger.git")).toBe(
+      "acme/ledger",
+    );
+    expect(repoFromRemote("https://github.com/acme/ledger")).toBe(
+      "acme/ledger",
+    );
     expect(repoFromRemote("https://gitlab.com/acme/ledger.git")).toBeNull();
     expect(repoFromRemote(null)).toBeNull();
   });
@@ -92,16 +109,37 @@ describe("adoptHook", () => {
       started_by: "owner",
       tmux_window: windowId,
     });
-    expect(store.projectRepos(store.getProject(projectId)!)).toEqual(["acme/ledger"]);
+    expect(store.projectRepos(store.getProject(projectId)!)).toEqual([
+      "acme/ledger",
+    ]);
   });
 
   test("later hooks reuse the window's task; a new claude there joins it", async () => {
     const { windowId } = await projectWindow();
-    const first = await adoptHook("prompt", { session_id: "s1" }, windowId, probe);
-    await adoptHook("tool", { session_id: "s1", tool_name: "Read", tool_input: { file_path: "a.ts" } }, windowId, probe);
+    const first = await adoptHook(
+      "prompt",
+      { session_id: "s1" },
+      windowId,
+      probe,
+    );
+    await adoptHook(
+      "tool",
+      {
+        session_id: "s1",
+        tool_name: "Read",
+        tool_input: { file_path: "a.ts" },
+      },
+      windowId,
+      probe,
+    );
     await adoptHook("end", { session_id: "s1" }, windowId, probe);
     expect(store.getSession("s1")!.ended_at).not.toBeNull();
-    const again = await adoptHook("prompt", { session_id: "s2" }, windowId, probe);
+    const again = await adoptHook(
+      "prompt",
+      { session_id: "s2" },
+      windowId,
+      probe,
+    );
     expect(again!.taskId).toBe(first!.taskId);
     expect(store.listTasks()).toHaveLength(1);
     expect(store.getSession("s2")!.task_id).toBe(first!.taskId);
@@ -109,23 +147,40 @@ describe("adoptHook", () => {
 
   test("a claude that ends without working makes nothing", async () => {
     const { windowId } = await projectWindow();
-    expect(await adoptHook("end", { session_id: "s1" }, windowId, probe)).toBeNull();
+    expect(
+      await adoptHook("end", { session_id: "s1" }, windowId, probe),
+    ).toBeNull();
     expect(store.listTasks()).toHaveLength(0);
   });
 
   test("panes outside projects, and archived projects, are left alone", async () => {
     const plain = await fake.newSession("home");
-    const w = await fake.newWindow({ sessionId: plain.id, name: "zsh", cwd: "/", env: {}, argv: [] });
-    expect(await adoptHook("prompt", { session_id: "s1" }, w.id, probe)).toBeNull();
+    const w = await fake.newWindow({
+      sessionId: plain.id,
+      name: "zsh",
+      cwd: "/",
+      env: {},
+      argv: [],
+    });
+    expect(
+      await adoptHook("prompt", { session_id: "s1" }, w.id, probe),
+    ).toBeNull();
     const { projectId, windowId } = await projectWindow();
     store.archiveProject(projectId);
-    expect(await adoptHook("prompt", { session_id: "s2" }, windowId, probe)).toBeNull();
+    expect(
+      await adoptHook("prompt", { session_id: "s2" }, windowId, probe),
+    ).toBeNull();
     expect(store.listTasks()).toHaveLength(0);
   });
 
   test("riker-tools by hand in an adopted window finds its task and session", async () => {
     const { windowId } = await projectWindow();
-    const env = await adoptHook("prompt", { session_id: "s1" }, windowId, probe);
+    const env = await adoptHook(
+      "prompt",
+      { session_id: "s1" },
+      windowId,
+      probe,
+    );
     expect(await paneEnv(windowId)).toEqual(env);
   });
 });
@@ -134,7 +189,10 @@ describe("user settings", () => {
   test("install adds ours once, keeps yours, backs up; uninstall restores", () => {
     const dir = mkdtempSync(join(tmpdir(), "riker-claude-"));
     const file = join(dir, "settings.json");
-    const mine = { model: "opus", hooks: { Stop: [{ hooks: [{ type: "command", command: "say hi" }] }] } };
+    const mine = {
+      model: "opus",
+      hooks: { Stop: [{ hooks: [{ type: "command", command: "say hi" }] }] },
+    };
     writeFileSync(file, JSON.stringify(mine));
     expect(hooksInstalled(file)).toBe(false);
     installHooks(file);
@@ -143,10 +201,26 @@ describe("user settings", () => {
     expect(after.model).toBe("opus");
     expect(after.hooks.Stop).toHaveLength(2);
     expect(after.hooks.PreToolUse).toEqual([
-      { matcher: "*", hooks: [{ type: "command", command: expect.stringContaining("adopt-hook.sh tool") }] },
+      {
+        matcher: "*",
+        hooks: [
+          {
+            type: "command",
+            command: expect.stringContaining("adopt-hook.sh tool"),
+          },
+        ],
+      },
     ]);
     expect(after.hooks.PostToolUse).toEqual([
-      { matcher: ARTIFACT_TOOLS, hooks: [{ type: "command", command: expect.stringContaining("adopt-hook.sh made") }] },
+      {
+        matcher: ARTIFACT_TOOLS,
+        hooks: [
+          {
+            type: "command",
+            command: expect.stringContaining("adopt-hook.sh made"),
+          },
+        ],
+      },
     ]);
     expect(hooksInstalled(file)).toBe(true);
     expect(existsSync(`${file}.before-riker`)).toBe(true);
@@ -159,8 +233,12 @@ describe("user settings", () => {
     const script = guardScript();
     const lines = script.split("\n");
     const exec = lines.findIndex((l) => l.includes("exec"));
-    expect(lines.findIndex((l) => l.includes("RIKER_TASK_ID"))).toBeLessThan(exec);
-    expect(lines.findIndex((l) => l.includes("@riker_project"))).toBeLessThan(exec);
+    expect(lines.findIndex((l) => l.includes("RIKER_TASK_ID"))).toBeLessThan(
+      exec,
+    );
+    expect(lines.findIndex((l) => l.includes("@riker_project"))).toBeLessThan(
+      exec,
+    );
     expect(script).toContain('adopt-hook "$1"');
   });
 });

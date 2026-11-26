@@ -26,8 +26,14 @@ export function bumpVersion(current: string, bump: Bump): string {
     .split("-")[0]!
     .split(".")
     .map((n) => Number.parseInt(n, 10));
-  if (major === undefined || minor === undefined || patch === undefined || [major, minor, patch].some(Number.isNaN))
+  if (
+    major === undefined ||
+    minor === undefined ||
+    patch === undefined ||
+    [major, minor, patch].some(Number.isNaN)
+  ) {
     throw new Error(`cannot read a semver from "${current}"`);
+  }
   const next: Record<Bump, string> = {
     major: `${major + 1}.0.0`,
     minor: `${major}.${minor + 1}.0`,
@@ -38,15 +44,23 @@ export function bumpVersion(current: string, bump: Bump): string {
 
 // The version a release makes: the override as given (without a leading v),
 // else the bump of the current one.
-export function nextVersion(current: string, bump: string | undefined, override: string | undefined): string {
+export function nextVersion(
+  current: string,
+  bump: string | undefined,
+  override: string | undefined,
+): string {
   const exact = override?.trim().replace(/^v/, "");
   if (exact) {
-    if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(exact)) throw new Error(`"${exact}" is not a version like 1.2.3`);
+    if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(exact)) {
+      throw new Error(`"${exact}" is not a version like 1.2.3`);
+    }
     return exact;
   }
   const raw = bump?.trim() || "patch";
   const chosen = BUMPS.find((b) => b === raw);
-  if (!chosen) throw new Error(`RIKER_BUMP "${raw}": expected ${BUMPS.join(" | ")}`);
+  if (!chosen) {
+    throw new Error(`RIKER_BUMP "${raw}": expected ${BUMPS.join(" | ")}`);
+  }
   return bumpVersion(current, chosen);
 }
 
@@ -56,7 +70,11 @@ if (import.meta.main) {
   const pkgPath = join(root, "package.json");
   const pkg = (await Bun.file(pkgPath).json()) as { version: string };
 
-  const version = nextVersion(pkg.version, process.env.RIKER_BUMP, process.env.RIKER_VERSION);
+  const version = nextVersion(
+    pkg.version,
+    process.env.RIKER_BUMP,
+    process.env.RIKER_VERSION,
+  );
   const tag = `v${version}`;
   console.log(`${pkg.version} -> ${version} (tag ${tag})`);
 
@@ -76,5 +94,7 @@ if (import.meta.main) {
 
   const output = [`version=${version}`, `tag=${tag}`];
   console.log(output.join("\n"));
-  if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `${output.join("\n")}\n`);
+  if (process.env.GITHUB_OUTPUT) {
+    await appendFile(process.env.GITHUB_OUTPUT, `${output.join("\n")}\n`);
+  }
 }

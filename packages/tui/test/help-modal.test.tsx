@@ -13,14 +13,19 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 async function openHelp(width: number): Promise<string> {
   home = mkdtempSync(join(tmpdir(), "riker-help-"));
   process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
-  const setup = await testRender(() => <App engine={engine} />, { width, height: 45 });
+  const setup = await testRender(() => <App engine={engine} />, {
+    width,
+    height: 45,
+  });
   destroy = () => setup.renderer.destroy();
   const settle = async () => {
     await Bun.sleep(40);
@@ -33,7 +38,9 @@ async function openHelp(width: number): Promise<string> {
 }
 
 async function helpWidth(width: number): Promise<number> {
-  const line = (await openHelp(width)).split("\n").find((l) => l.includes("Keys here"));
+  const line = (await openHelp(width))
+    .split("\n")
+    .find((l) => l.includes("Keys here"));
   expect(line).toBeDefined();
   // The card's frame: from its left edge to its right.
   return [...line!].lastIndexOf("▕") - [...line!].indexOf("▏") + 1;
@@ -41,7 +48,9 @@ async function helpWidth(width: number): Promise<number> {
 
 test("the help is at least 80% of the terminal's width", async () => {
   const width = 160;
-  expect(await helpWidth(width)).toBeGreaterThanOrEqual(Math.floor(width * 0.8));
+  expect(await helpWidth(width)).toBeGreaterThanOrEqual(
+    Math.floor(width * 0.8),
+  );
 });
 
 test("the rail's colors come before the keys", async () => {

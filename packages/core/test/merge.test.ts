@@ -9,7 +9,13 @@ import { checkMerges, unmergedWork } from "../src/merge";
 import { setMux, TmuxMux } from "../src/mux";
 import type { Connector } from "../src/plugins";
 import * as store from "../src/store";
-import { AgentState, Kind, TaskStatus, TurnRole, type TaskRow } from "../src/types";
+import {
+  AgentState,
+  Kind,
+  TaskStatus,
+  TurnRole,
+  type TaskRow,
+} from "../src/types";
 import { FakeMux } from "./support/fake-mux";
 import { config, freshHome, testConfig } from "./support/helpers";
 
@@ -22,12 +28,21 @@ beforeEach(() => {
 });
 
 function branchTask(branch = "fix-export") {
-  const t = store.createTask({ title: "Fix export", kind: Kind.coding, channel: "owner", repo: "acme/api", branch });
+  const t = store.createTask({
+    title: "Fix export",
+    kind: Kind.coding,
+    channel: "owner",
+    repo: "acme/api",
+    branch,
+  });
   return t.id;
 }
 
 const triggers = (id: number) =>
-  store.turnsForTask(id).filter((t) => t.role === TurnRole.trigger).map((t) => t.body);
+  store
+    .turnsForTask(id)
+    .filter((t) => t.role === TurnRole.trigger)
+    .map((t) => t.body);
 
 describe("merged", () => {
   test("a branch merged by hand marks the task merged, once, and it is not done", async () => {
@@ -96,7 +111,11 @@ describe("a turn's end", () => {
   }
 
   function engineWith(c: Connector) {
-    return new Engine({ config: testConfig(), offline: true, plugins: [{ name: "p", connectors: [c] }] });
+    return new Engine({
+      config: testConfig(),
+      offline: true,
+      plugins: [{ name: "p", connectors: [c] }],
+    });
   }
 
   test("an agent leaving working is a turn end; the first look and staying put are not", () => {
@@ -135,7 +154,11 @@ describe("a turn's end", () => {
   });
 
   test("a task with neither branch nor PR costs no git call", async () => {
-    const t = store.createTask({ title: "Chat", kind: Kind.general, channel: "owner" });
+    const t = store.createTask({
+      title: "Chat",
+      kind: Kind.general,
+      channel: "owner",
+    });
     const e = engineWith(new Refresher());
     fake.merged.set("fix-export", "main");
     expect(await e.recheckMerge(t.id)).toBe(false);
@@ -160,7 +183,9 @@ describe("a sweep's cost", () => {
     expect(fake.mergedAsked.length).toBe(200);
     expect(fake.keysRead).toBe(1);
     fake.mergedAsked = [];
-    for (let i = 0; i < 5; i++) await checkMerges(config());
+    for (let i = 0; i < 5; i++) {
+      await checkMerges(config());
+    }
     expect(fake.mergedAsked).toEqual([]);
     expect(fake.keysRead).toBe(6);
     fake.merged.set("b7", "main");
@@ -226,7 +251,11 @@ describe("unmerged work at done", () => {
   const ask = (id: number) => unmergedWork(config(), store.getTask(id)!);
 
   test("every task not merged asks, with or without a PR or branch", async () => {
-    const chat = store.createTask({ title: "Reply to Sam", kind: Kind.general, channel: "owner" });
+    const chat = store.createTask({
+      title: "Reply to Sam",
+      kind: Kind.general,
+      channel: "owner",
+    });
     expect(await ask(chat.id)).toEqual({ why: null });
     const id = branchTask();
     fake.merged.set("fix-export", false);
@@ -234,7 +263,13 @@ describe("unmerged work at done", () => {
     expect(await ask(id)).toEqual({ why: null });
     fake.ahead.delete("fix-export");
     expect(await ask(id)).toEqual({ why: null });
-    const unmapped = store.createTask({ title: "x", kind: Kind.coding, channel: "owner", repo: "acme/unmapped", branch: "y" });
+    const unmapped = store.createTask({
+      title: "x",
+      kind: Kind.coding,
+      channel: "owner",
+      repo: "acme/unmapped",
+      branch: "y",
+    });
     expect(await ask(unmapped.id)).toEqual({ why: null });
   });
 
@@ -242,9 +277,13 @@ describe("unmerged work at done", () => {
     const id = branchTask();
     fake.merged.set("fix-export", false);
     fake.ahead.set("fix-export", 4);
-    expect(await ask(id)).toEqual({ why: "Branch fix-export has 4 commits not merged" });
+    expect(await ask(id)).toEqual({
+      why: "Branch fix-export has 4 commits not merged",
+    });
     fake.ahead.set("fix-export", 1);
-    expect(await ask(id)).toEqual({ why: "Branch fix-export has 1 commit not merged" });
+    expect(await ask(id)).toEqual({
+      why: "Branch fix-export has 1 commit not merged",
+    });
   });
 
   test("merged, by mark, PR or branch: nothing to ask", async () => {
@@ -274,8 +313,23 @@ describe("unmerged work at done", () => {
 
 describe("branchMerged (real git)", () => {
   async function sh(cwd: string, ...argv: string[]) {
-    const proc = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
-    if ((await proc.exited) !== 0) throw new Error(`${argv.join(" ")}: ${await new Response(proc.stderr).text()}`);
+    const proc = Bun.spawn(argv, {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "t",
+        GIT_AUTHOR_EMAIL: "t@t",
+        GIT_COMMITTER_NAME: "t",
+        GIT_COMMITTER_EMAIL: "t@t",
+      },
+    });
+    if ((await proc.exited) !== 0) {
+      throw new Error(
+        `${argv.join(" ")}: ${await new Response(proc.stderr).text()}`,
+      );
+    }
   }
 
   test("no work, unmerged, fast-forwarded and squashed", async () => {

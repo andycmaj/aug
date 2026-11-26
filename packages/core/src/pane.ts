@@ -38,7 +38,9 @@ export async function runInPane(run: PaneRun): Promise<PaneResult> {
   const exitFile = join(dir, "exit");
   try {
     const paneId = await mux().splitPane({ ...split, exitFile });
-    while (await mux().paneAlive(paneId)) await Bun.sleep(run.pollMs ?? 300);
+    while (await mux().paneAlive(paneId)) {
+      await Bun.sleep(run.pollMs ?? 300);
+    }
     return { paneId, exitCode: readExit(exitFile) };
   } finally {
     rmSync(dir, { recursive: true, force: true });

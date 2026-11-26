@@ -13,7 +13,12 @@ export const GuideStage = {
 export type GuideProgress =
   | { stage: typeof GuideStage.read; files: number; batches: number }
   | { stage: typeof GuideStage.whole }
-  | { stage: typeof GuideStage.batches; done: number; running: number; of: number }
+  | {
+      stage: typeof GuideStage.batches;
+      done: number;
+      running: number;
+      of: number;
+    }
   | { stage: typeof GuideStage.chapters; of: number }
   | { stage: typeof GuideStage.fitting }
   | { stage: typeof GuideStage.saving };

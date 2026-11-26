@@ -7,7 +7,9 @@ describe("coalesce", () => {
   test("a burst of schedules runs once", async () => {
     let runs = 0;
     const c = coalesce(() => runs++, 5);
-    for (let i = 0; i < 50; i++) c.schedule();
+    for (let i = 0; i < 50; i++) {
+      c.schedule();
+    }
     expect(runs).toBe(0);
     await tick(20);
     expect(runs).toBe(1);

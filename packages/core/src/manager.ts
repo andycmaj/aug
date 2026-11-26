@@ -80,7 +80,10 @@ export function managerSystem(
 
 // The project as the manager reads it each turn: whole on a new session,
 // what moved since on a resumed one. No clock in it.
-export function projectPicture(project: ProjectRow, config?: RikerConfig): string {
+export function projectPicture(
+  project: ProjectRow,
+  config?: RikerConfig,
+): string {
   const fresh = store.getProject(project.id) ?? project;
   const status = statusLines(fresh);
   // The detail names the manager for Home to tell; not for the manager.
@@ -163,7 +166,8 @@ export function managerCall(
 }
 
 // Tasks in a project that read as overseeing it: offered for promotion.
-const OVERSEER = /\b(overview|overseer|oversee|manager|manage|coordinat\w*|umbrella|epic|tracking|tracker|roadmap|plan)\b/i;
+const OVERSEER =
+  /\b(overview|overseer|oversee|manager|manage|coordinat\w*|umbrella|epic|tracking|tracker|roadmap|plan)\b/i;
 
 export function overseerCandidates(tasks: TaskRow[]): TaskRow[] {
   return tasks.filter(

@@ -63,11 +63,17 @@ export function resolveLogSettings(
   const maxBytes = config.maxBytes ?? DEFAULT_MAX_BYTES;
   const fromEnv = envVar("LOG", env)?.trim().toLowerCase();
   if (fromEnv) {
-    if (!truthy(fromEnv)) return null;
+    if (!truthy(fromEnv)) {
+      return null;
+    }
     return { level: isLevel(fromEnv) ? fromEnv : "debug", file, maxBytes };
   }
-  if (config.enabled) return { level: config.level, file, maxBytes };
-  if (truthy(envVar("DEV", env))) return { level: "debug", file, maxBytes };
+  if (config.enabled) {
+    return { level: config.level, file, maxBytes };
+  }
+  if (truthy(envVar("DEV", env))) {
+    return { level: "debug", file, maxBytes };
+  }
   return null;
 }
 
@@ -126,8 +132,11 @@ export function setTimingSink(sink: TimingSink | null): void {
 
 function numeric(fields: LogFields): Record<string, number | boolean> {
   const out: Record<string, number | boolean> = {};
-  for (const [k, v] of Object.entries(fields))
-    if (typeof v === "number" || typeof v === "boolean") out[k] = v;
+  for (const [k, v] of Object.entries(fields)) {
+    if (typeof v === "number" || typeof v === "boolean") {
+      out[k] = v;
+    }
+  }
   return out;
 }
 
@@ -137,9 +146,12 @@ export function logEnabled(level: LogLevelName = "trace"): boolean {
 }
 
 function replacer(_key: string, value: unknown): unknown {
-  if (value instanceof Error)
+  if (value instanceof Error) {
     return { name: value.name, message: value.message, stack: value.stack };
-  if (typeof value === "bigint") return value.toString();
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
   return value;
 }
 
@@ -168,7 +180,9 @@ function write(
   fields?: LogFields,
 ): void {
   const s = current();
-  if (!s || LogLevel[level] < LogLevel[s.level]) return;
+  if (!s || LogLevel[level] < LogLevel[s.level]) {
+    return;
+  }
   try {
     const line = formatLine(new Date(), level, scope, msg, fields);
     if (size === undefined) {
@@ -242,7 +256,9 @@ export function logCrashes(): void {
   );
   process.on("unhandledRejection", (reason) => {
     log.error("unhandled rejection", { err: reason });
-    if (process.listenerCount("unhandledRejection") === 1) throw reason;
+    if (process.listenerCount("unhandledRejection") === 1) {
+      throw reason;
+    }
   });
   process.on("exit", (code) => log.info("exit", { code }));
 }

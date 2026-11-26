@@ -86,18 +86,27 @@ function owned(file: string, name: string): boolean {
 function writeOwned(file: string, text: string, name: string): void {
   mkdirSync(dirname(file), { recursive: true });
   if (present(file) && !owned(file, name)) {
-    if (present(file + BACKUP) || present(file + LEGACY_BACKUP)) rmSync(file);
-    else renameSync(file, file + BACKUP);
-  } else if (present(file)) rmSync(file);
+    if (present(file + BACKUP) || present(file + LEGACY_BACKUP)) {
+      rmSync(file);
+    } else {
+      renameSync(file, file + BACKUP);
+    }
+  } else if (present(file)) {
+    rmSync(file);
+  }
   writeFileSync(file, text);
   chmodSync(file, 0o755);
 }
 
 function removeOwned(file: string, name: string): boolean {
-  if (!owned(file, name)) return false;
+  if (!owned(file, name)) {
+    return false;
+  }
   rmSync(file);
   const backup = [BACKUP, LEGACY_BACKUP].find((b) => present(file + b));
-  if (backup) renameSync(file + backup, file);
+  if (backup) {
+    renameSync(file + backup, file);
+  }
   return true;
 }
 
@@ -108,13 +117,17 @@ function marked(script: string, name: string): string {
 }
 
 const markerOf = (name: string) => `# Installed by \`${CMD} install ${name}\``;
-const legacyMarkerOf = (name: string) => `# Installed by \`${LEGACY.cmd} install ${name}\``;
+const legacyMarkerOf = (name: string) =>
+  `# Installed by \`${LEGACY.cmd} install ${name}\``;
 // Ends in ";" so one home is never a prefix match for another.
 const homeMark = () => `${CMD} home ${paths.home()};`;
 // This home as an earlier install may have named it: aug's marker, and
 // ~/.aug for the default home it moved from.
 const homeMarks = () =>
-  homeAliases().flatMap((home) => [`${CMD} home ${home};`, `${LEGACY.cmd} home ${home};`]);
+  homeAliases().flatMap((home) => [
+    `${CMD} home ${home};`,
+    `${LEGACY.cmd} home ${home};`,
+  ]);
 
 // ── statusline ───────────────────────────────────────────────────────────
 
@@ -192,7 +205,10 @@ function starshipBlock(withProfile: boolean): string {
   ].join("\n");
 }
 
-function blockOf(toml: string, [first, last] = [BLOCK_START, BLOCK_END]): string | null {
+function blockOf(
+  toml: string,
+  [first, last] = [BLOCK_START, BLOCK_END],
+): string | null {
   const start = toml.indexOf(first);
   const end = toml.indexOf(last);
   return start < 0 || end < start ? null : toml.slice(start, end + last.length);
@@ -202,7 +218,9 @@ function withoutBlock(toml: string): string {
   for (const [first, last] of [[BLOCK_START, BLOCK_END], LEGACY_BLOCK]) {
     const start = toml.indexOf(first);
     const end = toml.indexOf(last);
-    if (start < 0 || end < start) continue;
+    if (start < 0 || end < start) {
+      continue;
+    }
     const before = toml.slice(0, start).replace(/\n+$/, "\n");
     const after = toml.slice(end + last.length).replace(/^\n+/, "");
     toml = before + after;
@@ -225,19 +243,21 @@ function withoutProfile(toml: string): string {
 export function withStatusline(toml: string): string {
   let rest = withoutProfile(withoutBlock(toml));
   let ownProfiles = false;
-  if (PROFILE_LINE.test(rest))
+  if (PROFILE_LINE.test(rest)) {
     rest = rest.replace(
       PROFILE_LINE,
       (_: string, head: string, quote: string, tail: string) =>
         `${head}${quote}${STARSHIP_MODULE}${tail}`,
     );
-  else if (/^\[profiles\]\s*$/m.test(rest))
+  } else if (/^\[profiles\]\s*$/m.test(rest)) {
     rest = rest.replace(
       /^\[profiles\]\s*$/m,
       (h) =>
         `${h}\n${STARSHIP_PROFILE} = "${STARSHIP_MODULE}${STARSHIP_DEFAULT}"  ${ADDED}`,
     );
-  else ownProfiles = true;
+  } else {
+    ownProfiles = true;
+  }
   const body = rest.replace(/\n*$/, "");
   return `${body ? `${body}\n\n` : ""}${starshipBlock(ownProfiles)}\n`;
 }
@@ -257,8 +277,11 @@ const statusline: Installable = {
   state() {
     const toml = readText(starshipConfigPath()) ?? "";
     const block = blockOf(toml);
-    if (!block)
-      return blockOf(toml, LEGACY_BLOCK) ? InstallState.stale : InstallState.missing;
+    if (!block) {
+      return blockOf(toml, LEGACY_BLOCK)
+        ? InstallState.stale
+        : InstallState.missing;
+    }
     const current =
       block === starshipBlock(block.includes("\n[profiles]\n")) &&
       Boolean(PROFILE_LINE.exec(toml)?.[0].includes(STARSHIP_MODULE)) &&
@@ -293,18 +316,20 @@ const statusline: Installable = {
         statusLine: { type: "command", command: STATUS_COMMAND },
       });
       lines.push(`${settingsFile} statusLine runs ${STATUS_COMMAND}`);
-    } else if (!current?.includes(STATUS_COMMAND))
+    } else if (!current?.includes(STATUS_COMMAND)) {
       lines.push(
         `${settingsFile} statusLine runs ${current ?? "something else"}, not ${STATUS_COMMAND}: left as is`,
       );
+    }
     return lines.join("\n");
   },
   uninstall() {
     const file = starshipConfigPath();
     const toml = readText(file);
     const removed = removeOwned(statusHelperPath(), STATUS);
-    if (toml === null || !(blockOf(toml) ?? blockOf(toml, LEGACY_BLOCK)))
+    if (toml === null || !(blockOf(toml) ?? blockOf(toml, LEGACY_BLOCK))) {
       return removed ? statusHelperPath() : null;
+    }
     writeFileSync(file, withoutStatusline(toml));
     return `${file} (Claude's statusLine left as is)`;
   },
@@ -359,10 +384,12 @@ const revdiff: Installable = {
       : "the revdiff Claude Code plugin is not installed",
   state() {
     const texts = revdiffTargets().map(readText);
-    if (texts.every((t) => t === revdiffScript()))
+    if (texts.every((t) => t === revdiffScript())) {
       return InstallState.installed;
+    }
     return texts.some(
-      (t) => t?.includes(markerOf(REVDIFF)) || t?.includes(legacyMarkerOf(REVDIFF)),
+      (t) =>
+        t?.includes(markerOf(REVDIFF)) || t?.includes(legacyMarkerOf(REVDIFF)),
     )
       ? InstallState.stale
       : InstallState.missing;
@@ -374,8 +401,9 @@ const revdiff: Installable = {
     }),
   install() {
     const targets = revdiffTargets();
-    for (const file of targets)
+    for (const file of targets) {
       writeOwned(file, revdiffScript(), REVDIFF);
+    }
     return targets.join("\n");
   },
   uninstall() {
@@ -392,7 +420,9 @@ const hooks: Installable = {
   help: "pick up claudes you start by hand in a project's tmux session",
   unavailable: () => null,
   state() {
-    if (!hooksInstalled()) return InstallState.missing;
+    if (!hooksInstalled()) {
+      return InstallState.missing;
+    }
     return hooksCurrent() ? InstallState.installed : InstallState.stale;
   },
   here: () => hooksHere(),
@@ -416,10 +446,14 @@ export function installState(name: string): InstallState {
 // Not while this Riker's own riker-tools is gone: rewriting would only point
 // them at the missing file too.
 export function refreshInstalls(): string[] {
-  if (toolsMissing()) return [];
+  if (toolsMissing()) {
+    return [];
+  }
   const refreshed: string[] = [];
   for (const [name, item] of Object.entries(INSTALLS)) {
-    if (installState(name) !== InstallState.stale || !item.here()) continue;
+    if (installState(name) !== InstallState.stale || !item.here()) {
+      continue;
+    }
     item.install();
     refreshed.push(name);
   }

@@ -15,14 +15,23 @@ export interface DocsBlock {
 
 export function docsBlock(config: BudgetConfig, parts: DocsBlock): string {
   const out: string[] = [];
-  if (parts.persona) out.push("## PERSONA.md", forPrompt(config, DocName.persona));
-  if (parts.job) out.push("## JOB.md", forPrompt(config, DocName.job));
-  if (parts.style)
-    out.push("## STYLE.md (for any reply you draft)", forPrompt(config, DocName.style));
-  if (parts.learned)
+  if (parts.persona) {
+    out.push("## PERSONA.md", forPrompt(config, DocName.persona));
+  }
+  if (parts.job) {
+    out.push("## JOB.md", forPrompt(config, DocName.job));
+  }
+  if (parts.style) {
+    out.push(
+      "## STYLE.md (for any reply you draft)",
+      forPrompt(config, DocName.style),
+    );
+  }
+  if (parts.learned) {
     out.push(
       "## LEARNED.md (lines in use)",
       forPrompt(config, DocName.learned, learnedInUse()),
     );
+  }
   return out.join("\n");
 }

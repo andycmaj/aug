@@ -16,25 +16,35 @@ import { AgentState, Kind, TurnRole } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
 import { freshHome, testConfig } from "./support/helpers";
 
-describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("a project's manager through real claude", () => {
-  afterAll(() =>
-    setBrain(async () => {
-      throw new Error("no brain after the real-claude test");
-    }),
-  );
+describe.skipIf(!process.env.RIKER_REAL_CLAUDE)(
+  "a project's manager through real claude",
+  () => {
+    afterAll(() =>
+      setBrain(async () => {
+        throw new Error("no brain after the real-claude test");
+      }),
+    );
 
-  test(
-    "plans two tasks in order in its project, writes the standing, and leaves another project alone",
-    async () => {
-      freshHome({ brain: { ...DEFAULT_CONFIG.brain, assistantModel: "haiku" } });
+    test("plans two tasks in order in its project, writes the standing, and leaves another project alone", async () => {
+      freshHome({
+        brain: { ...DEFAULT_CONFIG.brain, assistantModel: "haiku" },
+      });
       // riker-tools runs in its own process: it must see this database.
       useDb(openDb(paths.db()));
       setMux(new FakeMux());
       setBrain(claudeBrain);
       const engine = new Engine({ config: testConfig() });
-      const billing = store.createProject({ name: "Billing", tmuxSession: "billing" });
-      const search = store.createProject({ name: "Search", tmuxSession: "search" });
-      const theirs = engine.desk.newTask("Index rebuild", Kind.general, "", { projectId: search.id });
+      const billing = store.createProject({
+        name: "Billing",
+        tmuxSession: "billing",
+      });
+      const search = store.createProject({
+        name: "Search",
+        tmuxSession: "search",
+      });
+      const theirs = engine.desk.newTask("Index rebuild", Kind.general, "", {
+        projectId: search.id,
+      });
       const drain = setInterval(() => void engine.drainMoves(), 100);
       try {
         await engine.desk.sayToProject(
@@ -52,7 +62,9 @@ describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("a project's manager through rea
           const answered = store
             .turnsForTask(manager.id)
             .some((x) => x.role === TurnRole.agent && x.status !== "running");
-          if (answered && t.agent_state !== AgentState.working) break;
+          if (answered && t.agent_state !== AgentState.working) {
+            break;
+          }
           await Bun.sleep(250);
         }
       } finally {
@@ -61,7 +73,9 @@ describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("a project's manager through rea
       await engine.drainMoves();
 
       const manager = store.managerOf(billing.id)!;
-      const answer = store.turnsForTask(manager.id).findLast((t) => t.role === TurnRole.agent)!;
+      const answer = store
+        .turnsForTask(manager.id)
+        .findLast((t) => t.role === TurnRole.agent)!;
       console.log("manager steps:", answer.steps);
       console.log("manager answer:", answer.body);
       const mine = store.tasksForProject(billing.id);
@@ -74,9 +88,10 @@ describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("a project's manager through rea
       expect(store.getTask(theirs.id)!.title).toBe("Index rebuild");
       console.log(
         "moves:",
-        db().query("SELECT verb, asked_by, status, result FROM moves ORDER BY id").all(),
+        db()
+          .query("SELECT verb, asked_by, status, result FROM moves ORDER BY id")
+          .all(),
       );
-    },
-    240_000,
-  );
-});
+    }, 240_000);
+  },
+);

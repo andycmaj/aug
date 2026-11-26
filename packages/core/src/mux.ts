@@ -10,7 +10,12 @@ import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { Server, TmuxServerRestartedError } from "libtmux";
 import { perfOn, perfStart } from "./perf";
-import { inspect, scan, type CheckoutState, type FoundCheckout } from "./checkouts";
+import {
+  inspect,
+  scan,
+  type CheckoutState,
+  type FoundCheckout,
+} from "./checkouts";
 import { logger } from "./log";
 import { CMD, LEGACY, legacyOption, NAME, option, optionFormat } from "./brand";
 import { shellQuote, toolsCommand } from "./self";
@@ -108,7 +113,11 @@ export interface Mux {
   killSession(sessionId: string): Promise<void>;
   // From names the session to take it out of: a viewer links the same
   // window, and tmux would otherwise pick whichever session it likes.
-  moveWindow(windowId: string, fromSessionId: string, toSessionId: string): Promise<void>;
+  moveWindow(
+    windowId: string,
+    fromSessionId: string,
+    toSessionId: string,
+  ): Promise<void>;
   // Types a line into the window's first pane (claude, even while a split
   // has focus), then Enter.
   sendLine(windowId: string, text: string): Promise<void>;
@@ -145,7 +154,10 @@ export interface Mux {
   // Whether the branch's work has landed in the repo's base branch: the base
   // it landed in, false if it has not, null when git cannot say (no such
   // branch, no reflog to tell where it started).
-  branchMerged(repoPath: string, branch: string): Promise<string | false | null>;
+  branchMerged(
+    repoPath: string,
+    branch: string,
+  ): Promise<string | false | null>;
   // How many of the branch's commits are not in the base (the local one or
   // origin's, whichever is ahead), null when git cannot say. A squash merge
   // still counts its commits: ask branchMerged first.
@@ -154,7 +166,10 @@ export interface Mux {
   // base's name and tips and the branch's tip. Same key, same answer; a
   // branch with no tip is left out (branchMerged would say null). Null when
   // git cannot read the repo.
-  mergeKeys(repoPath: string, branches: string[]): Promise<Map<string, string> | null>;
+  mergeKeys(
+    repoPath: string,
+    branches: string[],
+  ): Promise<Map<string, string> | null>;
   // What is at a path: gone, a checkout and its GitHub repos, a worktree.
   inspectCheckout(path: string): CheckoutState;
   // Main checkouts under the roots, depth folders down.
@@ -209,14 +224,17 @@ export interface MadeWorktree {
 // just a path on its last line.
 export function parseWorktree(stdout: string): MadeWorktree | null {
   const text = stdout.trim();
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
-    if (typeof parsed.path === "string" && parsed.path)
+    if (typeof parsed.path === "string" && parsed.path) {
       return {
         path: parsed.path,
         branch: typeof parsed.branch === "string" ? parsed.branch : null,
       };
+    }
   } catch {
     // not JSON: fall through to the last line
   }
@@ -237,7 +255,10 @@ function gitIn(repoPath: string): Git {
       stdin: "ignore",
       timeout: GIT_TIMEOUT_MS,
     });
-    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    const [out, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      proc.exited,
+    ]);
     return code === 0 ? out.trim() : null;
   };
 }
@@ -249,23 +270,49 @@ function gitIn(repoPath: string): Git {
 async function baseTips(
   git: Git,
   branches: string[],
-): Promise<{ base: string; local?: string; remote?: string; tips: Map<string, string> } | null> {
-  const head = await git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD");
+): Promise<{
+  base: string;
+  local?: string;
+  remote?: string;
+  tips: Map<string, string>;
+} | null> {
+  const head = await git(
+    "symbolic-ref",
+    "--quiet",
+    "--short",
+    "refs/remotes/origin/HEAD",
+  );
   const base = head?.replace(/^origin\//, "") || "main";
   const localRef = `refs/heads/${base}`;
   const remoteRef = `refs/remotes/origin/${base}`;
   const wanted = new Set(branches.map((b) => `refs/heads/${b}`));
-  const listed = await git("for-each-ref", "--format=%(refname) %(objectname)", localRef, remoteRef, ...wanted);
-  if (listed === null) return null;
+  const listed = await git(
+    "for-each-ref",
+    "--format=%(refname) %(objectname)",
+    localRef,
+    remoteRef,
+    ...wanted,
+  );
+  if (listed === null) {
+    return null;
+  }
   let local: string | undefined;
   let remote: string | undefined;
   const tips = new Map<string, string>();
   for (const line of listed.split("\n")) {
     const [ref, sha] = line.split(" ");
-    if (!ref || !sha) continue;
-    if (ref === localRef) local = sha;
-    if (ref === remoteRef) remote = sha;
-    if (wanted.has(ref)) tips.set(ref.slice("refs/heads/".length), sha);
+    if (!ref || !sha) {
+      continue;
+    }
+    if (ref === localRef) {
+      local = sha;
+    }
+    if (ref === remoteRef) {
+      remote = sha;
+    }
+    if (wanted.has(ref)) {
+      tips.set(ref.slice("refs/heads/".length), sha);
+    }
   }
   return { base, local, remote, tips };
 }
@@ -275,7 +322,9 @@ const CLONE_TIMEOUT_MS = 10 * 60_000;
 // ── tmux ─────────────────────────────────────────────────────────────────
 
 const SEP = "\t";
-const SESSION_FORMAT = ["#{session_id}", "#{session_name}", PROJECT_READ].join(SEP);
+const SESSION_FORMAT = ["#{session_id}", "#{session_name}", PROJECT_READ].join(
+  SEP,
+);
 const WINDOW_FORMAT = [
   "#{window_id}",
   "#{session_id}",
@@ -342,7 +391,9 @@ export type HostServer =
   | { at: "other"; socket: string; lost: boolean };
 
 // $TMUX is "socket path,server pid,session".
-function hostFromEnv(tmux = process.env.TMUX): { path: string; pid: number } | null {
+function hostFromEnv(
+  tmux = process.env.TMUX,
+): { path: string; pid: number } | null {
   const [path, raw] = (tmux ?? "").split(",");
   const pid = Number(raw);
   return path && Number.isInteger(pid) && pid > 0 ? { path, pid } : null;
@@ -367,7 +418,9 @@ function isTmux(pid: number): boolean {
   } catch {
     return false;
   }
-  const run = Bun.spawnSync(["ps", "-o", "comm=", "-p", String(pid)], { stderr: "ignore" });
+  const run = Bun.spawnSync(["ps", "-o", "comm=", "-p", String(pid)], {
+    stderr: "ignore",
+  });
   return run.exitCode === 0 && /tmux/.test(run.stdout.toString());
 }
 
@@ -403,9 +456,15 @@ export class TmuxMux implements Mux {
   // $TMUX_TMPDIR (or /tmp)/tmux-<uid>/<-L name or default>.
   private socketFile(): string {
     const { socketName, socketPath } = this.socket;
-    if (socketPath) return socketPath;
+    if (socketPath) {
+      return socketPath;
+    }
     const dir = process.env.TMUX_TMPDIR || "/tmp";
-    return join(dir, `tmux-${process.getuid?.() ?? 0}`, socketName ?? "default");
+    return join(
+      dir,
+      `tmux-${process.getuid?.() ?? 0}`,
+      socketName ?? "default",
+    );
   }
 
   // A live server's socket file can be deleted under it (macOS cleans /tmp,
@@ -417,15 +476,27 @@ export class TmuxMux implements Mux {
   private async reviveHost(): Promise<void> {
     const host = hostFromEnv();
     const path = this.socketFile();
-    if (!host || existsSync(path) || !samePath(host.path, path) || !isTmux(host.pid)) return;
-    log.info("tmux socket gone; asking Riker's own server to remake it", { pid: host.pid, path });
+    if (
+      !host ||
+      existsSync(path) ||
+      !samePath(host.path, path) ||
+      !isTmux(host.pid)
+    ) {
+      return;
+    }
+    log.info("tmux socket gone; asking Riker's own server to remake it", {
+      pid: host.pid,
+      path,
+    });
     try {
       process.kill(host.pid, "SIGUSR1");
     } catch (err) {
       log.warn("could not signal tmux", { pid: host.pid, err: String(err) });
       return;
     }
-    for (let i = 0; i < 40 && !existsSync(path); i++) await Bun.sleep(25);
+    for (let i = 0; i < 40 && !existsSync(path); i++) {
+      await Bun.sleep(25);
+    }
   }
 
   // libtmux pins ids to the daemon it first met and refuses (before running
@@ -435,7 +506,9 @@ export class TmuxMux implements Mux {
     try {
       return await run(this.server);
     } catch (err) {
-      if (!(err instanceof TmuxServerRestartedError)) throw err;
+      if (!(err instanceof TmuxServerRestartedError)) {
+        throw err;
+      }
       this.server = this.connect();
       return run(this.server);
     }
@@ -447,7 +520,9 @@ export class TmuxMux implements Mux {
 
   private tmuxArgs(): string[] {
     const { socketName, socketPath } = this.socket;
-    if (socketPath) return ["tmux", "-S", socketPath];
+    if (socketPath) {
+      return ["tmux", "-S", socketPath];
+    }
     return socketName ? ["tmux", "-L", socketName] : ["tmux"];
   }
 
@@ -468,11 +543,23 @@ export class TmuxMux implements Mux {
           PROJECT_READ,
         ].join(SEP),
       ]);
-      if (!line) return null;
-      const [id, pid, windowId, windowName, sessionId, sessionName, task, project] =
-        line.split(SEP);
+      if (!line) {
+        return null;
+      }
+      const [
+        id,
+        pid,
+        windowId,
+        windowName,
+        sessionId,
+        sessionName,
+        task,
+        project,
+      ] = line.split(SEP);
       // tmux answers for the current pane when the named one is gone.
-      if (id !== paneId) return null;
+      if (id !== paneId) {
+        return null;
+      }
       return {
         windowId,
         windowName,
@@ -499,7 +586,9 @@ export class TmuxMux implements Mux {
   async hostWindow(): Promise<string | null> {
     const pane = process.env.TMUX_PANE;
     const serverPid = process.env.TMUX?.split(",")[1];
-    if (!pane || !serverPid) return null;
+    if (!pane || !serverPid) {
+      return null;
+    }
     try {
       // tmux answers for some other pane when this one is not on the server,
       // so both the server and the pane have to match.
@@ -518,9 +607,13 @@ export class TmuxMux implements Mux {
 
   async hostServer(): Promise<HostServer> {
     const host = hostFromEnv();
-    if (!host || !process.env.TMUX_PANE) return { at: "none" };
+    if (!host || !process.env.TMUX_PANE) {
+      return { at: "none" };
+    }
     const windowId = await this.hostWindow();
-    if (windowId) return { at: "here", windowId };
+    if (windowId) {
+      return { at: "here", windowId };
+    }
     // Its pid answered for no server here, though the path is this one's.
     const lost = samePath(host.path, this.socketFile()) && isTmux(host.pid);
     return { at: "other", socket: host.path, lost };
@@ -533,7 +626,9 @@ export class TmuxMux implements Mux {
       sessionLines = await this.cmd("list-sessions", ["-F", SESSION_FORMAT]);
       windowLines = await this.cmd("list-windows", ["-a", "-F", WINDOW_FORMAT]);
     } catch (err) {
-      if (opts.strict && !noServer(err)) throw err;
+      if (opts.strict && !noServer(err)) {
+        throw err;
+      }
       // No server on the socket yet.
       log.debug("tmux state empty", { err: String(err) });
       return { sessions: [], windows: [] };
@@ -544,7 +639,9 @@ export class TmuxMux implements Mux {
         id,
         name,
         projectId: idOf(project),
-        viewer: name.startsWith(VIEWER_PREFIX) || name.startsWith(LEGACY_VIEWER_PREFIX),
+        viewer:
+          name.startsWith(VIEWER_PREFIX) ||
+          name.startsWith(LEGACY_VIEWER_PREFIX),
       };
     });
     // A viewer lists its task's window again; report each window once,
@@ -553,9 +650,13 @@ export class TmuxMux implements Mux {
     const seen = new Set<string>();
     const windows: MuxWindow[] = [];
     for (const line of windowLines) {
-      if (!line) continue;
+      if (!line) {
+        continue;
+      }
       const [id, sessionId, name, task] = line.split(SEP);
-      if (viewers.has(sessionId) || seen.has(id)) continue;
+      if (viewers.has(sessionId) || seen.has(id)) {
+        continue;
+      }
       seen.add(id);
       windows.push({ id, sessionId, name, taskId: idOf(task) });
     }
@@ -566,25 +667,67 @@ export class TmuxMux implements Mux {
     const session = await this.retry((server) =>
       server.newSession({ name, startDirectory: cwd }),
     );
-    return { id: session.id, name: session.name ?? name, projectId: null, viewer: false };
+    return {
+      id: session.id,
+      name: session.name ?? name,
+      projectId: null,
+      viewer: false,
+    };
   }
 
   async tagSession(sessionId: string, projectId: number): Promise<void> {
-    await this.cmd("set-option", ["-t", sessionId, PROJECT_OPTION, String(projectId)]);
+    await this.cmd("set-option", [
+      "-t",
+      sessionId,
+      PROJECT_OPTION,
+      String(projectId),
+    ]);
   }
 
   async newWindow(w: NewWindow): Promise<MuxWindow> {
-    const args = ["-d", "-P", "-F", "#{window_id}", "-t", `${w.sessionId}:`, "-n", w.name, "-c", w.cwd];
-    for (const [key, value] of Object.entries(w.env)) args.push("-e", `${key}=${value}`);
+    const args = [
+      "-d",
+      "-P",
+      "-F",
+      "#{window_id}",
+      "-t",
+      `${w.sessionId}:`,
+      "-n",
+      w.name,
+      "-c",
+      w.cwd,
+    ];
+    for (const [key, value] of Object.entries(w.env)) {
+      args.push("-e", `${key}=${value}`);
+    }
     args.push(windowCommand(w.argv));
     const [id] = await this.cmd("new-window", args);
-    if (!id) throw new MuxError("tmux new-window printed no window id");
-    return { id: id.trim(), sessionId: w.sessionId, name: w.name, taskId: null };
+    if (!id) {
+      throw new MuxError("tmux new-window printed no window id");
+    }
+    return {
+      id: id.trim(),
+      sessionId: w.sessionId,
+      name: w.name,
+      taskId: null,
+    };
   }
 
   async tagWindow(windowId: string, taskId: number): Promise<void> {
-    await this.cmd("set-option", ["-w", "-t", windowId, TASK_OPTION, String(taskId)]);
-    await this.cmd("set-option", ["-w", "-t", windowId, TOOLS_OPTION, toolsCommand()]);
+    await this.cmd("set-option", [
+      "-w",
+      "-t",
+      windowId,
+      TASK_OPTION,
+      String(taskId),
+    ]);
+    await this.cmd("set-option", [
+      "-w",
+      "-t",
+      windowId,
+      TOOLS_OPTION,
+      toolsCommand(),
+    ]);
   }
 
   async copyLegacyTags(): Promise<number> {
@@ -593,21 +736,33 @@ export class TmuxMux implements Mux {
     try {
       sessionLines = await this.cmd("list-sessions", [
         "-F",
-        ["#{session_id}", `#{${PROJECT_OPTION}}`, `#{${legacyOption("project")}}`].join(SEP),
+        [
+          "#{session_id}",
+          `#{${PROJECT_OPTION}}`,
+          `#{${legacyOption("project")}}`,
+        ].join(SEP),
       ]);
       windowLines = await this.cmd("list-windows", [
         "-a",
         "-F",
-        ["#{window_id}", `#{${TASK_OPTION}}`, `#{${legacyOption("task")}}`].join(SEP),
+        [
+          "#{window_id}",
+          `#{${TASK_OPTION}}`,
+          `#{${legacyOption("task")}}`,
+        ].join(SEP),
       ]);
     } catch (err) {
-      if (noServer(err)) return 0;
+      if (noServer(err)) {
+        return 0;
+      }
       throw err;
     }
     let tagged = 0;
     for (const line of sessionLines) {
       const [id, now, old] = line.split(SEP);
-      if (!id || now || !idOf(old)) continue;
+      if (!id || now || !idOf(old)) {
+        continue;
+      }
       await this.tagSession(id, idOf(old)!);
       tagged++;
     }
@@ -615,7 +770,9 @@ export class TmuxMux implements Mux {
     const seen = new Set<string>();
     for (const line of windowLines) {
       const [id, now, old] = line.split(SEP);
-      if (!id || seen.has(id) || now || !idOf(old)) continue;
+      if (!id || seen.has(id) || now || !idOf(old)) {
+        continue;
+      }
       seen.add(id);
       // @riker_tools from this Riker, not aug's copy (its path is gone).
       await this.tagWindow(id, idOf(old)!);
@@ -632,17 +789,35 @@ export class TmuxMux implements Mux {
     await this.cmd("kill-session", ["-t", sessionId]);
   }
 
-  async moveWindow(windowId: string, fromSessionId: string, toSessionId: string): Promise<void> {
-    await this.cmd("move-window", ["-d", "-s", `${fromSessionId}:${windowId}`, "-t", `${toSessionId}:`]);
+  async moveWindow(
+    windowId: string,
+    fromSessionId: string,
+    toSessionId: string,
+  ): Promise<void> {
+    await this.cmd("move-window", [
+      "-d",
+      "-s",
+      `${fromSessionId}:${windowId}`,
+      "-t",
+      `${toSessionId}:`,
+    ]);
   }
 
   async sendLine(windowId: string, text: string): Promise<void> {
     // A bare window target is its active pane, which is a diff viewer while
     // one is split off; {top-left} is too, while that split is zoomed.
-    const [first] = await this.cmd("list-panes", ["-t", windowId, "-F", "#{pane_id}"]);
+    const [first] = await this.cmd("list-panes", [
+      "-t",
+      windowId,
+      "-F",
+      "#{pane_id}",
+    ]);
     const target = first?.trim() || windowId;
-    if (Buffer.byteLength(text) <= SEND_KEYS_MAX) await this.cmd("send-keys", ["-t", target, "-l", text]);
-    else await this.paste(target, text);
+    if (Buffer.byteLength(text) <= SEND_KEYS_MAX) {
+      await this.cmd("send-keys", ["-t", target, "-l", text]);
+    } else {
+      await this.paste(target, text);
+    }
     await this.cmd("send-keys", ["-t", target, "Enter"]);
   }
 
@@ -652,22 +827,36 @@ export class TmuxMux implements Mux {
   // whole; -d drops the buffer after.
   private async paste(target: string, text: string): Promise<void> {
     const buffer = `riker-${randomUUID()}`;
-    const proc = Bun.spawn([...this.tmuxArgs(), "load-buffer", "-b", buffer, "-"], {
-      stdin: new TextEncoder().encode(text),
-      stdout: "ignore",
-      stderr: "pipe",
-    });
-    const [code, err] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
-    if (code !== 0) throw new MuxError(`tmux load-buffer failed: ${err.trim() || `exit ${code}`}`);
+    const proc = Bun.spawn(
+      [...this.tmuxArgs(), "load-buffer", "-b", buffer, "-"],
+      {
+        stdin: new TextEncoder().encode(text),
+        stdout: "ignore",
+        stderr: "pipe",
+      },
+    );
+    const [code, err] = await Promise.all([
+      proc.exited,
+      new Response(proc.stderr).text(),
+    ]);
+    if (code !== 0) {
+      throw new MuxError(
+        `tmux load-buffer failed: ${err.trim() || `exit ${code}`}`,
+      );
+    }
     await this.cmd("paste-buffer", ["-d", "-p", "-b", buffer, "-t", target]);
   }
 
   async splitPane(s: SplitPane): Promise<string> {
     const args = ["-P", "-F", "#{pane_id}", "-t", s.paneId, "-c", s.cwd];
-    if (s.zoom) args.push("-Z");
+    if (s.zoom) {
+      args.push("-Z");
+    }
     args.push(paneCommand(s.argv, s.exitFile));
     const [id] = await this.cmd("split-window", args);
-    if (!id) throw new MuxError("tmux split-window printed no pane id");
+    if (!id) {
+      throw new MuxError("tmux split-window printed no pane id");
+    }
     return id.trim();
   }
 
@@ -684,7 +873,12 @@ export class TmuxMux implements Mux {
 
   async windowPanes(windowId: string): Promise<string[] | null> {
     try {
-      const panes = await this.cmd("list-panes", ["-t", windowId, "-F", "#{pane_id}"]);
+      const panes = await this.cmd("list-panes", [
+        "-t",
+        windowId,
+        "-F",
+        "#{pane_id}",
+      ]);
       return panes.map((p) => p.trim()).filter(Boolean);
     } catch {
       return null;
@@ -695,22 +889,36 @@ export class TmuxMux implements Mux {
     // Named before the switch: tmux finds "the current client" through the
     // session Riker's pane is in, and once moved that client is not in it, so
     // the message after would go to whichever client tmux likes (a viewer).
-    const [client] = await this.cmd("display-message", ["-p", "#{client_name}"]);
+    const [client] = await this.cmd("display-message", [
+      "-p",
+      "#{client_name}",
+    ]);
     const target = windowId ? `${sessionId}:${windowId}` : sessionId;
     const on = client?.trim() ? ["-c", client.trim()] : [];
     await this.cmd("switch-client", [...on, "-t", target]);
     // switch-client -l (prefix L) is tmux's own "last session": Riker's.
-    await this.cmd("display-message", [...on, "-d", "5000", BACK_TO_RIKER]).catch(
-      (err: unknown) => log.debug("back-to-riker message failed", { err: String(err) }),
+    await this.cmd("display-message", [
+      ...on,
+      "-d",
+      "5000",
+      BACK_TO_RIKER,
+    ]).catch((err: unknown) =>
+      log.debug("back-to-riker message failed", { err: String(err) }),
     );
   }
 
   attachCommand(sessionId: string, windowId?: string): string {
     const target = windowId ? `${sessionId}:${windowId}` : sessionId;
-    return [...this.tmuxArgs(), "attach", "-t", target].map(shellQuote).join(" ");
+    return [...this.tmuxArgs(), "attach", "-t", target]
+      .map(shellQuote)
+      .join(" ");
   }
 
-  viewerArgv(viewerName: string, sessionId: string, windowId: string): string[] {
+  viewerArgv(
+    viewerName: string,
+    sessionId: string,
+    windowId: string,
+  ): string[] {
     // One client process makes a session of its own, links the task's window
     // into it and drops the placeholder, so the session holds claude and
     // nothing else. Linked, not grouped: tmux 3.7's choose-tree draws nothing
@@ -731,14 +939,34 @@ export class TmuxMux implements Mux {
       `"run-shell -C \\"switch-client -c '#{hook_client}' -t '${sessionId.replaceAll("$", "\\\\$")}'\\""`;
     const placeholder = `${CMD}-placeholder`;
     return [
-      "env", "-u", "TMUX",
+      "env",
+      "-u",
+      "TMUX",
       ...this.tmuxArgs(),
       // cat holds the window open without starting your shell.
-      "new-session", "-s", viewerName, "-n", placeholder, "cat",
-      ";", "set-option", "status", "off",
-      ";", "set-option", "prefix", "None",
-      ";", "set-option", "destroy-unattached", "on",
-      ";", "set-option", "-F", CLIENT_OPTION, "#{client_name}",
+      "new-session",
+      "-s",
+      viewerName,
+      "-n",
+      placeholder,
+      "cat",
+      ";",
+      "set-option",
+      "status",
+      "off",
+      ";",
+      "set-option",
+      "prefix",
+      "None",
+      ";",
+      "set-option",
+      "destroy-unattached",
+      "on",
+      ";",
+      "set-option",
+      "-F",
+      CLIENT_OPTION,
+      "#{client_name}",
       // A program's OSC 52 clipboard read (nvim's, over ssh) goes unanswered
       // on tmux's defaults: set-clipboard external drops it, and get-clipboard
       // buffer replies only from a paste buffer, silent when there is none.
@@ -746,12 +974,34 @@ export class TmuxMux implements Mux {
       // client's terminal, Riker's while you type in the viewer, and Riker
       // answers from the system clipboard. Both are server-wide, so only
       // tmux's defaults are changed and a value set on purpose is kept.
-      ";", "if-shell", "-F", "#{==:#{set-clipboard},external}", "set-option -s set-clipboard on",
-      ";", "if-shell", "-F", "#{==:#{get-clipboard},buffer}", "set-option -s get-clipboard request",
-      ";", "set-hook", "client-attached", bounce,
-      ";", "set-hook", "client-session-changed", bounce,
-      ";", "link-window", "-s", windowId, "-t", `=${viewerName}:`,
-      ";", "kill-window", "-t", `=${viewerName}:=${placeholder}`,
+      ";",
+      "if-shell",
+      "-F",
+      "#{==:#{set-clipboard},external}",
+      "set-option -s set-clipboard on",
+      ";",
+      "if-shell",
+      "-F",
+      "#{==:#{get-clipboard},buffer}",
+      "set-option -s get-clipboard request",
+      ";",
+      "set-hook",
+      "client-attached",
+      bounce,
+      ";",
+      "set-hook",
+      "client-session-changed",
+      bounce,
+      ";",
+      "link-window",
+      "-s",
+      windowId,
+      "-t",
+      `=${viewerName}:`,
+      ";",
+      "kill-window",
+      "-t",
+      `=${viewerName}:=${placeholder}`,
     ];
   }
 
@@ -760,37 +1010,67 @@ export class TmuxMux implements Mux {
   // in every other session (the unlinked-* events).
   async watch(onChange: () => void, signal: AbortSignal): Promise<void> {
     const state = await this.state();
-    if (state.sessions.length === 0) return;
+    if (state.sessions.length === 0) {
+      return;
+    }
     for (const s of state.sessions) {
       const pid = Number(s.name.slice(WATCH_PREFIX.length));
-      if (s.name.startsWith(WATCH_PREFIX) && pid !== process.pid && !pidAlive(pid))
+      if (
+        s.name.startsWith(WATCH_PREFIX) &&
+        pid !== process.pid &&
+        !pidAlive(pid)
+      ) {
         await this.cmd("kill-session", ["-t", s.id]).catch(() => []);
+      }
     }
     const name = `${WATCH_PREFIX}${process.pid}`;
     const id =
       state.sessions.find((s) => s.name === name)?.id ??
-      (await this.cmd("new-session", ["-d", "-P", "-F", "#{session_id}", "-s", name]))[0]?.trim();
-    if (!id) return;
+      (
+        await this.cmd("new-session", [
+          "-d",
+          "-P",
+          "-F",
+          "#{session_id}",
+          "-s",
+          name,
+        ])
+      )[0]?.trim();
+    if (!id) {
+      return;
+    }
     const stream = this.server.watch({ target: id, signal });
     signal.addEventListener("abort", () => {
       void stream.close();
       void this.cmd("kill-session", ["-t", id]).catch(() => []);
     });
     try {
-      for await (const event of stream) if (WATCHED.has(event.kind)) onChange();
+      for await (const event of stream) {
+        if (WATCHED.has(event.kind)) {
+          onChange();
+        }
+      }
     } finally {
       await stream.close();
     }
   }
 
   async branchExists(repoPath: string, branch: string): Promise<boolean> {
-    for (const ref of [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`]) {
-      const proc = Bun.spawn(["git", "-C", repoPath, "rev-parse", "--verify", "--quiet", ref], {
-        stdout: "ignore",
-        stderr: "ignore",
-        stdin: "ignore",
-      });
-      if ((await proc.exited) === 0) return true;
+    for (const ref of [
+      `refs/heads/${branch}`,
+      `refs/remotes/origin/${branch}`,
+    ]) {
+      const proc = Bun.spawn(
+        ["git", "-C", repoPath, "rev-parse", "--verify", "--quiet", ref],
+        {
+          stdout: "ignore",
+          stderr: "ignore",
+          stdin: "ignore",
+        },
+      );
+      if ((await proc.exited) === 0) {
+        return true;
+      }
     }
     return false;
   }
@@ -801,13 +1081,20 @@ export class TmuxMux implements Mux {
   // The base is the local one or origin's, whichever is ahead: a PR merged
   // on GitHub reaches origin/<base> with any fetch, while the checkout's own
   // <base> waits for the owner's pull. Nothing here fetches.
-  async branchMerged(repoPath: string, branch: string): Promise<string | false | null> {
+  async branchMerged(
+    repoPath: string,
+    branch: string,
+  ): Promise<string | false | null> {
     const git = gitIn(repoPath);
     const read = await baseTips(git, [branch]);
-    if (!read) return null;
+    if (!read) {
+      return null;
+    }
     const { base, local, remote } = read;
     const tip = read.tips.get(branch);
-    if (!tip || (!local && !remote)) return null;
+    if (!tip || (!local && !remote)) {
+      return null;
+    }
     let baseTip = (local ?? remote)!;
     let into = local ? base : `origin/${base}`;
     if (local && remote && local !== remote) {
@@ -816,18 +1103,37 @@ export class TmuxMux implements Mux {
         into = `origin/${base}`;
       }
     }
-    const created = (await git("reflog", "show", "--format=%H", `refs/heads/${branch}`))
+    const created = (
+      await git("reflog", "show", "--format=%H", `refs/heads/${branch}`)
+    )
       ?.split("\n")
       .filter(Boolean)
       .at(-1);
-    if (!created) return null;
-    if (created === tip) return false;
-    if ((await git("merge-base", "--is-ancestor", tip, baseTip)) !== null) return into;
+    if (!created) {
+      return null;
+    }
+    if (created === tip) {
+      return false;
+    }
+    if ((await git("merge-base", "--is-ancestor", tip, baseTip)) !== null) {
+      return into;
+    }
     const forkPoint = await git("merge-base", baseTip, tip);
     const tree = await git("rev-parse", `${tip}^{tree}`);
-    if (!forkPoint || !tree) return false;
-    const squash = await git("commit-tree", tree, "-p", forkPoint, "-m", "riker: squash check");
-    if (!squash) return false;
+    if (!forkPoint || !tree) {
+      return false;
+    }
+    const squash = await git(
+      "commit-tree",
+      tree,
+      "-p",
+      forkPoint,
+      "-m",
+      "riker: squash check",
+    );
+    if (!squash) {
+      return false;
+    }
     const cherry = await git("cherry", baseTip, squash);
     return cherry?.startsWith("-") ? into : false;
   }
@@ -836,20 +1142,37 @@ export class TmuxMux implements Mux {
     const git = gitIn(repoPath);
     const read = await baseTips(git, [branch]);
     const tip = read?.tips.get(branch);
-    if (!read || !tip || (!read.local && !read.remote)) return null;
+    if (!read || !tip || (!read.local && !read.remote)) {
+      return null;
+    }
     let baseTip = (read.local ?? read.remote)!;
-    if (read.local && read.remote && read.local !== read.remote)
-      if ((await git("merge-base", "--is-ancestor", read.local, read.remote)) !== null) baseTip = read.remote;
+    if (read.local && read.remote && read.local !== read.remote) {
+      if (
+        (await git("merge-base", "--is-ancestor", read.local, read.remote)) !==
+        null
+      ) {
+        baseTip = read.remote;
+      }
+    }
     const count = await git("rev-list", "--count", `${baseTip}..${tip}`);
     return count === null ? null : Number(count);
   }
 
-  async mergeKeys(repoPath: string, branches: string[]): Promise<Map<string, string> | null> {
+  async mergeKeys(
+    repoPath: string,
+    branches: string[],
+  ): Promise<Map<string, string> | null> {
     const read = await baseTips(gitIn(repoPath), branches);
-    if (!read) return null;
+    if (!read) {
+      return null;
+    }
     const keys = new Map<string, string>();
-    for (const [branch, tip] of read.tips)
-      keys.set(branch, `${tip} ${read.base} ${read.local ?? "-"} ${read.remote ?? "-"}`);
+    for (const [branch, tip] of read.tips) {
+      keys.set(
+        branch,
+        `${tip} ${read.base} ${read.local ?? "-"} ${read.remote ?? "-"}`,
+      );
+    }
     return keys;
   }
 
@@ -868,9 +1191,15 @@ export class TmuxMux implements Mux {
       stdin: "ignore",
       timeout: CLONE_TIMEOUT_MS,
     });
-    const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
-    if (code !== 0)
-      throw new MuxError(stderr.trim().split("\n").pop() || `gh repo clone exited ${code}`);
+    const [stderr, code] = await Promise.all([
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    if (code !== 0) {
+      throw new MuxError(
+        stderr.trim().split("\n").pop() || `gh repo clone exited ${code}`,
+      );
+    }
   }
 
   async worktree(w: Worktree): Promise<MadeWorktree> {
@@ -893,10 +1222,13 @@ export class TmuxMux implements Mux {
       new Response(proc.stderr).text(),
       proc.exited,
     ]);
-    if (code !== 0)
+    if (code !== 0) {
       throw new MuxError(wtError(stderr, `${argv[0]} exited ${code}`));
+    }
     const made = parseWorktree(stdout);
-    if (!made) throw new MuxError(`no worktree path in: ${stdout.trim().slice(0, 200)}`);
+    if (!made) {
+      throw new MuxError(`no worktree path in: ${stdout.trim().slice(0, 200)}`);
+    }
     return made;
   }
 
@@ -907,8 +1239,13 @@ export class TmuxMux implements Mux {
       stdin: "ignore",
       timeout: WT_TIMEOUT_MS,
     });
-    const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
-    if (code !== 0) throw new MuxError(wtError(stderr, `wt remove exited ${code}`));
+    const [stderr, code] = await Promise.all([
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    if (code !== 0) {
+      throw new MuxError(wtError(stderr, `wt remove exited ${code}`));
+    }
   }
 }
 
@@ -923,13 +1260,22 @@ export function wtError(stderr: string, fallback: string): string {
   const hints: string[] = [];
   for (const raw of stderr.replace(ANSI, "").split("\n")) {
     const line = raw.trim();
-    if (!line) continue;
-    if (line.startsWith("↳")) hints.push(line.slice(1).trim());
-    else if (line.startsWith("✗")) reason = line.slice(1).trim();
-    else if (!reason) reason = line;
-    else detail.push(line);
+    if (!line) {
+      continue;
+    }
+    if (line.startsWith("↳")) {
+      hints.push(line.slice(1).trim());
+    } else if (line.startsWith("✗")) {
+      reason = line.slice(1).trim();
+    } else if (!reason) {
+      reason = line;
+    } else {
+      detail.push(line);
+    }
   }
-  if (!reason) return hints.join(" ") || fallback;
+  if (!reason) {
+    return hints.join(" ") || fallback;
+  }
   const head = detail.length ? `${reason} (${detail.join(", ")})` : reason;
   return [head, ...hints].join(". ");
 }
@@ -941,17 +1287,29 @@ export function timedMux(inner: Mux): Mux {
   return new Proxy(inner, {
     get(target, prop, receiver) {
       const value: unknown = Reflect.get(target, prop, receiver);
-      if (typeof value !== "function" || typeof prop !== "string" || prop === "watch") return value;
+      if (
+        typeof value !== "function" ||
+        typeof prop !== "string" ||
+        prop === "watch"
+      ) {
+        return value;
+      }
       const known = wrapped.get(prop);
-      if (known) return known;
+      if (known) {
+        return known;
+      }
       const fn = value as (...args: unknown[]) => unknown;
       const op = `mux.${prop}`;
       const call = (...args: unknown[]): unknown => {
-        if (!perfOn()) return fn.apply(target, args);
+        if (!perfOn()) {
+          return fn.apply(target, args);
+        }
         const done = perfStart(op);
         try {
           const out = fn.apply(target, args);
-          if (out instanceof Promise) return out.finally(() => done());
+          if (out instanceof Promise) {
+            return out.finally(() => done());
+          }
           done();
           return out;
         } catch (err) {

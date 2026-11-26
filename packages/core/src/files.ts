@@ -19,12 +19,17 @@ const MAX_FILES = 500;
 export function snapshotDir(dir: string): DirSnapshot {
   const out: DirSnapshot = new Map();
   const walk = (at: string, depth: number) => {
-    if (depth > MAX_DEPTH || out.size >= MAX_FILES || !existsSync(at)) return;
+    if (depth > MAX_DEPTH || out.size >= MAX_FILES || !existsSync(at)) {
+      return;
+    }
     for (const entry of readdirSync(at, { withFileTypes: true })) {
-      if (entry.name.startsWith(".")) continue;
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
       const full = join(at, entry.name);
-      if (entry.isDirectory()) walk(full, depth + 1);
-      else if (entry.isFile()) {
+      if (entry.isDirectory()) {
+        walk(full, depth + 1);
+      } else if (entry.isFile()) {
         const st = statSync(full);
         out.set(full, { mtimeMs: st.mtimeMs, size: st.size });
       }
@@ -43,7 +48,9 @@ export function changedFiles(
   const made: MadeFile[] = [];
   for (const [path, st] of after) {
     const was = before.get(path);
-    if (was && was.mtimeMs === st.mtimeMs && was.size === st.size) continue;
+    if (was && was.mtimeMs === st.mtimeMs && was.size === st.size) {
+      continue;
+    }
     made.push({
       path,
       name: relative(dir, path) || basename(path),
@@ -63,16 +70,24 @@ export function parseFiles(json: string | null | undefined): MadeFile[] {
 }
 
 export function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB`;
+  if (n < 1024) {
+    return `${n} B`;
+  }
+  if (n < 1024 * 1024) {
+    return `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB`;
+  }
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export type Preview = "markdown" | "table" | "none";
 
 export function previewOf(name: string): Preview {
-  if (/\.(md|markdown|txt)$/i.test(name)) return "markdown";
-  if (/\.(csv|tsv)$/i.test(name)) return "table";
+  if (/\.(md|markdown|txt)$/i.test(name)) {
+    return "markdown";
+  }
+  if (/\.(csv|tsv)$/i.test(name)) {
+    return "table";
+  }
   return "none";
 }
 
@@ -88,21 +103,29 @@ export function parseCsv(text: string, delimiter = ","): string[][] {
       if (c === '"' && text[i + 1] === '"') {
         field += '"';
         i++;
-      } else if (c === '"') quoted = false;
-      else field += c;
+      } else if (c === '"') {
+        quoted = false;
+      } else {
+        field += c;
+      }
       continue;
     }
-    if (c === '"' && field === "") quoted = true;
-    else if (c === delimiter) {
+    if (c === '"' && field === "") {
+      quoted = true;
+    } else if (c === delimiter) {
       row.push(field);
       field = "";
     } else if (c === "\n" || c === "\r") {
-      if (c === "\r" && text[i + 1] === "\n") i++;
+      if (c === "\r" && text[i + 1] === "\n") {
+        i++;
+      }
       row.push(field);
       rows.push(row);
       row = [];
       field = "";
-    } else field += c;
+    } else {
+      field += c;
+    }
   }
   if (field !== "" || row.length > 0) {
     row.push(field);
@@ -120,7 +143,9 @@ export function tableLines(
 ): string[] {
   const shown = rows.slice(0, maxRows);
   const cols = Math.max(0, ...shown.map((r) => r.length));
-  if (cols === 0) return [];
+  if (cols === 0) {
+    return [];
+  }
   const widths = Array.from({ length: cols }, (_, c) =>
     Math.max(1, ...shown.map((r) => (r[c] ?? "").length)),
   );
@@ -139,13 +164,17 @@ export function tableLines(
       .join(" ".repeat(gap))
       .trimEnd(),
   );
-  if (rows.length > maxRows) lines.push(`… ${rows.length - maxRows} more rows`);
+  if (rows.length > maxRows) {
+    lines.push(`… ${rows.length - maxRows} more rows`);
+  }
   return lines;
 }
 
 export function readPreview(file: MadeFile, maxChars = 20_000): string | null {
   try {
-    if (!existsSync(file.path)) return null;
+    if (!existsSync(file.path)) {
+      return null;
+    }
     return readFileSync(file.path, "utf8").slice(0, maxChars);
   } catch {
     return null;
@@ -155,7 +184,9 @@ export function readPreview(file: MadeFile, maxChars = 20_000): string | null {
 // ── opening a link or a file ─────────────────────────────────────────────
 
 export function isWsl(): boolean {
-  if (process.platform !== "linux") return false;
+  if (process.platform !== "linux") {
+    return false;
+  }
   try {
     return /microsoft/i.test(readFileSync("/proc/version", "utf8"));
   } catch {
@@ -169,12 +200,21 @@ export function openerArgv(
   platform: NodeJS.Platform = process.platform,
   wsl: boolean = isWsl(),
 ): string[] {
-  if (Array.isArray(opener) && opener.length) return [...opener, target];
-  if (typeof opener === "string" && opener.trim())
+  if (Array.isArray(opener) && opener.length) {
+    return [...opener, target];
+  }
+  if (typeof opener === "string" && opener.trim()) {
     return [...opener.trim().split(/\s+/), target];
-  if (wsl) return ["wslview", target];
-  if (platform === "darwin") return ["open", target];
-  if (platform === "win32") return ["cmd", "/c", "start", "", target];
+  }
+  if (wsl) {
+    return ["wslview", target];
+  }
+  if (platform === "darwin") {
+    return ["open", target];
+  }
+  if (platform === "win32") {
+    return ["cmd", "/c", "start", "", target];
+  }
   return ["xdg-open", target];
 }
 

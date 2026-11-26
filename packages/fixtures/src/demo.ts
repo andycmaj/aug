@@ -285,7 +285,11 @@ export function seedDemo(): void {
       {
         title: "Review: Add dark mode toggle (web#88)",
         summary: reviewBrief(
-          { repo: "northwind/web", number: 88, url: "https://github.com/northwind/web/pull/88" },
+          {
+            repo: "northwind/web",
+            number: 88,
+            url: "https://github.com/northwind/web/pull/88",
+          },
           "Priya wants a review before Friday's release.",
         ),
         kind: Kind.coding,
@@ -564,7 +568,12 @@ export function seedDemo(): void {
     // export fix (a Win then too, still open), and one dropped beside them.
     const yesterday = (hour: number) => {
       const d = new Date();
-      return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, hour).toISOString();
+      return new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate() - 1,
+        hour,
+      ).toISOString();
     };
     const shipped = store.createTask({
       title: "Retry Stripe webhooks with backoff",
@@ -574,17 +583,35 @@ export function seedDemo(): void {
       branch: "stripe-webhook-retry",
       createdAt: yesterday(9),
     });
-    store.addTurn({ taskId: shipped.id, role: TurnRole.you, body: "Retry failed webhooks with exponential backoff, max 5 tries.", startedAt: yesterday(9) });
-    store.addTurn({ taskId: shipped.id, role: TurnRole.agent, body: "Added a retry queue with backoff; tests pass. PR #318 open.", startedAt: yesterday(11) });
+    store.addTurn({
+      taskId: shipped.id,
+      role: TurnRole.you,
+      body: "Retry failed webhooks with exponential backoff, max 5 tries.",
+      startedAt: yesterday(9),
+    });
+    store.addTurn({
+      taskId: shipped.id,
+      role: TurnRole.agent,
+      body: "Added a retry queue with backoff; tests pass. PR #318 open.",
+      startedAt: yesterday(11),
+    });
     store.updateTask(shipped.id, { merged_at: yesterday(15) });
-    store.updateTask(shipped.id, { status: "done", closed_at: yesterday(16), closed_by: "you" });
+    store.updateTask(shipped.id, {
+      status: "done",
+      closed_at: yesterday(16),
+      closed_by: "you",
+    });
     const dropped = store.createTask({
       title: "Investigate flaky invoice PDF test",
       kind: Kind.task,
       channel: "owner",
       createdAt: yesterday(10),
     });
-    store.updateTask(dropped.id, { status: "dropped", closed_at: yesterday(14), closed_by: "you" });
+    store.updateTask(dropped.id, {
+      status: "dropped",
+      closed_at: yesterday(14),
+      closed_by: "you",
+    });
     store.addWin(localDay(new Date(yesterday(12))), shipped.id);
     store.addWin(localDay(new Date(yesterday(12))), exp);
 
@@ -634,9 +661,24 @@ export function seedDemo(): void {
     // The Inbox's other rows: one triage could not place, one it never
     // reached, one a greeting.
     for (const [i, m] of [
-      { body: "Can you check why the March payroll export is short?", reason: "awaiting AI triage (claude timed out)", verdict: "fyi" as const, minutes: 40 },
-      { body: "Is the vendor call still on for Thursday?", reason: null, verdict: null, minutes: 25 },
-      { body: "hey!", reason: "a greeting; waits for the ask", verdict: null, minutes: 22 },
+      {
+        body: "Can you check why the March payroll export is short?",
+        reason: "awaiting AI triage (claude timed out)",
+        verdict: "fyi" as const,
+        minutes: 40,
+      },
+      {
+        body: "Is the vendor call still on for Thursday?",
+        reason: null,
+        verdict: null,
+        minutes: 25,
+      },
+      {
+        body: "hey!",
+        reason: "a greeting; waits for the ask",
+        verdict: null,
+        minutes: 22,
+      },
     ].entries()) {
       const row = store.insertMessage({
         channel: "slack",
@@ -648,9 +690,12 @@ export function seedDemo(): void {
         body: m.body,
         receivedAt: ago(m.minutes),
       })!;
-      if (m.reason) store.fileMessage(row.id, m.verdict, m.reason, null);
-      if (m.reason?.startsWith("awaiting AI triage"))
+      if (m.reason) {
+        store.fileMessage(row.id, m.verdict, m.reason, null);
+      }
+      if (m.reason?.startsWith("awaiting AI triage")) {
         store.settleMessage(row.id, MessageState.failed);
+      }
     }
     store.addIdea(
       "Nobody has answered Priya about the payroll export",
@@ -704,8 +749,14 @@ export function seedDemo(): void {
       brief:
         "Month-end close runs from the ledger export without hand fixes.\nThe export must match the GL to the cent, and bank imports must load as they come.",
     });
-    const exportGoal = store.addGoal(ledger.id, "Export matches the GL to the cent");
-    const importGoal = store.addGoal(ledger.id, "Bank CSVs import as they come");
+    const exportGoal = store.addGoal(
+      ledger.id,
+      "Export matches the GL to the cent",
+    );
+    const importGoal = store.addGoal(
+      ledger.id,
+      "Bank CSVs import as they come",
+    );
     store.addGoal(ledger.id, "Close checklist runs without hand steps");
     store.addProjectLink(
       ledger.id,
@@ -735,22 +786,42 @@ export function seedDemo(): void {
 
 // A week of made-up spend for the Cost tab.
 function seedSpend(): void {
-  const tasks = store.listTasks().filter((t) => t.kind !== Kind.coding).slice(0, 3);
-  const roles = [SpendRole.triage, SpendRole.assistant, SpendRole.advisor, SpendRole.slack];
+  const tasks = store
+    .listTasks()
+    .filter((t) => t.kind !== Kind.coding)
+    .slice(0, 3);
+  const roles = [
+    SpendRole.triage,
+    SpendRole.assistant,
+    SpendRole.advisor,
+    SpendRole.slack,
+  ];
   for (let ago = 6; ago >= 0; ago--) {
     const at = new Date(Date.now() - ago * 86400_000);
-    for (const [i, role] of roles.entries())
-      recordSpend({ role }, "haiku", { costUsd: 0.05 * (i + 1) + ago * 0.03 }, at);
-    for (const [i, t] of tasks.entries())
+    for (const [i, role] of roles.entries()) {
+      recordSpend(
+        { role },
+        "haiku",
+        { costUsd: 0.05 * (i + 1) + ago * 0.03 },
+        at,
+      );
+    }
+    for (const [i, t] of tasks.entries()) {
       recordSpend(
         { role: SpendRole.general, taskId: t.id },
         "sonnet",
         {
           costUsd: 0.4 * (i + 1) + (ago % 3) * 0.2,
-          usage: { input: 50, output: 1500, cacheRead: 40_000, cacheWrite: 5_000 },
+          usage: {
+            input: 50,
+            output: 1500,
+            cacheRead: 40_000,
+            cacheWrite: 5_000,
+          },
         },
         at,
       );
+    }
   }
 }
 
@@ -776,7 +847,9 @@ export async function demoBrain(call: BrainCall): Promise<BrainResult> {
 
   if ("did" in props) {
     for (const step of STEPS) {
-      if (call.signal?.aborted) throw new Error("stopped");
+      if (call.signal?.aborted) {
+        throw new Error("stopped");
+      }
       await sleep(700);
       call.onStep?.(step);
     }
@@ -815,11 +888,18 @@ export async function demoBrain(call: BrainCall): Promise<BrainResult> {
   }
   // Home: the Assistant answers in words, after looking things up.
   if (call.env?.RIKER_ASKED_BY === "assistant") {
-    const named = [...call.prompt.matchAll(/^(RIKER-\d{4}) \[[^\]]*\] (.+?)(?: \(project .+\))?$/gm)];
+    const named = [
+      ...call.prompt.matchAll(
+        /^(RIKER-\d{4}) \[[^\]]*\] (.+?)(?: \(project .+\))?$/gm,
+      ),
+    ];
     const asked = call.prompt.includes("## Tasks the owner named")
       ? call.prompt.split("## Tasks the owner named\n")[1].split("\n")[0]
       : null;
-    for (const step of ["Bash riker-tools tasks", ...(asked ? [`Bash riker-tools task ${asked.slice(0, 8)}`] : [])]) {
+    for (const step of [
+      "Bash riker-tools tasks",
+      ...(asked ? [`Bash riker-tools task ${asked.slice(0, 8)}`] : []),
+    ]) {
       await sleep(600);
       call.onStep?.(step);
     }
@@ -830,9 +910,14 @@ export async function demoBrain(call: BrainCall): Promise<BrainResult> {
   }
   // A project's manager: about one project, read whole each turn.
   if (call.env?.RIKER_ASKED_BY?.startsWith("manager ")) {
-    const project = call.system?.match(/manager of the project (.+?) in Riker/)?.[1] ?? "this project";
+    const project =
+      call.system?.match(/manager of the project (.+?) in Riker/)?.[1] ??
+      "this project";
     const open = [...call.prompt.matchAll(/^ {2}(RIKER-\d{4}) \[/gm)].length;
-    for (const step of [`Bash riker-tools project ${project}`, "Bash riker-tools tasks --project"]) {
+    for (const step of [
+      `Bash riker-tools project ${project}`,
+      "Bash riker-tools tasks --project",
+    ]) {
       await sleep(600);
       call.onStep?.(step);
     }
@@ -841,8 +926,10 @@ export async function demoBrain(call: BrainCall): Promise<BrainResult> {
       text: `This is the demo, so I answer from a script. I manage **${project}**: ${open} open task${open === 1 ? "" : "s"}. In your own riker I'd plan its work as tasks in order, keep its standing, and start, stop or close its tasks when you say.`,
     };
   }
-  if ("ideas" in props) return done({ ideas: [] });
-  if ("verdict" in props)
+  if ("ideas" in props) {
+    return done({ ideas: [] });
+  }
+  if ("verdict" in props) {
     return done({
       verdict: "general",
       title: "A demo ask",
@@ -850,6 +937,7 @@ export async function demoBrain(call: BrainCall): Promise<BrainResult> {
       priority: "regular",
       reason: "demo triage",
     });
+  }
   if ("section" in props) {
     const correction = call.prompt.split("\n")[0].replace("Correction: ", "");
     return done({
@@ -871,12 +959,16 @@ export function demoHome(
   prefix = "riker-demo-",
 ): string {
   const named = envVar("HOME", env);
-  if (named && !inAgentEnv(env) && resolve(named) !== resolve(defaultHome())) return named;
+  if (named && !inAgentEnv(env) && resolve(named) !== resolve(defaultHome())) {
+    return named;
+  }
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
 export function installFixture(name: string): Engine {
-  if (name !== "demo") throw new Error(`unknown fixture "${name}" (try: demo)`);
+  if (name !== "demo") {
+    throw new Error(`unknown fixture "${name}" (try: demo)`);
+  }
   process.env.RIKER_HOME = demoHome();
   useDb(openDb());
   // Coding agents run on a private tmux server, never your own.

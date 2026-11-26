@@ -236,12 +236,14 @@ const state = defineCommand({
   args: { home: common.home },
   run({ args }) {
     const s = loadState(statePath(simHome(args.home)));
-    for (const p of s.pulls)
+    for (const p of s.pulls) {
       console.log(
         `#${p.number} ${p.state.toLowerCase()} by ${p.author} (${p.head}) ${p.title} · checks ${p.checks.map((c) => c.conclusion ?? c.status).join(",") || "none"} · reviews ${p.reviews.map((r) => `${r.user}:${r.state}`).join(",") || "none"}`,
       );
-    for (const l of s.log.slice(-10))
+    }
+    for (const l of s.log.slice(-10)) {
       console.log(`${l.at.slice(11, 19)} ${l.line}`);
+    }
   },
 });
 

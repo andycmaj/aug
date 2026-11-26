@@ -16,7 +16,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 const RAIL = 46;
@@ -64,8 +66,11 @@ async function boot() {
   await settle();
   const press = async (...keys: string[]) => {
     for (const k of keys) {
-      if (k === "enter") setup.mockInput.pressEnter();
-      else setup.mockInput.pressKey(k);
+      if (k === "enter") {
+        setup.mockInput.pressEnter();
+      } else {
+        setup.mockInput.pressKey(k);
+      }
       await settle();
     }
   };
@@ -89,8 +94,10 @@ async function boot() {
       const head = l.match(
         /^\s{1,2}(Home|Wins|System|Tasks|Code Reviews|Watching|For later) \(/,
       );
-      if (head) section = head[1];
-      if (l.includes(title))
+      if (head) {
+        section = head[1];
+      }
+      if (l.includes(title)) {
         out.push({
           section,
           // A row nested under its project has its gutter further in.
@@ -98,6 +105,7 @@ async function boot() {
           line: l,
           sub: lines[i + 1] ?? "",
         });
+      }
     });
     return out;
   };
@@ -132,8 +140,9 @@ test("a task that is neither, a Win, watched or both: rows in its project and un
   expect(bothWatching.sub).toContain("◫ twinproj");
   expect(bothWatching.line).toContain("★ Zq both");
   // One line each, title and tags.
-  for (const r of rowsOf("Zq both"))
+  for (const r of rowsOf("Zq both")) {
     expect(r.line.length).toBeLessThanOrEqual(RAIL);
+  }
 });
 
 test("both rows are one task: selecting either marks the other; Next takes each task once", async () => {
@@ -160,7 +169,9 @@ test("both rows are one task: selecting either marks the other; Next takes each 
   for (let i = 0; i < 20; i++) {
     await press("n");
     const at = rail().find((l) => /^\s*▸/.test(l));
-    if (at) seen.push(at.replace(/^\s*▸\s*\S\s*/, "").trim());
+    if (at) {
+      seen.push(at.replace(/^\s*▸\s*\S\s*/, "").trim());
+    }
   }
   const zq = seen.filter((t) => t.startsWith("Zq") || t.includes(" Zq"));
   expect(zq.map((t) => t.replace(/^[★◉ ]+/, ""))).toEqual([

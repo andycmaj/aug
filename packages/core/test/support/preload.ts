@@ -3,4 +3,6 @@
 import { fileURLToPath } from "node:url";
 import { setToolsEntry } from "../../src/self";
 
-setToolsEntry(fileURLToPath(new URL("../../../cli/src/riker-tools.ts", import.meta.url)));
+setToolsEntry(
+  fileURLToPath(new URL("../../../cli/src/riker-tools.ts", import.meta.url)),
+);

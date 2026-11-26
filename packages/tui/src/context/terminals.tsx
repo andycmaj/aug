@@ -116,10 +116,14 @@ export function TerminalsProvider(props: ParentProps) {
 
   function fit(term: Term) {
     const host = term.host;
-    if (!host || host.width <= 0 || host.height <= 0) return;
+    if (!host || host.width <= 0 || host.height <= 0) {
+      return;
+    }
     const cols = Math.max(10, host.width);
     const rows = Math.max(3, host.height);
-    if (cols === term.size.cols && rows === term.size.rows) return;
+    if (cols === term.size.cols && rows === term.size.rows) {
+      return;
+    }
     term.size = { cols, rows };
     term.view.resizeTerminal(cols, rows);
     term.session.resize(cols, rows);
@@ -127,8 +131,12 @@ export function TerminalsProvider(props: ParentProps) {
 
   function open(request: TermRequest) {
     const existing = terms.get(request.id);
-    if (existing?.session.running) return;
-    if (existing) close(request.id);
+    if (existing?.session.running) {
+      return;
+    }
+    if (existing) {
+      close(request.id);
+    }
     // Start near the size it will be shown at so the program does not draw
     // for 80x24 and then reflow; the host refits on adopt.
     const cols = Math.max(40, dims().width - 50);
@@ -160,7 +168,9 @@ export function TerminalsProvider(props: ParentProps) {
       cwd: request.cwd,
       env: request.env,
       onData: (data) => {
-        if (term.link.link.phase !== "connected") term.link.connected();
+        if (term.link.link.phase !== "connected") {
+          term.link.connected();
+        }
         view.feed(data);
         const text = decoder.decode(data, { stream: true });
         modes.feed(text);
@@ -170,11 +180,14 @@ export function TerminalsProvider(props: ParentProps) {
           background: isHex(theme.background) ? theme.background : "#000000",
           clipboard: readClipboard,
         });
-        if (replies) term.session.write(replies);
+        if (replies) {
+          term.session.write(replies);
+        }
       },
       onExit: (code) => {
-        if (term.link.link.phase !== "connected")
+        if (term.link.link.phase !== "connected") {
           term.link.failed(`exited ${code ?? "?"} before any output`);
+        }
         term.link.dispose();
         publish();
         request.onExit?.(code);
@@ -184,13 +197,17 @@ export function TerminalsProvider(props: ParentProps) {
     // keeps its transcript off our scrollback); otherwise scroll ours.
     view.onMouseScroll = (event) => {
       const direction = event.scroll?.direction;
-      if (direction !== "up" && direction !== "down") return;
+      if (direction !== "up" && direction !== "down") {
+        return;
+      }
       event.stopPropagation();
       const bytes = modes.wheel(direction, event.x - view.x, event.y - view.y);
       if (bytes) {
         view.followBottom();
         term.session.write(bytes);
-      } else view.scrollLines(direction === "up" ? -3 : 3);
+      } else {
+        view.scrollLines(direction === "up" ? -3 : 3);
+      }
     };
     terms.set(request.id, term);
     publish();
@@ -198,10 +215,14 @@ export function TerminalsProvider(props: ParentProps) {
 
   function close(id: string) {
     const term = terms.get(id);
-    if (!term) return;
+    if (!term) {
+      return;
+    }
     term.session.kill();
     term.link.dispose();
-    if (term.host) term.host.remove(term.view);
+    if (term.host) {
+      term.host.remove(term.view);
+    }
     term.view.destroyTerminal();
     terms.delete(id);
     publish();
@@ -209,15 +230,21 @@ export function TerminalsProvider(props: ParentProps) {
 
   function adopt(id: string, host: BoxRenderable): () => void {
     const term = terms.get(id);
-    if (!term) return () => {};
-    if (term.host && term.host !== host) term.host.remove(term.view);
+    if (!term) {
+      return () => {};
+    }
+    if (term.host && term.host !== host) {
+      term.host.remove(term.view);
+    }
     term.host = host;
     host.add(term.view);
     term.size = { cols: 0, rows: 0 };
     const refit = () => fit(term);
     // Layout is not computed until the first frame.
     const start = () => {
-      if (host.isDestroyed) return;
+      if (host.isDestroyed) {
+        return;
+      }
       if (host.width <= 0 || host.height <= 0) {
         setTimeout(start, 16);
         return;
@@ -228,14 +255,18 @@ export function TerminalsProvider(props: ParentProps) {
     host.onSizeChange = refit;
     return () => {
       if (term.host === host) {
-        if (!host.isDestroyed) host.remove(term.view);
+        if (!host.isDestroyed) {
+          host.remove(term.view);
+        }
         term.host = null;
       }
     };
   }
 
   onCleanup(() => {
-    for (const id of [...terms.keys()]) close(id);
+    for (const id of [...terms.keys()]) {
+      close(id);
+    }
   });
 
   return (
@@ -248,14 +279,18 @@ export function TerminalsProvider(props: ParentProps) {
         open,
         write: (id, data) => {
           const term = terms.get(id);
-          if (!term) return;
+          if (!term) {
+            return;
+          }
           // Typing returns to the live screen, as in any terminal.
           term.view.followBottom();
           term.session.write(data);
         },
         paste: (id, text) => {
           const term = terms.get(id);
-          if (!term || !text) return;
+          if (!term || !text) {
+            return;
+          }
           term.view.followBottom();
           term.session.write(term.modes.paste(text));
         },
@@ -268,7 +303,9 @@ export function TerminalsProvider(props: ParentProps) {
         },
         veil: (id, on) => {
           const term = terms.get(id);
-          if (!term) return;
+          if (!term) {
+            return;
+          }
           const bg = isHex(theme.background) ? theme.background : "#000000";
           const color = RGBA.fromHex(bg);
           color.a = VEIL_ALPHA;

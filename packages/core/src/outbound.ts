@@ -44,7 +44,9 @@ export class Drafts {
 
   constructor(kinds: readonly DraftKind[] = []) {
     for (const kind of kinds) {
-      if (this.kinds.has(kind.type)) throw new Error(`two plugins draft ${kind.type}`);
+      if (this.kinds.has(kind.type)) {
+        throw new Error(`two plugins draft ${kind.type}`);
+      }
       this.kinds.set(kind.type, kind);
     }
   }
@@ -53,18 +55,26 @@ export class Drafts {
   // never from the model: the first kind that can answer its last message.
   for(task: TaskRow, answer: TurnAnswer["action"]): DraftAction | null {
     const text = answer?.text.trim();
-    if (!answer || !text) return null;
+    if (!answer || !text) {
+      return null;
+    }
     const message = lastIncoming(task.id);
-    if (!message) return null;
+    if (!message) {
+      return null;
+    }
     for (const kind of this.kinds.values()) {
       const draft = kind.build(message, { ...answer, text });
-      if (draft) return draft;
+      if (draft) {
+        return draft;
+      }
     }
     return null;
   }
 
   describe(action: DraftAction): string {
-    return this.kinds.get(action.type)?.describe(action) ?? `${action.type} draft`;
+    return (
+      this.kinds.get(action.type)?.describe(action) ?? `${action.type} draft`
+    );
   }
 
   text(action: DraftAction): string {
@@ -80,9 +90,17 @@ export class Drafts {
   }
 
   send(action: DraftAction, config: RikerConfig): Promise<string> {
-    if (override) return override(action, config);
+    if (override) {
+      return override(action, config);
+    }
     const kind = this.kinds.get(action.type);
-    if (!kind) return Promise.reject(new SendError(`nothing is connected to send a ${this.describe(action)}`));
+    if (!kind) {
+      return Promise.reject(
+        new SendError(
+          `nothing is connected to send a ${this.describe(action)}`,
+        ),
+      );
+    }
     return kind.send(action, config);
   }
 }
@@ -96,7 +114,9 @@ export async function sendPending(
   drafts: Drafts,
 ): Promise<string> {
   const pending = store.pendingAction(taskId);
-  if (!pending) throw new SendError("nothing waits to be sent");
+  if (!pending) {
+    throw new SendError("nothing waits to be sent");
+  }
   try {
     const receipt = await drafts.send(pending.action, config);
     log.info("sent", {
@@ -133,11 +153,19 @@ export async function sendPending(
 
 // The owner rewrote the draft before sending. Returns the words it replaced
 // (the caller keeps them as a correction: editing a draft teaches voice).
-export function editPending(taskId: number, text: string, drafts: Drafts): string | null {
+export function editPending(
+  taskId: number,
+  text: string,
+  drafts: Drafts,
+): string | null {
   const pending = store.pendingAction(taskId);
-  if (!pending) return null;
+  if (!pending) {
+    return null;
+  }
   const before = drafts.text(pending.action);
-  if (before.trim() === text.trim()) return null;
+  if (before.trim() === text.trim()) {
+    return null;
+  }
   store.updateTurn(pending.turn.id, {
     action: JSON.stringify(drafts.withText(pending.action, text)),
   });

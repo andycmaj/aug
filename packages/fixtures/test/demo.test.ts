@@ -10,7 +10,11 @@ describe("demo home", () => {
   test("never Riker's own home: not the real one, not from an agent's window", () => {
     expect(demoHome({})).toContain("riker-demo-");
     expect(demoHome({ RIKER_HOME: defaultHome() })).toContain("riker-demo-");
-    expect(demoHome({ RIKER_HOME: `${defaultHome()}/` })).toContain("riker-demo-");
-    expect(demoHome({ RIKER_HOME: "/tmp/scratch-riker", RIKER: "1" })).toContain("riker-demo-");
+    expect(demoHome({ RIKER_HOME: `${defaultHome()}/` })).toContain(
+      "riker-demo-",
+    );
+    expect(
+      demoHome({ RIKER_HOME: "/tmp/scratch-riker", RIKER: "1" }),
+    ).toContain("riker-demo-");
   });
 });

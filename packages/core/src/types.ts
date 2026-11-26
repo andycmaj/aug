@@ -514,14 +514,16 @@ export const ProposalSource = {
   // The onboarding interview's drafts.
   onboard: "onboard",
 } as const;
-export type ProposalSource = (typeof ProposalSource)[keyof typeof ProposalSource];
+export type ProposalSource =
+  (typeof ProposalSource)[keyof typeof ProposalSource];
 
 export const ProposalStatus = {
   open: "open",
   accepted: "accepted",
   rejected: "rejected",
 } as const;
-export type ProposalStatus = (typeof ProposalStatus)[keyof typeof ProposalStatus];
+export type ProposalStatus =
+  (typeof ProposalStatus)[keyof typeof ProposalStatus];
 
 // A whole new text for one brain doc, waiting on the owner in a SYSTEM task.
 export interface DocProposalRow {
@@ -552,7 +554,14 @@ export type StepDecision = (typeof StepDecision)[keyof typeof StepDecision];
 // escalation rule named it); the Inbox reads it back.
 export const HELD = "held: ";
 
-export type TriageVerdict = Verdict | "attached" | "own" | "opener" | "failed" | "held" | "timer";
+export type TriageVerdict =
+  | Verdict
+  | "attached"
+  | "own"
+  | "opener"
+  | "failed"
+  | "held"
+  | "timer";
 
 export interface TriageRunRow {
   id: number;
@@ -665,7 +674,6 @@ export interface TaskEventRow {
   detail: string | null;
   at: string;
 }
-
 
 // A finished session written up once (docs/session-digests-design.md): the
 // project journal and the task's story both read it.

@@ -54,9 +54,9 @@ describe("a coding task's driver", () => {
 
   test("scratch skips every question; resuming never asks again", async () => {
     const task = engine.desk.newTask("Try a thing", Kind.coding);
-    expect((await engine.desk.startAgent(task.id, { noWorktree: true })).type).toBe(
-      "started",
-    );
+    expect(
+      (await engine.desk.startAgent(task.id, { noWorktree: true })).type,
+    ).toBe("started");
     await engine.desk.stopAgent(task.id);
     expect(store.getTask(task.id)!.agent_state).toBe(AgentState.stopped);
     expect(fake.windows).toHaveLength(0);
@@ -173,7 +173,9 @@ describe("Agents at once (maxActiveAgents)", () => {
     ]);
     expect(fake.windows).toHaveLength(2);
     expect(store.getTask(tasks[2].id)!.agent_state).toBe(AgentState.queued);
-    expect(store.getTask(tasks[2].id)!.queue_reason).toContain("waiting its turn");
+    expect(store.getTask(tasks[2].id)!.queue_reason).toContain(
+      "waiting its turn",
+    );
   });
 
   test("a queued Start runs, with its branch and note, once a working agent stops working", async () => {

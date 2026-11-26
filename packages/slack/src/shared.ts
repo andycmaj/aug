@@ -56,7 +56,9 @@ export function threadKeyFor(
   msg: { ts: string; thread_ts?: string },
   dm: boolean,
 ): string {
-  if (msg.thread_ts) return `slack:${channel}:${msg.thread_ts}`;
+  if (msg.thread_ts) {
+    return `slack:${channel}:${msg.thread_ts}`;
+  }
   return dm ? `slack:${channel}:dm` : `slack:${channel}:${msg.ts}`;
 }
 

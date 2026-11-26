@@ -3,12 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { paths } from "../src/paths";
 import { DEFAULT_CONFIG, mergeConfig } from "../src/config";
-import {
-  fillTemplate,
-  parseWorktree,
-  setMux,
-  windowCommand,
-} from "../src/mux";
+import { fillTemplate, parseWorktree, setMux, windowCommand } from "../src/mux";
 import { shellQuote } from "../src/self";
 import {
   adoptSession,
@@ -43,8 +38,16 @@ beforeEach(() => {
   setMux(fake);
 });
 
-function codingTask(repo: string | null = "acme/api", title = "Fix login redirect") {
-  return store.createTask({ title, kind: Kind.coding, channel: "github", repo });
+function codingTask(
+  repo: string | null = "acme/api",
+  title = "Fix login redirect",
+) {
+  return store.createTask({
+    title,
+    kind: Kind.coding,
+    channel: "github",
+    repo,
+  });
 }
 
 describe("helpers", () => {
@@ -62,18 +65,35 @@ describe("helpers", () => {
         create: "",
         branch: "pr:12",
       }),
-    ).toEqual(["wt", "-C", "/src/api", "switch", "pr:12", "--no-cd", "--format", "json", "-y"]);
+    ).toEqual([
+      "wt",
+      "-C",
+      "/src/api",
+      "switch",
+      "pr:12",
+      "--no-cd",
+      "--format",
+      "json",
+      "-y",
+    ]);
     expect(
-      parseWorktree('{"action":"created","branch":"feat-x","path":"/src/api.x","created_branch":true}'),
+      parseWorktree(
+        '{"action":"created","branch":"feat-x","path":"/src/api.x","created_branch":true}',
+      ),
     ).toEqual({ path: "/src/api.x", branch: "feat-x" });
-    expect(parseWorktree("making it\n/src/api.y\n")).toEqual({ path: "/src/api.y", branch: null });
+    expect(parseWorktree("making it\n/src/api.y\n")).toEqual({
+      path: "/src/api.y",
+      branch: null,
+    });
     expect(parseWorktree("nothing here")).toBeNull();
   });
 
   test("window command quotes every argument and keeps a shell", () => {
     expect(shellQuote("it's")).toBe(`'it'\\''s'`);
     // What a hook command and a tmux window both pass bare.
-    expect(shellQuote("RIKER-12@host%x+y=z:a,b./c-d_e")).toBe("RIKER-12@host%x+y=z:a,b./c-d_e");
+    expect(shellQuote("RIKER-12@host%x+y=z:a,b./c-d_e")).toBe(
+      "RIKER-12@host%x+y=z:a,b./c-d_e",
+    );
     expect(shellQuote("a b")).toBe("'a b'");
     expect(windowCommand(["claude", "--append-system-prompt", "a b"])).toBe(
       `claude --append-system-prompt 'a b'; exec "\${SHELL:-/bin/sh}" -l`,
@@ -96,7 +116,11 @@ describe("repo choices", () => {
     const p = await createProject(config(), { name: "Web", repo: "acme/web" });
     store.addProjectRepo(p.id, "acme/infra");
     store.updateTask(t.id, { project_id: p.id });
-    expect(repoChoices(config(), store.getTask(t.id)!)).toEqual(["acme/web", "acme/infra", "acme/api"]);
+    expect(repoChoices(config(), store.getTask(t.id)!)).toEqual([
+      "acme/web",
+      "acme/infra",
+      "acme/api",
+    ]);
   });
 
   test("setting the repo lets start make a worktree", async () => {
@@ -111,17 +135,34 @@ describe("repo choices", () => {
 
 describe("projects", () => {
   test("a new project is a tagged session with a free name", async () => {
-    fake.sessions.push({ id: "$9", name: "billing", projectId: null, viewer: false });
-    const p = await createProject(config(), { name: "Billing", repo: "acme/api" });
+    fake.sessions.push({
+      id: "$9",
+      name: "billing",
+      projectId: null,
+      viewer: false,
+    });
+    const p = await createProject(config(), {
+      name: "Billing",
+      repo: "acme/api",
+    });
     expect(p.tmux_session).toBe("billing-2");
-    expect(fake.sessions.find((s) => s.name === "billing-2")?.projectId).toBe(p.id);
+    expect(fake.sessions.find((s) => s.name === "billing-2")?.projectId).toBe(
+      p.id,
+    );
     expect(store.projectRepos(p)).toEqual(["acme/api"]);
   });
 
   test("a project whose session cannot be tagged is not kept", async () => {
-    fake.sessions.push({ id: "$1", name: "home", projectId: null, viewer: false });
+    fake.sessions.push({
+      id: "$1",
+      name: "home",
+      projectId: null,
+      viewer: false,
+    });
     fake.tagFails = "tmux went away";
-    await expect(createProject(config(), { name: "Auth" })).rejects.toThrow("tmux went away");
+    await expect(createProject(config(), { name: "Auth" })).rejects.toThrow(
+      "tmux went away",
+    );
     await expect(adoptSession("$1")).rejects.toThrow("tmux went away");
     expect(store.listProjects()).toHaveLength(0);
     expect(fake.sessions.map((s) => s.name)).toEqual(["home"]);
@@ -153,7 +194,9 @@ describe("viewer", () => {
     await startTask(config(), t.id);
     fake.host = fake.windows[0].id;
     const viewer = await viewerArgv(t.id);
-    expect(viewer && "refused" in viewer && viewer.refused).toContain("own tmux window");
+    expect(viewer && "refused" in viewer && viewer.refused).toContain(
+      "own tmux window",
+    );
   });
 
   test("on a tmux server that can hang under a viewer, the viewer says so", async () => {
@@ -162,7 +205,9 @@ describe("viewer", () => {
     expect(await viewerArgv(t.id)).not.toHaveProperty("warning");
     fake.tmuxVersion = "3.7c";
     const viewer = await viewerArgv(t.id);
-    expect(viewer && "argv" in viewer && viewer.warning).toContain("tmux 3.7c can hang");
+    expect(viewer && "argv" in viewer && viewer.warning).toContain(
+      "tmux 3.7c can hang",
+    );
   });
 });
 
@@ -173,7 +218,9 @@ describe("starting a task", () => {
     store.updateTask(t.id, { project_id: p.id });
     const r = await startTask(config(), t.id);
     expect(r.type).toBe("started");
-    if (r.type !== "started") return;
+    if (r.type !== "started") {
+      return;
+    }
 
     expect(fake.worktrees[0]).toMatchObject({
       repoPath: "/src/api",
@@ -242,7 +289,10 @@ describe("starting a task", () => {
     const t = codingTask("acme/api");
     expect(await startTask(config(), t.id)).toMatchObject({
       type: "needs-path",
-      need: { repo: "acme/api", problem: { kind: "missing", path: "/src/api" } },
+      need: {
+        repo: "acme/api",
+        problem: { kind: "missing", path: "/src/api" },
+      },
     });
     expect(fake.worktrees).toHaveLength(0);
   });
@@ -259,8 +309,12 @@ describe("starting a task", () => {
   test("resuming after claude exited replaces the leftover window", async () => {
     const t = codingTask();
     const first = await startTask(config(), t.id);
-    if (first.type !== "started") throw new Error("not started");
-    store.updateSession(first.session.id, { ended_at: new Date().toISOString() });
+    if (first.type !== "started") {
+      throw new Error("not started");
+    }
+    store.updateSession(first.session.id, {
+      ended_at: new Date().toISOString(),
+    });
     const again = await startTask(config(), t.id, { resume: first.session.id });
     expect(fake.windows).toHaveLength(1);
     expect(again.type === "started" && again.windowId).not.toBe(first.windowId);
@@ -271,11 +325,17 @@ describe("starting a task", () => {
   test("a claude killed for its own resume ends nothing; one that exits in place does", async () => {
     const t = codingTask();
     const first = await startTask(config(), t.id);
-    if (first.type !== "started") throw new Error("not started");
+    if (first.type !== "started") {
+      throw new Error("not started");
+    }
     // Marked ended while its claude still ran (a stray reconcile).
-    store.updateSession(first.session.id, { ended_at: new Date().toISOString() });
+    store.updateSession(first.session.id, {
+      ended_at: new Date().toISOString(),
+    });
     const again = await startTask(config(), t.id, { resume: first.session.id });
-    if (again.type !== "started") throw new Error("not resumed");
+    if (again.type !== "started") {
+      throw new Error("not resumed");
+    }
     // In the fake a window's pane has the window's id.
     expect(await endedElsewhere(first.session.id, first.windowId)).toBe(true);
     expect(await endedElsewhere(first.session.id, again.windowId)).toBe(false);
@@ -295,7 +355,9 @@ describe("closing, moving, reconciling", () => {
     expect(r).toEqual({ warnings: [], archived: true });
     expect(fake.windows).toHaveLength(0);
     expect(fake.sessions).toHaveLength(0);
-    expect(fake.removed).toEqual([{ repoPath: "/src/api", branch: "fix-login-redirect" }]);
+    expect(fake.removed).toEqual([
+      { repoPath: "/src/api", branch: "fix-login-redirect" },
+    ]);
     expect(store.getProject(projectId)!.status).toBe("archived");
     expect(store.latestSession(t.id)!.ended_at).not.toBeNull();
     // The brief the start wrote for claude goes with its window.
@@ -379,7 +441,10 @@ describe("closing, moving, reconciling", () => {
     const t = codingTask();
     store.updateTask(t.id, { project_id: p.id });
     await startTask(config(), t.id);
-    expect(fake.sessions[0]).toMatchObject({ name: "auth-renamed", projectId: p.id });
+    expect(fake.sessions[0]).toMatchObject({
+      name: "auth-renamed",
+      projectId: p.id,
+    });
   });
 
   test("archiving kills the project's windows (viewers too) and stops its tasks", async () => {
@@ -388,7 +453,12 @@ describe("closing, moving, reconciling", () => {
     store.updateTask(t.id, { project_id: p.id });
     await startTask(config(), t.id);
     const session = fake.sessions.find((s) => s.projectId === p.id)!;
-    fake.sessions.push({ id: "$v", name: "riker-view-1-1", projectId: null, viewer: true });
+    fake.sessions.push({
+      id: "$v",
+      name: "riker-view-1-1",
+      projectId: null,
+      viewer: true,
+    });
     await archiveProject(p.id);
     expect(fake.windows).toHaveLength(0);
     expect(fake.sessions.some((s) => s.id === session.id)).toBe(false);
@@ -402,7 +472,11 @@ describe("closing, moving, reconciling", () => {
     let calls = 0;
     const done = watchTmux(() => calls++, abort.signal, 10);
     await Bun.sleep(0);
-    for (const fire of fake.watchers) { fire(); fire(); fire(); }
+    for (const fire of fake.watchers) {
+      fire();
+      fire();
+      fire();
+    }
     await Bun.sleep(30);
     expect(calls).toBe(1);
     abort.abort();
@@ -415,7 +489,9 @@ describe("closing, moving, reconciling", () => {
     expect(await nudge(t.id, "hi")).toBe(false);
     await startTask(config(), t.id);
     expect(await nudge(t.id, "New review on #12")).toBe(true);
-    expect(fake.sent).toEqual([{ windowId: fake.windows[0].id, text: "New review on #12" }]);
+    expect(fake.sent).toEqual([
+      { windowId: fake.windows[0].id, text: "New review on #12" },
+    ]);
   });
 
   // shift+t, and ctrl+t while attached (AUG-0148).
@@ -428,10 +504,22 @@ describe("closing, moving, reconciling", () => {
     const attach = `tmux attach -t ${w.sessionId}:${w.id}`;
     expect(await jump(t.id)).toEqual({ attach, why: "outside" });
     fake.elsewhere = { at: "other", socket: "/tmp/tmux-501/mine", lost: false };
-    expect(await jump(t.id)).toEqual({ attach, why: "elsewhere", socket: "/tmp/tmux-501/mine" });
+    expect(await jump(t.id)).toEqual({
+      attach,
+      why: "elsewhere",
+      socket: "/tmp/tmux-501/mine",
+    });
     // Riker's server lost its socket file to a newer server at that path.
-    fake.elsewhere = { at: "other", socket: "/tmp/tmux-501/default", lost: true };
-    expect(await jump(t.id)).toEqual({ attach, why: "lost", socket: "/tmp/tmux-501/default" });
+    fake.elsewhere = {
+      at: "other",
+      socket: "/tmp/tmux-501/default",
+      lost: true,
+    };
+    expect(await jump(t.id)).toEqual({
+      attach,
+      why: "lost",
+      socket: "/tmp/tmux-501/default",
+    });
     expect(fake.switched).toEqual([]);
     fake.host = "@riker";
     expect(await jump(t.id)).toBe("jumped");

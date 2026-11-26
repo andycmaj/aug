@@ -13,7 +13,8 @@ export const POINTER = join(tmpdir(), "riker-sim.home");
 // The owner's PR, once opened, is the work task's: as `riker-tools pr` would.
 export function linkOpened(s: SimState, done: Applied): void {
   const p = done.opened;
-  if (!p || p.author !== s.me || !s.work?.taskId || p.head !== s.work.branch)
+  if (!p || p.author !== s.me || !s.work?.taskId || p.head !== s.work.branch) {
     return;
+  }
   linkPr(s.work.taskId, pullWeb(s, p.number));
 }

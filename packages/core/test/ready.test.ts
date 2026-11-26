@@ -30,7 +30,11 @@ import { freshHome } from "./support/helpers";
 let n = 0;
 
 function coding() {
-  return store.createTask({ title: `c${++n}`, kind: Kind.coding, channel: "github" });
+  return store.createTask({
+    title: `c${++n}`,
+    kind: Kind.coding,
+    channel: "github",
+  });
 }
 
 function start(taskId: number, startedBy: "riker" | "owner" = "riker") {
@@ -81,7 +85,11 @@ describe("ready for review", () => {
     const t = coding();
     const ref = start(t.id, "owner");
     workFinished(ref, { summary: "done", closes: false });
-    handleHook("stop", { last_assistant_message: "Next steps: yours to close" }, ref);
+    handleHook(
+      "stop",
+      { last_assistant_message: "Next steps: yours to close" },
+      ref,
+    );
     sessionActivity(ref, AgentState.waiting, "asked you something");
     expect(fresh(t.id).agent_state).toBe(AgentState.ready);
     sessionEnded(ref, "its window closed");
@@ -116,8 +124,16 @@ describe("ready for review", () => {
   });
 
   test("a chat turn that answers is ready; one that asks is waiting", () => {
-    const a = store.createTask({ title: "a", kind: Kind.general, channel: "owner" });
-    const b = store.createTask({ title: "b", kind: Kind.general, channel: "owner" });
+    const a = store.createTask({
+      title: "a",
+      kind: Kind.general,
+      channel: "owner",
+    });
+    const b = store.createTask({
+      title: "b",
+      kind: Kind.general,
+      channel: "owner",
+    });
     turnFinished(start(a.id), { asking: null });
     turnFinished(start(b.id), { asking: "which one?" });
     expect(lane(a.id)).toBe(Lane.ready);
@@ -151,11 +167,17 @@ describe("ready for review", () => {
 
 test("an old database's agentdone reads as ready", () => {
   const db = new Database(":memory:");
-  db.exec("CREATE TABLE tasks (id INTEGER PRIMARY KEY, repo TEXT, agent_state TEXT)");
+  db.exec(
+    "CREATE TABLE tasks (id INTEGER PRIMARY KEY, repo TEXT, agent_state TEXT)",
+  );
   db.exec("CREATE TABLE sessions (id TEXT PRIMARY KEY, state TEXT)");
   db.exec("INSERT INTO tasks (agent_state) VALUES ('agentdone')");
   db.exec("INSERT INTO sessions (id, state) VALUES ('s', 'agentdone')");
   migrate(db);
-  expect(db.query("SELECT agent_state FROM tasks").get()).toEqual({ agent_state: "ready" });
-  expect(db.query("SELECT state FROM sessions").get()).toEqual({ state: "ready" });
+  expect(db.query("SELECT agent_state FROM tasks").get()).toEqual({
+    agent_state: "ready",
+  });
+  expect(db.query("SELECT state FROM sessions").get()).toEqual({
+    state: "ready",
+  });
 });

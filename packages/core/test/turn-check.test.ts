@@ -10,8 +10,18 @@ describe("stale working", () => {
   beforeEach(() => freshHome());
 
   function working(id: string) {
-    const t = store.createTask({ title: id, kind: Kind.coding, channel: "owner" });
-    store.createSession({ id, taskId: t.id, kind: SessionKind.tmux, cwd: "/tmp", startedBy: "riker" });
+    const t = store.createTask({
+      title: id,
+      kind: Kind.coding,
+      channel: "owner",
+    });
+    store.createSession({
+      id,
+      taskId: t.id,
+      kind: SessionKind.tmux,
+      cwd: "/tmp",
+      startedBy: "riker",
+    });
     store.updateTask(t.id, { agent_state: AgentState.working });
     return t.id;
   }
@@ -37,7 +47,10 @@ describe("stale working", () => {
   test("claude's session files are read by session id", () => {
     const dir = join(process.env.RIKER_HOME!, "sessions");
     mkdirSync(dir);
-    writeFileSync(join(dir, "1.json"), JSON.stringify({ pid: 1, sessionId: "a", status: "idle" }));
+    writeFileSync(
+      join(dir, "1.json"),
+      JSON.stringify({ pid: 1, sessionId: "a", status: "idle" }),
+    );
     writeFileSync(join(dir, "2.json"), "{half");
     expect([...claudeStatuses(dir)]).toEqual([["a", "idle"]]);
   });

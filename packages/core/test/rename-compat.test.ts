@@ -3,12 +3,24 @@
 // per legacy fallback (docs/rename-riker.md).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { envVar, inAgentEnv, optionFormat, refNumber } from "../src/brand";
 import { guardScript, hooksHere, installHooks } from "../src/adopt";
-import { INSTALLS, InstallState, installState, refreshInstalls, revdiffTargets } from "../src/install";
+import {
+  INSTALLS,
+  InstallState,
+  installState,
+  refreshInstalls,
+  revdiffTargets,
+} from "../src/install";
 import { resolveLogSettings } from "../src/log";
 import { mentionedTasks } from "../src/mentions";
 import { homeAliases, paths } from "../src/paths";
@@ -22,7 +34,9 @@ import { config, freshHome } from "./support/helpers";
 describe("env", () => {
   test("RIKER_* first, then the AUG_* an agent from before the rename has", () => {
     expect(envVar("TASK_ID", { AUG_TASK_ID: "7" })).toBe("7");
-    expect(envVar("TASK_ID", { RIKER_TASK_ID: "8", AUG_TASK_ID: "7" })).toBe("8");
+    expect(envVar("TASK_ID", { RIKER_TASK_ID: "8", AUG_TASK_ID: "7" })).toBe(
+      "8",
+    );
     expect(envVar("TASK_ID", {})).toBeUndefined();
     expect(inAgentEnv({ AUG: "1" })).toBe(true);
     expect(inAgentEnv({ RIKER: "1" })).toBe(true);
@@ -41,45 +55,77 @@ describe("refs", () => {
 
   test("RIKER- is printed; AUG-, riker- and bare numbers still parse", () => {
     expect(store.taskRef(12)).toBe("RIKER-0012");
-    for (const ref of ["RIKER-0012", "AUG-0012", "@AUG-0012", "aug12", "riker-12", "12"])
+    for (const ref of [
+      "RIKER-0012",
+      "AUG-0012",
+      "@AUG-0012",
+      "aug12",
+      "riker-12",
+      "12",
+    ]) {
       expect(refNumber(ref)).toBe(12);
+    }
     expect(store.parseTaskRef("AUG-0076")).toBe(76);
     expect(refNumber("ledger-12")).toBeNull();
   });
 
   test("text from before the rename names its tasks", () => {
-    const a = store.createTask({ title: "one", kind: Kind.general, channel: "owner" });
-    const b = store.createTask({ title: "two", kind: Kind.general, channel: "owner" });
+    const a = store.createTask({
+      title: "one",
+      kind: Kind.general,
+      channel: "owner",
+    });
+    const b = store.createTask({
+      title: "two",
+      kind: Kind.general,
+      channel: "owner",
+    });
     const aug = `AUG-${String(a.id).padStart(4, "0")}`;
-    expect(mentionedTasks(`about @${aug} and ${store.taskRef(b.id)}`).map((t) => t.id)).toEqual([
-      a.id,
-      b.id,
-    ]);
+    expect(
+      mentionedTasks(`about @${aug} and ${store.taskRef(b.id)}`).map(
+        (t) => t.id,
+      ),
+    ).toEqual([a.id, b.id]);
   });
 });
 
 test("a tmux read falls back to aug's tag", () => {
-  expect(optionFormat("task")).toBe("#{?@riker_task,#{@riker_task},#{@aug_task}}");
+  expect(optionFormat("task")).toBe(
+    "#{?@riker_task,#{@riker_task},#{@aug_task}}",
+  );
 });
 
 test("claudes aug or Riker runs itself are never strays", () => {
   const base = { pid: 1, sessionId: "s", cwd: "/w", kind: "interactive" };
-  for (const entrypoint of ["aug", "riker"])
-    expect(parseClaudeProcess(JSON.stringify({ ...base, entrypoint }))).toBeNull();
-  expect(parseClaudeProcess(JSON.stringify({ ...base, entrypoint: "cli" }))).not.toBeNull();
+  for (const entrypoint of ["aug", "riker"]) {
+    expect(
+      parseClaudeProcess(JSON.stringify({ ...base, entrypoint })),
+    ).toBeNull();
+  }
+  expect(
+    parseClaudeProcess(JSON.stringify({ ...base, entrypoint: "cli" })),
+  ).not.toBeNull();
 });
 
 test("an action in config that names aug's plugin runs Riker's", () => {
-  freshHome({ actions: { recap: { skill: "aug:summarize", via: "headless", title: "Recap" } } });
+  freshHome({
+    actions: {
+      recap: { skill: "aug:summarize", via: "headless", title: "Recap" },
+    },
+  });
   expect(currentSkill("aug:guide")).toBe("riker:guide");
   expect(currentSkill("mine:guide")).toBe("mine:guide");
-  expect(registeredActions(config()).find((a) => a.name === "recap")?.skill).toBe("riker:summarize");
+  expect(
+    registeredActions(config()).find((a) => a.name === "recap")?.skill,
+  ).toBe("riker:summarize");
 });
 
 test("aug-tools is on an agent's PATH beside riker-tools", () => {
   freshHome();
   const dir = toolsBin();
-  expect(readFileSync(join(dir, "aug-tools"), "utf8")).toBe(readFileSync(join(dir, "riker-tools"), "utf8"));
+  expect(readFileSync(join(dir, "aug-tools"), "utf8")).toBe(
+    readFileSync(join(dir, "riker-tools"), "utf8"),
+  );
 });
 
 test("the hook guard lets aug's agents and aug-tagged sessions through", () => {
@@ -118,8 +164,11 @@ describe("aug's installs are ours but out of date", () => {
       ["STARSHIP_CONFIG", saved.starship],
       ["PATH", saved.path],
     ] as const) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
     }
   });
 
@@ -134,7 +183,15 @@ describe("aug's installs are ours but out of date", () => {
     writeFileSync(
       file,
       JSON.stringify({
-        hooks: { Stop: [{ hooks: [{ type: "command", command: `sh ${legacy}/adopt-hook.sh stop` }] }] },
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                { type: "command", command: `sh ${legacy}/adopt-hook.sh stop` },
+              ],
+            },
+          ],
+        },
         theme: "dark",
       }),
     );
@@ -178,10 +235,14 @@ describe("aug's installs are ours but out of date", () => {
     expect(refreshInstalls()).toContain("statusline");
     const after = readFileSync(process.env.STARSHIP_CONFIG!, "utf8");
     expect(after).not.toContain("aug");
-    expect(after).toContain('claude-code = "${custom.riker_task}$claude_model"');
+    expect(after).toContain(
+      'claude-code = "${custom.riker_task}$claude_model"',
+    );
     expect(installState("statusline")).toBe(InstallState.installed);
     // The helper was aug's: replaced in place, not kept as someone else's.
-    expect(existsSync(join(paths.home(), "statusline.sh.before-riker"))).toBe(false);
+    expect(existsSync(join(paths.home(), "statusline.sh.before-riker"))).toBe(
+      false,
+    );
     INSTALLS.statusline.uninstall();
     expect(readFileSync(process.env.STARSHIP_CONFIG!, "utf8")).toBe(
       '[profiles]\nclaude-code = "$claude_model"\n',
@@ -190,8 +251,13 @@ describe("aug's installs are ours but out of date", () => {
 
   test("aug's revdiff launcher is replaced, and its backup restored on uninstall", () => {
     const plugins = join(dir, "claude", "plugins");
-    mkdirSync(join(plugins, "data", "revdiff-revdiff", "scripts"), { recursive: true });
-    writeFileSync(join(plugins, "installed_plugins.json"), JSON.stringify({ plugins: { "revdiff@revdiff": [{}] } }));
+    mkdirSync(join(plugins, "data", "revdiff-revdiff", "scripts"), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(plugins, "installed_plugins.json"),
+      JSON.stringify({ plugins: { "revdiff@revdiff": [{}] } }),
+    );
     const [target] = revdiffTargets();
     writeFileSync(
       target,

@@ -398,7 +398,9 @@ CREATE INDEX IF NOT EXISTS stories_task ON stories(task_id);
 let shared: Database | undefined;
 
 export function openDb(file = paths.db()): Database {
-  if (file !== ":memory:") ensureHome();
+  if (file !== ":memory:") {
+    ensureHome();
+  }
   const db = new Database(file, { create: true });
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA busy_timeout = 5000");
@@ -451,13 +453,16 @@ function trackTables(db: Database): void {
   db.exec(
     "CREATE TABLE IF NOT EXISTS table_versions (name TEXT PRIMARY KEY, v INTEGER NOT NULL DEFAULT 0)",
   );
-  const seed = db.query("INSERT OR IGNORE INTO table_versions (name) VALUES (?)");
+  const seed = db.query(
+    "INSERT OR IGNORE INTO table_versions (name) VALUES (?)",
+  );
   for (const table of TABLES) {
     seed.run(table);
-    for (const op of ["INSERT", "UPDATE", "DELETE"])
+    for (const op of ["INSERT", "UPDATE", "DELETE"]) {
       db.exec(
         `CREATE TRIGGER IF NOT EXISTS tv_${table}_${op.toLowerCase()} AFTER ${op} ON ${table} BEGIN UPDATE table_versions SET v = v + 1 WHERE name = '${table}'; END`,
       );
+    }
   }
 }
 
@@ -530,7 +535,10 @@ function recordEvents(db: Database): void {
         INSERT INTO task_events (task_id, kind, detail, at)
         SELECT task_id, 'finished', result, COALESCE(ended_at, last_event_at) FROM sessions
         WHERE result IS NOT NULL`);
-      db.query("INSERT INTO kv (key, value) VALUES (?, ?)").run(EVENTS_BACKFILLED, new Date().toISOString());
+      db.query("INSERT INTO kv (key, value) VALUES (?, ?)").run(
+        EVENTS_BACKFILLED,
+        new Date().toISOString(),
+      );
     }
     db.exec(EVENT_TRIGGERS);
   })();
@@ -542,26 +550,46 @@ export function tableVersions(): Record<Table, number> {
     v: number;
   }[];
   const out = {} as Record<Table, number>;
-  for (const table of TABLES) out[table] = 0;
-  for (const row of rows) out[row.name] = row.v;
+  for (const table of TABLES) {
+    out[table] = 0;
+  }
+  for (const row of rows) {
+    out[row.name] = row.v;
+  }
   return out;
 }
 
 // Columns added after a table first shipped: added in place on an old file.
 const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "turns", column: "files", ddl: "TEXT NOT NULL DEFAULT '[]'" },
-  { table: "tasks", column: "project_id", ddl: "INTEGER REFERENCES projects(id)" },
+  {
+    table: "tasks",
+    column: "project_id",
+    ddl: "INTEGER REFERENCES projects(id)",
+  },
   { table: "tasks", column: "branch", ddl: "TEXT" },
   { table: "tasks", column: "worktree", ddl: "TEXT" },
   { table: "sessions", column: "tmux_window", ddl: "TEXT" },
-  { table: "tasks", column: "from_task_id", ddl: "INTEGER REFERENCES tasks(id)" },
+  {
+    table: "tasks",
+    column: "from_task_id",
+    ddl: "INTEGER REFERENCES tasks(id)",
+  },
   // The task an approved idea became.
-  { table: "ideas", column: "made_task_id", ddl: "INTEGER REFERENCES tasks(id)" },
+  {
+    table: "ideas",
+    column: "made_task_id",
+    ddl: "INTEGER REFERENCES tasks(id)",
+  },
   { table: "turns", column: "pending", ddl: "INTEGER NOT NULL DEFAULT 0" },
   // Where a running action is (the guide's stage), one line.
   { table: "turns", column: "progress", ddl: "TEXT" },
   { table: "projects", column: "brief", ddl: "TEXT NOT NULL DEFAULT ''" },
-  { table: "tasks", column: "goal_id", ddl: "INTEGER REFERENCES project_goals(id)" },
+  {
+    table: "tasks",
+    column: "goal_id",
+    ddl: "INTEGER REFERENCES project_goals(id)",
+  },
   { table: "sessions", column: "end_reason", ddl: "TEXT" },
   { table: "sessions", column: "transcript_path", ddl: "TEXT" },
   { table: "projects", column: "journal", ddl: "INTEGER" },
@@ -608,21 +636,32 @@ export function migrate(db: Database): void {
   const stateAdded = before.length > 0 && !before.includes("state");
   for (const { table, column, ddl } of ADDED_COLUMNS) {
     const cols = columns(db, table);
-    if (cols.length > 0 && !cols.includes(column))
+    if (cols.length > 0 && !cols.includes(column)) {
       db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+    }
   }
   // Indexes on added columns wait until the columns exist.
-  if (columns(db, "tasks").includes("branch"))
+  if (columns(db, "tasks").includes("branch")) {
     db.exec("CREATE INDEX IF NOT EXISTS tasks_branch ON tasks(repo, branch)");
+  }
   if (columns(db, "messages").includes("state")) {
-    if (stateAdded) backfillMessageState(db);
-    db.exec("CREATE INDEX IF NOT EXISTS messages_state ON messages(state, next_at)");
+    if (stateAdded) {
+      backfillMessageState(db);
+    }
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS messages_state ON messages(state, next_at)",
+    );
   }
   for (const [from, to] of RENAMED_STATES) {
-    if (columns(db, "tasks").length > 0)
-      db.query("UPDATE tasks SET agent_state = ? WHERE agent_state = ?").run(to, from);
-    if (columns(db, "sessions").length > 0)
+    if (columns(db, "tasks").length > 0) {
+      db.query("UPDATE tasks SET agent_state = ? WHERE agent_state = ?").run(
+        to,
+        from,
+      );
+    }
+    if (columns(db, "sessions").length > 0) {
       db.query("UPDATE sessions SET state = ? WHERE state = ?").run(to, from);
+    }
   }
   backfillTriage(db);
   remindersToTimers(db);
@@ -631,7 +670,9 @@ export function migrate(db: Database): void {
 // A task put away before reminders were timers keeps its day: one remind
 // timer for each, unless one was ever made for that day.
 function remindersToTimers(db: Database): void {
-  if (columns(db, "timers").length === 0 || columns(db, "tasks").length === 0) return;
+  if (columns(db, "timers").length === 0 || columns(db, "tasks").length === 0) {
+    return;
+  }
   db.exec(`
     INSERT INTO timers (task_id, kind, due_at, note, by, created_at)
     SELECT t.id, 'remind', t.remind_at, '', 'you', t.updated_at FROM tasks t
@@ -667,10 +708,23 @@ function backfillMessageState(db: Database): void {
 const TRIAGE_BACKFILLED = "triage.backfilled";
 
 function backfillTriage(db: Database): void {
-  for (const table of ["kv", "messages", "tasks", "triage_runs", "triage_steps"])
-    if (columns(db, table).length === 0) return;
-  const done = db.query("SELECT 1 FROM kv WHERE key = ?").get(TRIAGE_BACKFILLED);
-  if (done) return;
+  for (const table of [
+    "kv",
+    "messages",
+    "tasks",
+    "triage_runs",
+    "triage_steps",
+  ]) {
+    if (columns(db, table).length === 0) {
+      return;
+    }
+  }
+  const done = db
+    .query("SELECT 1 FROM kv WHERE key = ?")
+    .get(TRIAGE_BACKFILLED);
+  if (done) {
+    return;
+  }
   db.transaction(() => {
     db.exec(`
       INSERT INTO triage_runs (message_id, rule, outcome, task_id, project_id, reason, at)
@@ -694,7 +748,10 @@ function backfillTriage(db: Database): void {
       FROM triage_runs r
       WHERE r.rule = 'legacy'
         AND NOT EXISTS (SELECT 1 FROM triage_steps s WHERE s.run_id = r.id)`);
-    db.query("INSERT INTO kv (key, value) VALUES (?, ?)").run(TRIAGE_BACKFILLED, new Date().toISOString());
+    db.query("INSERT INTO kv (key, value) VALUES (?, ?)").run(
+      TRIAGE_BACKFILLED,
+      new Date().toISOString(),
+    );
   })();
 }
 
@@ -738,7 +795,9 @@ export async function writeWhenFree<T>(
     try {
       return write();
     } catch (err) {
-      if (!isBusy(err) || attempt >= tries) throw err;
+      if (!isBusy(err) || attempt >= tries) {
+        throw err;
+      }
       await Bun.sleep(waitMs);
     }
   }

@@ -19,14 +19,19 @@ let home: string | undefined;
 afterEach(() => {
   setBoardTab(BoardTab.wins);
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 async function boot() {
   home = mkdtempSync(join(tmpdir(), "riker-board-docs-"));
   process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
-  const setup = await testRender(() => <App engine={engine} />, { width: 160, height: 45 });
+  const setup = await testRender(() => <App engine={engine} />, {
+    width: 160,
+    height: 45,
+  });
   destroy = () => setup.renderer.destroy();
   const settle = async (ms = 40) => {
     await Bun.sleep(ms);
@@ -36,27 +41,37 @@ async function boot() {
   // "return" is Enter and "shift+x" is X: pressKey takes a key, not a name.
   const press = async (...keys: string[]) => {
     for (const k of keys) {
-      if (k === "return") setup.mockInput.pressEnter();
-      else if (k.startsWith("shift+")) setup.mockInput.pressKey(k.slice(6).toUpperCase(), { shift: true });
-      else setup.mockInput.pressKey(k);
+      if (k === "return") {
+        setup.mockInput.pressEnter();
+      } else if (k.startsWith("shift+")) {
+        setup.mockInput.pressKey(k.slice(6).toUpperCase(), { shift: true });
+      } else {
+        setup.mockInput.pressKey(k);
+      }
       await settle();
     }
   };
   const type = async (text: string) => {
-    for (const c of text) setup.mockInput.pressKey(c);
+    for (const c of text) {
+      setup.mockInput.pressKey(c);
+    }
     setup.mockInput.pressEnter();
     await settle();
   };
   // The tab keeps its search across tab switches (and so across tests).
   const find = async (words: string) => {
-    if (setup.captureCharFrame().includes('/ "')) await press("/");
+    if (setup.captureCharFrame().includes('/ "')) {
+      await press("/");
+    }
     await press("/");
     await type(words);
   };
   const frame = () => setup.captureCharFrame();
   // The view is kept across tests: v only when on Chat.
   const board = async (tab: string) => {
-    if (!frame().includes("Agent board")) await press("v");
+    if (!frame().includes("Agent board")) {
+      await press("v");
+    }
     await press(tab);
   };
   return { press, type, find, frame, settle, board };
@@ -88,15 +103,30 @@ test("Docs lists the demo's PRs, issues and project doc, one row per address", a
 
 test("Enter shows the address and owners; L attaches it elsewhere; x takes it off", async () => {
   const { press, type, find, frame, board } = await boot();
-  const task = store.createTask({ title: "Read the spec", kind: "general", channel: "owner" });
-  const other = store.createTask({ title: "Also needs it", kind: "general", channel: "owner" });
-  store.addTaskLink(task.id, "https://docs.example.test/zebra-spec", "zebra spec", "you");
+  const task = store.createTask({
+    title: "Read the spec",
+    kind: "general",
+    channel: "owner",
+  });
+  const other = store.createTask({
+    title: "Also needs it",
+    kind: "general",
+    channel: "owner",
+  });
+  store.addTaskLink(
+    task.id,
+    "https://docs.example.test/zebra-spec",
+    "zebra spec",
+    "you",
+  );
   await board("6");
   await find("zebra");
   expect(frame()).toContain("zebra spec");
   await press("return");
   expect(frame()).toContain("https://docs.example.test/zebra-spec");
-  expect(frame()).toContain(`${store.taskRef(task.id)} Read the spec · link · by you`);
+  expect(frame()).toContain(
+    `${store.taskRef(task.id)} Read the spec · link · by you`,
+  );
 
   await press("shift+l");
   await type(store.taskRef(other.id));
@@ -128,6 +158,8 @@ test("f cycles kinds; a PR its branch opened has nothing to take off", async () 
   await press("f");
   expect(frame()).toContain(" issue 0 ");
   expect(frame()).toContain("Nothing matches");
-  for (let i = 0; i < 5; i++) await press("f");
+  for (let i = 0; i < 5; i++) {
+    await press("f");
+  }
   expect(frame()).toContain("northwind/ledger#219");
 });

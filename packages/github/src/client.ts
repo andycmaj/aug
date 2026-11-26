@@ -68,7 +68,12 @@ export function parseIncluded(raw: GhRaw): GhResponse {
     headers.clear();
     for (const line of lines) {
       const i = line.indexOf(":");
-      if (i > 0) headers.set(line.slice(0, i).trim().toLowerCase(), line.slice(i + 1).trim());
+      if (i > 0) {
+        headers.set(
+          line.slice(0, i).trim().toLowerCase(),
+          line.slice(i + 1).trim(),
+        );
+      }
     }
   }
   return { status, headers, body, stderr: raw.stderr, code: raw.code };
@@ -84,7 +89,9 @@ export interface RateHeaders {
 }
 
 function num(v: string | undefined): number | null {
-  if (v === undefined || v === "") return null;
+  if (v === undefined || v === "") {
+    return null;
+  }
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
@@ -92,7 +99,11 @@ function num(v: string | undefined): number | null {
 export function rateHeaders(headers: Map<string, string>): RateHeaders {
   const resource = headers.get("x-ratelimit-resource");
   const budget =
-    resource === GhBudget.rest ? GhBudget.rest : resource === GhBudget.graphql ? GhBudget.graphql : null;
+    resource === GhBudget.rest
+      ? GhBudget.rest
+      : resource === GhBudget.graphql
+        ? GhBudget.graphql
+        : null;
   const reset = num(headers.get("x-ratelimit-reset"));
   const retry = num(headers.get("retry-after"));
   return {
@@ -105,9 +116,13 @@ export function rateHeaders(headers: Map<string, string>): RateHeaders {
 
 // GraphQL answers a spent budget with 200 and an error of type RATE_LIMITED.
 function graphqlLimited(body: string): string | null {
-  if (!body.includes("RATE_LIMITED")) return null;
+  if (!body.includes("RATE_LIMITED")) {
+    return null;
+  }
   try {
-    const answer = JSON.parse(body) as { errors?: { type?: string; message?: string }[] };
+    const answer = JSON.parse(body) as {
+      errors?: { type?: string; message?: string }[];
+    };
     const e = answer.errors?.find((x) => x.type === "RATE_LIMITED");
     return e ? (e.message ?? "rate limited") : null;
   } catch {
@@ -127,22 +142,40 @@ export function readLimit(res: GhResponse, budget: GhBudget): GhLimit | null {
   const gqlLimited = graphqlLimited(res.body);
   const refused = res.status === 403 || res.status === 429;
   const words = ghTrouble(said) === GhTrouble.rateLimit;
-  if (!refused && !gqlLimited && !(res.status === null && words)) return null;
-  if (refused && !words && h.remaining !== 0 && h.retryAfterMs === null && res.status === 403)
+  if (!refused && !gqlLimited && !(res.status === null && words)) {
     return null;
+  }
+  if (
+    refused &&
+    !words &&
+    h.remaining !== 0 &&
+    h.retryAfterMs === null &&
+    res.status === 403
+  ) {
+    return null;
+  }
   const on = h.budget ?? budget;
-  if (h.retryAfterMs !== null) return { kind: "secondary", budget: on, retryAfterMs: h.retryAfterMs };
-  if (h.remaining === 0) return { kind: "primary", budget: on, resetAt: h.resetAt };
-  if (SECONDARY.test(said) || (h.remaining !== null && h.remaining > 0))
+  if (h.retryAfterMs !== null) {
+    return { kind: "secondary", budget: on, retryAfterMs: h.retryAfterMs };
+  }
+  if (h.remaining === 0) {
+    return { kind: "primary", budget: on, resetAt: h.resetAt };
+  }
+  if (SECONDARY.test(said) || (h.remaining !== null && h.remaining > 0)) {
     return { kind: "secondary", budget: on, retryAfterMs: null };
+  }
   // Limited, but nothing said which way: the free rate_limit call settles it.
   return { kind: "primary", budget: on, resetAt: null };
 }
 
 export function throttledWords(p: Pause): string {
   const at = clockTime(p.until);
-  if (p.why === PauseWhy.secondary) return `GitHub secondary rate limit, waiting until ${at}`;
-  if (p.why === PauseWhy.reserve) return `GitHub rate limit budget low, saving it until ${at}`;
+  if (p.why === PauseWhy.secondary) {
+    return `GitHub secondary rate limit, waiting until ${at}`;
+  }
+  if (p.why === PauseWhy.reserve) {
+    return `GitHub rate limit budget low, saving it until ${at}`;
+  }
   return `GitHub rate limited until ${at}`;
 }
 
@@ -189,12 +222,16 @@ export class GithubClient {
   // Made on first use, once the store is open. A pause outlives a restart:
   // GitHub's reset does not move because Riker did.
   gate(): GithubGate {
-    if (this.theGate) return this.theGate;
+    if (this.theGate) {
+      return this.theGate;
+    }
     const gate = new GithubGate(() => this.baseMs(), this.clock);
     for (const budget of Object.values(GhBudget)) {
       try {
         const saved = store.kvGet(PAUSE_KEY(budget));
-        if (!saved) continue;
+        if (!saved) {
+          continue;
+        }
         const p = JSON.parse(saved) as Pause;
         gate.hold(budget, p.until, p.why);
       } catch {
@@ -225,7 +262,9 @@ export class GithubClient {
 
   private saved(budget: GhBudget): Pause | null {
     const p = this.gate().pause(budget);
-    if (p) store.kvSet(PAUSE_KEY(budget), JSON.stringify(p));
+    if (p) {
+      store.kvSet(PAUSE_KEY(budget), JSON.stringify(p));
+    }
     return p;
   }
 
@@ -234,9 +273,15 @@ export class GithubClient {
   }
 
   // A REST call; GET unless fields say otherwise (gh posts with -f).
-  async api(path: string, fields: Record<string, string> = {}, options: CallOptions = {}): Promise<unknown> {
+  async api(
+    path: string,
+    fields: Record<string, string> = {},
+    options: CallOptions = {},
+  ): Promise<unknown> {
     const args = ["api", "-i", path];
-    for (const [k, v] of Object.entries(fields)) args.push("-f", `${k}=${v}`);
+    for (const [k, v] of Object.entries(fields)) {
+      args.push("-f", `${k}=${v}`);
+    }
     const res = await this.call(GhBudget.rest, args, options);
     return JSON.parse(res.body || "null") as unknown;
   }
@@ -249,7 +294,9 @@ export class GithubClient {
     options: CallOptions = {},
   ): Promise<unknown> {
     const args = ["api", "graphql", "-i", "-f", `query=${query}`];
-    for (const [k, v] of Object.entries(vars)) args.push(typeof v === "number" ? "-F" : "-f", `${k}=${v}`);
+    for (const [k, v] of Object.entries(vars)) {
+      args.push(typeof v === "number" ? "-F" : "-f", `${k}=${v}`);
+    }
     const res = await this.call(GhBudget.graphql, args, options);
     return JSON.parse(res.body) as unknown;
   }
@@ -262,15 +309,23 @@ export class GithubClient {
     return res.body.trim();
   }
 
-  private async call(budget: GhBudget, args: string[], options: CallOptions): Promise<GhResponse> {
+  private async call(
+    budget: GhBudget,
+    args: string[],
+    options: CallOptions,
+  ): Promise<GhResponse> {
     const gate = this.gate();
     const held = gate.pause(budget);
-    if (held && !(options.owner && held.why === PauseWhy.reserve)) throw new GhThrottled(budget, held);
+    if (held && !(options.owner && held.why === PauseWhy.reserve)) {
+      throw new GhThrottled(budget, held);
+    }
     const res = parseIncluded(await this.run(args));
     const limit = readLimit(res, budget);
     if (limit) {
       const settled =
-        limit.kind === "primary" && limit.resetAt === null ? await this.settle(limit.budget) : limit;
+        limit.kind === "primary" && limit.resetAt === null
+          ? await this.settle(limit.budget)
+          : limit;
       throw new GhThrottled(settled.budget, this.limited(settled));
     }
     const h = rateHeaders(res.headers);
@@ -278,14 +333,19 @@ export class GithubClient {
       const p = gate.observe(h.budget, h.remaining, h.resetAt);
       if (p) {
         this.saved(h.budget);
-        log.info("github budget low", { budget: h.budget, remaining: h.remaining });
+        log.info("github budget low", {
+          budget: h.budget,
+          remaining: h.remaining,
+        });
       }
     }
     // A 2xx is an answer even when gh exits 1 (a GraphQL answer with errors).
     const ok = res.status === null ? res.code === 0 : res.status < 300;
     if (!ok) {
       const said = res.stderr.trim();
-      throw new Error(said || `gh ${args[0]} ${args[1] ?? ""} exited ${res.code}`.trim());
+      throw new Error(
+        said || `gh ${args[0]} ${args[1] ?? ""} exited ${res.code}`.trim(),
+      );
     }
     return res;
   }
@@ -298,7 +358,13 @@ export class GithubClient {
   private async settle(budget: GhBudget): Promise<GhLimit> {
     const args =
       budget === GhBudget.graphql
-        ? ["api", "graphql", "-i", "-f", "query={ rateLimit { remaining resetAt } }"]
+        ? [
+            "api",
+            "graphql",
+            "-i",
+            "-f",
+            "query={ rateLimit { remaining resetAt } }",
+          ]
         : ["api", "-i", "rate_limit"];
     try {
       const res = parseIncluded(await this.run(args));
@@ -311,12 +377,18 @@ export class GithubClient {
         resetAt = typeof r?.reset === "number" ? r.reset * 1000 : null;
       }
       if (remaining !== null && resetAt !== null) {
-        if (remaining > 0) return { kind: "secondary", budget, retryAfterMs: null };
+        if (remaining > 0) {
+          return { kind: "secondary", budget, retryAfterMs: null };
+        }
         return { kind: "primary", budget, resetAt };
       }
     } catch (err) {
       log.warn("rate limit lookup failed", { err: errorMessage(err) });
     }
-    return { kind: "primary", budget, resetAt: this.now() + UNKNOWN_RESET_PAUSE_MS };
+    return {
+      kind: "primary",
+      budget,
+      resetAt: this.now() + UNKNOWN_RESET_PAUSE_MS,
+    };
   }
 }

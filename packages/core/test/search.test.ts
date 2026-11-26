@@ -105,15 +105,17 @@ describe("search", () => {
   });
 
   test("a task number finds its task in any spelling", () => {
-    for (let i = 0; i < 30; i++)
+    for (let i = 0; i < 30; i++) {
       store.createTask({
         title: `task ${i}`,
         kind: Kind.task,
         channel: "owner",
       });
+    }
     const want = store.listTasks().find((t) => t.id === 23)!.title;
-    for (const q of ["RIKER-0023", "riker-23", "riker23", "23", "0023"])
+    for (const q of ["RIKER-0023", "riker-23", "riker23", "23", "0023"]) {
       expect(titles(q)[0]).toBe(want);
+    }
     // Explicit RIKER-: only refs, never a number in the words.
     expect(titles("riker-23")).toEqual([want]);
   });
@@ -292,38 +294,80 @@ describe("go-to list", () => {
   });
 
   test("done and dropped work is hidden unless the done toggle is on", () => {
-    const open = store.createTask({ title: "Guide review", kind: Kind.task, channel: "owner" });
-    const gone = store.createTask({ title: "Guide findings", kind: Kind.task, channel: "owner" });
-    store.updateTask(gone.id, { status: TaskStatus.dropped, closed_at: at(9), closed_by: "you" });
+    const open = store.createTask({
+      title: "Guide review",
+      kind: Kind.task,
+      channel: "owner",
+    });
+    const gone = store.createTask({
+      title: "Guide findings",
+      kind: Kind.task,
+      channel: "owner",
+    });
+    store.updateTask(gone.id, {
+      status: TaskStatus.dropped,
+      closed_at: at(9),
+      closed_by: "you",
+    });
     const all = () =>
-      searchIndex(rail(), { messages: new Map(), turns: new Map() }, store.closedTasks());
+      searchIndex(
+        rail(),
+        { messages: new Map(), turns: new Map() },
+        store.closedTasks(),
+      );
     const titles = (q: string, showDone?: boolean) =>
       goToList(all(), q, [], showDone).map((h) => h.title);
     expect(titles("")).not.toContain("Guide findings");
     expect(titles("guide")).toEqual(["Guide review"]);
     expect(titles(store.taskRef(gone.id))).toEqual([]);
     // A done task visited lately stays hidden too.
-    expect(goToList(all(), "", [`t${gone.id}`]).map((h) => h.title)).not.toContain(
-      "Guide findings",
-    );
-    expect(goToList(all(), "guide", [], true).map((h) => [h.title, h.section])).toEqual([
+    expect(
+      goToList(all(), "", [`t${gone.id}`]).map((h) => h.title),
+    ).not.toContain("Guide findings");
+    expect(
+      goToList(all(), "guide", [], true).map((h) => [h.title, h.section]),
+    ).toEqual([
       ["Guide review", "Tasks"],
       ["Guide findings", "Dropped"],
     ]);
-    expect(goToList(all(), store.taskRef(gone.id), [], true).map((h) => h.item.key)).toEqual([
-      `t${gone.id}`,
-    ]);
+    expect(
+      goToList(all(), store.taskRef(gone.id), [], true).map((h) => h.item.key),
+    ).toEqual([`t${gone.id}`]);
     void open;
   });
 
   test("with done shown and nothing typed, closed work ends the list, last closed first", () => {
-    const open = store.createTask({ title: "Open one", kind: Kind.task, channel: "owner" });
-    const older = store.createTask({ title: "Closed first", kind: Kind.task, channel: "owner" });
-    const newer = store.createTask({ title: "Closed last", kind: Kind.task, channel: "owner" });
-    store.updateTask(older.id, { status: TaskStatus.done, closed_at: at(8), closed_by: "you" });
-    store.updateTask(newer.id, { status: TaskStatus.dropped, closed_at: at(9), closed_by: "you" });
+    const open = store.createTask({
+      title: "Open one",
+      kind: Kind.task,
+      channel: "owner",
+    });
+    const older = store.createTask({
+      title: "Closed first",
+      kind: Kind.task,
+      channel: "owner",
+    });
+    const newer = store.createTask({
+      title: "Closed last",
+      kind: Kind.task,
+      channel: "owner",
+    });
+    store.updateTask(older.id, {
+      status: TaskStatus.done,
+      closed_at: at(8),
+      closed_by: "you",
+    });
+    store.updateTask(newer.id, {
+      status: TaskStatus.dropped,
+      closed_at: at(9),
+      closed_by: "you",
+    });
     const all = () =>
-      searchIndex(rail(), { messages: new Map(), turns: new Map() }, store.closedTasks());
+      searchIndex(
+        rail(),
+        { messages: new Map(), turns: new Map() },
+        store.closedTasks(),
+      );
     const list = goToList(all(), "", [], true);
     expect(list.slice(-2).map((h) => [h.title, h.section])).toEqual([
       ["Closed last", "Dropped"],
@@ -338,9 +382,15 @@ describe("go-to list", () => {
   });
 
   test("typing searches, recent or not", () => {
-    const a = store.createTask({ title: "Alpha", kind: Kind.task, channel: "owner" });
+    const a = store.createTask({
+      title: "Alpha",
+      kind: Kind.task,
+      channel: "owner",
+    });
     store.createTask({ title: "Bravo", kind: Kind.task, channel: "owner" });
     const list = goToList(docs(), "bravo", [`t${a.id}`]);
-    expect(list.map((h) => [h.recent, h.title])).toEqual([[undefined, "Bravo"]]);
+    expect(list.map((h) => [h.recent, h.title])).toEqual([
+      [undefined, "Bravo"],
+    ]);
   });
 });

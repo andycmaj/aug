@@ -31,8 +31,9 @@ export function claudeStatuses(
         sessionId?: unknown;
         status?: unknown;
       };
-      if (typeof raw.sessionId === "string" && typeof raw.status === "string")
+      if (typeof raw.sessionId === "string" && typeof raw.status === "string") {
         out.set(raw.sessionId, raw.status);
+      }
     } catch {
       // gone between the listing and the read, or half written
     }
@@ -48,9 +49,15 @@ export function settleStaleTurns(
 ): string[] {
   const settled: string[] = [];
   for (const s of store.liveSessions()) {
-    if (s.kind !== SessionKind.tmux || s.state !== AgentState.working) continue;
-    if (now - Date.parse(s.last_event_at) < QUIET_MS) continue;
-    if (statuses.get(s.id) !== "idle") continue;
+    if (s.kind !== SessionKind.tmux || s.state !== AgentState.working) {
+      continue;
+    }
+    if (now - Date.parse(s.last_event_at) < QUIET_MS) {
+      continue;
+    }
+    if (statuses.get(s.id) !== "idle") {
+      continue;
+    }
     turnEnded({ taskId: s.task_id, sessionId: s.id }, null);
     settled.push(s.id);
   }

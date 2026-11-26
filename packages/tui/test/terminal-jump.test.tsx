@@ -44,7 +44,12 @@ async function mount(withJump: boolean, kitty = false) {
                 focus = useFocus();
                 let pane: Renderable | undefined;
                 onMount(() => {
-                  terminals.open({ id: "term", title: "T", kind: "agent", argv: SHOW_ONE_KEY });
+                  terminals.open({
+                    id: "term",
+                    title: "T",
+                    kind: "agent",
+                    argv: SHOW_ONE_KEY,
+                  });
                   focus?.setActivePane("canvas");
                 });
                 return (

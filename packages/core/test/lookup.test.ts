@@ -74,7 +74,8 @@ describe("@ mentions", () => {
     // A number is a task ref, never a project.
     expect(refs(String(fix.id))).toEqual([store.taskRef(fix.id)]);
     // "riker" (or "aug", from before the rename) may be a ref on its way; a project it begins comes first.
-    expect(refs("riker")).toEqual(["riker-bootstrap", store.taskRef(fix.id)]);    expect(refs("aug")).toEqual([store.taskRef(fix.id)]);
+    expect(refs("riker")).toEqual(["riker-bootstrap", store.taskRef(fix.id)]);
+    expect(refs("aug")).toEqual([store.taskRef(fix.id)]);
   });
 
   test("a project's ref finds it again, whatever its name holds", () => {
@@ -96,9 +97,9 @@ describe("@ mentions", () => {
     const a = project("riker bootstrap");
     project("ledger");
     expect(
-      mentionedProjects("move it to @riker-bootstrap, not @nothing or ledger").map(
-        (p) => p.id,
-      ),
+      mentionedProjects(
+        "move it to @riker-bootstrap, not @nothing or ledger",
+      ).map((p) => p.id),
     ).toEqual([a.id]);
   });
 
@@ -111,7 +112,10 @@ describe("@ mentions", () => {
 });
 
 test("projects match by name or session, ignoring case and punctuation", () => {
-  store.createProject({ name: "riker bootstrap", tmuxSession: "riker-bootstrap" });
+  store.createProject({
+    name: "riker bootstrap",
+    tmuxSession: "riker-bootstrap",
+  });
   expect(findProject("RIKER-Bootstrap")?.name).toBe("riker bootstrap");
   expect(findProject("rikerbootstrap")?.name).toBe("riker bootstrap");
   expect(findProject("riker")).toBeNull();

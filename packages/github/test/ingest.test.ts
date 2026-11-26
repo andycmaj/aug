@@ -42,18 +42,33 @@ describe("notifications into messages", () => {
         latest_comment_url: null,
         type: "PullRequest",
       },
-      repository: { full_name: "acme/ledger", html_url: "https://github.com/acme/ledger" },
+      repository: {
+        full_name: "acme/ledger",
+        html_url: "https://github.com/acme/ledger",
+      },
     };
     const calls: string[] = [];
     const api = async (path: string) => {
       calls.push(path);
-      if (path === "user") return { login: "me" };
-      if (path.startsWith("notifications")) return [n];
-      return { user: { login: "erin" }, body: "LGTM?", head: { ref: "keep-transfers" } };
+      if (path === "user") {
+        return { login: "me" };
+      }
+      if (path.startsWith("notifications")) {
+        return [n];
+      }
+      return {
+        user: { login: "erin" },
+        body: "LGTM?",
+        head: { ref: "keep-transfers" },
+      };
     };
     const without = await pollGithub(null, api);
     expect(without[0].meta?.head).toBeUndefined();
-    const withHead = await pollGithub(null, api, (repo) => repo === "acme/ledger");
+    const withHead = await pollGithub(
+      null,
+      api,
+      (repo) => repo === "acme/ledger",
+    );
     expect(withHead[0].meta?.head).toBe("keep-transfers");
   });
 });
@@ -65,14 +80,26 @@ describe("review requests at ingest", () => {
       id: "2",
       reason: "review_requested",
       updated_at: "2026-11-07T10:00:00Z",
-      subject: { title: "Faster CSV", url: pullUrl, latest_comment_url: null, type: "PullRequest" },
-      repository: { full_name: "acme/ledger", html_url: "https://github.com/acme/ledger" },
+      subject: {
+        title: "Faster CSV",
+        url: pullUrl,
+        latest_comment_url: null,
+        type: "PullRequest",
+      },
+      repository: {
+        full_name: "acme/ledger",
+        html_url: "https://github.com/acme/ledger",
+      },
     };
     const calls: string[] = [];
     const api = async (path: string) => {
       calls.push(path);
-      if (path === "user") return { login: "Me" };
-      if (path.startsWith("notifications")) return [n];
+      if (path === "user") {
+        return { login: "Me" };
+      }
+      if (path.startsWith("notifications")) {
+        return [n];
+      }
       return {
         user: { login: "erin" },
         body: "please review",
@@ -84,30 +111,40 @@ describe("review requests at ingest", () => {
     };
     const [m] = await pollGithub(null, api);
     expect(m.meta?.requested).toEqual({ me: true, teams: ["acme/payments"] });
-    expect(calls.filter((c) => c.startsWith("repos/"))).toEqual(["repos/acme/ledger/pulls/231"]);
+    expect(calls.filter((c) => c.startsWith("repos/"))).toEqual([
+      "repos/acme/ledger/pulls/231",
+    ]);
   });
 });
 
 describe("a burst of notifications", () => {
   test("details read a few at a time, and messages keep the oldest-first order", async () => {
-    const notifications: GhNotification[] = Array.from({ length: 12 }, (_, i) => ({
-      id: String(i),
-      reason: "comment",
-      updated_at: `2026-11-07T10:${String(59 - i).padStart(2, "0")}:00Z`,
-      subject: {
-        title: `issue ${i}`,
-        url: `https://api.github.com/repos/acme/ledger/issues/${i}`,
-        latest_comment_url: null,
-        type: "Issue",
-      },
-      repository: { full_name: "acme/ledger", html_url: "https://github.com/acme/ledger" },
-    }));
+    const notifications: GhNotification[] = Array.from(
+      { length: 12 },
+      (_, i) => ({
+        id: String(i),
+        reason: "comment",
+        updated_at: `2026-11-07T10:${String(59 - i).padStart(2, "0")}:00Z`,
+        subject: {
+          title: `issue ${i}`,
+          url: `https://api.github.com/repos/acme/ledger/issues/${i}`,
+          latest_comment_url: null,
+          type: "Issue",
+        },
+        repository: {
+          full_name: "acme/ledger",
+          html_url: "https://github.com/acme/ledger",
+        },
+      }),
+    );
     let inFlight = 0;
     let most = 0;
     const calls: string[] = [];
     const api = async (path: string) => {
       calls.push(path.split("?")[0]!);
-      if (path.startsWith("notifications")) return notifications;
+      if (path.startsWith("notifications")) {
+        return notifications;
+      }
       inFlight++;
       most = Math.max(most, inFlight);
       // Later issues answer first: order must come from the list, not the clock.
@@ -119,6 +156,8 @@ describe("a burst of notifications", () => {
     expect(calls.filter((c) => c === "user")).toEqual([]);
     expect(calls.filter((c) => c.startsWith("repos/"))).toHaveLength(12);
     expect(most).toBe(4);
-    expect(got.map((m) => m.meta?.number)).toEqual([11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
+    expect(got.map((m) => m.meta?.number)).toEqual([
+      11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+    ]);
   });
 });

@@ -162,7 +162,9 @@ export const RIKER_PLUGIN = PLUGIN;
 // same skills are Riker's now.
 export function currentSkill(skill: string): string {
   const prefix = `${LEGACY.plugin}:`;
-  return skill.startsWith(prefix) ? `${RIKER_PLUGIN}:${skill.slice(prefix.length)}` : skill;
+  return skill.startsWith(prefix)
+    ? `${RIKER_PLUGIN}:${skill.slice(prefix.length)}`
+    : skill;
 }
 
 export function rikerPluginDir(): string {
@@ -183,14 +185,17 @@ export function ensureRikerPlugin(dir = rikerPluginDir()): string {
     2,
   );
   writeIfChanged(manifest, `${want}\n`);
-  for (const [name, text] of Object.entries(RIKER_SKILLS))
+  for (const [name, text] of Object.entries(RIKER_SKILLS)) {
     writeIfChanged(join(dir, "skills", name, "SKILL.md"), text);
+  }
   return dir;
 }
 
 function writeIfChanged(file: string, text: string): void {
   try {
-    if (existsSync(file) && readFileSync(file, "utf8") === text) return;
+    if (existsSync(file) && readFileSync(file, "utf8") === text) {
+      return;
+    }
     mkdirSync(join(file, ".."), { recursive: true });
     writeFileSync(file, text);
   } catch (err) {
@@ -200,7 +205,9 @@ function writeIfChanged(file: string, text: string): void {
 
 // Built-ins, then config's changes and additions. An entry without a skill
 // or a via is left out (and logged), never guessed.
-export function registeredActions(config: Pick<RikerConfig, "actions">): ActionSpec[] {
+export function registeredActions(
+  config: Pick<RikerConfig, "actions">,
+): ActionSpec[] {
   const out: ActionSpec[] = [];
   const names = new Set([
     ...Object.keys(BUILTIN_ACTIONS),
@@ -208,7 +215,9 @@ export function registeredActions(config: Pick<RikerConfig, "actions">): ActionS
   ]);
   for (const name of names) {
     const override = config.actions?.[name];
-    if (override === false) continue;
+    if (override === false) {
+      continue;
+    }
     const merged = { ...BUILTIN_ACTIONS[name], ...override };
     if (!merged.skill || !merged.via || !isVia(merged.via)) {
       log.warn("action left out: it needs a skill and a via", { name });
@@ -234,11 +243,18 @@ export function registeredActions(config: Pick<RikerConfig, "actions">): ActionS
 
 // A trigger with an unknown event is left out (and logged), never guessed.
 function triggers(name: string, on: unknown): ActionTrigger[] | undefined {
-  if (!Array.isArray(on)) return undefined;
+  if (!Array.isArray(on)) {
+    return undefined;
+  }
   const events = Object.values(ActionEvent) as string[];
   return on.filter((t): t is ActionTrigger => {
-    const ok = typeof t === "object" && t !== null && events.includes((t as ActionTrigger).event);
-    if (!ok) log.warn("action trigger left out: unknown event", { name, trigger: t });
+    const ok =
+      typeof t === "object" &&
+      t !== null &&
+      events.includes((t as ActionTrigger).event);
+    if (!ok) {
+      log.warn("action trigger left out: unknown event", { name, trigger: t });
+    }
     return ok;
   });
 }
@@ -285,20 +301,31 @@ function hasWorktree(task: TaskRow): boolean {
 
 function why(spec: ActionSpec, task: TaskRow, offered: boolean): string | null {
   const kinds = spec.kinds ?? WORK_KINDS;
-  if (!kinds.includes(task.kind))
+  if (!kinds.includes(task.kind)) {
     return `${spec.name} is for ${kinds.join(" or ")} tasks`;
+  }
   const making = offered && makesCheckout(spec, task);
   for (const need of spec.needs ?? []) {
-    if (need === ActionNeed.worktree && making) continue;
-    if (need === ActionNeed.worktree && !task.worktree)
+    if (need === ActionNeed.worktree && making) {
+      continue;
+    }
+    if (need === ActionNeed.worktree && !task.worktree) {
       return `${spec.name} needs a worktree (start the agent first)`;
+    }
     // Checked before the run, not after it has spent its tokens.
-    if (need === ActionNeed.worktree && task.worktree && !existsSync(task.worktree))
+    if (
+      need === ActionNeed.worktree &&
+      task.worktree &&
+      !existsSync(task.worktree)
+    ) {
       return `${spec.name} needs a worktree, and ${task.worktree} is gone`;
-    if (need === ActionNeed.session && !store.latestSession(task.id))
+    }
+    if (need === ActionNeed.session && !store.latestSession(task.id)) {
       return `${spec.name} needs an agent session (start the agent first)`;
-    if (need === ActionNeed.pr && !taskPr(task))
+    }
+    if (need === ActionNeed.pr && !taskPr(task)) {
       return `${spec.name} needs a pull request on the task`;
+    }
   }
   return null;
 }
@@ -315,32 +342,57 @@ export function triggeredBy(
   return registeredActions(config).filter(
     (spec) =>
       spec.via !== ActionVia.pane &&
-      (spec.on ?? []).some((t) => t.event === event && triggerMatches(t, task, message ?? null)) &&
+      (spec.on ?? []).some(
+        (t) => t.event === event && triggerMatches(t, task, message ?? null),
+      ) &&
       whyNot(spec, task) === null,
   );
 }
 
-function triggerMatches(t: ActionTrigger, task: TaskRow, message: MessageRow | null): boolean {
-  if (t.kind && t.kind !== task.kind) return false;
-  if (t.channel && t.channel !== (message?.channel ?? task.channel)) return false;
+function triggerMatches(
+  t: ActionTrigger,
+  task: TaskRow,
+  message: MessageRow | null,
+): boolean {
+  if (t.kind && t.kind !== task.kind) {
+    return false;
+  }
+  if (t.channel && t.channel !== (message?.channel ?? task.channel)) {
+    return false;
+  }
   if (t.githubReason) {
     const meta = message ? messageMeta(message) : null;
     const reason = meta?.channel === "github" ? meta.reason : null;
-    if (!reason || !t.githubReason.includes(reason)) return false;
+    if (!reason || !t.githubReason.includes(reason)) {
+      return false;
+    }
   }
-  if (!regexMatch(t.author, message?.author ?? message?.author_name)) return false;
-  if (!regexMatch(t.title, task.title)) return false;
-  if (!regexMatch(t.body, message?.body)) return false;
+  if (!regexMatch(t.author, message?.author ?? message?.author_name)) {
+    return false;
+  }
+  if (!regexMatch(t.title, task.title)) {
+    return false;
+  }
+  if (!regexMatch(t.body, message?.body)) {
+    return false;
+  }
   if (t.project) {
     const project = task.project_id ? store.getProject(task.project_id) : null;
-    if (project?.name.toLowerCase() !== t.project.toLowerCase()) return false;
+    if (project?.name.toLowerCase() !== t.project.toLowerCase()) {
+      return false;
+    }
   }
   return true;
 }
 
 // A pattern that does not compile never matches.
-function regexMatch(pattern: string | undefined, value: string | null | undefined): boolean {
-  if (!pattern) return true;
+function regexMatch(
+  pattern: string | undefined,
+  value: string | null | undefined,
+): boolean {
+  if (!pattern) {
+    return true;
+  }
   try {
     return new RegExp(pattern, "i").test(value ?? "");
   } catch {
@@ -360,7 +412,9 @@ export function keyedActions(
 // The actions the picker offers for a task: the ones it can run now, and
 // the ones it can once their worktree is made.
 export function actionsFor(config: RikerConfig, task: TaskRow): ActionSpec[] {
-  return registeredActions(config).filter((a) => whyNotOffered(a, task) === null);
+  return registeredActions(config).filter(
+    (a) => whyNotOffered(a, task) === null,
+  );
 }
 
 // What a task without a PR is taken against; the skills fall back to master
@@ -452,9 +506,13 @@ export function userSkillDir(name: string): string {
 // applies), under RIKER_HOME. Made once and kept while its link still points
 // at the skill, so two runs at once never pull it from under each other.
 export function wrapUserSkill(name: string): string | null {
-  if (!/^[A-Za-z0-9_-]+$/.test(name)) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+    return null;
+  }
   const source = userSkillDir(name);
-  if (!existsSync(join(source, "SKILL.md"))) return null;
+  if (!existsSync(join(source, "SKILL.md"))) {
+    return null;
+  }
   const dir = join(paths.home(), "wrapped", name);
   const link = join(dir, "skills", name);
   try {
@@ -497,10 +555,15 @@ export function paneCommand(
   if (plugin) {
     const source = skillSource(spec, capabilityDirs);
     // A plugin the user installed loads with their settings anyway.
-    if (source) dirs = [source.dir];
-    else if (plugin === RIKER_PLUGIN) return { error: `skill ${spec.skill} not found in Riker's plugin` };
+    if (source) {
+      dirs = [source.dir];
+    } else if (plugin === RIKER_PLUGIN) {
+      return { error: `skill ${spec.skill} not found in Riker's plugin` };
+    }
   } else if (!existsSync(join(userSkillDir(spec.skill), "SKILL.md"))) {
-    return { error: `skill ${spec.skill} not found in ${userSkillDir(spec.skill)}` };
+    return {
+      error: `skill ${spec.skill} not found in ${userSkillDir(spec.skill)}`,
+    };
   }
   const env = { [envName("TASK_ID")]: String(task.id) };
   return {
@@ -519,7 +582,9 @@ export function paneCommand(
 // The rules Riker's own skills declare: trusted, since Riker wrote them.
 export function rikerSkillRules(spec: ActionSpec): string[] {
   const [plugin, name] = spec.skill.split(":", 2);
-  if (plugin !== RIKER_PLUGIN || !name) return [];
+  if (plugin !== RIKER_PLUGIN || !name) {
+    return [];
+  }
   const text = RIKER_SKILLS[name];
   return text ? (declaredRules(text) ?? []) : [];
 }

@@ -39,19 +39,31 @@ export function useViewer() {
   const desk = riker.desk;
 
   async function attachViewer(taskId: number): Promise<boolean> {
-    if (terminals.forTask(taskId)?.running) return true;
-    if (attaching.has(taskId)) return false;
+    if (terminals.forTask(taskId)?.running) {
+      return true;
+    }
+    if (attaching.has(taskId)) {
+      return false;
+    }
     attaching.add(taskId);
     try {
       const viewer = await desk.viewer(taskId);
       if (viewer && "refused" in viewer) {
-        if (!refused.has(taskId)) showToast(viewer.refused, 6000, "error");
+        if (!refused.has(taskId)) {
+          showToast(viewer.refused, 6000, "error");
+        }
         refused.add(taskId);
         return false;
       }
-      if (!viewer || terminals.forTask(taskId)?.running) return Boolean(viewer);
-      if (viewer.warning && !warned) showToast(viewer.warning, 10000, "error");
-      if (viewer.warning) warned = true;
+      if (!viewer || terminals.forTask(taskId)?.running) {
+        return Boolean(viewer);
+      }
+      if (viewer.warning && !warned) {
+        showToast(viewer.warning, 10000, "error");
+      }
+      if (viewer.warning) {
+        warned = true;
+      }
       const id = viewerId(taskId);
       terminals.close(id);
       terminals.open({
@@ -76,10 +88,12 @@ export function useViewer() {
       const row = riker.task(taskId);
       return Boolean(row && riker.isLive(row));
     };
-    for (const id of viewersToClose(terminals.list(), task?.id ?? null, live))
+    for (const id of viewersToClose(terminals.list(), task?.id ?? null, live)) {
       terminals.close(id);
-    if (task && inTmux(task) && riker.isLive(task))
+    }
+    if (task && inTmux(task) && riker.isLive(task)) {
       void attachViewer(task.id);
+    }
   });
 
   return { attachViewer };

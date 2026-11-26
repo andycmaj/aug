@@ -57,15 +57,19 @@ export function handleHook(
         payload.tool_name ?? "tool",
         payload.tool_input,
       );
-      if (payload.tool_name === "AskUserQuestion")
+      if (payload.tool_name === "AskUserQuestion") {
         sessionActivity(env, AgentState.waiting, "asked you something", step);
-      else sessionActivity(env, AgentState.working, null, step);
+      } else {
+        sessionActivity(env, AgentState.working, null, step);
+      }
       return;
     }
     case "notification": {
       // Claude's "waiting for your input" after a quiet minute: the turn
       // ended already, and Stop said whether it asked anything.
-      if (isIdleNotice(payload)) return;
+      if (isIdleNotice(payload)) {
+        return;
+      }
       const text = payload.message ?? "needs you";
       const approval = /permission|approve|allow/i.test(text);
       sessionActivity(
@@ -93,13 +97,19 @@ export function handleHook(
 // up a session which ended without `done` (core/digest-watcher.ts).
 function keepTranscript(env: HookEnv, payload: HookPayload): void {
   const path = payload.transcript_path;
-  if (!path) return;
-  if (store.getSession(env.sessionId)?.transcript_path === path) return;
+  if (!path) {
+    return;
+  }
+  if (store.getSession(env.sessionId)?.transcript_path === path) {
+    return;
+  }
   store.updateSession(env.sessionId, { transcript_path: path });
 }
 
 function isIdleNotice(payload: HookPayload): boolean {
-  if (payload.notification_type) return payload.notification_type === "idle_prompt";
+  if (payload.notification_type) {
+    return payload.notification_type === "idle_prompt";
+  }
   return /waiting for your input/i.test(payload.message ?? "");
 }
 
@@ -111,22 +121,29 @@ function endReason(reason: string | undefined): string {
 // The question a turn ended on, if it ended on one: its last line, when
 // that line asks. A turn that ends with a statement left nothing to answer.
 export function endedAsking(message: string | null): string | null {
-  if (!message) return null;
+  if (!message) {
+    return null;
+  }
   const lines = message
     .split("\n")
     .map((l) => l.replace(/[*_`\s]+$/g, "").trim())
     .filter(Boolean);
   const last = lines.at(-1) ?? "";
-  if (!last.endsWith("?")) return null;
+  if (!last.endsWith("?")) {
+    return null;
+  }
   return last.length > 200 ? `${last.slice(0, 199)}…` : last;
 }
 
 // The turn's last words: from the payload when claude sends them, else the
 // last assistant text in its transcript.
 function lastMessage(payload: HookPayload): string | null {
-  if (typeof payload.last_assistant_message === "string")
+  if (typeof payload.last_assistant_message === "string") {
     return payload.last_assistant_message;
-  if (!payload.transcript_path) return null;
+  }
+  if (!payload.transcript_path) {
+    return null;
+  }
   try {
     return lastAssistantText(readFileSync(payload.transcript_path, "utf8"));
   } catch {
@@ -137,17 +154,25 @@ function lastMessage(payload: HookPayload): string | null {
 export function lastAssistantText(jsonl: string): string | null {
   const lines = jsonl.split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (!lines[i].includes('"assistant"')) continue;
+    if (!lines[i].includes('"assistant"')) {
+      continue;
+    }
     let entry: { type?: string; message?: { content?: unknown } };
     try {
       entry = JSON.parse(lines[i]) as typeof entry;
     } catch {
       continue;
     }
-    if (entry.type !== "assistant") continue;
+    if (entry.type !== "assistant") {
+      continue;
+    }
     const content = entry.message?.content;
-    if (typeof content === "string") return content;
-    if (!Array.isArray(content)) continue;
+    if (typeof content === "string") {
+      return content;
+    }
+    if (!Array.isArray(content)) {
+      continue;
+    }
     const text = content
       .filter(
         (c): c is { type: "text"; text: string } =>
@@ -158,7 +183,9 @@ export function lastAssistantText(jsonl: string): string | null {
       )
       .map((c) => c.text)
       .join("\n");
-    if (text.trim()) return text;
+    if (text.trim()) {
+      return text;
+    }
   }
   return null;
 }
@@ -184,20 +211,31 @@ export function artifactLink(
   let title: string;
   if (tool === "Artifact") {
     const action = input.action ?? "publish";
-    if (action !== "publish" || input.asset) return null;
+    if (action !== "publish" || input.asset) {
+      return null;
+    }
     const file = typeof input.file_path === "string" ? input.file_path : "";
     title =
       (typeof input.title === "string" && input.title.trim()) ||
-      file.split("/").pop()?.replace(/\.[^.]+$/, "") ||
+      file
+        .split("/")
+        .pop()
+        ?.replace(/\.[^.]+$/, "") ||
       "Claude artifact";
   } else if (/^mcp__.*Claude_Docs__/.test(tool)) {
-    const container = (input.container ?? {}) as { create?: { name?: unknown } };
+    const container = (input.container ?? {}) as {
+      create?: { name?: unknown };
+    };
     const name = container.create?.name;
-    title = typeof name === "string" && name.trim() ? name.trim() : "Claude doc";
-  } else return null;
+    title =
+      typeof name === "string" && name.trim() ? name.trim() : "Claude doc";
+  } else {
+    return null;
+  }
   const url =
-    (typeof input.url === "string" ? input.url.match(ARTIFACT_URL)?.[0] : null) ??
-    text(payload.tool_response).match(ARTIFACT_URL)?.[0];
+    (typeof input.url === "string"
+      ? input.url.match(ARTIFACT_URL)?.[0]
+      : null) ?? text(payload.tool_response).match(ARTIFACT_URL)?.[0];
   return url ? { url, title } : null;
 }
 
@@ -209,11 +247,20 @@ function linkArtifact(payload: HookPayload, env: HookEnv): void {
 
 // Also called by a headless turn for each tool result (agents.ts), which has
 // no PostToolUse hook, so it checks ARTIFACT_TOOLS itself.
-export function linkMadeArtifact(taskId: number, payload: HookPayload): boolean {
-  if (!new RegExp(ARTIFACT_TOOLS).test(payload.tool_name ?? "")) return false;
+export function linkMadeArtifact(
+  taskId: number,
+  payload: HookPayload,
+): boolean {
+  if (!new RegExp(ARTIFACT_TOOLS).test(payload.tool_name ?? "")) {
+    return false;
+  }
   const made = artifactLink(payload);
-  if (!made) return false;
-  if (store.linksForTask(taskId).some((l) => l.url === made.url)) return false;
+  if (!made) {
+    return false;
+  }
+  if (store.linksForTask(taskId).some((l) => l.url === made.url)) {
+    return false;
+  }
   store.addTaskLink(
     taskId,
     made.url,
@@ -242,7 +289,9 @@ export function handleDone(
   config?: RikerConfig,
 ): string {
   const task = store.getTask(env.taskId);
-  if (!task) return `no task ${env.taskId}`;
+  if (!task) {
+    return `no task ${env.taskId}`;
+  }
   const session = store.getSession(env.sessionId);
   const kind: NonNullable<TurnAnswer["action"]>["kind"] =
     args.close === "issue"
@@ -277,12 +326,19 @@ export function handleDone(
             ? "Ready for review: yours to close (you started this session)."
             : "Ready for review: yours to close (a reply may be owed).",
     });
-    if (action) store.setTurnAction(turn.id, action);
+    if (action) {
+      store.setTurnAction(turn.id, action);
+    }
     // Before workFinished: its `finished` event finds the digest there.
     const digest = config
-      ? digestFromDone(config, task, session, { ...args.digest, summary: args.summary })
+      ? digestFromDone(config, task, session, {
+          ...args.digest,
+          summary: args.summary,
+        })
       : null;
-    if (digest && config && storySwitch(config, task).on) storyFromDigest(digest);
+    if (digest && config && storySwitch(config, task).on) {
+      storyFromDigest(digest);
+    }
     workFinished(env, {
       summary: args.summary,
       closes,

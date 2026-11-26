@@ -29,7 +29,9 @@ export class NavHistory {
   visit(place: Place): void {
     this.touch(place);
     const here = this.current();
-    if (here && samePlace(here, place)) return;
+    if (here && samePlace(here, place)) {
+      return;
+    }
     this.trail = [...this.trail.slice(0, this.at + 1), place].slice(-TRAIL_MAX);
     this.at = this.trail.length - 1;
   }
@@ -45,9 +47,19 @@ export class NavHistory {
     return this.step(1, exists);
   }
 
-  canGo(direction: 1 | -1, exists: (p: Place) => boolean = () => true): boolean {
-    for (let i = this.at + direction; i >= 0 && i < this.trail.length; i += direction)
-      if (exists(this.trail[i])) return true;
+  canGo(
+    direction: 1 | -1,
+    exists: (p: Place) => boolean = () => true,
+  ): boolean {
+    for (
+      let i = this.at + direction;
+      i >= 0 && i < this.trail.length;
+      i += direction
+    ) {
+      if (exists(this.trail[i])) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -59,17 +71,24 @@ export class NavHistory {
   }
 
   private step(direction: 1 | -1, exists: (p: Place) => boolean): Place | null {
-    for (let i = this.at + direction; i >= 0 && i < this.trail.length; i += direction)
+    for (
+      let i = this.at + direction;
+      i >= 0 && i < this.trail.length;
+      i += direction
+    ) {
       if (exists(this.trail[i])) {
         this.at = i;
         this.touch(this.trail[i]);
         return this.trail[i];
       }
+    }
     return null;
   }
 
   private touch(place: Place): void {
-    if (place.view !== "chat") return;
+    if (place.view !== "chat") {
+      return;
+    }
     this.recentKeys = [
       place.key,
       ...this.recentKeys.filter((k) => k !== place.key),

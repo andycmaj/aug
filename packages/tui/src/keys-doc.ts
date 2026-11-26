@@ -147,7 +147,13 @@ const PLACES: {
     title: "Board · Docs",
     where: "Board, tab 6, on a link someone attached",
     scopes: ["board", "app"],
-    ctx: { ...quiet, item: "doc", board: BoardTab.docs, docOwned: true, docRemovable: true },
+    ctx: {
+      ...quiet,
+      item: "doc",
+      board: BoardTab.docs,
+      docOwned: true,
+      docRemovable: true,
+    },
   },
   {
     id: "board-cost",
@@ -168,8 +174,11 @@ function rows(bindings: HelpBinding<HelpCtx>[]): KeyRow[] {
   const byDesc = new Map<string, KeyRow>();
   for (const b of bindings) {
     const row = byDesc.get(b.desc);
-    if (row) row.keys += ` / ${label(b.keys)}`;
-    else byDesc.set(b.desc, { keys: label(b.keys), desc: b.desc, cmd: b.cmd });
+    if (row) {
+      row.keys += ` / ${label(b.keys)}`;
+    } else {
+      byDesc.set(b.desc, { keys: label(b.keys), desc: b.desc, cmd: b.cmd });
+    }
   }
   return [...byDesc.values()];
 }
@@ -224,8 +233,9 @@ const CLOSE = "</script>";
 export function withKeysData(html: string, doc: KeysDoc = keysDoc()): string {
   const start = html.indexOf(OPEN);
   const end = html.indexOf(CLOSE, start);
-  if (start < 0 || end < 0)
+  if (start < 0 || end < 0) {
     throw new Error("keyboard.html has no keys-data block");
+  }
   const json = JSON.stringify(doc).replaceAll("<", "\\u003c");
   return html.slice(0, start + OPEN.length) + json + html.slice(end);
 }

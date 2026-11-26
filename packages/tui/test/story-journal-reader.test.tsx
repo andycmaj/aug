@@ -3,7 +3,13 @@
 // saves as the owner's new version.
 
 import { afterEach, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testRender } from "@opentui/solid";
@@ -18,17 +24,25 @@ const editorBefore = process.env.EDITOR;
 const visualBefore = process.env.VISUAL;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
   process.env.EDITOR = editorBefore;
-  if (visualBefore === undefined) delete process.env.VISUAL;
-  else process.env.VISUAL = visualBefore;
+  if (visualBefore === undefined) {
+    delete process.env.VISUAL;
+  } else {
+    process.env.VISUAL = visualBefore;
+  }
 });
 
 async function boot() {
   home = mkdtempSync(join(tmpdir(), "riker-reader-"));
   process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
-  const setup = await testRender(() => <App engine={engine} />, { width: 140, height: 50 });
+  const setup = await testRender(() => <App engine={engine} />, {
+    width: 140,
+    height: 50,
+  });
   destroy = () => setup.renderer.destroy();
   const settle = async (ms = 40) => {
     await Bun.sleep(ms);
@@ -36,13 +50,18 @@ async function boot() {
   };
   await settle();
   const frame = () => setup.captureCharFrame();
-  const press = async (key: string, mods?: { ctrl?: boolean; shift?: boolean }) => {
+  const press = async (
+    key: string,
+    mods?: { ctrl?: boolean; shift?: boolean },
+  ) => {
     setup.mockInput.pressKey(key, mods);
     await settle();
   };
   const goTo = async (words: string) => {
     await press("\\", { ctrl: true });
-    for (const c of words) setup.mockInput.pressKey(c);
+    for (const c of words) {
+      setup.mockInput.pressKey(c);
+    }
     setup.mockInput.pressEnter();
     await settle();
     // Off the chat box: V is a key, not a letter typed.
@@ -50,7 +69,9 @@ async function boot() {
   };
   const frameWith = async (want: string, ms = 3000) => {
     const end = Date.now() + ms;
-    while (!frame().includes(want) && Date.now() < end) await settle(20);
+    while (!frame().includes(want) && Date.now() < end) {
+      await settle(20);
+    }
     return frame();
   };
   return { engine, frame, press, goTo, frameWith };
@@ -58,12 +79,19 @@ async function boot() {
 
 test("V reads a task's story as markdown, and e rewrites it in $EDITOR", async () => {
   const { engine, frame, press, goTo, frameWith } = await boot();
-  const task = store.listTasks().find((t) => t.title === "CSV import fails on a BOM")!;
-  engine.desk.editStory(task.id, "## Pinned by the owner\n- story-pin-0241\n## Next steps\n- story-next-0241\n- second step");
+  const task = store
+    .listTasks()
+    .find((t) => t.title === "CSV import fails on a BOM")!;
+  engine.desk.editStory(
+    task.id,
+    "## Pinned by the owner\n- story-pin-0241\n## Next steps\n- story-next-0241\n- second step",
+  );
   await goTo("CSV import");
   await press("V");
   const shown = await frameWith("story-next-0241");
-  if (process.env.READER_FRAMES) writeFileSync(process.env.READER_FRAMES, `${shown}\n`);
+  if (process.env.READER_FRAMES) {
+    writeFileSync(process.env.READER_FRAMES, `${shown}\n`);
+  }
   expect(shown).toContain(`${store.taskRef(task.id)} story`);
   // Rendered, not raw: the headings lose their hashes.
   expect(shown).toContain("Pinned by the owner");
@@ -73,13 +101,21 @@ test("V reads a task's story as markdown, and e rewrites it in $EDITOR", async (
 
   // An editor that adds a line under Next steps and saves.
   const script = join(home!, "fake-editor.sh");
-  writeFileSync(script, `#!/bin/sh\nperl -0pi -e 's/- second step/- second step\\n- edited-in-editor-0241/' "$1"\n`);
+  writeFileSync(
+    script,
+    `#!/bin/sh\nperl -0pi -e 's/- second step/- second step\\n- edited-in-editor-0241/' "$1"\n`,
+  );
   chmodSync(script, 0o755);
   delete process.env.VISUAL;
   process.env.EDITOR = script;
   await press("e");
   const end = Date.now() + 5000;
-  while (!store.currentStory(task.id)?.next.includes("edited-in-editor-0241") && Date.now() < end) await Bun.sleep(30);
+  while (
+    !store.currentStory(task.id)?.next.includes("edited-in-editor-0241") &&
+    Date.now() < end
+  ) {
+    await Bun.sleep(30);
+  }
   const cur = store.currentStory(task.id)!;
   expect(cur.by).toBe("owner");
   expect(cur.next).toBe("story-next-0241\nsecond step\nedited-in-editor-0241");
@@ -90,12 +126,18 @@ test("V reads a task's story as markdown, and e rewrites it in $EDITOR", async (
 test("V on a project reads its journal as markdown, markers left out", async () => {
   const { frame, press, goTo, frameWith } = await boot();
   const project = store.listProjects().find((p) => p.name === "ledger fixes")!;
-  writeJournal(project, "2026-11-24 10:00  RIKER-0001  journal-entry-0241  (agent)\nOutcome: ready for review\n\nDid:\n- wrote the reader", new Date().toISOString());
+  writeJournal(
+    project,
+    "2026-11-24 10:00  RIKER-0001  journal-entry-0241  (agent)\nOutcome: ready for review\n\nDid:\n- wrote the reader",
+    new Date().toISOString(),
+  );
   await goTo("ledger fixes");
   expect(frame()).toContain("Project · ledger fixes");
   await press("V");
   const shown = await frameWith("journal-entry-0241");
-  if (process.env.READER_FRAMES) writeFileSync(`${process.env.READER_FRAMES}.journal`, `${shown}\n`);
+  if (process.env.READER_FRAMES) {
+    writeFileSync(`${process.env.READER_FRAMES}.journal`, `${shown}\n`);
+  }
   expect(shown).toContain("ledger fixes journal");
   expect(shown).toContain("wrote the reader");
   expect(shown).not.toContain("riker:journal");
@@ -110,7 +152,11 @@ test("V on a project reads its journal as markdown, markers left out", async () 
 test("e on the journal edits a copy; an entry Riker wrote meanwhile is kept", async () => {
   const { frame, press, goTo, frameWith } = await boot();
   const project = store.listProjects().find((p) => p.name === "ledger fixes")!;
-  const file = writeJournal(project, "2026-11-24 10:00  RIKER-0001  made  (first)", new Date().toISOString());
+  const file = writeJournal(
+    project,
+    "2026-11-24 10:00  RIKER-0001  made  (first)",
+    new Date().toISOString(),
+  );
   // The editor adds a note at the end of its copy, and while it is open an
   // entry lands in the file (what the engine does).
   const script = join(home!, "fake-editor.sh");
@@ -126,21 +172,40 @@ test("e on the journal edits a copy; an entry Riker wrote meanwhile is kept", as
   await frameWith("ledger fixes journal");
   await press("e");
   const end = Date.now() + 5000;
-  while (!readFileSync(file, "utf8").includes("owner-note-0241") && Date.now() < end) await Bun.sleep(30);
+  while (
+    !readFileSync(file, "utf8").includes("owner-note-0241") &&
+    Date.now() < end
+  ) {
+    await Bun.sleep(30);
+  }
   const now = readFileSync(file, "utf8");
   expect(now).toContain("owner-note-0241");
   expect(now).toContain("engine-entry-0241");
   expect(now).toContain("(first)");
   const toast = (await frameWith("Riker wrote")).replace(/\s+/g, " ");
-  if (process.env.READER_FRAMES) writeFileSync(`${process.env.READER_FRAMES}.merge`, `${frame()}\n`);
+  if (process.env.READER_FRAMES) {
+    writeFileSync(`${process.env.READER_FRAMES}.merge`, `${frame()}\n`);
+  }
   expect(toast).toContain("Riker wrote");
 });
 
 test("the reader lists the task's links and docs, and a number opens one", async () => {
   const { engine, frame, press, goTo, frameWith } = await boot();
-  const task = store.listTasks().find((t) => t.title === "CSV import fails on a BOM")!;
-  store.addTaskLink(task.id, "https://example.com/spec-0241", "Spec doc 0241", "owner");
-  store.addProjectLink(task.project_id!, "https://example.com/runbook-0241", "Runbook 0241", "owner");
+  const task = store
+    .listTasks()
+    .find((t) => t.title === "CSV import fails on a BOM")!;
+  store.addTaskLink(
+    task.id,
+    "https://example.com/spec-0241",
+    "Spec doc 0241",
+    "owner",
+  );
+  store.addProjectLink(
+    task.project_id!,
+    "https://example.com/runbook-0241",
+    "Runbook 0241",
+    "owner",
+  );
   const opened = join(home!, "opened.txt");
   const opener = join(home!, "fake-opener.sh");
   writeFileSync(opener, `#!/bin/sh\nprintf '%s\\n' "$1" >> "${opened}"\n`);
@@ -149,7 +214,9 @@ test("the reader lists the task's links and docs, and a number opens one", async
   await goTo("CSV import");
   await press("V");
   const shown = await frameWith("Runbook 0241");
-  if (process.env.READER_FRAMES) writeFileSync(`${process.env.READER_FRAMES}.links`, `${shown}\n`);
+  if (process.env.READER_FRAMES) {
+    writeFileSync(`${process.env.READER_FRAMES}.links`, `${shown}\n`);
+  }
   const rows = shown.split("\n");
   const row = (label: string) => rows.find((l) => l.includes(label)) ?? "";
   // The PR first, then the thread, the task's link, the project's docs.
@@ -167,7 +234,9 @@ test("the reader lists the task's links and docs, and a number opens one", async
       return "";
     }
   };
-  while (!read() && Date.now() < end) await Bun.sleep(20);
+  while (!read() && Date.now() < end) {
+    await Bun.sleep(20);
+  }
   expect(read()).toBe("https://example.com/spec-0241\n");
   // Still open: a number is not a Board tab here.
   expect(frame()).toContain("Spec doc 0241");

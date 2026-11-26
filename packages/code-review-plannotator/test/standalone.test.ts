@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeArgs, claudeAsk } from "../src/ask";
@@ -9,7 +15,10 @@ import { ANSWER, repo } from "./support/repo";
 
 // A `claude` that answers every call with the same JSON result, and keeps
 // the prompt it read and the arguments it was given.
-function fakeClaude(result: Record<string, unknown>): { bin: string; dir: string } {
+function fakeClaude(result: Record<string, unknown>): {
+  bin: string;
+  dir: string;
+} {
   const dir = mkdtempSync(join(tmpdir(), "crp-claude-"));
   writeFileSync(join(dir, "result.json"), JSON.stringify(result));
   const bin = join(dir, "claude");
@@ -40,7 +49,11 @@ describe("the instructions without riker", () => {
   });
 
   test("a job prompt names the base, the pull request and the job", () => {
-    const text = jobPrompt({ base: "origin/main", pr: "12", about: "division" })("notes, batch 1 of 2");
+    const text = jobPrompt({
+      base: "origin/main",
+      pr: "12",
+      about: "division",
+    })("notes, batch 1 of 2");
     expect(text).toContain("Base branch: origin/main");
     expect(text).toContain("Pull request: 12");
     expect(text).toContain("What the change is for: division");
@@ -54,7 +67,9 @@ describe("the instructions without riker", () => {
     expect(args[args.indexOf("--setting-sources") + 1]).toBe("");
     expect(args[args.indexOf("--model") + 1]).toBe("haiku");
     expect(args[args.indexOf("--tools") + 1]).toBe("Read,Grep,Glob,Bash");
-    expect(args.slice(args.indexOf("--allowedTools") + 1)).toEqual(skillTools());
+    expect(args.slice(args.indexOf("--allowedTools") + 1)).toEqual(
+      skillTools(),
+    );
   });
 });
 
@@ -63,8 +78,15 @@ describe("claudeAsk", () => {
     const fake = fakeClaude({
       result: "ok",
       total_cost_usd: 0.25,
-      usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100, cache_creation_input_tokens: 7 },
-      permission_denials: [{ tool_name: "Bash", tool_input: { command: "rm -rf /" } }],
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 100,
+        cache_creation_input_tokens: 7,
+      },
+      permission_denials: [
+        { tool_name: "Bash", tool_input: { command: "rm -rf /" } },
+      ],
     });
     const claude = claudeAsk({ cwd: fake.dir, claude: fake.bin });
     const answer = await claude.ask("the prompt", "guide");
@@ -73,12 +95,20 @@ describe("claudeAsk", () => {
     expect(readFileSync(join(fake.dir, "prompt.txt"), "utf8")).toBe("again");
     expect(claude.calls.map((c) => c.label)).toEqual(["guide", "chapters"]);
     const total = claude.total();
-    expect(total).toMatchObject({ calls: 2, costUsd: 0.5, inputTokens: 20, outputTokens: 10, cacheReadTokens: 200 });
+    expect(total).toMatchObject({
+      calls: 2,
+      costUsd: 0.5,
+      inputTokens: 20,
+      outputTokens: 10,
+      cacheReadTokens: 200,
+    });
   });
 
   test("a failed call says so", async () => {
     const fake = fakeClaude({ result: "credit too low", is_error: true });
-    await expect(claudeAsk({ cwd: fake.dir, claude: fake.bin }).ask("p", "guide")).rejects.toThrow("credit too low");
+    await expect(
+      claudeAsk({ cwd: fake.dir, claude: fake.bin }).ask("p", "guide"),
+    ).rejects.toThrow("credit too low");
   });
 });
 
@@ -93,11 +123,15 @@ describe("review", () => {
         return { text: GUIDE_TEXT, denied: [] };
       },
     });
-    if ("error" in ran) throw new Error(ran.error);
+    if ("error" in ran) {
+      throw new Error(ran.error);
+    }
     expect(ran.calls).toBe(1);
     expect(prompts[0]).toContain("Arguments: job: whole");
     expect(prompts[0]).toContain("Base branch: main");
-    expect(ran.guide.sections[0]!.diffs.map((d) => d.file)).toEqual(["math.ts"]);
+    expect(ran.guide.sections[0]!.diffs.map((d) => d.file)).toEqual([
+      "math.ts",
+    ]);
     expect(ran.guide.unplacedFiles).toEqual(["README.md"]);
     expect(ran.findings).toHaveLength(2);
     expect(ran.comments.map((c) => c.scope)).toEqual(["line", "file"]);
@@ -117,8 +151,14 @@ describe("review", () => {
           : { text: GUIDE_TEXT, denied: [] };
       },
     });
-    if ("error" in ran) throw new Error(ran.error);
-    expect(jobs.sort()).toEqual(["chapters", "notes, batch 1 of 2", "notes, batch 2 of 2"]);
+    if ("error" in ran) {
+      throw new Error(ran.error);
+    }
+    expect(jobs.sort()).toEqual([
+      "chapters",
+      "notes, batch 1 of 2",
+      "notes, batch 2 of 2",
+    ]);
     expect(ran.calls).toBe(3);
   });
 });
@@ -126,10 +166,27 @@ describe("review", () => {
 describe("the CLI", () => {
   test("writes the guide, the findings and the usage, with no Plannotator", async () => {
     const dir = repo();
-    const fake = fakeClaude({ result: GUIDE_TEXT, total_cost_usd: 0.1, usage: { input_tokens: 3, output_tokens: 4 } });
+    const fake = fakeClaude({
+      result: GUIDE_TEXT,
+      total_cost_usd: 0.1,
+      usage: { input_tokens: 3, output_tokens: 4 },
+    });
     const out = join(dir, "out");
     const proc = Bun.spawn(
-      ["bun", join(import.meta.dir, "../src/cli.ts"), "review", "--cwd", dir, "--claude", fake.bin, "--out", out, "--no-plannotator", "--model", "haiku"],
+      [
+        "bun",
+        join(import.meta.dir, "../src/cli.ts"),
+        "review",
+        "--cwd",
+        dir,
+        "--claude",
+        fake.bin,
+        "--out",
+        out,
+        "--no-plannotator",
+        "--model",
+        "haiku",
+      ],
       { stdout: "pipe", stderr: "pipe" },
     );
     const [stdout, stderr, code] = await Promise.all([
@@ -142,10 +199,16 @@ describe("the CLI", () => {
     expect(stdout).toContain("Add div");
     expect(stdout).toContain("2 findings:");
     expect(existsSync(join(out, "guide.json"))).toBe(true);
-    const findings = JSON.parse(readFileSync(join(out, "guide-findings.json"), "utf8"));
+    const findings = JSON.parse(
+      readFileSync(join(out, "guide-findings.json"), "utf8"),
+    );
     expect(findings.findings).toHaveLength(2);
     const usage = JSON.parse(readFileSync(join(out, "usage.json"), "utf8"));
-    expect(usage).toMatchObject({ model: "haiku", findings: 2, total: { calls: 1, costUsd: 0.1 } });
+    expect(usage).toMatchObject({
+      model: "haiku",
+      findings: 2,
+      total: { calls: 1, costUsd: 0.1 },
+    });
     expect(readFileSync(join(fake.dir, "args.txt"), "utf8")).toContain("haiku");
   });
 });

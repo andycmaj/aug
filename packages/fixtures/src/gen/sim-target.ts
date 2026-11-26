@@ -47,7 +47,10 @@ export function simTarget(file: string): GenTarget {
         ...(ask === Ask.team ? { team: SIM_TEAM } : {}),
       });
       const p = done.opened!;
-      return { number: p.number, url: `https://github.com/${loadState(file).repo}/pull/${p.number}` };
+      return {
+        number: p.number,
+        url: `https://github.com/${loadState(file).repo}/pull/${p.number}`,
+      };
     },
     async followUp(pr, _change, reply) {
       event({ type: "push", pr, by: GEN_AUTHOR });

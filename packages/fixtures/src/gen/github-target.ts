@@ -69,18 +69,32 @@ export function githubTarget(
   let token: { value: string; until: number } | null = null;
 
   async function installationToken(): Promise<string> {
-    if (token && token.until > Date.now() + 60_000) return token.value;
-    const res = await fetcher(`${API}/app/installations/${config.installationId}/access_tokens`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${appJwt(config.appId, key())}`, accept: "application/vnd.github+json" },
-    });
-    if (!res.ok) throw new Error(`the App's token: ${res.status} ${await res.text()}`);
+    if (token && token.until > Date.now() + 60_000) {
+      return token.value;
+    }
+    const res = await fetcher(
+      `${API}/app/installations/${config.installationId}/access_tokens`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${appJwt(config.appId, key())}`,
+          accept: "application/vnd.github+json",
+        },
+      },
+    );
+    if (!res.ok) {
+      throw new Error(`the App's token: ${res.status} ${await res.text()}`);
+    }
     const got = (await res.json()) as { token: string; expires_at: string };
     token = { value: got.token, until: Date.parse(got.expires_at) };
     return got.token;
   }
 
-  async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async function call<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
     const res = await fetcher(`${API}/repos/${config.repo}${path}`, {
       method,
       headers: {
@@ -91,22 +105,43 @@ export function githubTarget(
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
-    if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${await res.text()}`);
+    if (!res.ok) {
+      throw new Error(`${method} ${path}: ${res.status} ${await res.text()}`);
+    }
     return (res.status === 204 ? null : await res.json()) as T;
   }
 
   // A commit of `change` over `parent`, as one tree.
-  async function commit(parent: string, change: Change, message: string): Promise<string> {
-    const { tree } = await call<{ tree: { sha: string } }>("GET", `/git/commits/${parent}`);
+  async function commit(
+    parent: string,
+    change: Change,
+    message: string,
+  ): Promise<string> {
+    const { tree } = await call<{ tree: { sha: string } }>(
+      "GET",
+      `/git/commits/${parent}`,
+    );
     const entries = await Promise.all(
       change.files.map(async (f) => {
-        if (f.content === null) return { path: f.path, mode: "100644", type: "blob", sha: null };
-        const blob = await call<{ sha: string }>("POST", "/git/blobs", { content: f.content, encoding: "utf-8" });
+        if (f.content === null) {
+          return { path: f.path, mode: "100644", type: "blob", sha: null };
+        }
+        const blob = await call<{ sha: string }>("POST", "/git/blobs", {
+          content: f.content,
+          encoding: "utf-8",
+        });
         return { path: f.path, mode: "100644", type: "blob", sha: blob.sha };
       }),
     );
-    const made = await call<{ sha: string }>("POST", "/git/trees", { base_tree: tree.sha, tree: entries });
-    const c = await call<{ sha: string }>("POST", "/git/commits", { message, tree: made.sha, parents: [parent] });
+    const made = await call<{ sha: string }>("POST", "/git/trees", {
+      base_tree: tree.sha,
+      tree: entries,
+    });
+    const c = await call<{ sha: string }>("POST", "/git/commits", {
+      message,
+      tree: made.sha,
+      parents: [parent],
+    });
     return c.sha;
   }
 
@@ -115,51 +150,83 @@ export function githubTarget(
     await call(
       "POST",
       `/pulls/${pr}/requested_reviewers`,
-      who === Ask.team && slug ? { team_reviewers: [slug] } : { reviewers: [config.me] },
+      who === Ask.team && slug
+        ? { team_reviewers: [slug] }
+        : { reviewers: [config.me] },
     );
   }
 
-  const comment = (pr: number, body: string) => call("POST", `/issues/${pr}/comments`, { body });
+  const comment = (pr: number, body: string) =>
+    call("POST", `/issues/${pr}/comments`, { body });
 
   return {
     name: "github",
     hasTeam: Boolean(config.team),
     async list() {
-      const pulls = await call<GhPullRow[]>("GET", "/pulls?state=all&sort=updated&direction=desc&per_page=50");
+      const pulls = await call<GhPullRow[]>(
+        "GET",
+        "/pulls?state=all&sort=updated&direction=desc&per_page=50",
+      );
       const ours = pulls.filter((p) => p.head.ref.startsWith(GEN_BRANCH));
       return Promise.all(
         ours.map(async (p): Promise<GenPr> => {
           const open = p.state === "open";
-          const reviews = open ? await call<GhReviewRow[]>("GET", `/pulls/${p.number}/reviews?per_page=100`) : [];
+          const reviews = open
+            ? await call<GhReviewRow[]>(
+                "GET",
+                `/pulls/${p.number}/reviews?per_page=100`,
+              )
+            : [];
           const mine = reviews
-            .filter((r) => r.user?.login.toLowerCase() === config.me.toLowerCase() && r.submitted_at && r.state !== "PENDING")
+            .filter(
+              (r) =>
+                r.user?.login.toLowerCase() === config.me.toLowerCase() &&
+                r.submitted_at &&
+                r.state !== "PENDING",
+            )
             .at(-1);
           const head = open
-            ? await call<{ commit: { committer: { date: string } } }>("GET", `/commits/${p.head.sha}`)
+            ? await call<{ commit: { committer: { date: string } } }>(
+                "GET",
+                `/commits/${p.head.sha}`,
+              )
             : null;
           return {
             number: p.number,
             url: p.html_url,
-            state: p.merged_at ? PrState.merged : open ? PrState.open : PrState.closed,
+            state: p.merged_at
+              ? PrState.merged
+              : open
+                ? PrState.open
+                : PrState.closed,
             updatedAt: p.updated_at,
             pushedAt: head?.commit.committer.date ?? p.updated_at,
-            mine: mine ? { verdict: mine.state as Verdict, at: mine.submitted_at! } : null,
+            mine: mine
+              ? { verdict: mine.state as Verdict, at: mine.submitted_at! }
+              : null,
             repliedAt: null,
           };
         }),
       );
     },
     async open(change, who): Promise<Opened> {
-      const main = await call<{ object: { sha: string } }>("GET", `/git/ref/heads/${base}`);
+      const main = await call<{ object: { sha: string } }>(
+        "GET",
+        `/git/ref/heads/${base}`,
+      );
       const sha = await commit(main.object.sha, change, change.title);
       const branch = `${GEN_BRANCH}${Date.now().toString(36)}`;
       await call("POST", "/git/refs", { ref: `refs/heads/${branch}`, sha });
-      const pr = await call<{ number: number; html_url: string }>("POST", "/pulls", {
-        title: change.title,
-        body: change.body,
-        head: branch,
-        base,
-      });
+      const pr = await call<{ number: number; html_url: string }>(
+        "POST",
+        "/pulls",
+        {
+          title: change.title,
+          body: change.body,
+          head: branch,
+          base,
+        },
+      );
       await ask(pr.number, who);
       return { number: pr.number, url: pr.html_url };
     },
@@ -183,7 +250,9 @@ export function githubTarget(
       await call("PUT", `/pulls/${pr}/merge`, { merge_method: "squash" });
     },
     async close(pr) {
-      const p = await call<GhPullRow>("PATCH", `/pulls/${pr}`, { state: "closed" });
+      const p = await call<GhPullRow>("PATCH", `/pulls/${pr}`, {
+        state: "closed",
+      });
       await call("DELETE", `/git/refs/heads/${p.head.ref}`);
     },
   };

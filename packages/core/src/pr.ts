@@ -27,7 +27,9 @@ const THREAD = /^github:([^/#]+\/[^/#]+)#(\d+)$/;
 
 function fromThread(key: string): PrRef | null {
   const m = key.match(THREAD);
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const number = Number(m[2]);
   return { repo: m[1], number, url: prUrl(m[1], number) };
 }
@@ -51,21 +53,29 @@ export function taskPr(task: TaskRow): PrRef | null {
     .filter((k) => k !== task.thread_key);
   for (const key of linked.reverse()) {
     const pr = fromThread(key);
-    if (pr) return pr;
+    if (pr) {
+      return pr;
+    }
   }
   const own = fromUrl(task.url);
-  if (own) return own;
+  if (own) {
+    return own;
+  }
   if (task.thread_key) {
     const pr = fromThread(task.thread_key);
     const first = pr ? store.firstMessageOnThread(task.thread_key) : null;
     if (pr && first) {
       const meta = messageMeta(first);
-      if (meta.channel === "github" && meta.type === "PullRequest") return pr;
+      if (meta.channel === "github" && meta.type === "PullRequest") {
+        return pr;
+      }
     }
   }
   for (const link of store.linksForTask(task.id).reverse()) {
     const pr = fromUrl(link.url);
-    if (pr) return pr;
+    if (pr) {
+      return pr;
+    }
   }
   return null;
 }
@@ -77,11 +87,14 @@ export const REVIEW_LINK_BY = "triage review";
 export const REVIEW_LINK_TITLE = "the pull request to review";
 
 export function reviewedPr(task: TaskRow): PrRef | null {
-  for (const link of store.linksForTask(task.id))
+  for (const link of store.linksForTask(task.id)) {
     if (link.added_by === REVIEW_LINK_BY) {
       const pr = fromUrl(link.url);
-      if (pr) return pr;
+      if (pr) {
+        return pr;
+      }
     }
+  }
   return null;
 }
 
@@ -99,35 +112,65 @@ export function prChip(s: PrStatusRow): { text: string; tone: Tone } {
     s.error
       ? { text: `#${s.number} ${word} · stale`, tone: "muted" as const }
       : { text: `#${s.number} ${word}`, tone };
-  if (s.state === PrState.merged) return say("merged", "accent");
-  if (s.state === PrState.closed) return say("✗ closed", "muted");
-  if (s.queue === PrQueue.failing) return say("✗ MQ", "error");
-  if (s.queue === PrQueue.queued)
+  if (s.state === PrState.merged) {
+    return say("merged", "accent");
+  }
+  if (s.state === PrState.closed) {
+    return say("✗ closed", "muted");
+  }
+  if (s.queue === PrQueue.failing) {
+    return say("✗ MQ", "error");
+  }
+  if (s.queue === PrQueue.queued) {
     return say(
       s.queue_position
         ? `${QUEUE_MARK} MQ ${s.queue_position}`
         : `${QUEUE_MARK} MQ`,
       "info",
     );
-  if (s.queue === PrQueue.removed) return say("✗ out of MQ", "error");
-  if (s.mergeable === PrMergeable.conflict) return say("✗ conflict", "error");
-  if (s.checks === PrChecks.fail) return say("✗ ci", "error");
-  if (s.review === PrReview.changes) return say("✗ changes", "error");
-  if (s.checks === PrChecks.pending) return say("● ci", "warning");
-  if (s.state === PrState.draft) return say("draft", "muted");
-  if (s.review === PrReview.approved) return say("✓ approved", "success");
-  if (s.review === PrReview.required) return say("● in review", "warning");
+  }
+  if (s.queue === PrQueue.removed) {
+    return say("✗ out of MQ", "error");
+  }
+  if (s.mergeable === PrMergeable.conflict) {
+    return say("✗ conflict", "error");
+  }
+  if (s.checks === PrChecks.fail) {
+    return say("✗ ci", "error");
+  }
+  if (s.review === PrReview.changes) {
+    return say("✗ changes", "error");
+  }
+  if (s.checks === PrChecks.pending) {
+    return say("● ci", "warning");
+  }
+  if (s.state === PrState.draft) {
+    return say("draft", "muted");
+  }
+  if (s.review === PrReview.approved) {
+    return say("✓ approved", "success");
+  }
+  if (s.review === PrReview.required) {
+    return say("● in review", "warning");
+  }
   return say("✓ ci", "success");
 }
 
 // What the rail's review lane says instead of "PR in review" once the PR
 // has moved on to the queue, or been put out of it.
 export function prQueueWord(s: PrStatusRow | null): string | null {
-  if (!s || s.state === PrState.merged || s.state === PrState.closed)
+  if (!s || s.state === PrState.merged || s.state === PrState.closed) {
     return null;
-  if (s.queue === PrQueue.queued) return "in merge queue";
-  if (s.queue === PrQueue.failing) return "failing in merge queue";
-  if (s.queue === PrQueue.removed) return "out of merge queue";
+  }
+  if (s.queue === PrQueue.queued) {
+    return "in merge queue";
+  }
+  if (s.queue === PrQueue.failing) {
+    return "failing in merge queue";
+  }
+  if (s.queue === PrQueue.removed) {
+    return "out of merge queue";
+  }
   return null;
 }
 
@@ -145,15 +188,19 @@ const REVIEW_WORDS: Record<PrReview, string> = {
 };
 
 function queueWords(s: PrStatusRow): string {
-  if (s.queue === PrQueue.queued)
+  if (s.queue === PrQueue.queued) {
     return s.queue_position
       ? `in merge queue, position ${s.queue_position}`
       : "in merge queue";
-  if (s.queue === PrQueue.failing) return "in merge queue, failing";
-  if (s.queue === PrQueue.removed)
+  }
+  if (s.queue === PrQueue.failing) {
+    return "in merge queue, failing";
+  }
+  if (s.queue === PrQueue.removed) {
     return s.queue_reason
       ? `removed from merge queue: ${s.queue_reason.toLowerCase()}`
       : "removed from merge queue";
+  }
   return "";
 }
 
@@ -178,7 +225,9 @@ export function taskPrStatus(
   task: TaskRow,
 ): { pr: PrRef; status: PrStatusRow | null } | null {
   const pr = taskPr(task);
-  if (!pr) return null;
+  if (!pr) {
+    return null;
+  }
   const status = store.prStatus(task.id);
   return { pr, status: status?.url === pr.url ? status : null };
 }
@@ -186,10 +235,16 @@ export function taskPrStatus(
 // What an open or draft PR says of a task's unmerged work (merge.ts
 // unmergedWork asks it); null for any other state or none read.
 export function unmergedPr(task: TaskRow): string | null {
-  if (task.merged_at) return null;
+  if (task.merged_at) {
+    return null;
+  }
   const s = taskPrStatus(task)?.status;
-  if (!s) return null;
-  if (s.state !== PrState.open && s.state !== PrState.draft) return null;
+  if (!s) {
+    return null;
+  }
+  if (s.state !== PrState.open && s.state !== PrState.draft) {
+    return null;
+  }
   const what = s.state === PrState.draft ? "a draft" : "open";
   return `PR #${s.number} is ${what}, not merged${s.error ? " (as of its last read)" : ""}`;
 }

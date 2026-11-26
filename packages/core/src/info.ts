@@ -8,11 +8,23 @@ import { paths } from "./paths";
 import { ageLabel, type RailItem } from "./rail";
 import { projectProgress } from "./lookup";
 import type { RikerConfig } from "./config";
-import { journalSwitch, lines, projectStoryDefault, storySwitch, switchWords } from "./digests";
+import {
+  journalSwitch,
+  lines,
+  projectStoryDefault,
+  storySwitch,
+  switchWords,
+} from "./digests";
 import { journalExists, journalFile } from "./journal";
 import * as store from "./store";
 import { timerLine, timerRef } from "./timers";
-import { GoalStatus, TimerKind, type ProjectRow, type StoryRow, type TaskRow } from "./types";
+import {
+  GoalStatus,
+  TimerKind,
+  type ProjectRow,
+  type StoryRow,
+  type TaskRow,
+} from "./types";
 
 export interface InfoRow {
   label: string;
@@ -27,7 +39,9 @@ export interface InfoSection {
 }
 
 function when(iso: string | null, now: Date): string | null {
-  if (!iso) return null;
+  if (!iso) {
+    return null;
+  }
   const d = new Date(iso);
   const stamp = d.toLocaleString([], {
     month: "short",
@@ -56,14 +70,24 @@ function section(
 }
 
 // The task's story switch (J flips it) and its current version.
-function storySection(config: RikerConfig, task: TaskRow, now: Date): InfoSection {
+function storySection(
+  config: RikerConfig,
+  task: TaskRow,
+  now: Date,
+): InfoSection {
   const v = store.currentStory(task.id);
-  const part = (key: keyof StoryRow, label: string): [string, string | null] => {
+  const part = (
+    key: keyof StoryRow,
+    label: string,
+  ): [string, string | null] => {
     const items = v ? lines(String(v[key] ?? "")) : [];
     return [label, items.length ? items.join("; ") : null];
   };
   return section("Story", [
-    ["switch", `${switchWords("story", storySwitch(config, task))}; J flips it, V reads it`],
+    [
+      "switch",
+      `${switchWords("story", storySwitch(config, task))}; J flips it, V reads it`,
+    ],
     ["as of", v ? `${when(v.at, now)} by ${v.by}` : null],
     part("pinned", "pinned"),
     part("goals", "goals"),
@@ -81,22 +105,25 @@ function storySection(config: RikerConfig, task: TaskRow, now: Date): InfoSectio
 function journalSection(config: RikerConfig, project: ProjectRow): InfoSection {
   const file = journalFile(project);
   const s = section("Journal", [
-    ["switch", `${switchWords("journal", journalSwitch(config, project))}; J flips it, V reads it`],
+    [
+      "switch",
+      `${switchWords("journal", journalSwitch(config, project))}; J flips it, V reads it`,
+    ],
     ["stories", switchWords("stories", projectStoryDefault(config, project))],
   ]);
-  if (journalExists(project)) s.rows.push({ label: "file", value: file, open: `file://${file}` });
+  if (journalExists(project)) {
+    s.rows.push({ label: "file", value: file, open: `file://${file}` });
+  }
   return s;
 }
 
-function taskSections(
-  task: TaskRow,
-  lane: Lane,
-  now: Date,
-): InfoSection[] {
+function taskSections(task: TaskRow, lane: Lane, now: Date): InfoSection[] {
   const messages = store.messagesForTask(task.id);
   const turns = store.turnsForTask(task.id);
   const sessions = store.sessionsForTask(task.id);
-  const files = new Set(turns.flatMap((t) => parseFiles(t.files).map((f) => f.path)));
+  const files = new Set(
+    turns.flatMap((t) => parseFiles(t.files).map((f) => f.path)),
+  );
   const work = paths.work(task.id);
   const last = messages.at(-1);
   const latest = sessions[0];
@@ -109,9 +136,20 @@ function taskSections(
       ["kind", task.kind],
       ["status", task.status],
       ["lane", LANE_META[lane].word],
-      ["project", task.project_id ? store.getProject(task.project_id)?.name : null],
-      ["goal", goal ? `${store.goalRef(goal.id)} ${goal.title} (${goal.status})` : null],
-      ["priority", task.priority_pinned ? `${task.priority} (set by you)` : task.priority],
+      [
+        "project",
+        task.project_id ? store.getProject(task.project_id)?.name : null,
+      ],
+      [
+        "goal",
+        goal
+          ? `${store.goalRef(goal.id)} ${goal.title} (${goal.status})`
+          : null,
+      ],
+      [
+        "priority",
+        task.priority_pinned ? `${task.priority} (set by you)` : task.priority,
+      ],
       ["watching", task.watching ? "yes" : null],
       ["waiting on", task.waiting_on],
       ["remind", when(task.remind_at, now)],
@@ -121,7 +159,12 @@ function taskSections(
         .map((t): [string, string] => [timerRef(t.id), timerLine(t, now)]),
       ["created", when(task.created_at, now)],
       ["updated", when(task.updated_at, now)],
-      ["closed", task.closed_at ? `${when(task.closed_at, now)} by ${task.closed_by ?? "?"}` : null],
+      [
+        "closed",
+        task.closed_at
+          ? `${when(task.closed_at, now)} by ${task.closed_by ?? "?"}`
+          : null,
+      ],
     ]),
     section("Source", [
       ["channel", task.channel],
@@ -130,7 +173,10 @@ function taskSections(
       ["thread", task.thread_key],
       ["triage", task.triage_reason],
       ["messages", messages.length || null],
-      ["last heard", last ? `${last.author_name}, ${when(last.received_at, now)}` : null],
+      [
+        "last heard",
+        last ? `${last.author_name}, ${when(last.received_at, now)}` : null,
+      ],
     ]),
     {
       title: "Links",
@@ -156,12 +202,18 @@ function taskSections(
   ].filter((s) => s.rows.length > 0);
 }
 
-export function itemInfo(item: RailItem, now = new Date(), config?: RikerConfig): InfoSection[] {
+export function itemInfo(
+  item: RailItem,
+  now = new Date(),
+  config?: RikerConfig,
+): InfoSection[] {
   switch (item.type) {
     case "task": {
       const fresh = store.getTask(item.task.id) ?? item.task;
       const sections = taskSections(fresh, item.lane, now);
-      return config ? [...sections, storySection(config, fresh, now)] : sections;
+      return config
+        ? [...sections, storySection(config, fresh, now)]
+        : sections;
     }
     case "project": {
       const fresh = store.getProject(item.project.id) ?? item.project;
@@ -174,7 +226,10 @@ export function itemInfo(item: RailItem, now = new Date(), config?: RikerConfig)
           ["repos", item.repos.join(", ") || null],
           ["open tasks", String(item.open)],
           ["working", item.working ? String(item.working) : null],
-          ["solo", item.project.solo ? "yes: archived when its task is done" : null],
+          [
+            "solo",
+            item.project.solo ? "yes: archived when its task is done" : null,
+          ],
           ["goals", item.goals ? `${item.goalsMet}/${item.goals} met` : null],
           ["created", when(item.project.created_at, now)],
         ]),
@@ -190,9 +245,11 @@ export function itemInfo(item: RailItem, now = new Date(), config?: RikerConfig)
         },
         {
           title: "Docs",
-          rows: store
-            .linksForProject(fresh.id)
-            .map((l) => ({ label: l.title ?? "link", value: l.url, open: l.url })),
+          rows: store.linksForProject(fresh.id).map((l) => ({
+            label: l.title ?? "link",
+            value: l.url,
+            open: l.url,
+          })),
         },
         ...(config ? [journalSection(config, fresh)] : []),
       ].filter((s) => s.rows.length > 0);
@@ -201,6 +258,8 @@ export function itemInfo(item: RailItem, now = new Date(), config?: RikerConfig)
 }
 
 export function infoTitle(item: RailItem): string {
-  if (item.type === "task") return `${store.taskRef(item.task.id)} · ${item.task.title}`;
+  if (item.type === "task") {
+    return `${store.taskRef(item.task.id)} · ${item.task.title}`;
+  }
   return `Project ${item.project.name}`;
 }

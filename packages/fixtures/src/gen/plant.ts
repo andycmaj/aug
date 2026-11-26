@@ -50,15 +50,26 @@ export async function plant(path: string, content: string): Promise<Planted> {
       `The file now:\n\`\`\`\n${content}\n\`\`\``,
     ].join("\n"),
   });
-  if (result.isError) throw new Error(`plant: ${result.text}`);
+  if (result.isError) {
+    throw new Error(`plant: ${result.text}`);
+  }
   const a = (result.structured ?? JSON.parse(result.text)) as Answer;
   return {
-    change: { title: a.title, body: a.body, files: [{ path, content: a.content }], source: `planted in ${path}` },
+    change: {
+      title: a.title,
+      body: a.body,
+      files: [{ path, content: a.content }],
+      source: `planted in ${path}`,
+    },
     bug: { path, line: a.bugLine, what: a.bug },
   };
 }
 
 // A file worth planting in: source, not too long.
 export function plantable(path: string, content: string): boolean {
-  return /\.(ts|tsx|js|py|go|rs)$/.test(path) && !/test|spec|fixture/i.test(path) && content.split("\n").length <= 400;
+  return (
+    /\.(ts|tsx|js|py|go|rs)$/.test(path) &&
+    !/test|spec|fixture/i.test(path) &&
+    content.split("\n").length <= 400
+  );
 }

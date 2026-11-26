@@ -11,7 +11,9 @@ import type { NewMessage } from "@riker/core/store";
 // since every call after it fails too and spends what is left.
 function unlessLimited(err: unknown): null {
   const message = err instanceof Error ? err.message : String(err);
-  if (ghTrouble(message) === GhTrouble.rateLimit) throw err;
+  if (ghTrouble(message) === GhTrouble.rateLimit) {
+    throw err;
+  }
   return null;
 }
 
@@ -149,7 +151,9 @@ export async function pollGithub(
     all: "false",
     per_page: "50",
   });
-  if (sinceIso) query.set("since", sinceIso);
+  if (sinceIso) {
+    query.set("since", sinceIso);
+  }
   const notifications = (await api(
     `notifications?${query}`,
   )) as GhNotification[];
@@ -172,7 +176,9 @@ async function notificationMessage(
   const detail = n.subject.latest_comment_url ?? n.subject.url;
   if (detail) {
     try {
-      item = (await api(detail.replace("https://api.github.com/", ""))) as GhItem;
+      item = (await api(
+        detail.replace("https://api.github.com/", ""),
+      )) as GhItem;
     } catch (err) {
       item = unlessLimited(err);
     }
@@ -195,7 +201,9 @@ async function notificationMessage(
           : await api(n.subject.url.replace("https://api.github.com/", ""))
       ) as GhPull;
       head = pull.head?.ref ?? null;
-      if (review) requested = reviewRequested(pull, n.repository.full_name, me);
+      if (review) {
+        requested = reviewRequested(pull, n.repository.full_name, me);
+      }
     } catch (err) {
       head = unlessLimited(err);
     }

@@ -15,7 +15,9 @@ let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
   destroy?.();
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 async function boot() {
@@ -43,14 +45,17 @@ async function boot() {
   };
   const goTo = async (words: string) => {
     await press("\\", { ctrl: true });
-    for (const c of words) setup.mockInput.pressKey(c);
+    for (const c of words) {
+      setup.mockInput.pressKey(c);
+    }
     await enter();
   };
   const frame = () => setup.captureCharFrame();
   return { press, enter, goTo, frame };
 }
 
-const taskTitled = (prefix: string) => store.listTasks().find((t) => t.title.startsWith(prefix))!;
+const taskTitled = (prefix: string) =>
+  store.listTasks().find((t) => t.title.startsWith(prefix))!;
 const ASK = "Mark it done anyway?";
 
 test("d on a task whose PR is open asks; Enter keeps it open", async () => {

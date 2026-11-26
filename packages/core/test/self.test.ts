@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { guardScript, installHooks } from "../src/adopt";
@@ -28,11 +35,21 @@ const PIN = envName("TOOLS_ENTRY");
 let dir: string;
 let main: string;
 let wt: string;
-const before = { entry: toolsEntry(), pin: process.env[PIN], claude: process.env.CLAUDE_CONFIG_DIR };
+const before = {
+  entry: toolsEntry(),
+  pin: process.env[PIN],
+  claude: process.env.CLAUDE_CONFIG_DIR,
+};
 
 function git(cwd: string, ...args: string[]): void {
-  const r = Bun.spawnSync(["git", ...args], { cwd, stderr: "pipe", stdout: "pipe" });
-  if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
+  const r = Bun.spawnSync(["git", ...args], {
+    cwd,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  if (r.exitCode !== 0) {
+    throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
+  }
 }
 
 function file(path: string): void {
@@ -52,16 +69,31 @@ beforeEach(() => {
   git(main, "init", "-q", "-b", "main");
   file(join(main, TOOLS));
   git(main, "add", ".");
-  git(main, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init");
+  git(
+    main,
+    "-c",
+    "user.name=t",
+    "-c",
+    "user.email=t@t",
+    "commit",
+    "-qm",
+    "init",
+  );
   git(main, "worktree", "add", "-q", "-b", "some-task", wt);
 });
 
 afterEach(() => {
   setToolsEntry(before.entry);
-  if (before.pin === undefined) delete process.env[PIN];
-  else process.env[PIN] = before.pin;
-  if (before.claude === undefined) delete process.env.CLAUDE_CONFIG_DIR;
-  else process.env.CLAUDE_CONFIG_DIR = before.claude;
+  if (before.pin === undefined) {
+    delete process.env[PIN];
+  } else {
+    process.env[PIN] = before.pin;
+  }
+  if (before.claude === undefined) {
+    delete process.env.CLAUDE_CONFIG_DIR;
+  } else {
+    process.env.CLAUDE_CONFIG_DIR = before.claude;
+  }
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -97,9 +129,14 @@ describe("what briefs and hooks name", () => {
     expect(guardScript()).toContain(join(main, TOOLS));
     expect(guardScript()).not.toContain(wt);
 
-    const task = store.createTask({ title: "Fix it", kind: Kind.coding, channel: "github" });
+    const task = store.createTask({
+      title: "Fix it",
+      kind: Kind.coding,
+      channel: "github",
+    });
     const launch = codingLaunch(config(), task, {});
-    const brief = launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1]!;
+    const brief =
+      launch.argv[launch.argv.indexOf("--append-system-prompt-file") + 1]!;
     const text = `${launch.argv.join(" ")} ${readFileSync(brief, "utf8")}`;
     expect(text).toContain(join(main, TOOLS));
     expect(text).not.toContain(wt);

@@ -93,23 +93,40 @@ export function outcomeOf(events: TaskEventRow[]): Outcome {
   let status: Outcome = Outcome.open;
   let merged = false;
   for (const e of events) {
-    if (e.kind === TaskEventKind.done) status = Outcome.done;
-    else if (e.kind === TaskEventKind.dropped) status = Outcome.dropped;
-    else if (e.kind === TaskEventKind.later) status = Outcome.later;
-    else if (e.kind === TaskEventKind.reopened) status = Outcome.open;
-    else if (e.kind === TaskEventKind.merged) merged = true;
-    else if (e.kind === TaskEventKind.unmerged) merged = false;
+    if (e.kind === TaskEventKind.done) {
+      status = Outcome.done;
+    } else if (e.kind === TaskEventKind.dropped) {
+      status = Outcome.dropped;
+    } else if (e.kind === TaskEventKind.later) {
+      status = Outcome.later;
+    } else if (e.kind === TaskEventKind.reopened) {
+      status = Outcome.open;
+    } else if (e.kind === TaskEventKind.merged) {
+      merged = true;
+    } else if (e.kind === TaskEventKind.unmerged) {
+      merged = false;
+    }
   }
-  if (status !== Outcome.open && status !== Outcome.later) return status;
+  if (status !== Outcome.open && status !== Outcome.later) {
+    return status;
+  }
   return merged ? Outcome.merged : status;
 }
 
 // Today the task's own columns say it best.
 function outcomeNow(task: TaskRow): Outcome {
-  if (task.status === TaskStatus.done) return Outcome.done;
-  if (task.status === TaskStatus.dropped) return Outcome.dropped;
-  if (task.merged_at) return Outcome.merged;
-  if (task.status === TaskStatus.later) return Outcome.later;
+  if (task.status === TaskStatus.done) {
+    return Outcome.done;
+  }
+  if (task.status === TaskStatus.dropped) {
+    return Outcome.dropped;
+  }
+  if (task.merged_at) {
+    return Outcome.merged;
+  }
+  if (task.status === TaskStatus.later) {
+    return Outcome.later;
+  }
   return Outcome.open;
 }
 
@@ -142,11 +159,15 @@ export function winsDay(day: string, now: Date): WinsDay {
   const row = (task: TaskRow, win: boolean): DayRow => {
     const own = events.filter((e) => e.task_id === task.id).reverse();
     const turns = counts.filter((c) => c.task_id === task.id);
-    const last = [...own.map((e) => e.at), ...turns.map((c) => c.last)].sort().pop() ?? null;
+    const last =
+      [...own.map((e) => e.at), ...turns.map((c) => c.last)].sort().pop() ??
+      null;
     return {
       task,
       win,
-      outcome: isToday ? outcomeNow(task) : outcomeOf(store.eventsForTask(task.id, to)),
+      outcome: isToday
+        ? outcomeNow(task)
+        : outcomeOf(store.eventsForTask(task.id, to)),
       lane: isToday
         ? laneOf(task, {
             hasPendingAction: pending.has(task.id),
@@ -173,8 +194,14 @@ export function winsDay(day: string, now: Date): WinsDay {
     .sort(newest((r) => winIds.indexOf(r.task.id)));
 
   const touched = new Set<number>();
-  for (const e of events) if (LANDED.has(e.kind)) touched.add(e.task_id);
-  for (const c of counts) touched.add(c.task_id);
+  for (const e of events) {
+    if (LANDED.has(e.kind)) {
+      touched.add(e.task_id);
+    }
+  }
+  for (const c of counts) {
+    touched.add(c.task_id);
+  }
   const also = [...touched]
     .filter((id) => !winIds.includes(id))
     .flatMap((id) => {
@@ -188,7 +215,9 @@ export function winsDay(day: string, now: Date): WinsDay {
     isToday,
     wins,
     also,
-    made: events.filter((e) => e.kind === TaskEventKind.created && taskOf(e.task_id)).length,
+    made: events.filter(
+      (e) => e.kind === TaskEventKind.created && taskOf(e.task_id),
+    ).length,
     moves: store.movesBetween(from, to).length,
   };
 }
@@ -197,7 +226,9 @@ function movesFor(taskId: number, from: string, to: string): MoveRow[] {
   return store.movesBetween(from, to).filter((m) => {
     try {
       const args = JSON.parse(m.args) as Record<string, unknown>;
-      return typeof args.task === "string" && parseTaskRef(args.task) === taskId;
+      return (
+        typeof args.task === "string" && parseTaskRef(args.task) === taskId
+      );
     } catch {
       return false;
     }
@@ -213,19 +244,26 @@ function agentMs(taskId: number, from: string, to: string): number {
   for (const s of store.sessionsForTask(taskId)) {
     const start = Math.max(lo, Date.parse(s.started_at));
     const end = Math.min(hi, Date.parse(s.ended_at ?? s.last_event_at));
-    if (end > start) ms += end - start;
+    if (end > start) {
+      ms += end - start;
+    }
   }
   return ms;
 }
 
 export function winDetail(taskId: number, day: string): WinDetail | null {
   const task = store.getTask(taskId);
-  if (!task) return null;
+  if (!task) {
+    return null;
+  }
   const { from, to } = dayBounds(day);
   const turns = store.turnsForTaskBetween(taskId, from, to);
   return {
     task,
-    events: store.eventsBetween(from, to).filter((e) => e.task_id === taskId).reverse(),
+    events: store
+      .eventsBetween(from, to)
+      .filter((e) => e.task_id === taskId)
+      .reverse(),
     turns: turns.slice(-DETAIL_TURNS).reverse(),
     moreTurns: Math.max(0, turns.length - DETAIL_TURNS),
     moves: movesFor(taskId, from, to).reverse(),

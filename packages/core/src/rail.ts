@@ -67,18 +67,29 @@ export function managerMark(
   now: Date,
   idleMinutes: number,
 ): ManagerMark | null {
-  if (!info) return null;
-  if (info.state === AgentState.working || info.state === AgentState.queued)
+  if (!info) {
+    return null;
+  }
+  if (info.state === AgentState.working || info.state === AgentState.queued) {
     return ManagerMark.working;
+  }
   // Never run as a manager yet (just made or promoted), or stopped.
-  if (!info.lastAt || info.state === AgentState.none || info.state === AgentState.stopped)
+  if (
+    !info.lastAt ||
+    info.state === AgentState.none ||
+    info.state === AgentState.stopped
+  ) {
     return ManagerMark.asleep;
+  }
   const idle = now.getTime() - Date.parse(info.lastAt);
   const warm = idleMinutes <= 0 || idle <= idleMinutes * 60_000;
-  if (!warm) return ManagerMark.asleep;
-  return info.state === AgentState.waiting ? ManagerMark.waiting : ManagerMark.active;
+  if (!warm) {
+    return ManagerMark.asleep;
+  }
+  return info.state === AgentState.waiting
+    ? ManagerMark.waiting
+    : ManagerMark.active;
 }
-
 
 export const Section = {
   home: "home",
@@ -149,7 +160,9 @@ export const taskKey = (taskId: number) => `t${taskId}`;
 export function baseKey(key: string): string;
 export function baseKey(key: string | null): string | null;
 export function baseKey(key: string | null): string | null {
-  if (key === null) return null;
+  if (key === null) {
+    return null;
+  }
   const at = key.indexOf("@");
   return at === -1 ? key : key.slice(0, at);
 }
@@ -157,9 +170,13 @@ export function baseKey(key: string | null): string | null {
 // The row a key stands for: that row, else its task's own row, else the
 // first copy of it (a done Win sits only under Wins).
 export function rowFor(items: RailItem[], key: string | null): RailItem | null {
-  if (key === null) return null;
+  if (key === null) {
+    return null;
+  }
   const exact = items.find((i) => i.key === key);
-  if (exact) return exact;
+  if (exact) {
+    return exact;
+  }
   const base = baseKey(key);
   return (
     items.find((i) => i.key === base) ??
@@ -224,30 +241,36 @@ export function isSlipped(
   blocked = false,
 ): boolean {
   // A task waiting on another task: that task's own row says how it goes.
-  if (blocked) return false;
-  if (!task.waiting_on || task.status !== TaskStatus.open) return false;
+  if (blocked) {
+    return false;
+  }
+  if (!task.waiting_on || task.status !== TaskStatus.open) {
+    return false;
+  }
   const since = lastHeard ?? task.updated_at;
   return now.getTime() - Date.parse(since) > SLIPPED_AFTER_MS;
 }
 
 // Where a task sits on the rail, Wins and Watching aside: they list it
 // again (buildRail). Null: off the rail.
-function placeOf(
-  task: TaskRow,
-  lane: Lane,
-  onYou: Section,
-): Section | null {
+function placeOf(task: TaskRow, lane: Lane, onYou: Section): Section | null {
   // Riker asking about its own docs: on you until answered, never later.
-  if (task.kind === Kind.system)
+  if (task.kind === Kind.system) {
     return task.status === TaskStatus.open || task.status === TaskStatus.later
       ? Section.system
       : null;
+  }
   // An agent-closed task stays until you have read its result.
-  if (task.status === TaskStatus.done) return lane === Lane.ready ? onYou : null;
-  if (task.status === TaskStatus.dropped) return null;
+  if (task.status === TaskStatus.done) {
+    return lane === Lane.ready ? onYou : null;
+  }
+  if (task.status === TaskStatus.dropped) {
+    return null;
+  }
   // Unless its agent asks you something: then it is back on you.
-  if (task.status === TaskStatus.later)
+  if (task.status === TaskStatus.later) {
     return task.agent_state === AgentState.waiting ? onYou : Section.later;
+  }
   return onYou;
 }
 
@@ -263,7 +286,7 @@ export function buildRail(input: RailInput): RailSection[] {
     later: [],
   };
 
-  if (input.home)
+  if (input.home) {
     sections.home.push({
       type: "task",
       key: `t${input.home.id}`,
@@ -276,6 +299,7 @@ export function buildRail(input: RailInput): RailSection[] {
       copy: false,
       tags: [],
     });
+  }
 
   const projectIds = new Set((input.projects ?? []).map((p) => p.project.id));
 
@@ -288,12 +312,17 @@ export function buildRail(input: RailInput): RailSection[] {
     const lane = laneOf(task, {
       hasPendingAction: input.pendingActions.has(task.id),
       // A PR you were asked to review is on you, not in its review loop.
-      prState: reviews.has(task.id) ? null : (input.prStates?.get(task.id) ?? null),
+      prState: reviews.has(task.id)
+        ? null
+        : (input.prStates?.get(task.id) ?? null),
       blockers,
     });
     // The rail's clock ticks by the minute: an ask newer than it is now.
     const asked = reviews.has(task.id)
-      ? [input.asked?.get(task.id) ?? task.created_at, input.now.toISOString()].sort()[0]
+      ? [
+          input.asked?.get(task.id) ?? task.created_at,
+          input.now.toISOString(),
+        ].sort()[0]
       : undefined;
     const item: TaskItem = {
       type: "task",
@@ -334,13 +363,15 @@ export function buildRail(input: RailInput): RailSection[] {
         ? [Tag.watching]
         : []),
     ];
-    if (place === Section.later)
+    if (place === Section.later) {
       sections.later.push({
         ...item,
         at: task.remind_at ?? item.at,
         tags: tagsFor(place),
       });
-    else if (place) sections[place].push({ ...item, tags: tagsFor(place) });
+    } else if (place) {
+      sections[place].push({ ...item, tags: tagsFor(place) });
+    }
     const copy = (section: Section): TaskItem => ({
       ...item,
       // A task with no row of its own (a done Win) is not a copy: its row
@@ -349,12 +380,17 @@ export function buildRail(input: RailInput): RailSection[] {
       copy: place !== null,
       tags: tagsFor(section),
     });
-    if (win) winItems[wins.get(task.id)!] = copy(Section.wins);
-    if (watched) sections.watching.push(copy(Section.watching));
+    if (win) {
+      winItems[wins.get(task.id)!] = copy(Section.wins);
+    }
+    if (watched) {
+      sections.watching.push(copy(Section.watching));
+    }
     // Due lists an open task a timer fired on; it stays where it sits too.
     const fired = input.due?.get(task.id);
-    if (fired && place && task.status === TaskStatus.open)
+    if (fired && place && task.status === TaskStatus.open) {
       sections.due.push({ ...copy(Section.due), at: fired });
+    }
   }
 
   const byAt = (a: RailItem, b: RailItem) =>
@@ -378,7 +414,9 @@ export function buildRail(input: RailInput): RailSection[] {
     return own.length > 0 && own.every((t) => t.kind === Kind.system);
   };
   for (const p of input.projects ?? []) {
-    if (p.project.solo && systemOnly(p.project.id)) continue;
+    if (p.project.solo && systemOnly(p.project.id)) {
+      continue;
+    }
     grouped.push({
       type: "project",
       key: `p${p.project.id}`,
@@ -387,8 +425,11 @@ export function buildRail(input: RailInput): RailSection[] {
     });
     for (const item of sorted(
       sections.tasks.filter((i) => groupOf(i) === p.project.id),
-    ))
-      if (item.type === "task") grouped.push({ ...item, group: p.project.id });
+    )) {
+      if (item.type === "task") {
+        grouped.push({ ...item, group: p.project.id });
+      }
+    }
   }
 
   sections.wins = winItems.filter(Boolean);
@@ -420,14 +461,18 @@ export function buildRail(input: RailInput): RailSection[] {
 // are still active: one archived or deleted since drops out, and a new one
 // is not in the list, so it opens unfolded. Ids survive a rename.
 export function readFolds(saved: string | null, active: number[]): Set<number> {
-  if (!saved) return new Set();
+  if (!saved) {
+    return new Set();
+  }
   let ids: unknown;
   try {
     ids = JSON.parse(saved);
   } catch {
     return new Set();
   }
-  if (!Array.isArray(ids)) return new Set();
+  if (!Array.isArray(ids)) {
+    return new Set();
+  }
   const live = new Set(active);
   return new Set(ids.filter((id): id is number => live.has(id)));
 }
@@ -441,7 +486,9 @@ export function foldRail(
   sections: RailSection[],
   folded: Set<number>,
 ): RailSection[] {
-  if (folded.size === 0) return sections;
+  if (folded.size === 0) {
+    return sections;
+  }
   return sections.map((s) => ({
     ...s,
     items: s.items.filter(
@@ -535,9 +582,13 @@ export function filterCounts(
     RAIL_FILTERS.map((f) => [f.filter, 0]),
   ) as Record<RailFilter, number>;
   for (const item of flattenRail(sections)) {
-    if (item.type !== "task" || isHome(item) || item.copy) continue;
+    if (item.type !== "task" || isHome(item) || item.copy) {
+      continue;
+    }
     const f = filterOf(item.lane);
-    if (f) counts[f]++;
+    if (f) {
+      counts[f]++;
+    }
   }
   return counts;
 }
@@ -548,10 +599,16 @@ export function filterRail(
   sections: RailSection[],
   active: Set<RailFilter>,
 ): RailSection[] {
-  if (active.size === 0) return sections;
+  if (active.size === 0) {
+    return sections;
+  }
   const keep = (item: RailItem) => {
-    if (item.type !== "task") return false;
-    if (isHome(item)) return true;
+    if (item.type !== "task") {
+      return false;
+    }
+    if (isHome(item)) {
+      return true;
+    }
     const f = filterOf(item.lane);
     return f !== null && active.has(f);
   };
@@ -577,8 +634,11 @@ export function cycleFilter(
 ): Set<RailFilter> {
   const order = RAIL_FILTERS.map((f) => f.filter);
   const from = active.size === 1 ? order.indexOf([...active][0]) : -1;
-  for (let i = from + 1; i < order.length; i++)
-    if (counts[order[i]] > 0) return new Set([order[i]]);
+  for (let i = from + 1; i < order.length; i++) {
+    if (counts[order[i]] > 0) {
+      return new Set([order[i]]);
+    }
+  }
   return new Set();
 }
 
@@ -596,11 +656,17 @@ export function walkableKeys(
   const seen = new Set<string>(selected ? [baseKey(selected)] : []);
   const keys = new Set<string>();
   for (const s of sections) {
-    if (!WALKED.includes(s.section)) continue;
+    if (!WALKED.includes(s.section)) {
+      continue;
+    }
     for (const item of s.items) {
-      if (item.type !== "task") continue;
+      if (item.type !== "task") {
+        continue;
+      }
       const base = baseKey(item.key);
-      if (seen.has(base)) continue;
+      if (seen.has(base)) {
+        continue;
+      }
       seen.add(base);
       keys.add(item.key);
     }
@@ -616,10 +682,14 @@ export function nextKey(
   current: string | null,
   direction: 1 | -1,
 ): string | null {
-  if (order.length === 0) return null;
+  if (order.length === 0) {
+    return null;
+  }
   const start = current ? order.indexOf(current) : -1;
   for (let i = start + direction; i >= 0 && i < order.length; i += direction) {
-    if (walkable.has(order[i])) return order[i];
+    if (walkable.has(order[i])) {
+      return order[i];
+    }
   }
   return null;
 }
@@ -630,16 +700,23 @@ export function ageLabel(iso: string, now: Date): string {
   const abs = Math.abs(ms);
   const min = Math.floor(abs / 60000);
   let text: string;
-  if (min < 5) text = "<5m";
-  else if (min < 60) text = `${min}m`;
-  else if (min < 60 * 24) text = `${Math.floor(min / 60)}h`;
-  else text = `${Math.floor(min / (60 * 24))}d`;
+  if (min < 5) {
+    text = "<5m";
+  } else if (min < 60) {
+    text = `${min}m`;
+  } else if (min < 60 * 24) {
+    text = `${Math.floor(min / 60)}h`;
+  } else {
+    text = `${Math.floor(min / (60 * 24))}d`;
+  }
   return future ? `in ${text}` : text;
 }
 
 // Where the rail cursor goes when its row leaves: the row below, else above.
 export function neighborKey(order: string[], key: string): string | null {
   const at = order.indexOf(key);
-  if (at === -1) return order[0] ?? null;
+  if (at === -1) {
+    return order[0] ?? null;
+  }
   return order[at + 1] ?? order[at - 1] ?? null;
 }

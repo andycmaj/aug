@@ -30,8 +30,12 @@ function Row(props: {
   return (
     <text>
       <span style={{ fg: theme.text }}>{props.label.padEnd(12)}</span>
-      <span style={{ fg: props.color }}>{costBar(props.total.cost, props.max)}</span>
-      <span style={{ fg: theme.text }}>{` ${usd(props.total.cost).padStart(8)}`}</span>
+      <span style={{ fg: props.color }}>
+        {costBar(props.total.cost, props.max)}
+      </span>
+      <span
+        style={{ fg: theme.text }}
+      >{` ${usd(props.total.cost).padStart(8)}`}</span>
       <span style={{ fg: theme.textMuted }}>
         {`  ${String(props.total.calls).padStart(4)} calls  ${tokens(props.total.tokens).padStart(5)} tok${props.extra ? `  ${truncate(props.extra, Math.max(10, props.width - 60))}` : ""}`}
       </span>
@@ -115,7 +119,9 @@ export function CostTab(props: {
       {heading("Tasks, today")}
       <For
         each={report().tasksToday}
-        fallback={<text fg={theme.textMuted}>No task's agent has run today.</text>}
+        fallback={
+          <text fg={theme.textMuted}>No task's agent has run today.</text>
+        }
       >
         {(t) => (
           <Row
@@ -169,8 +175,7 @@ export function CostTab(props: {
       <text fg={theme.textMuted} marginTop={1} wrapMode="word">
         Headless calls only (triage, the Assistant, general agents, the Advisor,
         Slack): a coding agent's cost shows in its own Claude Code status line.
-        The cap is spend.dailyUsd in config.json; spend.capEnabled turns it
-        off.
+        The cap is spend.dailyUsd in config.json; spend.capEnabled turns it off.
       </text>
     </scrollbox>
   );

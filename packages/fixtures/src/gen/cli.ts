@@ -5,7 +5,15 @@
 // now; `stream` keeps going within its limits; `start`/`stop` run the stream
 // in the background. Plain TS, no Solid.
 
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { defineCommand, runMain } from "citty";
 import { envVar } from "@riker/core/brand";
@@ -17,7 +25,13 @@ import { donorCommits, nextChange } from "./donor";
 import { githubTarget, type GithubGenConfig } from "./github-target";
 import { Ask, DEFAULT_LIMITS, PrState, type Limits, type Move } from "./plan";
 import { plant, plantable } from "./plant";
-import { loadGenState, saveGenState, tick, type Changes, type GenState } from "./run";
+import {
+  loadGenState,
+  saveGenState,
+  tick,
+  type Changes,
+  type GenState,
+} from "./run";
 import { simTarget } from "./sim-target";
 import type { GenTarget } from "./target";
 
@@ -27,11 +41,16 @@ type Target = (typeof Target)[keyof typeof Target];
 // The generator's folder: under the running sim's home for the sim, under
 // Riker's home for GitHub (its config and the App's key live there).
 function genDir(target: Target): string {
-  if (target === Target.github) return join(paths.home(), "gen");
+  if (target === Target.github) {
+    return join(paths.home(), "gen");
+  }
   const home =
-    envVar("SIM_HOME") || (existsSync(POINTER) ? readFileSync(POINTER, "utf8").trim() : "");
+    envVar("SIM_HOME") ||
+    (existsSync(POINTER) ? readFileSync(POINTER, "utf8").trim() : "");
   if (!home || !existsSync(statePath(home))) {
-    console.error("gen: no sim running (start one with bun run sim), or use --target github");
+    console.error(
+      "gen: no sim running (start one with bun run sim), or use --target github",
+    );
     process.exit(2);
   }
   return join(home, "gen");
@@ -57,29 +76,51 @@ function readGithubConfig(): GenConfig {
 
 // The donor by default is this checkout, replayed from 150 commits back.
 function repoRoot(): string {
-  const r = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], { cwd: import.meta.dir, stdout: "pipe" });
+  const r = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+    cwd: import.meta.dir,
+    stdout: "pipe",
+  });
   return r.stdout.toString().trim();
 }
 
-function setup(target: Target): { target: GenTarget; changes: (plantOn: boolean) => Changes; stateFile: string } {
+function setup(target: Target): {
+  target: GenTarget;
+  changes: (plantOn: boolean) => Changes;
+  stateFile: string;
+} {
   const dir = genDir(target);
   const stateFile = join(dir, `state-${target}.json`);
   const donor = target === Target.github ? readGithubConfig() : null;
   const repo = donor?.donor ?? repoRoot();
-  const seed = donor?.seed ?? Bun.spawnSync(["git", "rev-parse", "HEAD~150"], { cwd: repo, stdout: "pipe" }).stdout.toString().trim();
+  const seed =
+    donor?.seed ??
+    Bun.spawnSync(["git", "rev-parse", "HEAD~150"], {
+      cwd: repo,
+      stdout: "pipe",
+    })
+      .stdout.toString()
+      .trim();
   const commits = donorCommits(repo, seed);
   const t = donor ? githubTarget(donor) : simTarget(statePath(dirname(dir)));
   const changes = (plantOn: boolean): Changes => ({
     async next(state: GenState) {
       if (plantOn) {
-        const files = Bun.spawnSync(["git", "ls-tree", "-r", "--name-only", seed], { cwd: repo, stdout: "pipe" })
+        const files = Bun.spawnSync(
+          ["git", "ls-tree", "-r", "--name-only", seed],
+          { cwd: repo, stdout: "pipe" },
+        )
           .stdout.toString()
           .split("\n")
           .filter(Boolean);
         for (let i = 0; i < files.length; i++) {
           const path = files[(state.cursor * 7 + i) % files.length]!;
-          const content = Bun.spawnSync(["git", "show", `${seed}:${path}`], { cwd: repo, stdout: "pipe" }).stdout.toString();
-          if (!plantable(path, content)) continue;
+          const content = Bun.spawnSync(["git", "show", `${seed}:${path}`], {
+            cwd: repo,
+            stdout: "pipe",
+          }).stdout.toString();
+          if (!plantable(path, content)) {
+            continue;
+          }
           state.cursor++;
           const planted = await plant(path, content);
           return { change: planted.change, planted: planted.bug };
@@ -87,7 +128,9 @@ function setup(target: Target): { target: GenTarget; changes: (plantOn: boolean)
         return null;
       }
       const next = nextChange(repo, commits, state.cursor);
-      if (!next) return null;
+      if (!next) {
+        return null;
+      }
       state.cursor = next.cursor;
       return { change: next.change };
     },
@@ -96,8 +139,16 @@ function setup(target: Target): { target: GenTarget; changes: (plantOn: boolean)
 }
 
 const common = {
-  target: { type: "string", default: "sim", description: "sim (the offline sim that runs now) or github (the lab repo)" },
-  plant: { type: "boolean", description: "haiku writes each new PR with one planted bug (costs a little)" },
+  target: {
+    type: "string",
+    default: "sim",
+    description: "sim (the offline sim that runs now) or github (the lab repo)",
+  },
+  plant: {
+    type: "boolean",
+    description:
+      "haiku writes each new PR with one planted bug (costs a little)",
+  },
 } as const;
 
 function targetOf(v: string): Target {
@@ -112,17 +163,28 @@ function targetOf(v: string): Target {
 // sim makes each PR's diff from its own commits, so a planted file would
 // never reach it.
 function openSpend(plantOn: boolean, target: Target): void {
-  if (!plantOn) return;
+  if (!plantOn) {
+    return;
+  }
   if (target !== Target.github) {
-    console.error("gen: --plant needs --target github (the sim makes its diffs from its own commits)");
+    console.error(
+      "gen: --plant needs --target github (the sim makes its diffs from its own commits)",
+    );
     process.exit(2);
   }
   useDb(openDb());
 }
 
-async function newestOpen(t: GenTarget, pr: string | undefined): Promise<number> {
-  if (pr) return Number(pr);
-  const open = (await t.list()).filter((p) => p.state === PrState.open).sort((a, b) => b.number - a.number);
+async function newestOpen(
+  t: GenTarget,
+  pr: string | undefined,
+): Promise<number> {
+  if (pr) {
+    return Number(pr);
+  }
+  const open = (await t.list())
+    .filter((p) => p.state === PrState.open)
+    .sort((a, b) => b.number - a.number);
   if (!open[0]) {
     console.error("gen: none of its PRs is open: gen once ask opens one");
     process.exit(2);
@@ -133,12 +195,21 @@ async function newestOpen(t: GenTarget, pr: string | undefined): Promise<number>
 const once = defineCommand({
   meta: {
     name: "once",
-    description: "do one thing now: ask (a PR asking you), team (asking your team), tag, rerequest, or tick (answer your reviews)",
+    description:
+      "do one thing now: ask (a PR asking you), team (asking your team), tag, rerequest, or tick (answer your reviews)",
   },
   args: {
     ...common,
-    what: { type: "positional", default: "ask", description: "ask | team | tag | rerequest | tick" },
-    pr: { type: "string", description: "which of its PRs (tag, rerequest; default: its newest open one)" },
+    what: {
+      type: "positional",
+      default: "ask",
+      description: "ask | team | tag | rerequest | tick",
+    },
+    pr: {
+      type: "string",
+      description:
+        "which of its PRs (tag, rerequest; default: its newest open one)",
+    },
   },
   async run({ args }) {
     const target = targetOf(args.target);
@@ -148,11 +219,17 @@ const once = defineCommand({
     const what = String(args.what);
     let said: string[] = [];
     if (what === "ask" || what === "team") {
-      const moves: Move[] = [{ type: "open", ask: what === "team" ? Ask.team : Ask.me }];
-      said = (await tick(t, state, changes(Boolean(args.plant)), { moves })).said;
+      const moves: Move[] = [
+        { type: "open", ask: what === "team" ? Ask.team : Ask.me },
+      ];
+      said = (await tick(t, state, changes(Boolean(args.plant)), { moves }))
+        .said;
     } else if (what === "tag") {
       const pr = await newestOpen(t, args.pr);
-      await t.tag(pr, "Hey, could you take a look at this one when you get a chance?");
+      await t.tag(
+        pr,
+        "Hey, could you take a look at this one when you get a chance?",
+      );
       said = [`#${pr}: tagged you`];
     } else if (what === "rerequest") {
       const pr = await newestOpen(t, args.pr);
@@ -160,53 +237,95 @@ const once = defineCommand({
       said = [`#${pr}: asked your review again`];
     } else if (what === "tick") {
       // Answers only: a new PR is what ask is for.
-      const all = await tick(t, state, changes(false), { limits: { ...DEFAULT_LIMITS, maxOpen: 0 } });
+      const all = await tick(t, state, changes(false), {
+        limits: { ...DEFAULT_LIMITS, maxOpen: 0 },
+      });
       said = all.said.length ? all.said : ["nothing to answer"];
     } else {
       console.error(`gen once: ask, team, tag, rerequest or tick, not ${what}`);
       process.exit(2);
     }
     saveGenState(stateFile, state);
-    for (const line of said) console.log(line);
+    for (const line of said) {
+      console.log(line);
+    }
   },
 });
 
 const DURATION = /^(\d+)(s|m|h)$/;
 function ms(v: string): number {
   const m = DURATION.exec(v);
-  if (!m) throw new Error(`a duration is like 30m, 2h or 90s, not ${v}`);
-  return Number(m[1]) * { s: 1000, m: 60_000, h: 3_600_000 }[m[2] as "s" | "m" | "h"];
+  if (!m) {
+    throw new Error(`a duration is like 30m, 2h or 90s, not ${v}`);
+  }
+  return (
+    Number(m[1]) * { s: 1000, m: 60_000, h: 3_600_000 }[m[2] as "s" | "m" | "h"]
+  );
 }
 
 const streamArgs = {
   ...common,
-  every: { type: "string", default: "30m", description: "a new PR at most this often" },
-  hours: { type: "string", default: "9-18", description: "local hours it opens PRs in" },
-  max: { type: "string", default: "5", description: "at most this many of its PRs open" },
+  every: {
+    type: "string",
+    default: "30m",
+    description: "a new PR at most this often",
+  },
+  hours: {
+    type: "string",
+    default: "9-18",
+    description: "local hours it opens PRs in",
+  },
+  max: {
+    type: "string",
+    default: "5",
+    description: "at most this many of its PRs open",
+  },
 } as const;
 
 const stopFile = (target: Target) => join(genDir(target), "stop");
-const pidFile = (target: Target) => join(genDir(target), `stream-${target}.pid`);
+const pidFile = (target: Target) =>
+  join(genDir(target), `stream-${target}.pid`);
 
 const stream = defineCommand({
-  meta: { name: "stream", description: "keep going: answer your reviews, and open PRs within the limits, until gen stop" },
+  meta: {
+    name: "stream",
+    description:
+      "keep going: answer your reviews, and open PRs within the limits, until gen stop",
+  },
   args: streamArgs,
   async run({ args }) {
     const target = targetOf(args.target);
     openSpend(Boolean(args.plant), target);
     const [from, to] = args.hours.split("-").map(Number) as [number, number];
-    const limits: Limits = { ...DEFAULT_LIMITS, everyMs: ms(args.every), hours: [from, to], maxOpen: Number(args.max) };
+    const limits: Limits = {
+      ...DEFAULT_LIMITS,
+      everyMs: ms(args.every),
+      hours: [from, to],
+      maxOpen: Number(args.max),
+    };
     const { target: t, changes, stateFile } = setup(target);
     rmSync(stopFile(target), { force: true });
     // Your reviews are answered within five minutes, whatever --every says.
     const wait = Math.min(limits.everyMs, 5 * 60_000);
-    console.log(`gen stream on ${target}: a PR at most every ${args.every}, ${from}:00-${to}:00, at most ${limits.maxOpen} open; gen stop ends it`);
+    console.log(
+      `gen stream on ${target}: a PR at most every ${args.every}, ${from}:00-${to}:00, at most ${limits.maxOpen} open; gen stop ends it`,
+    );
     while (!existsSync(stopFile(target))) {
       const state = loadGenState(stateFile);
-      const { said } = await tick(t, state, changes(Boolean(args.plant)), { limits });
+      const { said } = await tick(t, state, changes(Boolean(args.plant)), {
+        limits,
+      });
       saveGenState(stateFile, state);
-      for (const line of said) console.log(`${new Date().toISOString().slice(11, 19)} ${line}`);
-      for (let waited = 0; waited < wait && !existsSync(stopFile(target)); waited += 5000) await Bun.sleep(5000);
+      for (const line of said) {
+        console.log(`${new Date().toISOString().slice(11, 19)} ${line}`);
+      }
+      for (
+        let waited = 0;
+        waited < wait && !existsSync(stopFile(target));
+        waited += 5000
+      ) {
+        await Bun.sleep(5000);
+      }
     }
     rmSync(pidFile(target), { force: true });
     console.log("gen stream stopped");
@@ -214,25 +333,53 @@ const stream = defineCommand({
 });
 
 const start = defineCommand({
-  meta: { name: "start", description: "run the stream in the background (its log: gen/stream-<target>.log)" },
+  meta: {
+    name: "start",
+    description:
+      "run the stream in the background (its log: gen/stream-<target>.log)",
+  },
   args: streamArgs,
   run({ args }) {
     const target = targetOf(args.target);
     const dir = genDir(target);
     mkdirSync(dir, { recursive: true });
     const log = openSync(join(dir, `stream-${target}.log`), "a");
-    const argv = [process.execPath, import.meta.path, "stream", "--target", target, "--every", args.every, "--hours", args.hours, "--max", args.max];
-    if (args.plant) argv.push("--plant");
-    const child = Bun.spawn(argv, { stdout: log, stderr: log, stdin: "ignore", env: process.env });
+    const argv = [
+      process.execPath,
+      import.meta.path,
+      "stream",
+      "--target",
+      target,
+      "--every",
+      args.every,
+      "--hours",
+      args.hours,
+      "--max",
+      args.max,
+    ];
+    if (args.plant) {
+      argv.push("--plant");
+    }
+    const child = Bun.spawn(argv, {
+      stdout: log,
+      stderr: log,
+      stdin: "ignore",
+      env: process.env,
+    });
     child.unref();
     closeSync(log);
     writeFileSync(pidFile(target), `${child.pid}\n`);
-    console.log(`gen stream on ${target} started (pid ${child.pid}); gen stop ends it`);
+    console.log(
+      `gen stream on ${target} started (pid ${child.pid}); gen stop ends it`,
+    );
   },
 });
 
 const stop = defineCommand({
-  meta: { name: "stop", description: "end the stream (it stops within five seconds)" },
+  meta: {
+    name: "stop",
+    description: "end the stream (it stops within five seconds)",
+  },
   args: { target: common.target },
   run({ args }) {
     const target = targetOf(args.target);
@@ -243,22 +390,38 @@ const stop = defineCommand({
 });
 
 const state = defineCommand({
-  meta: { name: "state", description: "its PRs, what it planted, and what it did lately" },
+  meta: {
+    name: "state",
+    description: "its PRs, what it planted, and what it did lately",
+  },
   args: { target: common.target },
   async run({ args }) {
     const target = targetOf(args.target);
     const { target: t, stateFile } = setup(target);
     const s = loadGenState(stateFile);
-    for (const p of await t.list())
-      console.log(`#${p.number} ${p.state}${p.mine ? ` · your review: ${p.mine.verdict.toLowerCase()}` : ""} · ${p.url}`);
-    for (const b of s.planted) console.log(`planted #${b.pr} ${b.path}:${b.line}: ${b.what}`);
-    for (const l of s.log.slice(-10)) console.log(`${l.at.slice(0, 19)} ${l.line}`);
+    for (const p of await t.list()) {
+      console.log(
+        `#${p.number} ${p.state}${p.mine ? ` · your review: ${p.mine.verdict.toLowerCase()}` : ""} · ${p.url}`,
+      );
+    }
+    for (const b of s.planted) {
+      console.log(`planted #${b.pr} ${b.path}:${b.line}: ${b.what}`);
+    }
+    for (const l of s.log.slice(-10)) {
+      console.log(`${l.at.slice(0, 19)} ${l.line}`);
+    }
     const pid = pidFile(target);
-    console.log(existsSync(pid) ? `stream: running (pid ${readFileSync(pid, "utf8").trim()})` : "stream: not running");
+    console.log(
+      existsSync(pid)
+        ? `stream: running (pid ${readFileSync(pid, "utf8").trim()})`
+        : "stream: not running",
+    );
   },
 });
 
-const SETUP_STEPS = (file: string) => `The GitHub target acts as a GitHub App on a lab repo, so GitHub tells you of
+const SETUP_STEPS = (
+  file: string,
+) => `The GitHub target acts as a GitHub App on a lab repo, so GitHub tells you of
 its asks as it would of a colleague's (it never tells you of your own).
 
 1. Make the lab repo, seeded from this checkout 150 commits back:
@@ -282,25 +445,37 @@ its asks as it would of a colleague's (it never tells you of your own).
 7. bun run gen check --target github, then bun run gen once ask --target github.`;
 
 const setupCmd = defineCommand({
-  meta: { name: "setup", description: "the steps to set up the GitHub target (only you can do them)" },
+  meta: {
+    name: "setup",
+    description: "the steps to set up the GitHub target (only you can do them)",
+  },
   run() {
     console.log(SETUP_STEPS(githubConfigPath()));
   },
 });
 
 const check = defineCommand({
-  meta: { name: "check", description: "check the GitHub target: config, key, token, repo, team" },
+  meta: {
+    name: "check",
+    description: "check the GitHub target: config, key, token, repo, team",
+  },
   async run() {
     const config = readGithubConfig();
     const t = githubTarget(config);
     const prs = await t.list();
-    console.log(`ok: the App reads ${config.repo} (${prs.length} of its PRs); asks ${config.me}${config.team ? ` and ${config.team}` : ""}`);
+    console.log(
+      `ok: the App reads ${config.repo} (${prs.length} of its PRs); asks ${config.me}${config.team ? ` and ${config.team}` : ""}`,
+    );
   },
 });
 
 await runMain(
   defineCommand({
-    meta: { name: "gen", description: "the review activity generator: PRs asking your review, for dogfooding" },
+    meta: {
+      name: "gen",
+      description:
+        "the review activity generator: PRs asking your review, for dogfooding",
+    },
     subCommands: { once, stream, start, stop, state, setup: setupCmd, check },
   }),
 );

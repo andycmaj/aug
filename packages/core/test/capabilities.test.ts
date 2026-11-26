@@ -22,11 +22,7 @@ import {
   pluginWidens,
   resolveCapability,
 } from "../src/capabilities";
-import {
-  DEFAULT_CONFIG,
-  mergeConfig,
-  type RikerConfig,
-} from "../src/config";
+import { DEFAULT_CONFIG, mergeConfig, type RikerConfig } from "../src/config";
 import { TurnRole, type TurnRow } from "../src/types";
 
 function withCaps(caps: Partial<RikerConfig["capabilities"]>): RikerConfig {
@@ -60,9 +56,13 @@ describe("capabilities", () => {
   });
 
   test("built-in capabilities hold no write-looking tools but the writes they name", () => {
-    for (const spec of Object.values(CAPABILITIES))
-      for (const tool of spec.tools)
-        expect(WRITE_VERB.test(tool) && !spec.writes?.includes(tool)).toBe(false);
+    for (const spec of Object.values(CAPABILITIES)) {
+      for (const tool of spec.tools) {
+        expect(WRITE_VERB.test(tool) && !spec.writes?.includes(tool)).toBe(
+          false,
+        );
+      }
+    }
     // Only Claude Docs has a write capability.
     expect(
       Object.entries(CAPABILITIES)
@@ -154,7 +154,9 @@ describe("capabilities", () => {
       "notion-wait-session",
       "notion-query-sessions",
     ];
-    for (const tool of writes) expect(WRITE_VERB.test(tool)).toBe(true);
+    for (const tool of writes) {
+      expect(WRITE_VERB.test(tool)).toBe(true);
+    }
     const config = withCaps({
       tools: { "notion.read": ["notion-fetch", ...writes] },
       grants: { general: ["notion.read"] },
@@ -262,8 +264,11 @@ function fakeClaudeDir(): string {
 describe("plugin and command capabilities", () => {
   const saved = process.env.CLAUDE_CONFIG_DIR;
   afterEach(() => {
-    if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
-    else process.env.CLAUDE_CONFIG_DIR = saved;
+    if (saved === undefined) {
+      delete process.env.CLAUDE_CONFIG_DIR;
+    } else {
+      process.env.CLAUDE_CONFIG_DIR = saved;
+    }
   });
 
   test("an installed plugin resolves by full or bare name", () => {
@@ -418,24 +423,33 @@ describe("Claude Docs grants", () => {
 
   test("docs.read reads only; docs.write adds batch, create and update but not delete", () => {
     expect(
-      capabilityAllow("general", withCaps({ grants: { general: ["docs.read"] } })),
+      capabilityAllow(
+        "general",
+        withCaps({ grants: { general: ["docs.read"] } }),
+      ),
     ).toEqual(["read", "export", "guide", "query"].map((t) => DOCS + t));
     const write = capabilityAllow(
       "general",
       withCaps({ grants: { general: ["docs.write"] } }),
     );
-    for (const t of ["read", "guide", "batch", "create", "update"])
+    for (const t of ["read", "guide", "batch", "create", "update"]) {
       expect(write).toContain(DOCS + t);
+    }
     expect(write).not.toContain(`${DOCS}delete`);
   });
 
   test("the default config grants no Docs tool to either role", () => {
-    for (const role of ["general", "assistant"] as const)
+    for (const role of ["general", "assistant"] as const) {
       expect(
         capabilityAllow(role, DEFAULT_CONFIG).filter((r) => r.startsWith(DOCS)),
       ).toEqual([]);
-    expect(generalAllow(DEFAULT_CONFIG).some((r) => r.startsWith(DOCS))).toBe(false);
-    expect(assistantAllow(DEFAULT_CONFIG).some((r) => r.startsWith(DOCS))).toBe(false);
+    }
+    expect(generalAllow(DEFAULT_CONFIG).some((r) => r.startsWith(DOCS))).toBe(
+      false,
+    );
+    expect(assistantAllow(DEFAULT_CONFIG).some((r) => r.startsWith(DOCS))).toBe(
+      false,
+    );
   });
 
   test("docs.write reaches task agents and the Assistant, each by its own grant", () => {
@@ -497,10 +511,17 @@ describe("Claude Docs grants", () => {
       `"docs.write" is in capabilities.grants.general, but its tools leave "delete" out`,
     );
     expect(
-      grantHint("mcp__claude_ai_Slack__slack_send_message", "general", none, FILE),
+      grantHint(
+        "mcp__claude_ai_Slack__slack_send_message",
+        "general",
+        none,
+        FILE,
+      ),
     ).toContain("no capability in Riker grants it");
     expect(grantHint("Bash", "general", none, FILE)).toBeNull();
-    expect(grantHint("mcp__someone_else__thing", "general", none, FILE)).toBeNull();
+    expect(
+      grantHint("mcp__someone_else__thing", "general", none, FILE),
+    ).toBeNull();
   });
 
   test("grant steps come once per denied tool, none for a shell call", () => {
@@ -526,7 +547,9 @@ describe("Claude Docs grants", () => {
     const note = deniedNote(turns);
     expect(note).toContain("the owner has not granted them");
     expect(note).toContain(`- ${DOCS}batch\n`);
-    expect(note).toContain(`add "docs.write" to capabilities.grants.general in ${FILE}`);
+    expect(note).toContain(
+      `add "docs.write" to capabilities.grants.general in ${FILE}`,
+    );
     expect(note).toContain("never edit Riker's config yourself");
     expect(note).not.toContain("did not match an allowed command");
     expect(refusalLines(steps)).toEqual([

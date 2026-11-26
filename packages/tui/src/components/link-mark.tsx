@@ -4,7 +4,13 @@
 // connecting, so a settled or hidden one never redraws. Motion off (config
 // `motion`, RIKER_MOTION=0, bun test) draws the still mark instead.
 
-import { createEffect, createSignal, onCleanup, Show, type Accessor } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  onCleanup,
+  Show,
+  type Accessor,
+} from "solid-js";
 import { useTheme } from "@andycmaj/opentui-app";
 import {
   LINK_FRAME_MS,
@@ -21,7 +27,9 @@ export function useLinkFrame(active: Accessor<boolean>): Accessor<number> {
   const motion = useMotion();
   const [frame, setFrame] = createSignal(0);
   createEffect(() => {
-    if (!active() || !motion()) return;
+    if (!active() || !motion()) {
+      return;
+    }
     const timer = setInterval(
       () => setFrame((f) => (f + 1) % LINK_FRAMES.length),
       LINK_FRAME_MS,
@@ -46,9 +54,20 @@ export function LinkMark(props: {
   return (
     <>
       <span
-        style={{ fg: toneColor(theme, look().tone), attributes: props.bold ? 1 : 0 }}
-      >{props.label ? `${look().mark} ${props.label}` : look().mark}</span>
-      <Show when={props.reason && props.link.phase === LinkPhase.failed && props.link.reason}>
+        style={{
+          fg: toneColor(theme, look().tone),
+          attributes: props.bold ? 1 : 0,
+        }}
+      >
+        {props.label ? `${look().mark} ${props.label}` : look().mark}
+      </span>
+      <Show
+        when={
+          props.reason &&
+          props.link.phase === LinkPhase.failed &&
+          props.link.reason
+        }
+      >
         <span style={{ fg: theme.textMuted }}>{` · ${props.link.reason}`}</span>
       </Show>
     </>

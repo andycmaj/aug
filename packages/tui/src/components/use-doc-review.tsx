@@ -21,7 +21,7 @@ export function useDocReview() {
 
   function argv(diff: string, out: string, title: string): string[] {
     const revdiff = Bun.which("revdiff");
-    if (revdiff)
+    if (revdiff) {
       return [
         "sh",
         "-c",
@@ -31,11 +31,14 @@ export function useDocReview() {
         out,
         title,
       ];
+    }
     return ["sh", "-c", `exec "\${PAGER:-less}" "$0"`, diff];
   }
 
   function reviewDocs(task: TaskRow): false | void {
-    if (task.kind !== Kind.system) return false;
+    if (task.kind !== Kind.system) {
+      return false;
+    }
     const files = writeReview(task.id);
     if (!files) {
       showToast("nothing to review here: y accepts, x rejects", 3000);
@@ -64,13 +67,19 @@ export function useDocReview() {
       cwd: files.dir,
       onExit: () => {
         const state = terminals.get(id);
-        if (!state || state.running) return;
+        if (!state || state.running) {
+          return;
+        }
         terminals.close(id);
-        if (riker.selectedKey() === `t${task.id}`) setActivePane("canvas");
+        if (riker.selectedKey() === `t${task.id}`) {
+          setActivePane("canvas");
+        }
         const notes = existsSync(files.out)
           ? readFileSync(files.out, "utf8").trim()
           : "";
-        if (!notes) return;
+        if (!notes) {
+          return;
+        }
         showToast("redrafting from your notes…", 3000);
         void riker.desk.redraftDocs(task.id, notes).then((line) => {
           showToast(line, 4000);

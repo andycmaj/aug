@@ -20,9 +20,15 @@ describe("the release's version", () => {
   });
 
   test("a bad bump or override is refused before anything is tagged", () => {
-    expect(() => nextVersion("0.0.1", "huge", undefined)).toThrow("expected major | minor | patch");
-    expect(() => nextVersion("0.0.1", "patch", "next")).toThrow("not a version");
-    expect(() => bumpVersion("one.two.three", "patch")).toThrow("cannot read a semver");
+    expect(() => nextVersion("0.0.1", "huge", undefined)).toThrow(
+      "expected major | minor | patch",
+    );
+    expect(() => nextVersion("0.0.1", "patch", "next")).toThrow(
+      "not a version",
+    );
+    expect(() => bumpVersion("one.two.three", "patch")).toThrow(
+      "cannot read a semver",
+    );
   });
 
   test("riker --version says the root package.json's, which the release bumps", () => {

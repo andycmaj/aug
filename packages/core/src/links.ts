@@ -14,14 +14,25 @@ export type LinkTarget =
 // link may predate the check, so readers ask this rather than trust it.
 export function linkTarget(link: string): LinkTarget | null {
   const clean = link.trim();
-  if (!clean) return null;
-  if (isAbsolute(clean)) return { type: "file", path: clean };
-  if (!URL.canParse(clean)) return null;
-  const parsed = new URL(clean);
-  if (parsed.protocol === "http:" || parsed.protocol === "https:")
-    return { type: "web", url: clean };
-  if (parsed.protocol !== "file:" || (parsed.host && parsed.host !== "localhost"))
+  if (!clean) {
     return null;
+  }
+  if (isAbsolute(clean)) {
+    return { type: "file", path: clean };
+  }
+  if (!URL.canParse(clean)) {
+    return null;
+  }
+  const parsed = new URL(clean);
+  if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+    return { type: "web", url: clean };
+  }
+  if (
+    parsed.protocol !== "file:" ||
+    (parsed.host && parsed.host !== "localhost")
+  ) {
+    return null;
+  }
   try {
     return { type: "file", path: fileURLToPath(parsed) };
   } catch {
@@ -35,12 +46,14 @@ export function linkTarget(link: string): LinkTarget | null {
 export function checkLink(link: string): string | Error {
   const clean = link.trim();
   const target = linkTarget(clean);
-  if (!target)
+  if (!target) {
     return new Error(
       `${clean || "url"} is not an http(s) URL or a file's absolute path`,
     );
-  if (target.type === "file" && !isFile(target.path))
+  }
+  if (target.type === "file" && !isFile(target.path)) {
     return new Error(`${target.path} is not a file on disk`);
+  }
   return clean;
 }
 

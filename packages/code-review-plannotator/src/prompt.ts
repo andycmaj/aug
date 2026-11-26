@@ -19,24 +19,40 @@ export function skillTools(text: string = GUIDE_SKILL): string[] {
   const line = FRONTMATTER.exec(text)?.[1]
     ?.split("\n")
     .find((l) => l.startsWith("allowed-tools:"));
-  if (!line) return [];
+  if (!line) {
+    return [];
+  }
   const rules: string[] = [];
   let depth = 0;
   let current = "";
   for (const ch of line.slice("allowed-tools:".length)) {
-    if (ch === "(") depth++;
-    if (ch === ")") depth--;
+    if (ch === "(") {
+      depth++;
+    }
+    if (ch === ")") {
+      depth--;
+    }
     if (ch === "," && depth === 0) {
-      if (current.trim()) rules.push(current.trim());
+      if (current.trim()) {
+        rules.push(current.trim());
+      }
       current = "";
-    } else current += ch;
+    } else {
+      current += ch;
+    }
   }
-  if (current.trim()) rules.push(current.trim());
+  if (current.trim()) {
+    rules.push(current.trim());
+  }
   return rules;
 }
 
 // What the change is for, the base and the job, as the skill's arguments.
-export function jobPrompt(opts: { base: string; pr?: string; about?: string }): (job: string) => string {
+export function jobPrompt(opts: {
+  base: string;
+  pr?: string;
+  about?: string;
+}): (job: string) => string {
   return (job) =>
     [
       "Write the guided review in your instructions for the change in this checkout.",

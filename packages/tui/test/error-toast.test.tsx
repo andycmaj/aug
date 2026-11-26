@@ -20,7 +20,9 @@ let home: string | undefined;
 afterEach(() => {
   destroy?.();
   destroy = undefined;
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 const toasts = () =>
@@ -59,7 +61,9 @@ test("errors stack; dismiss takes the newest, one at a time", () => {
 
 test("a flood keeps the newest errors only", () => {
   const t = toasts();
-  for (let i = 0; i < MAX_ERRORS + 5; i++) t.showToast(`e${i}`, 0, "error");
+  for (let i = 0; i < MAX_ERRORS + 5; i++) {
+    t.showToast(`e${i}`, 0, "error");
+  }
   expect(t.errors()).toHaveLength(MAX_ERRORS);
   expect(t.errors().at(-1)?.message).toBe(`e${MAX_ERRORS + 4}`);
 });
@@ -67,7 +71,9 @@ test("a flood keeps the newest errors only", () => {
 test("the hint names the key, the repeats and what waits under it", () => {
   const e = { id: 1, message: "x", times: 1 };
   expect(errorHint(e, 0, false)).toBe("esc dismiss");
-  expect(errorHint({ ...e, times: 3 }, 2, false)).toBe("×3 · esc dismiss · 2 more");
+  expect(errorHint({ ...e, times: 3 }, 2, false)).toBe(
+    "×3 · esc dismiss · 2 more",
+  );
   expect(errorHint(e, 0, true)).toBe("ctrl+] then esc dismiss");
 });
 
@@ -89,12 +95,16 @@ async function boot(opts: { undoSays?: string } = {}) {
   const log = join(home, "agent-bytes");
   const engine = installFixture("demo");
   const csv = store.listTasks().find((t) => t.title === CSV);
-  if (!csv) throw new Error("demo has no CSV task");
+  if (!csv) {
+    throw new Error("demo has no CSV task");
+  }
   const isLive = engine.desk.isLive.bind(engine.desk);
   engine.desk.isLive = (t) => t.id === csv.id || isLive(t);
   engine.desk.viewer = async () => ({ argv: agent(log) });
   const said = opts.undoSays;
-  if (said) engine.desk.undo = async () => ({ ok: false, text: said });
+  if (said) {
+    engine.desk.undo = async () => ({ ok: false, text: said });
+  }
 
   const setup = await testRender(() => <App engine={engine} />, {
     width: 160,
@@ -113,12 +123,16 @@ async function boot(opts: { undoSays?: string } = {}) {
     await settle();
   };
   const type = async (text: string) => {
-    for (const c of text) setup.mockInput.pressKey(c);
+    for (const c of text) {
+      setup.mockInput.pressKey(c);
+    }
     await settle();
   };
   const until = async (ok: () => boolean) => {
     const end = Date.now() + 3000;
-    while (!ok() && Date.now() < end) await settle(20);
+    while (!ok() && Date.now() < end) {
+      await settle(20);
+    }
     return ok();
   };
   const bytes = () => {

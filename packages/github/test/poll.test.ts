@@ -37,15 +37,20 @@ function fakeGithub(options: {
   const calls: string[] = [];
   const api = async (path: string) => {
     calls.push(path.split("?")[0]);
-    if (path === "user") return { login: "me" };
-    if (options.pulls && path in options.pulls) return options.pulls[path];
-    if (path === "rate_limit")
+    if (path === "user") {
+      return { login: "me" };
+    }
+    if (options.pulls && path in options.pulls) {
+      return options.pulls[path];
+    }
+    if (path === "rate_limit") {
       return {
         resources: {
           core: { remaining: 4000, reset },
           graphql: { remaining: 0, reset },
         },
       };
+    }
     return options.notifications ? options.notifications() : [];
   };
   const prs: PrFetch = async (refs) => {
@@ -68,13 +73,17 @@ const open: PrFetch = async (refs) => ({
 
 describe("the GitHub status line", () => {
   test("PRs that could not be read are not 'up to date'", async () => {
-    for (let n = 1; n <= 3; n++) prTask(n);
+    for (let n = 1; n <= 3; n++) {
+      prTask(n);
+    }
     const { engine, github } = fakeGithub({
       prs: async (refs) => ({
         views: new Map(
           refs.map((r) => [
             r.url,
-            r.url.endsWith("/1") ? { state: "OPEN" } : new Error("HTTP 502: Bad Gateway"),
+            r.url.endsWith("/1")
+              ? { state: "OPEN" }
+              : new Error("HTTP 502: Bad Gateway"),
           ]),
         ),
         budget: null,
@@ -112,8 +121,11 @@ describe("the GitHub status line", () => {
     let limited = true;
     const { engine, github, calls, clock } = fakeGithub({
       prs: async (refs) => {
-        if (limited)
-          throw new Error("GraphQL: API rate limit already exceeded for user ID 1.");
+        if (limited) {
+          throw new Error(
+            "GraphQL: API rate limit already exceeded for user ID 1.",
+          );
+        }
         return open(refs);
       },
     });
@@ -136,19 +148,26 @@ describe("the GitHub status line", () => {
     clock.t = reset * 1000 + 1;
     await github.poll();
     expect(calls).toContain("graphql");
-    expect(engine.status.github).toMatchObject({ state: "ok", detail: "up to date" });
+    expect(engine.status.github).toMatchObject({
+      state: "ok",
+      detail: "up to date",
+    });
   });
 
   test("a REST rate limit stops the notifications too", async () => {
     const { engine, github, calls } = fakeGithub({
       notifications: () => {
-        throw new Error("gh: API rate limit exceeded for user ID 1. (HTTP 403)");
+        throw new Error(
+          "gh: API rate limit exceeded for user ID 1. (HTTP 403)",
+        );
       },
       prs: open,
     });
     await github.poll();
     expect(engine.status.github.state).toBe("error");
-    expect(engine.status.github.detail).toMatch(/^rate limited until \d+:\d\d$/);
+    expect(engine.status.github.detail).toMatch(
+      /^rate limited until \d+:\d\d$/,
+    );
     calls.length = 0;
     await github.poll(true);
     expect(calls).not.toContain("notifications");
@@ -159,7 +178,10 @@ describe("the GitHub status line", () => {
     const { engine, github, calls } = fakeGithub({
       prs: async (refs) => ({
         ...(await open(refs)),
-        budget: { remaining: 10, resetAt: new Date(reset * 1000).toISOString() },
+        budget: {
+          remaining: 10,
+          resetAt: new Date(reset * 1000).toISOString(),
+        },
       }),
     });
     await github.poll();
@@ -192,7 +214,11 @@ describe("a task's PR at its turn's end", () => {
   });
 
   test("a task with no PR asks nothing", async () => {
-    const t = store.createTask({ title: "no PR", kind: Kind.coding, channel: "owner" });
+    const t = store.createTask({
+      title: "no PR",
+      kind: Kind.coding,
+      channel: "owner",
+    });
     const { github, calls } = fakeGithub({ prs: merged });
     await github.refreshTask(t);
     expect(calls).toEqual([]);
@@ -207,8 +233,16 @@ describe("a task's PR at its turn's end", () => {
       pulls: { "repos/acme/ledger/pulls/8": { state: "closed", merged: true } },
     });
     await github.refreshTask(store.getTask(t.id)!);
-    expect(calls).toEqual(["graphql", "rate_limit", "repos/acme/ledger/pulls/8"]);
-    expect(store.prStatus(t.id)).toMatchObject({ state: "merged", number: 8, error: null });
+    expect(calls).toEqual([
+      "graphql",
+      "rate_limit",
+      "repos/acme/ledger/pulls/8",
+    ]);
+    expect(store.prStatus(t.id)).toMatchObject({
+      state: "merged",
+      number: 8,
+      error: null,
+    });
     // Paused now: the next turn goes straight to REST.
     const u = prTask(9);
     calls.length = 0;
@@ -221,7 +255,9 @@ describe("a task's PR at its turn's end", () => {
     let limited = false;
     const { github, calls } = fakeGithub({
       prs: async (refs) => {
-        if (limited) throw new Error("API rate limit exceeded");
+        if (limited) {
+          throw new Error("API rate limit exceeded");
+        }
         return open(refs);
       },
       pulls: { "repos/acme/ledger/pulls/10": { state: "open", merged: false } },
@@ -232,20 +268,37 @@ describe("a task's PR at its turn's end", () => {
     limited = true;
     calls.length = 0;
     await github.refreshTask(store.getTask(t.id)!);
-    expect(calls).toEqual(["graphql", "rate_limit", "repos/acme/ledger/pulls/10"]);
+    expect(calls).toEqual([
+      "graphql",
+      "rate_limit",
+      "repos/acme/ledger/pulls/10",
+    ]);
     expect(store.prStatus(t.id)).toEqual(before);
   });
 });
 
 describe("what one poll costs", () => {
   test("a quiet poll on many PRs: login once a process, notifications once, 25 PRs a query", async () => {
-    for (let n = 1; n <= 60; n++) prTask(n);
+    for (let n = 1; n <= 60; n++) {
+      prTask(n);
+    }
     const { github, calls } = fakeGithub({ prs: open });
     await github.poll();
-    expect(calls.toSorted()).toEqual(["graphql", "graphql", "graphql", "notifications", "user"]);
+    expect(calls.toSorted()).toEqual([
+      "graphql",
+      "graphql",
+      "graphql",
+      "notifications",
+      "user",
+    ]);
     calls.length = 0;
     await github.poll();
-    expect(calls.toSorted()).toEqual(["graphql", "graphql", "graphql", "notifications"]);
+    expect(calls.toSorted()).toEqual([
+      "graphql",
+      "graphql",
+      "graphql",
+      "notifications",
+    ]);
   });
 
   test("notifications and PR status read side by side, and the poll waits for both", async () => {
@@ -279,7 +332,10 @@ describe("what one poll costs", () => {
     expect(finished).toBe(false);
     releasePrs();
     await poll;
-    expect(events.slice(2)).toEqual(["notifications answered", "graphql answered"]);
+    expect(events.slice(2)).toEqual([
+      "notifications answered",
+      "graphql answered",
+    ]);
     expect(store.prStatus(store.listTasks()[0]!.id)?.state).toBe(PrState.open);
   });
 });

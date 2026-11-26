@@ -23,8 +23,12 @@ const TRANSIENT =
   /HTTP 5\d\d|\b50[0234]\b|no server is currently available|connection reset|ECONNRESET|ETIMEDOUT|timed? ?out|unexpected EOF|TLS handshake|could not resolve host|no such host|network is unreachable|connection refused|something went wrong/i;
 
 export function ghTrouble(message: string): GhTrouble {
-  if (RATE_LIMIT.test(message)) return GhTrouble.rateLimit;
-  if (TRANSIENT.test(message)) return GhTrouble.transient;
+  if (RATE_LIMIT.test(message)) {
+    return GhTrouble.rateLimit;
+  }
+  if (TRANSIENT.test(message)) {
+    return GhTrouble.transient;
+  }
   return GhTrouble.other;
 }
 
@@ -95,8 +99,12 @@ export class GithubGate {
 
   pause(budget: GhBudget): Pause | null {
     const p = this.paused.get(budget);
-    if (!p) return null;
-    if (p.until > this.clock.now()) return p;
+    if (!p) {
+      return null;
+    }
+    if (p.until > this.clock.now()) {
+      return p;
+    }
     this.paused.delete(budget);
     return null;
   }
@@ -104,7 +112,9 @@ export class GithubGate {
   // Pauses only ever lengthen: a later, shorter answer does not cut one.
   hold(budget: GhBudget, until: number, why: PauseWhy): void {
     const had = this.pause(budget);
-    if (had && had.until >= until) return;
+    if (had && had.until >= until) {
+      return;
+    }
     this.paused.set(budget, { until, why });
   }
 
@@ -135,14 +145,18 @@ export class GithubGate {
   // so the owner's own gh and agents keep the rest.
   observe(budget: GhBudget, remaining: number, resetAt: number): Pause | null {
     this.strikes.delete(budget);
-    if (remaining >= reserveOf(budget) || resetAt <= this.clock.now()) return null;
+    if (remaining >= reserveOf(budget) || resetAt <= this.clock.now()) {
+      return null;
+    }
     this.hold(budget, resetAt, PauseWhy.reserve);
     return this.pause(budget);
   }
 
   // While backing off, when the next poll may run and what failed last.
   backoff(): { until: number; error: string } | null {
-    if (this.backoffUntil <= this.clock.now()) return null;
+    if (this.backoffUntil <= this.clock.now()) {
+      return null;
+    }
     return { until: this.backoffUntil, error: this.lastError ?? "failed" };
   }
 
@@ -196,8 +210,12 @@ export function limitedUntil(
   now: number,
 ): number {
   const r = limits?.resources?.[budget];
-  if (!r || typeof r.reset !== "number") return now + UNKNOWN_RESET_PAUSE_MS;
-  if ((r.remaining ?? 0) > 0) return now + SECONDARY_PAUSE_MS;
+  if (!r || typeof r.reset !== "number") {
+    return now + UNKNOWN_RESET_PAUSE_MS;
+  }
+  if ((r.remaining ?? 0) > 0) {
+    return now + SECONDARY_PAUSE_MS;
+  }
   return Math.max(r.reset * 1000, now + 60_000);
 }
 

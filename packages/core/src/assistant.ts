@@ -60,7 +60,9 @@ export function assistantAllow(config: RikerConfig): string[] {
 
 // The moves as the model calls them, from the one registry; `allowed`
 // leaves out the ones the caller may not ask for.
-export function movesHelp(allowed: (verb: string) => boolean = () => true): string {
+export function movesHelp(
+  allowed: (verb: string) => boolean = () => true,
+): string {
   return Object.entries(MOVES)
     .filter(([verb]) => allowed(verb))
     .map(([verb, spec]) => {
@@ -68,7 +70,9 @@ export function movesHelp(allowed: (verb: string) => boolean = () => true): stri
       const flags = Object.entries(spec.args)
         .filter(([name]) => name !== spec.positional)
         .map(([name, arg]) =>
-          arg.required ? `--${name} <${arg.help}>` : `[--${name} <${arg.help}>]`,
+          arg.required
+            ? `--${name} <${arg.help}>`
+            : `[--${name} <${arg.help}>]`,
         )
         .join(" ");
       return `- move ${verb}${positional}${flags ? ` ${flags}` : ""}: ${spec.help}`;
@@ -91,7 +95,10 @@ export const LOOKUPS = [
 
 // `lines` are what the plugins tell it (RikerPlugin.assistant): their own
 // tools and how a line from their place is answered.
-export function assistantSystem(config: RikerConfig, lines: readonly string[] = []): string {
+export function assistantSystem(
+  config: RikerConfig,
+  lines: readonly string[] = [],
+): string {
   const tools = TOOLS_NAME;
   return [
     "You are the Assistant in Riker, the owner's work manager in a terminal. This is Home: one long conversation where the owner asks about any of their work and tells you to change it. You run Riker for them: you look things up, make tasks and projects, start and stop agents, and move work around.",
@@ -162,7 +169,9 @@ const WHERE_KEY = "assistant.where";
 
 export function heardWhere(sessionId: string, key = WHERE_KEY): string | null {
   const raw = store.kvGet(key);
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   try {
     const kept = JSON.parse(raw) as { session?: string; where?: string };
     return kept.session === sessionId && typeof kept.where === "string"
@@ -173,7 +182,11 @@ export function heardWhere(sessionId: string, key = WHERE_KEY): string | null {
   }
 }
 
-export function rememberWhere(sessionId: string, where: string, key = WHERE_KEY): void {
+export function rememberWhere(
+  sessionId: string,
+  where: string,
+  key = WHERE_KEY,
+): void {
   store.kvSet(key, JSON.stringify({ session: sessionId, where }));
 }
 
@@ -184,9 +197,12 @@ export function whereSection(
   title = "Where things stand",
 ): string {
   const now = `Now: ${new Date().toString()}`;
-  if (heard === null) return `## ${title}\n${now}\n${where}`;
-  if (heard === where)
+  if (heard === null) {
+    return `## ${title}\n${now}\n${where}`;
+  }
+  if (heard === where) {
     return `## ${title}: unchanged since your last turn\n${now}`;
+  }
   const before = new Set(heard.split("\n"));
   const after = new Set(where.split("\n"));
   const gone = [...before].filter((l) => !after.has(l)).map((l) => `- ${l}`);
@@ -204,7 +220,9 @@ export function whereSection(
 export function heardFrom(turns: TurnRow[]): string | null {
   for (const t of unanswered(turns).reverse()) {
     const place = placeHeard(t.author);
-    if (place) return place;
+    if (place) {
+      return place;
+    }
   }
   return null;
 }

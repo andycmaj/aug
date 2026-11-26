@@ -10,7 +10,12 @@ import {
 } from "@andycmaj/opentui-app";
 import { useRiker } from "../context/riker";
 import { nerdFont } from "@riker/core/glyphs";
-import { laneMeta, type Lane, type LaneMeta, type Tone } from "@riker/core/lanes";
+import {
+  laneMeta,
+  type Lane,
+  type LaneMeta,
+  type Tone,
+} from "@riker/core/lanes";
 import type { Channel, Priority, ProjectRow } from "@riker/core/types";
 
 // A task in a project names it by its short tmux name: the rail's row and
@@ -54,8 +59,12 @@ export function priorityColor(
   theme: Theme,
   priority: Priority,
 ): ThemeColor | undefined {
-  if (priority === "urgent") return theme.error;
-  if (priority === "important") return theme.secondary;
+  if (priority === "urgent") {
+    return theme.error;
+  }
+  if (priority === "important") {
+    return theme.secondary;
+  }
   return undefined;
 }
 
@@ -86,7 +95,9 @@ export function duration(
 ): string {
   const ms = (toIso ? Date.parse(toIso) : now.getTime()) - Date.parse(fromIso);
   const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s}s`;
+  if (s < 60) {
+    return `${s}s`;
+  }
   const m = Math.floor(s / 60);
   return m < 60 ? `${m}m ${s % 60}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
 }
@@ -145,7 +156,9 @@ export function ModeToggle<M extends string>(props: {
               <box flexDirection="row">
                 <text fg={theme.accent}>{on() ? "▌" : " "}</text>
                 <text
-                  fg={on() ? contrastingForeground(theme.accent) : theme.textMuted}
+                  fg={
+                    on() ? contrastingForeground(theme.accent) : theme.textMuted
+                  }
                   bg={on() ? theme.accent : undefined}
                   attributes={on() ? TextAttributes.BOLD : 0}
                 >

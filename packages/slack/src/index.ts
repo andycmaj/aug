@@ -3,7 +3,12 @@
 // moves the Assistant asks for while answering Slack. Core knows none of it.
 
 import type { MoveGuard, RikerPlugin } from "@riker/core/plugins";
-import { CONFIRM_MINUTES, CONFIRM_MOVES, holdForYes, SLACK_ASKER } from "./confirm";
+import {
+  CONFIRM_MINUTES,
+  CONFIRM_MOVES,
+  holdForYes,
+  SLACK_ASKER,
+} from "./confirm";
 import { RemoteConnector, SlackConnector } from "./connector";
 import type { RemoteLink } from "./remote";
 import type { SlackTransport } from "./shared";
@@ -11,7 +16,13 @@ import { remoteConfig, slackConfig } from "./config";
 import { slackReply, type SlackReply } from "./draft";
 
 export { RemoteConnector, SlackConnector, slackReply, type SlackReply };
-export { remoteConfig, slackConfig, slackToken, type RemoteConfig, type SlackConfig } from "./config";
+export {
+  remoteConfig,
+  slackConfig,
+  slackToken,
+  type RemoteConfig,
+  type SlackConfig,
+} from "./config";
 
 export interface SlackOptions {
   // Replace what config picks (tests).

@@ -38,8 +38,15 @@ export function holdForStart(taskId: number): void {
 // there is nothing to continue.
 export function holdReleased(taskId: number): void {
   const task = store.getTask(taskId);
-  if (task?.agent_state === AgentState.queued && task.queue_reason === HELD_FOR_START)
-    store.updateTask(taskId, { agent_state: AgentState.none, queue_reason: null });
+  if (
+    task?.agent_state === AgentState.queued &&
+    task.queue_reason === HELD_FOR_START
+  ) {
+    store.updateTask(taskId, {
+      agent_state: AgentState.none,
+      queue_reason: null,
+    });
+  }
 }
 
 // Held back by the pool's limit, with the reason the rail shows.
@@ -53,11 +60,12 @@ export function queued(taskId: number, reason: string): void {
 // Start was taken back before it ran: nothing to continue, nothing lost.
 export function startCancelled(taskId: number): void {
   const task = store.getTask(taskId);
-  if (task?.agent_state === AgentState.queued)
+  if (task?.agent_state === AgentState.queued) {
     store.updateTask(taskId, {
       agent_state: AgentState.stopped,
       queue_reason: null,
     });
+  }
 }
 
 export interface StartedSession {
@@ -94,7 +102,9 @@ export function sessionStarted(s: StartedSession): SessionRow {
       });
     }
     const task = store.getTask(s.taskId);
-    if (task && task.status !== TaskStatus.open) store.reopen(s.taskId);
+    if (task && task.status !== TaskStatus.open) {
+      store.reopen(s.taskId);
+    }
     store.updateTask(s.taskId, {
       agent_state: AgentState.working,
       queue_reason: null,
@@ -120,9 +130,12 @@ export function sessionActivity(
   lastTool?: string,
 ): void {
   const task = store.getTask(ref.taskId);
-  if (!task) return;
-  if (task.agent_state === AgentState.ready && state !== AgentState.working)
+  if (!task) {
     return;
+  }
+  if (task.agent_state === AgentState.ready && state !== AgentState.working) {
+    return;
+  }
   store.batch(() => {
     store.updateSession(ref.sessionId, {
       state,
@@ -136,11 +149,7 @@ export function sessionActivity(
 // A turn is over: the agent asks something (waiting) or rests at its prompt
 // (idle).
 export function turnEnded(ref: AgentRef, asking: string | null): void {
-  sessionActivity(
-    ref,
-    asking ? AgentState.waiting : AgentState.idle,
-    asking,
-  );
+  sessionActivity(ref, asking ? AgentState.waiting : AgentState.idle, asking);
 }
 
 // Why a session came to an end. However it ended, the task is stopped and s
@@ -166,7 +175,9 @@ export function sessionEnded(ref: AgentRef, reason: string): void {
       ended_at: now(),
       end_reason: reason,
     });
-    if (!task || finished || task.status === TaskStatus.done) return;
+    if (!task || finished || task.status === TaskStatus.done) {
+      return;
+    }
     store.updateTask(ref.taskId, {
       agent_state: AgentState.stopped,
       agent_says: null,
@@ -204,7 +215,9 @@ export function workFinished(
   outcome: { summary: string; closes: boolean },
 ): void {
   const task = store.getTask(ref.taskId);
-  if (!task) return;
+  if (!task) {
+    return;
+  }
   store.batch(() => {
     store.updateSession(ref.sessionId, {
       state: AgentState.ready,
@@ -218,13 +231,16 @@ export function workFinished(
         ? { status: TaskStatus.done, closed_at: now(), closed_by: "agent" }
         : {}),
     });
-    if (task.status !== TaskStatus.done)
+    if (task.status !== TaskStatus.done) {
       store.tellFromTask(
         task,
         outcome.closes ? "finished" : "finished; it waits for the owner",
         outcome.summary,
       );
-    if (outcome.closes) blockerResolved(ref.taskId);
+    }
+    if (outcome.closes) {
+      blockerResolved(ref.taskId);
+    }
   });
 }
 
@@ -234,12 +250,13 @@ export function taskClosed(taskId: number, by = "you"): void {
   store.batch(() => {
     store.retirePendingActions(taskId);
     const task = store.getTask(taskId);
-    if (task && task.status !== TaskStatus.done)
+    if (task && task.status !== TaskStatus.done) {
       store.tellFromTask(
         task,
         `marked done by ${by}`,
         store.latestSession(taskId)?.result ?? null,
       );
+    }
     const agentLive =
       task &&
       (task.agent_state === AgentState.working ||
@@ -260,12 +277,13 @@ export function taskClosed(taskId: number, by = "you"): void {
     store.cancelTimers(taskId, [TimerKind.followup, TimerKind.remind]);
     for (const session of store
       .liveSessions()
-      .filter((s) => s.task_id === taskId))
+      .filter((s) => s.task_id === taskId)) {
       store.updateSession(session.id, {
         ended_at: now(),
         state: AgentState.stopped,
         end_reason: EndReason.closed,
       });
+    }
     blockerResolved(taskId);
   });
 }
@@ -279,7 +297,11 @@ export function taskDropped(taskId: number, by = "you", why = ""): void {
       closed_at: now(),
       closed_by: by,
     });
-    store.cancelTimers(taskId, [TimerKind.followup, TimerKind.schedule, TimerKind.remind]);
+    store.cancelTimers(taskId, [
+      TimerKind.followup,
+      TimerKind.schedule,
+      TimerKind.remind,
+    ]);
     store.addTurn({
       taskId,
       role: TurnRole.trigger,
@@ -292,7 +314,9 @@ export function taskDropped(taskId: number, by = "you", why = ""): void {
 // Open again, by the owner's say: no agent starts (Start does that).
 export function taskReopened(taskId: number, by = "you"): void {
   const task = store.getTask(taskId);
-  if (!task) return;
+  if (!task) {
+    return;
+  }
   const was = task.status;
   store.batch(() => {
     store.reopen(taskId);
@@ -308,18 +332,21 @@ export function taskReopened(taskId: number, by = "you"): void {
 // read, and the task is nobody's until an agent picks it up again.
 export function finishSuperseded(taskId: number): void {
   const task = store.getTask(taskId);
-  if (task?.agent_state === AgentState.ready)
+  if (task?.agent_state === AgentState.ready) {
     store.updateTask(taskId, {
       agent_state: AgentState.none,
       unread_result: 0,
     });
+  }
 }
 
 // A task others wait on is done or dropped: each of them hears it, and is
 // unblocked by it. What still blocks one is named.
 export function blockerResolved(blockerId: number): void {
   const blocker = store.getTask(blockerId);
-  if (!blocker) return;
+  if (!blocker) {
+    return;
+  }
   const how = blocker.status === TaskStatus.dropped ? "dropped" : "done";
   store.batch(() => {
     for (const dependent of store.dependentsOf(blockerId)) {
@@ -329,7 +356,9 @@ export function blockerResolved(blockerId: number): void {
         taskId: dependent,
         role: TurnRole.trigger,
         body: `${store.taskRef(blockerId)} ${how}: ${blocker.title}; ${
-          left.length ? `still blocked by ${left.join(", ")}` : "nothing blocks this now"
+          left.length
+            ? `still blocked by ${left.join(", ")}`
+            : "nothing blocks this now"
         }`,
       });
     }
@@ -363,8 +392,9 @@ export function mergeUndone(taskId: number): void {
 // The draft an agent was waiting on went out: it is no longer asking.
 export function draftSent(taskId: number): void {
   const task = store.getTask(taskId);
-  if (task?.agent_state === AgentState.waiting)
+  if (task?.agent_state === AgentState.waiting) {
     store.updateTask(taskId, { agent_says: null });
+  }
 }
 
 // Sessions alive when Riker last quit are not alive now, except in tmux, which
@@ -376,7 +406,9 @@ export function recoverAtBoot(
 ): void {
   store.batch(() => {
     for (const s of store.liveSessions()) {
-      if (survives(s)) continue;
+      if (survives(s)) {
+        continue;
+      }
       sessionEnded({ taskId: s.task_id, sessionId: s.id }, EndReason.restart);
     }
     for (const task of store.listTasks()) {
@@ -384,14 +416,16 @@ export function recoverAtBoot(
       if (
         task.agent_state === AgentState.queued &&
         task.queue_reason !== HELD_FOR_START
-      )
+      ) {
         holdForStart(task.id);
+      }
       if (
         task.agent_state === AgentState.working &&
         !store.liveSessions().some((s) => s.task_id === task.id) &&
         !isRunning(task.id)
-      )
+      ) {
         store.updateTask(task.id, { agent_state: AgentState.stopped });
+      }
     }
   });
 }

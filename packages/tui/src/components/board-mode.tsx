@@ -27,7 +27,12 @@ import { Commands } from "../commands";
 import { useRiker, ViewMode } from "../context/riker";
 import { BOARD_COLUMNS, LANE_META } from "@riker/core/lanes";
 import { isClosed, taskRef } from "@riker/core/rows";
-import { AgentState, Kind, type KnowledgeRow, type TaskRow } from "@riker/core/types";
+import {
+  AgentState,
+  Kind,
+  type KnowledgeRow,
+  type TaskRow,
+} from "@riker/core/types";
 import { BOARD_HELP_OPTIONS, BoardTab, type HelpCtx } from "../keymap";
 import { RikerFooter } from "./footer";
 import { boardTab, setBoardTab } from "./board-tab";
@@ -94,9 +99,15 @@ export function BoardMode() {
   });
 
   const target = (): TaskRow | null => {
-    if (tab() === Tab.columns) return cardTask();
-    if (tab() === Tab.inbox) return inbox.task();
-    if (tab() === Tab.wins) return wins.task();
+    if (tab() === Tab.columns) {
+      return cardTask();
+    }
+    if (tab() === Tab.inbox) {
+      return inbox.task();
+    }
+    if (tab() === Tab.wins) {
+      return wins.task();
+    }
     return null;
   };
 
@@ -107,33 +118,37 @@ export function BoardMode() {
 
   const onTask = (fn: (t: TaskRow) => void) => () => {
     const t = target();
-    if (!t) return false;
+    if (!t) {
+      return false;
+    }
     fn(riker.task(t.id) ?? t);
   };
 
   // c means one thing per tab, one command each, so the footer names it.
   function composeKnowledge() {
-    if (tab() !== Tab.knowledge) return false;
+    if (tab() !== Tab.knowledge) {
+      return false;
+    }
     shell.dialogs.show(() => (
-        <PromptModal
-          title="Knowledge: a durable discovery"
-          hint="topic: title - what was learned. Short-lived coordination is a handoff note (riker-tools note)."
-          placeholder="export: inter-company transfers - the bank feed keeps them, the export drops them"
-          onSubmit={(line) => {
-            const m = line.match(/^\s*([^:]+):\s*([^-–]+?)\s*[-–]\s*(.+)$/);
-            if (!m) {
-              showToast(
-                "Write it as  topic: title - what was learned",
-                4000,
-                "error",
-              );
-              return;
-            }
-            riker.desk.addKnowledge(m[1], m[2], m[3]);
-          }}
-          onClose={shell.dialogs.close}
-        />
-      ));
+      <PromptModal
+        title="Knowledge: a durable discovery"
+        hint="topic: title - what was learned. Short-lived coordination is a handoff note (riker-tools note)."
+        placeholder="export: inter-company transfers - the bank feed keeps them, the export drops them"
+        onSubmit={(line) => {
+          const m = line.match(/^\s*([^:]+):\s*([^-–]+?)\s*[-–]\s*(.+)$/);
+          if (!m) {
+            showToast(
+              "Write it as  topic: title - what was learned",
+              4000,
+              "error",
+            );
+            return;
+          }
+          riker.desk.addKnowledge(m[1], m[2], m[3]);
+        }}
+        onClose={shell.dialogs.close}
+      />
+    ));
   }
 
   const vertical = (d: number) => {
@@ -166,7 +181,9 @@ export function BoardMode() {
     }
   };
   const horizontal = (d: number) => {
-    if (tab() !== Tab.columns) return false;
+    if (tab() !== Tab.columns) {
+      return false;
+    }
     setCol((c) => Math.max(0, Math.min(BOARD_COLUMNS.length - 1, c + d)));
     setRow(0);
   };
@@ -206,16 +223,22 @@ export function BoardMode() {
       [Commands.OPEN]: () => {
         // Enter on the Inbox and Wins opens the row in place (INBOX_EXPAND,
         // WINS_EXPAND).
-        if (tab() === Tab.inbox || tab() === Tab.wins || tab() === Tab.docs) return false;
+        if (tab() === Tab.inbox || tab() === Tab.wins || tab() === Tab.docs) {
+          return false;
+        }
         const t = target();
-        if (t) openInChat(t);
+        if (t) {
+          openInChat(t);
+        }
       },
       [Commands.BOARD_COMPOSE_KNOWLEDGE]: composeKnowledge,
       [Commands.START]: onTask(shell.actions.start),
       [Commands.STOP]: onTask(shell.actions.stop),
       [Commands.JUMP]: () => {
         const t = target();
-        if (!t) return false;
+        if (!t) {
+          return false;
+        }
         void shell.actions.jumpTo(t.id);
       },
       [Commands.NUDGE]: onTask((t) => void shell.actions.nudge(t.id)),
@@ -224,7 +247,9 @@ export function BoardMode() {
       [Commands.REOPEN]: onTask(shell.actions.reopen),
       [Commands.PR_DASH]: () => {
         const t = target();
-        if (!t) return false;
+        if (!t) {
+          return false;
+        }
         return shell.actions.togglePrDash(riker.task(t.id) ?? t);
       },
     },
@@ -235,9 +260,13 @@ export function BoardMode() {
   // on, else the tab.
   const subject = (): string => {
     const t = target();
-    if (t) return `${taskRef(t.id)} ${t.title}`;
+    if (t) {
+      return `${taskRef(t.id)} ${t.title}`;
+    }
     const doc = docs.subject();
-    if (doc) return doc;
+    if (doc) {
+      return doc;
+    }
     const label = TABS.find((x) => x.key === tab())?.label.replace(/^\d+ /, "");
     return `Board: ${label ?? tab()}`;
   };
@@ -256,7 +285,9 @@ export function BoardMode() {
       started: false,
       pr: Boolean(t && riker.taskPr(t)),
       closed: Boolean(t && isClosed(t)),
-      ...(t ? { actions: actionsFor(riker.desk.config(), t).map((a) => a.name) } : {}),
+      ...(t
+        ? { actions: actionsFor(riker.desk.config(), t).map((a) => a.name) }
+        : {}),
       board: tab(),
       ...(tab() === Tab.inbox ? inbox.ctx() : {}),
       ...(tab() === Tab.wins ? wins.ctx() : {}),
@@ -375,12 +406,17 @@ function Columns(props: {
         const box = scrolls[ci];
         const task = props.columns[ci]?.tasks[selectedIn(ci)];
         const card = task && box?.content.findDescendantById(cardId(task.id));
-        if (!box || !card) return;
+        if (!box || !card) {
+          return;
+        }
         const view = box.viewport.height;
         const top = card.y - box.viewport.y + box.scrollTop;
         const bottom = top + card.height;
-        if (top < box.scrollTop || card.height >= view) box.scrollTo(top);
-        else if (bottom > box.scrollTop + view) box.scrollTo(bottom - view);
+        if (top < box.scrollTop || card.height >= view) {
+          box.scrollTo(top);
+        } else if (bottom > box.scrollTop + view) {
+          box.scrollTo(bottom - view);
+        }
       },
     ),
   );
@@ -456,14 +492,18 @@ function Card(props: {
     if (t.agent_state === AgentState.working) {
       return `${props.spinner} ${s?.last_tool ?? "working"} · ${s ? duration(s.started_at, null) : ""}`;
     }
-    if (t.agent_state === AgentState.waiting)
+    if (t.agent_state === AgentState.waiting) {
       return `${LANE_META.waiting.mark} ${t.agent_says ?? "waiting on you"}`;
-    if (t.agent_state === AgentState.queued)
+    }
+    if (t.agent_state === AgentState.queued) {
       return `${LANE_META.queued.mark} ${t.queue_reason ?? "waiting to start"}`;
-    if (riker.pending().has(t.id))
+    }
+    if (riker.pending().has(t.id)) {
       return `${LANE_META.approve.mark} ready to send`;
-    if (t.agent_state === AgentState.ready)
+    }
+    if (t.agent_state === AgentState.ready) {
       return `${LANE_META.ready.mark} ${s?.result ?? LANE_META.ready.word}`;
+    }
     return `${t.agent_state}`;
   };
   return (
@@ -504,8 +544,8 @@ function Knowledge(props: {
       fallback={
         <box paddingLeft={1}>
           <text fg={theme.textMuted}>
-            Nothing learned yet. Agents add discoveries with riker-tools knowledge
-            add; c writes one.
+            Nothing learned yet. Agents add discoveries with riker-tools
+            knowledge add; c writes one.
           </text>
         </box>
       }

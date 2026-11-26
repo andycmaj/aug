@@ -45,7 +45,9 @@ describe("config", () => {
     const config = fileConfig();
     const next = config.update((c) => ({ ...c, maxActiveAgents: 9 }));
     expect(config.get()).toBe(next);
-    expect(JSON.parse(readFileSync(paths.config(), "utf8")).maxActiveAgents).toBe(9);
+    expect(
+      JSON.parse(readFileSync(paths.config(), "utf8")).maxActiveAgents,
+    ).toBe(9);
     expect(loadConfig().maxActiveAgents).toBe(9);
   });
 
@@ -64,10 +66,14 @@ describe("config", () => {
 describe("a plugin's section", () => {
   beforeEach(() => freshHome());
 
-  const chat = configSection("chatter", { enabled: true, every: 30 }, (written, config) => ({
-    enabled: written.enabled ?? true,
-    every: written.every ?? (config.autostart ? 30 : 90),
-  }));
+  const chat = configSection(
+    "chatter",
+    { enabled: true, every: 30 },
+    (written, config) => ({
+      enabled: written.enabled ?? true,
+      every: written.every ?? (config.autostart ? 30 : 90),
+    }),
+  );
 
   test("is kept as written, and read whole through the section", () => {
     const config = mergeConfig({ chatter: { every: 5 } });
@@ -83,7 +89,10 @@ describe("a plugin's section", () => {
   test("an update writes back only what the owner wrote, not the defaults", () => {
     const source = fileConfig();
     source.update((c) => ({ ...c, chatter: { enabled: false } }));
-    const file = JSON.parse(readFileSync(paths.config(), "utf8")) as Record<string, unknown>;
+    const file = JSON.parse(readFileSync(paths.config(), "utf8")) as Record<
+      string,
+      unknown
+    >;
     expect(file.chatter).toEqual({ enabled: false });
     expect(chat.of(source.get())).toEqual({ enabled: false, every: 30 });
   });
@@ -97,7 +106,11 @@ describe("a plugin's section", () => {
 describe("keys that moved", () => {
   test("github.repos and github.reviewTeams are read into repos and triage, and leave GitHub's section", () => {
     const config = mergeConfig({
-      github: { pollSeconds: 30, repos: { "a/b": "/w/b" }, reviewTeams: ["acme/web"] },
+      github: {
+        pollSeconds: 30,
+        repos: { "a/b": "/w/b" },
+        reviewTeams: ["acme/web"],
+      },
     } as never);
     expect(config.repos).toEqual({ "a/b": "/w/b" });
     expect(config.triage.reviewTeams).toEqual(["acme/web"]);

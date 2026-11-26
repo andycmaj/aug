@@ -3,7 +3,12 @@ import { localDay } from "@riker/core/rail";
 import * as store from "@riker/core/store";
 import { SpendRole } from "@riker/core/types";
 import { freshHome } from "@riker/core/test/support/helpers";
-import { PersistentClaude, polledToRaw, realSpawn, type ProcLike } from "../src/claude-mcp";
+import {
+  PersistentClaude,
+  polledToRaw,
+  realSpawn,
+  type ProcLike,
+} from "../src/claude-mcp";
 import { plainText, rawToNewMessage, threadKeyFor } from "../src/shared";
 
 beforeEach(() => freshHome());
@@ -36,7 +41,9 @@ describe("ingest says who was asked", () => {
       mentions_me: true,
     });
     expect(rawToNewMessage(raw).meta).toMatchObject({ mention: true });
-    expect(rawToNewMessage({ ...raw, mentionsMe: undefined }).meta).toMatchObject({ mention: false });
+    expect(
+      rawToNewMessage({ ...raw, mentionsMe: undefined }).meta,
+    ).toMatchObject({ mention: false });
   });
 });
 
@@ -60,16 +67,24 @@ describe("the Slack session's spend", () => {
         },
         lines: (async function* () {
           for (;;) {
-            if (!pending.length) await new Promise<void>((r) => (wake = r));
+            if (!pending.length) {
+              await new Promise<void>((r) => (wake = r));
+            }
             wake = null;
-            while (pending.length) yield pending.shift()!;
+            while (pending.length) {
+              yield pending.shift()!;
+            }
           }
         })(),
         kill() {},
       };
     };
     // A fresh process every two turns: its total starts over.
-    const session = new PersistentClaude(() => ["claude"], { maxTurns: 2, spawn, model: "haiku" });
+    const session = new PersistentClaude(() => ["claude"], {
+      maxTurns: 2,
+      spawn,
+      model: "haiku",
+    });
     await session.ask("a");
     await session.ask("b");
     await session.ask("c");
@@ -92,11 +107,16 @@ describe("Riker's own claudes", () => {
     try {
       const proc = realSpawn(["sh", "-c", 'echo "pane=${TMUX_PANE:-none}"']);
       const seen: string[] = [];
-      for await (const line of proc.lines) seen.push(line);
+      for await (const line of proc.lines) {
+        seen.push(line);
+      }
       expect(seen).toEqual(["pane=none"]);
     } finally {
-      if (before === undefined) delete process.env.TMUX_PANE;
-      else process.env.TMUX_PANE = before;
+      if (before === undefined) {
+        delete process.env.TMUX_PANE;
+      } else {
+        process.env.TMUX_PANE = before;
+      }
     }
   });
 });

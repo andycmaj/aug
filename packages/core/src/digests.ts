@@ -36,29 +36,51 @@ function set(v: number | null | undefined): v is number {
   return v === 0 || v === 1;
 }
 
-export function journalSwitch(config: RikerConfig, project: ProjectRow | null): Switch {
-  if (project && set(project.journal)) return { on: project.journal === 1, from: SwitchFrom.project };
+export function journalSwitch(
+  config: RikerConfig,
+  project: ProjectRow | null,
+): Switch {
+  if (project && set(project.journal)) {
+    return { on: project.journal === 1, from: SwitchFrom.project };
+  }
   return { on: config.journal.enabled, from: SwitchFrom.config };
 }
 
 // Pure, for a view that read the project through the read model.
-export function storySwitchOf(config: RikerConfig, task: TaskRow, project: ProjectRow | null): Switch {
-  if (set(task.story)) return { on: task.story === 1, from: SwitchFrom.task };
+export function storySwitchOf(
+  config: RikerConfig,
+  task: TaskRow,
+  project: ProjectRow | null,
+): Switch {
+  if (set(task.story)) {
+    return { on: task.story === 1, from: SwitchFrom.task };
+  }
   return projectStoryDefault(config, project);
 }
 
 // What a project's tasks' stories follow when a task says nothing.
-export function projectStoryDefault(config: RikerConfig, project: ProjectRow | null): Switch {
-  if (project && set(project.story)) return { on: project.story === 1, from: SwitchFrom.project };
+export function projectStoryDefault(
+  config: RikerConfig,
+  project: ProjectRow | null,
+): Switch {
+  if (project && set(project.story)) {
+    return { on: project.story === 1, from: SwitchFrom.project };
+  }
   return { on: config.story.enabled, from: SwitchFrom.config };
 }
 
 export function storySwitch(config: RikerConfig, task: TaskRow): Switch {
-  return storySwitchOf(config, task, task.project_id ? store.getProject(task.project_id) : null);
+  return storySwitchOf(
+    config,
+    task,
+    task.project_id ? store.getProject(task.project_id) : null,
+  );
 }
 
 export function journalOn(config: RikerConfig, task: TaskRow): boolean {
-  if (!task.project_id) return false;
+  if (!task.project_id) {
+    return false;
+  }
   return journalSwitch(config, store.getProject(task.project_id)).on;
 }
 
@@ -73,7 +95,11 @@ export function switchWords(name: string, s: Switch): string {
 }
 
 // A switch as the owner sets it: on, off, or back to the level above.
-export const SwitchValue = { on: "on", off: "off", default: "default" } as const;
+export const SwitchValue = {
+  on: "on",
+  off: "off",
+  default: "default",
+} as const;
 export type SwitchValue = (typeof SwitchValue)[keyof typeof SwitchValue];
 
 export function switchColumn(v: SwitchValue): number | null {
@@ -97,12 +123,18 @@ const SECRET_SHAPES: RegExp[] = [
   /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*/g,
 ];
 
-const SECRET_VALUE = /\b(password|passwd|token|secret|api[_-]?key)(\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi;
+const SECRET_VALUE =
+  /\b(password|passwd|token|secret|api[_-]?key)(\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi;
 
 export function redact(text: string): string {
   let out = text;
-  for (const shape of SECRET_SHAPES) out = out.replace(shape, REDACTED);
-  return out.replace(SECRET_VALUE, (_m, key: string, sep: string) => `${key}${sep}${REDACTED}`);
+  for (const shape of SECRET_SHAPES) {
+    out = out.replace(shape, REDACTED);
+  }
+  return out.replace(
+    SECRET_VALUE,
+    (_m, key: string, sep: string) => `${key}${sep}${REDACTED}`,
+  );
 }
 
 // ── lists ───────────────────────────────────────────────────────────────
@@ -123,12 +155,18 @@ export function lines(field: string): string[] {
 
 // riker-tools done's list flags, one item each: citty keeps only the last
 // value of a flag given twice.
-export function repeated(rawArgs: string[], name: string): string[] | undefined {
+export function repeated(
+  rawArgs: string[],
+  name: string,
+): string[] | undefined {
   const out: string[] = [];
   for (let i = 0; i < rawArgs.length; i++) {
     const a = rawArgs[i];
-    if (a === `--${name}` && i + 1 < rawArgs.length) out.push(rawArgs[++i]);
-    else if (a.startsWith(`--${name}=`)) out.push(a.slice(name.length + 3));
+    if (a === `--${name}` && i + 1 < rawArgs.length) {
+      out.push(rawArgs[++i]);
+    } else if (a.startsWith(`--${name}=`)) {
+      out.push(a.slice(name.length + 3));
+    }
   }
   return out.length ? out : undefined;
 }
@@ -157,7 +195,9 @@ export interface Learned {
 // A learned line written `knowledge:<topic>: <text>` also goes to Knowledge.
 export function parseLearned(line: string): Learned {
   const m = line.match(KNOWLEDGE_LINE);
-  return m ? { text: m[2].trim(), topic: m[1].trim() } : { text: line, topic: null };
+  return m
+    ? { text: m[2].trim(), topic: m[1].trim() }
+    : { text: line, topic: null };
 }
 
 function outcomeOf(v: string | undefined): DigestOutcome {
@@ -167,30 +207,49 @@ function outcomeOf(v: string | undefined): DigestOutcome {
 
 // The links a session leaves: the task's PR and branch, and the docs
 // linked to the task since the session started.
-export function sessionLinks(task: TaskRow, session: SessionRow | null): DigestLinks {
+export function sessionLinks(
+  task: TaskRow,
+  session: SessionRow | null,
+): DigestLinks {
   const links: DigestLinks = {};
   const pr = taskPr(task);
-  if (pr) links.pr = pr.url;
-  if (task.branch) links.branch = task.branch;
+  if (pr) {
+    links.pr = pr.url;
+  }
+  if (task.branch) {
+    links.branch = task.branch;
+  }
   const since = session?.started_at ?? "";
   const docs = store
     .linksForTask(task.id)
     .filter((l) => l.created_at >= since && l.url !== links.pr)
     .map((l) => ({ url: l.url, title: l.title }));
-  if (docs.length) links.docs = docs;
+  if (docs.length) {
+    links.docs = docs;
+  }
   return links;
 }
 
 // Knowledge entries for the learned lines that ask for one: the line keeps
 // its text and the entry's id, so nothing is written twice.
-function knowledgeFrom(task: TaskRow, learned: string[]): { lines: string[]; ids: number[] } {
+function knowledgeFrom(
+  task: TaskRow,
+  learned: string[],
+): { lines: string[]; ids: number[] } {
   const ref = store.taskRef(task.id);
   const ids: number[] = [];
   const out = learned.map((line) => {
     const l = parseLearned(line);
-    if (!l.topic) return l.text;
+    if (!l.topic) {
+      return l.text;
+    }
     const title = l.text.length > 80 ? `${l.text.slice(0, 79)}…` : l.text;
-    const row = store.addKnowledge(l.topic, title, `${l.text}\n\nFrom ${ref} (${task.title}).`, `agent ${ref}`);
+    const row = store.addKnowledge(
+      l.topic,
+      title,
+      `${l.text}\n\nFrom ${ref} (${task.title}).`,
+      `agent ${ref}`,
+    );
     ids.push(row.id);
     return `(Knowledge #${row.id}) ${l.text}`;
   });
@@ -200,7 +259,9 @@ function knowledgeFrom(task: TaskRow, learned: string[]): { lines: string[]; ids
 // How far the transcript had got at done, so a watcher on a later run of
 // the same session reads only what came after.
 function transcriptSize(session: SessionRow | null): number | null {
-  if (!session?.transcript_path) return null;
+  if (!session?.transcript_path) {
+    return null;
+  }
   try {
     return statSync(session.transcript_path).size;
   } catch {
@@ -216,7 +277,9 @@ export function digestFromDone(
   session: SessionRow | null,
   args: DigestArgs,
 ): DigestRow | null {
-  if (!digestWanted(config, task)) return null;
+  if (!digestWanted(config, task)) {
+    return null;
+  }
   const clean = (v: string | string[] | undefined) => toLines(v).map(redact);
   const did = clean(args.did);
   const knowledge = knowledgeFrom(task, clean(args.learned));

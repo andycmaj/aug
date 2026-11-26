@@ -19,8 +19,9 @@ export class RepoError extends Error {}
 // owner/repo, as GitHub names it.
 export function checkRepo(repo: string): string {
   const clean = repo.trim();
-  if (!/^[\w.-]+\/[\w.-]+$/.test(clean))
+  if (!/^[\w.-]+\/[\w.-]+$/.test(clean)) {
     throw new RepoError(`${clean || "that"} is not owner/repo`);
+  }
   return clean;
 }
 
@@ -28,16 +29,25 @@ const sameRepo = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 export function expandHome(path: string): string {
   const clean = path.trim();
-  return clean === "~" || clean.startsWith("~/") ? homedir() + clean.slice(1) : clean;
+  return clean === "~" || clean.startsWith("~/")
+    ? homedir() + clean.slice(1)
+    : clean;
 }
 
 export function tildePath(path: string): string {
   const home = homedir();
-  return path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
+  return path === home || path.startsWith(`${home}/`)
+    ? `~${path.slice(home.length)}`
+    : path;
 }
 
-export function repoPath(config: RikerConfig, repo: string | null): string | null {
-  if (!repo) return null;
+export function repoPath(
+  config: RikerConfig,
+  repo: string | null,
+): string | null {
+  if (!repo) {
+    return null;
+  }
   return config.repos[repo] ?? null;
 }
 
@@ -76,14 +86,23 @@ export function checkPath(repo: string, path: string): CheckoutProblem | null {
     case "inside":
       return { kind: "inside", path, root: state.root };
     case "checkout":
-      if (state.repos.length === 0 || state.repos.some((r) => sameRepo(r, repo)))
+      if (
+        state.repos.length === 0 ||
+        state.repos.some((r) => sameRepo(r, repo))
+      ) {
         return null;
-      if (store.kvGet(anywayKey(repo)) === path) return null;
+      }
+      if (store.kvGet(anywayKey(repo)) === path) {
+        return null;
+      }
       return { kind: "mismatch", path, remotes: state.repos };
   }
 }
 
-export function checkMapped(config: RikerConfig, repo: string): CheckoutProblem | null {
+export function checkMapped(
+  config: RikerConfig,
+  repo: string,
+): CheckoutProblem | null {
   const path = repoPath(config, repo);
   return path ? checkPath(repo, path) : { kind: "unmapped" };
 }
@@ -107,14 +126,25 @@ export function describeProblem(repo: string, p: CheckoutProblem): string {
 
 // The checkout a problem points at instead: a worktree's main, a subfolder's top.
 export function problemFix(p: CheckoutProblem): string | null {
-  if (p.kind === "worktree") return p.main;
-  if (p.kind === "inside") return p.root;
+  if (p.kind === "worktree") {
+    return p.main;
+  }
+  if (p.kind === "inside") {
+    return p.root;
+  }
   return null;
 }
 
 // ── discovery ─────────────────────────────────────────────────────────────
 
-const DEFAULT_ROOTS = ["~/workspace", "~/src", "~/code", "~/projects", "~/dev", "~/git"];
+const DEFAULT_ROOTS = [
+  "~/workspace",
+  "~/src",
+  "~/code",
+  "~/projects",
+  "~/dev",
+  "~/git",
+];
 // ~/workspace/owner/repo is 2; one more for a group folder.
 const SCAN_DEPTH = 3;
 const SCAN_TTL_MS = 60_000;
@@ -128,10 +158,14 @@ export function repoRoots(config: RikerConfig): string[] {
 // Kept a minute, per Mux (a test's fake never sees another's scan).
 let scanned: { by: object; at: number; found: FoundCheckout[] } | null = null;
 
-export async function findCheckouts(config: RikerConfig, fresh = false): Promise<FoundCheckout[]> {
+export async function findCheckouts(
+  config: RikerConfig,
+  fresh = false,
+): Promise<FoundCheckout[]> {
   const by = mux();
-  if (!fresh && scanned?.by === by && Date.now() - scanned.at < SCAN_TTL_MS)
+  if (!fresh && scanned?.by === by && Date.now() - scanned.at < SCAN_TTL_MS) {
     return scanned.found;
+  }
   const found = await by.findCheckouts(repoRoots(config), SCAN_DEPTH);
   scanned = { by, at: Date.now(), found };
   return found;
@@ -161,7 +195,10 @@ export async function candidates(
     .filter((f) => f.repos.some((r) => sameRepo(r, repo)))
     .map((f) => ({ path: f.path, guess: false }));
   const byName = found
-    .filter((f) => f.repos.length === 0 && f.path.split("/").pop()?.toLowerCase() === name)
+    .filter(
+      (f) =>
+        f.repos.length === 0 && f.path.split("/").pop()?.toLowerCase() === name,
+    )
     .map((f) => ({ path: f.path, guess: true }));
   return [...byRemote, ...byName].filter((c) => c.path !== mapped);
 }
@@ -200,12 +237,17 @@ export async function pathNeed(
 
 // Saved only when worktrees can be made from it. A checkout of another repo
 // is saved: the start that follows asks whether to rename or use it anyway.
-export function mapRepo(config: ConfigSource, repo: string, path: string): void {
+export function mapRepo(
+  config: ConfigSource,
+  repo: string,
+  path: string,
+): void {
   const clean = checkRepo(repo);
   const full = expandHome(path);
   const problem = checkPath(clean, full);
-  if (problem && problem.kind !== "mismatch")
+  if (problem && problem.kind !== "mismatch") {
     throw new RepoError(describeProblem(clean, problem));
+  }
   saveRepos(config, (repos) => ({ ...repos, [clean]: full }));
 }
 
@@ -221,21 +263,32 @@ export function allowMismatch(repo: string, path: string): void {
 // A repo renamed on GitHub (or mistyped): the new name everywhere Riker keeps
 // it, the mapping, projects and open tasks. Closed tasks keep the old name
 // as history.
-export function renameRepo(config: ConfigSource, from: string, to: string): string {
+export function renameRepo(
+  config: ConfigSource,
+  from: string,
+  to: string,
+): string {
   const next = checkRepo(to);
-  if (from === next) return next;
+  if (from === next) {
+    return next;
+  }
   saveRepos(config, ({ [from]: path, ...rest }) =>
     path === undefined ? rest : { ...rest, [next]: rest[next] ?? path },
   );
   store.batch(() => {
     for (const p of store.listProjects()) {
       const list = store.projectRepos(p);
-      if (!list.includes(from)) continue;
+      if (!list.includes(from)) {
+        continue;
+      }
       const renamed = [...new Set(list.map((r) => (r === from ? next : r)))];
       store.updateProject(p.id, { repos: JSON.stringify(renamed) });
     }
-    for (const t of store.tasksWithRepo(from))
-      if (t.status === TaskStatus.open) store.updateTask(t.id, { repo: next });
+    for (const t of store.tasksWithRepo(from)) {
+      if (t.status === TaskStatus.open) {
+        store.updateTask(t.id, { repo: next });
+      }
+    }
   });
   return next;
 }
@@ -247,7 +300,9 @@ export async function cloneRepo(
 ): Promise<string> {
   const clean = checkRepo(repo);
   const target = expandHome(dest ?? cloneDest(config.get(), clean));
-  if (existsSync(target)) throw new RepoError(`${tildePath(target)} is already there`);
+  if (existsSync(target)) {
+    throw new RepoError(`${tildePath(target)} is already there`);
+  }
   await mux().clone(clean, target);
   forgetScan();
   mapRepo(config, clean, target);
@@ -285,13 +340,20 @@ export interface RepoReport {
   unmapped: FoundCheckout[];
 }
 
-export async function repoReport(config: RikerConfig, fresh = false): Promise<RepoReport> {
+export async function repoReport(
+  config: RikerConfig,
+  fresh = false,
+): Promise<RepoReport> {
   const mapped = config.repos;
   const projectsOf = new Map<string, string[]>();
-  for (const p of store.listProjects())
-    for (const r of store.projectRepos(p))
+  for (const p of store.listProjects()) {
+    for (const r of store.projectRepos(p)) {
       projectsOf.set(r, [...(projectsOf.get(r) ?? []), p.name]);
-  const names = [...new Set([...Object.keys(mapped), ...projectsOf.keys()])].sort();
+    }
+  }
+  const names = [
+    ...new Set([...Object.keys(mapped), ...projectsOf.keys()]),
+  ].sort();
   const found = await findCheckouts(config, fresh);
   const repos = await Promise.all(
     names.map(async (repo) => ({
@@ -306,16 +368,26 @@ export async function repoReport(config: RikerConfig, fresh = false): Promise<Re
   const known = names.map((n) => n.toLowerCase());
   // The owners of repos Riker already knows come first: likely the owner's own.
   const owners = new Set(known.map((n) => n.split("/")[0]));
-  const ownFirst = (f: FoundCheckout) => (owners.has(f.repos[0].split("/")[0].toLowerCase()) ? 0 : 1);
+  const ownFirst = (f: FoundCheckout) =>
+    owners.has(f.repos[0].split("/")[0].toLowerCase()) ? 0 : 1;
   const unmapped = found
-    .filter((f) => f.repos.length > 0 && !f.repos.some((r) => known.includes(r.toLowerCase())))
+    .filter(
+      (f) =>
+        f.repos.length > 0 &&
+        !f.repos.some((r) => known.includes(r.toLowerCase())),
+    )
     .sort((a, b) => ownFirst(a) - ownFirst(b));
   return { repos, unmapped };
 }
 
 export function repoStateLine(s: RepoState): string {
   const where = s.path ? tildePath(s.path) : "no path";
-  const state = s.problem && s.problem.kind !== "unmapped" ? describeProblem(s.repo, s.problem) : s.path ? "ok" : "";
+  const state =
+    s.problem && s.problem.kind !== "unmapped"
+      ? describeProblem(s.repo, s.problem)
+      : s.path
+        ? "ok"
+        : "";
   const projects = s.projects.length ? ` [${s.projects.join(", ")}]` : "";
   const others = s.others.length
     ? `; also at ${s.others.map((c) => `${tildePath(c.path)}${c.guess ? " (no remote)" : ""}`).join(", ")}`
@@ -325,10 +397,14 @@ export function repoStateLine(s: RepoState): string {
 
 export function reportText(r: RepoReport): string {
   const lines = r.repos.map(repoStateLine);
-  if (lines.length === 0) lines.push("no repos");
+  if (lines.length === 0) {
+    lines.push("no repos");
+  }
   if (r.unmapped.length) {
     lines.push("", "On disk, not mapped:");
-    for (const f of r.unmapped) lines.push(`${f.repos[0]}  ${tildePath(f.path)}`);
+    for (const f of r.unmapped) {
+      lines.push(`${f.repos[0]}  ${tildePath(f.path)}`);
+    }
   }
   return lines.join("\n");
 }

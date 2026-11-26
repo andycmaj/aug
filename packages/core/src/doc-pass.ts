@@ -70,7 +70,8 @@ const PASS_SCHEMA = {
           text: { type: "string", description: "the whole new doc" },
           reason: {
             type: "string",
-            description: "one or two sentences the owner reads: what changes and why",
+            description:
+              "one or two sentences the owner reads: what changes and why",
           },
           absorbs: {
             type: "array",
@@ -121,7 +122,9 @@ function signature(): string {
 export function archiveStale(at = new Date()): number {
   const text = readDoc(DocName.learned);
   const { text: kept, stale } = staleWatching(text, at);
-  if (stale.length === 0) return 0;
+  if (stale.length === 0) {
+    return 0;
+  }
   writeDoc(DocName.learned, kept);
   archiveLearned(stale, "stale: not seen again in 30 days", at);
   return stale.length;
@@ -191,7 +194,9 @@ async function curateKnowledge(
   });
   store.kvSet(KNOWLEDGE_SEEN, docHash(section.text));
   const plan = checkPlan(result.structured, section.entries);
-  if (planEmpty(plan)) return 0;
+  if (planEmpty(plan)) {
+    return 0;
+  }
   proposeKnowledge(plan);
   return 1;
 }
@@ -204,7 +209,9 @@ export async function runDocPass(
 ): Promise<DocPassRun> {
   const archived = archiveStale(at);
   const none = { proposed: 0, ideas: 0, archived, knowledge: 0 };
-  if (!force && !docPassDue(at)) return { ...none, skipped: "not due" };
+  if (!force && !docPassDue(at)) {
+    return { ...none, skipped: "not due" };
+  }
   const over = EDITABLE.filter((name) => overBudget(config, name));
   const docsDue = force || over.length > 0 || signature() !== store.kvGet(SEEN);
   const section = knowledgeSection(config, files);
@@ -216,8 +223,9 @@ export async function runDocPass(
     return { ...none, skipped: "nothing new" };
   }
   // Left due, so it runs on the first tick after the cap lifts.
-  if (!force && capReached(config, at))
+  if (!force && capReached(config, at)) {
     return { ...none, skipped: "daily spend cap reached" };
+  }
   const docs = docsDue ? await passDocs(config, at) : { proposed: 0, ideas: 0 };
   const knowledge = knowledgeDue ? await curateKnowledge(config, section) : 0;
   store.kvSet(LAST_RUN, at.toISOString());
@@ -255,14 +263,21 @@ async function passDocs(
   let proposed = 0;
   for (const edit of answer?.edits ?? []) {
     const doc = EDITABLE.find((d) => d === edit.doc);
-    if (!doc || !edit.text?.trim()) continue;
+    if (!doc || !edit.text?.trim()) {
+      continue;
+    }
     const text = edit.text.trimEnd() + "\n";
     const current = readDoc(doc);
-    if (text === current) continue;
-    const size = doc === DocName.learned ? learnedInUse(text).length : text.length;
+    if (text === current) {
+      continue;
+    }
+    const size =
+      doc === DocName.learned ? learnedInUse(text).length : text.length;
     // Never a proposal that is over budget and no smaller than what it
     // replaces.
-    if (size > docBudget(config, doc) && text.length >= current.length) continue;
+    if (size > docBudget(config, doc) && text.length >= current.length) {
+      continue;
+    }
     if (doc === DocName.learned) {
       const drops = unearnedDrops(current, text, edit.absorbs ?? []);
       if (drops.length) {
@@ -282,9 +297,15 @@ async function passDocs(
   let ideas = 0;
   const past = pastIdeas(at);
   for (const idea of answer?.ideas ?? []) {
-    if (repeatsPastIdea({ title: idea.title, taskId: null }, past)) continue;
+    if (repeatsPastIdea({ title: idea.title, taskId: null }, past)) {
+      continue;
+    }
     past.push(
-      store.addIdea(idea.title, `${idea.body}\n\n(A change to Riker's shipped docs: an AUG-MISC task.)`, null),
+      store.addIdea(
+        idea.title,
+        `${idea.body}\n\n(A change to Riker's shipped docs: an AUG-MISC task.)`,
+        null,
+      ),
     );
     ideas++;
   }

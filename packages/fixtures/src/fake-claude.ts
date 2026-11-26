@@ -65,13 +65,17 @@ for await (const line of rl) {
     ]);
     console.log("");
     console.log(
-      handleDone(env, {
-        summary:
-          "Export keeps inter-company transfers; added a regression test. 14 tests green.",
-        reply:
-          "Fixed: the export now keeps inter-company transfers (the missing 4,180). Test added.",
-        close: "issue",
-      }, Drafts.of([githubPlugin(), slackPlugin()])),
+      handleDone(
+        env,
+        {
+          summary:
+            "Export keeps inter-company transfers; added a regression test. 14 tests green.",
+          reply:
+            "Fixed: the export now keeps inter-company transfers (the missing 4,180). Test added.",
+          close: "issue",
+        },
+        Drafts.of([githubPlugin(), slackPlugin()]),
+      ),
     );
     console.log(dim("finished - the reply waits for your Send in Riker"));
     rl.close();

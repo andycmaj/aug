@@ -52,7 +52,12 @@ import {
   type Patch,
   type ReviewComment,
 } from "@riker/code-review-plannotator/guide";
-import { branchCommits, commitLog, planBatches, type BatchPlan } from "@riker/code-review-plannotator/batches";
+import {
+  branchCommits,
+  commitLog,
+  planBatches,
+  type BatchPlan,
+} from "@riker/code-review-plannotator/batches";
 import { setGuideLog } from "@riker/code-review-plannotator/log";
 import { reviewInBatches } from "@riker/code-review-plannotator/run";
 import type { GuideProgress } from "@riker/code-review-plannotator/progress";
@@ -154,14 +159,18 @@ function actionPrompt(
         : "",
     pr ?? "",
     "",
-    job ? `${invocation(spec, task, as)}; job: ${job}` : invocation(spec, task, as),
+    job
+      ? `${invocation(spec, task, as)}; job: ${job}`
+      : invocation(spec, task, as),
   ]
     .filter((line, i, all) => line !== "" || all[i - 1] !== "")
     .join("\n");
 }
 
 function checkoutLine(task: TaskRow, cwd: string): string {
-  if (!task.worktree) return "";
+  if (!task.worktree) {
+    return "";
+  }
   const branch = `branch ${task.branch ?? "unknown"}`;
   return task.worktree === cwd
     ? `Checkout: you run in it (${branch}), so run git there as is, never with -C.`
@@ -172,11 +181,19 @@ function checkoutLine(task: TaskRow, cwd: string): string {
 // shows only its own files, as Plannotator's diff against its parent does.
 // A base this checkout cannot find (the parent's branch never fetched) is
 // taken against main instead, as before the PR's base was known.
-export function guidePatch(task: TaskRow, cwd: string): Patch | { error: string } {
+export function guidePatch(
+  task: TaskRow,
+  cwd: string,
+): Patch | { error: string } {
   const base = actionBase(task);
   const patch = patchFor(cwd, base);
-  if (!("error" in patch) || base === ACTION_BASE || !patch.error.startsWith("no merge base"))
+  if (
+    !("error" in patch) ||
+    base === ACTION_BASE ||
+    !patch.error.startsWith("no merge base")
+  ) {
     return patch;
+  }
   log.warn("guide base not found, taking main", { task: task.id, base });
   return patchFor(cwd, ACTION_BASE);
 }
@@ -185,12 +202,16 @@ export function guidePatch(task: TaskRow, cwd: string): Patch | { error: string 
 // there (a worktree removed at close leaves nothing to resume in).
 function forkable(task: TaskRow): { id: string; cwd: string } | null {
   const session = store.latestSession(task.id);
-  if (!session?.cwd || !existsSync(session.cwd)) return null;
+  if (!session?.cwd || !existsSync(session.cwd)) {
+    return null;
+  }
   return { id: session.id, cwd: session.cwd };
 }
 
 function cwdFor(task: TaskRow): string {
-  if (task.worktree && existsSync(task.worktree)) return task.worktree;
+  if (task.worktree && existsSync(task.worktree)) {
+    return task.worktree;
+  }
   const dir = paths.work(task.id);
   mkdirSync(dir, { recursive: true });
   return dir;
@@ -204,23 +225,31 @@ export function startAction(
   event?: string,
   review?: GuideReviewInput,
 ): ActionRun | { error: string } {
-  if (spec.via === ActionVia.pane) return startPane(config, task, spec);
-  if (spec.via !== ActionVia.headless && spec.via !== ActionVia.fork)
+  if (spec.via === ActionVia.pane) {
+    return startPane(config, task, spec);
+  }
+  if (spec.via !== ActionVia.headless && spec.via !== ActionVia.fork) {
     return { error: `${spec.name} does not run headless (via ${spec.via})` };
+  }
   const key = runKey(task.id, spec.name);
-  if (running.has(key)) return { error: `${spec.name} is already running here` };
+  if (running.has(key)) {
+    return { error: `${spec.name} is already running here` };
+  }
 
   const grant = oneGrant(config, spec);
   const source = skillSource(spec, grant.pluginDirs);
-  if (!source) return { error: notFound(spec) };
+  if (!source) {
+    return { error: notFound(spec) };
+  }
   // A user skill's allowed-tools join the run's allow list once it loads:
   // like a plugin's, they must stay within what the capability grants.
   if (source.wrapped) {
     const extra = pluginWidens(source.dir, grant.commands);
-    if (extra.length)
+    if (extra.length) {
       return {
         error: `${spec.skill} asks for ${extra.join(", ")}: grant them with a capability in its actions entry`,
       };
+    }
   }
 
   // The guide reads its diff from its prompts, so it runs headless (fresh
@@ -232,7 +261,9 @@ export function startAction(
   let plan: { patch: Patch; batches: BatchPlan } | undefined;
   if (guide) {
     const patch = guidePatch(task, task.worktree ?? cwd);
-    if ("error" in patch) return { error: `${spec.name}: ${patch.error}` };
+    if ("error" in patch) {
+      return { error: `${spec.name}: ${patch.error}` };
+    }
     plan = { patch, batches: planBatches(patch, task.worktree ?? cwd) };
   }
   const turn = actionTurn(task, spec, event);
@@ -295,7 +326,9 @@ function actionTurn(task: TaskRow, spec: ActionSpec, event?: string): TurnRow {
     author: spec.name,
     status: TurnStatus.running,
   });
-  store.updateTurn(turn.id, { about: event ? `${spec.title} (on ${event})` : spec.title });
+  store.updateTurn(turn.id, {
+    about: event ? `${spec.title} (on ${event})` : spec.title,
+  });
   return turn;
 }
 
@@ -310,7 +343,9 @@ function startPane(
   spec: ActionSpec,
 ): ActionRun | { error: string } {
   const command = paneCommand(spec, task, oneGrant(config, spec).pluginDirs);
-  if ("error" in command) return command;
+  if ("error" in command) {
+    return command;
+  }
   const cwd = cwdFor(task);
   const turn = actionTurn(task, spec);
   const finish = (where: string) =>
@@ -323,18 +358,34 @@ function startPane(
     const window = await liveWindow(task.id).catch(() => null);
     if (window) {
       try {
-        await mux().splitPane({ paneId: window, cwd, argv: command.argv, zoom: true });
+        await mux().splitPane({
+          paneId: window,
+          cwd,
+          argv: command.argv,
+          zoom: true,
+        });
         finish("in a split of the agent's window");
-        return { ok: true, text: `${spec.title}: opened beside the agent`, pane: true };
+        return {
+          ok: true,
+          text: `${spec.title}: opened beside the agent`,
+          pane: true,
+        };
       } catch (err) {
-        log.warn("pane split failed; opening on the Canvas", { task: task.id, err });
+        log.warn("pane split failed; opening on the Canvas", {
+          task: task.id,
+          err,
+        });
       }
     }
     finish("on the Canvas");
     return {
       ok: true,
       text: `${spec.title}: opened on the Canvas`,
-      terminal: { argv: command.argv.slice(command.argv.indexOf("claude")), cwd, env: command.env },
+      terminal: {
+        argv: command.argv.slice(command.argv.indexOf("claude")),
+        cwd,
+        env: command.env,
+      },
     };
   })();
   return { turnId: turn.id, done };
@@ -374,11 +425,34 @@ async function run(
   const timing = log.time("action done", { task: task.id, action: spec.name });
   try {
     if (shape.plan) {
-      const { plan, context } = await reviewScope(task, shape, shape.plan, steps, turn);
-      return await runGuide(config, task, spec, turn, event, shape, plan, steps, timing, context);
+      const { plan, context } = await reviewScope(
+        task,
+        shape,
+        shape.plan,
+        steps,
+        turn,
+      );
+      return await runGuide(
+        config,
+        task,
+        spec,
+        turn,
+        event,
+        shape,
+        plan,
+        steps,
+        timing,
+        context,
+      );
     }
     const result = await think({
-      prompt: actionPrompt(spec, task, shape.cwd, Boolean(shape.session), shape.as),
+      prompt: actionPrompt(
+        spec,
+        task,
+        shape.cwd,
+        Boolean(shape.session),
+        shape.as,
+      ),
       system: actionSystem(spec),
       model: spec.model ?? config.brain.agentModel,
       cwd: shape.cwd,
@@ -400,7 +474,9 @@ async function run(
       );
       store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
     }
-    if (result.isError) throw new BrainError(result.text || "claude failed");
+    if (result.isError) {
+      throw new BrainError(result.text || "claude failed");
+    }
     const text = result.text.trim();
     const files =
       spec.output === ActionOutput.file ? writeOutput(task, spec, text) : [];
@@ -441,7 +517,9 @@ async function reviewScope(
   turn: TurnRow,
 ): Promise<{ plan: { patch: Patch; batches: BatchPlan }; context?: string }> {
   const review = shape.review;
-  if (!review) return { plan };
+  if (!review) {
+    return { plan };
+  }
   const say = (line: string) => {
     steps.push(line);
     store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
@@ -450,13 +528,18 @@ async function reviewScope(
   try {
     read = await review.source.context(review.pr);
   } catch (error) {
-    log.warn("review context not read", { task: task.id, error: String(error) });
+    log.warn("review context not read", {
+      task: task.id,
+      error: String(error),
+    });
     say(`pull request context not read: ${errorMessage(error)}`);
     return { plan };
   }
   say("pull request context read");
   const since = read.lastReviewed;
-  if (review.whole || !since) return { plan, context: read.text };
+  if (review.whole || !since) {
+    return { plan, context: read.text };
+  }
   const cwd = task.worktree ?? shape.cwd;
   const delta = patchFor(cwd, since);
   const short = since.slice(0, 7);
@@ -465,7 +548,10 @@ async function reviewScope(
     say(`whole PR: your last review (${short}) is not under its head now`);
     return { plan, context: read.text };
   }
-  const next = "error" in delta ? null : { patch: delta, batches: planBatches(delta, cwd) };
+  const next =
+    "error" in delta
+      ? null
+      : { patch: delta, batches: planBatches(delta, cwd) };
   if (!next || next.batches.batches.length === 0) {
     say(`whole PR: nothing to review since your last review (${short})`);
     return { plan, context: read.text };
@@ -492,13 +578,16 @@ async function runGuide(
   context?: string,
 ): Promise<ActionResult> {
   const cwd = task.worktree ?? shape.cwd;
-  const commits = branchCommits(cwd, plan.patch.mergeBase).length ? commitLog(cwd, plan.patch.mergeBase) : "";
+  const commits = branchCommits(cwd, plan.patch.mergeBase).length
+    ? commitLog(cwd, plan.patch.mergeBase)
+    : "";
   const progress = guideProgress(task, turn);
   const ran = await reviewInBatches({
     plan: plan.batches,
     commits,
     progress,
-    prompt: (job) => actionPrompt(spec, task, shape.cwd, false, shape.as, job, context),
+    prompt: (job) =>
+      actionPrompt(spec, task, shape.cwd, false, shape.as, job, context),
     ask: async (prompt, label) => {
       const result = await think({
         prompt,
@@ -522,17 +611,27 @@ async function runGuide(
         );
         store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
       }
-      if (result.isError) throw new BrainError(result.text || "claude failed");
+      if (result.isError) {
+        throw new BrainError(result.text || "claude failed");
+      }
       return { text: result.text, denied: result.denied ?? [] };
     },
   });
   if ("error" in ran) {
     const files = ran.answer
-      ? writeOutput(task, { ...spec, name: `${spec.name}-answer` }, ran.answer.trim())
+      ? writeOutput(
+          task,
+          { ...spec, name: `${spec.name}-answer` },
+          ran.answer.trim(),
+        )
       : [];
     throw new GuideError(ran.error, files);
   }
-  log.info("guide calls", { task: task.id, calls: ran.calls, gaps: ran.gaps.length });
+  log.info("guide calls", {
+    task: task.id,
+    calls: ran.calls,
+    gaps: ran.gaps.length,
+  });
   return finishGuide(
     task,
     spec,
@@ -544,7 +643,10 @@ async function runGuide(
 }
 
 // Each stage onto the turn, where the Canvas and the rail read it.
-function guideProgress(task: TaskRow, turn: TurnRow): (p: GuideProgress) => void {
+function guideProgress(
+  task: TaskRow,
+  turn: TurnRow,
+): (p: GuideProgress) => void {
   return (p) => {
     const line = guideProgressLine(p);
     log.info("guide progress", { task: task.id, stage: p.stage, line });
@@ -560,7 +662,13 @@ async function finishGuide(
   spec: ActionSpec,
   turn: TurnRow,
   guide: Guide,
-  run: { event?: string; patch: Patch; denied: string[]; gaps: string[]; progress: (p: GuideProgress) => void },
+  run: {
+    event?: string;
+    patch: Patch;
+    denied: string[];
+    gaps: string[];
+    progress: (p: GuideProgress) => void;
+  },
   timing: (fields?: Record<string, unknown>) => void,
 ): Promise<ActionResult> {
   const { event, denied } = run;
@@ -575,7 +683,11 @@ async function finishGuide(
     progress: run.progress,
   });
   if ("error" in saved) {
-    const files = writeOutput(task, { ...spec, name: `${spec.name}-answer` }, JSON.stringify(guide, null, 2));
+    const files = writeOutput(
+      task,
+      { ...spec, name: `${spec.name}-answer` },
+      JSON.stringify(guide, null, 2),
+    );
     throw new GuideError(saved.error, files);
   }
   store.updateTurn(turn.id, {
@@ -584,7 +696,11 @@ async function finishGuide(
     did: `${saved.guide.title}: ${saved.findings.length} review notes`,
     finished_at: now(),
     files: JSON.stringify([
-      { path: saved.file, name: "guide.json", bytes: Bun.file(saved.file).size },
+      {
+        path: saved.file,
+        name: "guide.json",
+        bytes: Bun.file(saved.file).size,
+      },
     ]),
   });
   timing({ ok: true });
@@ -593,11 +709,22 @@ async function finishGuide(
     : run.gaps.length
       ? " (not all of it reviewed: see the turn)"
       : "";
-  if (event) return { ok: true, text: `${spec.title}: saved, its review waits for you${warn}` };
+  if (event) {
+    return {
+      ok: true,
+      text: `${spec.title}: saved, its review waits for you${warn}`,
+    };
+  }
   return {
     ok: true,
     text: `${spec.title}: saved, opening Plannotator${warn}`,
-    terminal: reviewTerminal(cwd, dir, saved.patch.base, saved.comments, prToReview(task)),
+    terminal: reviewTerminal(
+      cwd,
+      dir,
+      saved.patch.base,
+      saved.comments,
+      prToReview(task),
+    ),
   };
 }
 
@@ -611,13 +738,25 @@ export function hasGuideReview(task: TaskRow): boolean {
 export function guideReview(task: TaskRow): ActionResult | { error: string } {
   const dir = paths.work(task.id);
   const kept = readFindings(dir);
-  if (!kept) return { error: `${store.taskRef(task.id)} has no saved guide: run the guide first` };
+  if (!kept) {
+    return {
+      error: `${store.taskRef(task.id)} has no saved guide: run the guide first`,
+    };
+  }
   const cwd = task.worktree ?? cwdFor(task);
-  if (!existsSync(cwd)) return { error: `${cwd} is gone` };
+  if (!existsSync(cwd)) {
+    return { error: `${cwd} is gone` };
+  }
   const patch = patchFor(cwd, kept.base);
-  if ("error" in patch) return patch;
+  if ("error" in patch) {
+    return patch;
+  }
   const { comments, dropped } = reviewComments(kept.findings, patch.text);
-  log.info("guide review", { task: task.id, comments: comments.length, dropped });
+  log.info("guide review", {
+    task: task.id,
+    comments: comments.length,
+    dropped,
+  });
   return {
     ok: true,
     text: `${kept.title || "Guide"}: opening Plannotator${dropped ? ` (${dropped} note${dropped === 1 ? "" : "s"} on files no longer changed left out)` : ""}`,
@@ -653,7 +792,14 @@ function reviewTerminal(
   const port = freePort();
   return {
     argv: pr
-      ? ["sh", "-c", 'rm -f "$2"; plannotator review --json "$1" | tee "$2"', "plannotator", pr, feedback]
+      ? [
+          "sh",
+          "-c",
+          'rm -f "$2"; plannotator review --json "$1" | tee "$2"',
+          "plannotator",
+          pr,
+          feedback,
+        ]
       : [
           "sh",
           "-c",
@@ -679,10 +825,16 @@ class GuideError extends Error {
   }
 }
 
-function writeOutput(task: TaskRow, spec: ActionSpec, text: string): MadeFile[] {
+function writeOutput(
+  task: TaskRow,
+  spec: ActionSpec,
+  text: string,
+): MadeFile[] {
   const dir = paths.work(task.id);
   mkdirSync(dir, { recursive: true });
   const path = join(dir, `${spec.name}.md`);
   writeFileSync(path, `${text}\n`);
-  return [{ path, name: `${spec.name}.md`, bytes: Buffer.byteLength(text) + 1 }];
+  return [
+    { path, name: `${spec.name}.md`, bytes: Buffer.byteLength(text) + 1 },
+  ];
 }

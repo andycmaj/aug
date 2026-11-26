@@ -38,7 +38,12 @@ import type { Lane, LaneMeta } from "@riker/core/lanes";
 import { proposalHeadline } from "@riker/core/knowledge";
 import { prChip, prLine } from "@riker/core/pr";
 import { usd } from "@riker/core/spend";
-import { journalSwitch, lines, storySwitchOf, switchWords } from "@riker/core/digests";
+import {
+  journalSwitch,
+  lines,
+  storySwitchOf,
+  switchWords,
+} from "@riker/core/digests";
 import {
   type Mention,
   mentionAt,
@@ -79,7 +84,10 @@ type Terminals = ReturnType<typeof useTerminals>;
 
 // A coding agent's terminal, live, takes the Canvas; once it stops, its
 // Result in the chat does.
-function agentTerminal(terminals: Terminals, task: TaskRow): TermState | undefined {
+function agentTerminal(
+  terminals: Terminals,
+  task: TaskRow,
+): TermState | undefined {
   const tm = inTmux(task) ? terminals.forTask(task.id) : undefined;
   return tm?.running ? tm : undefined;
 }
@@ -87,10 +95,19 @@ function agentTerminal(terminals: Terminals, task: TaskRow): TermState | undefin
 // ghdash (P), a System task's diff in revdiff (e) or a task action's
 // terminal (the guide's review, a quiz) takes the Canvas over the chat
 // and the agent.
-function overTerminal(terminals: Terminals, taskId: number): TermState | undefined {
-  for (const id of [prDashId(taskId), docReviewId(taskId), actionTermId(taskId)]) {
+function overTerminal(
+  terminals: Terminals,
+  taskId: number,
+): TermState | undefined {
+  for (const id of [
+    prDashId(taskId),
+    docReviewId(taskId),
+    actionTermId(taskId),
+  ]) {
     const t = terminals.get(id);
-    if (t?.running) return t;
+    if (t?.running) {
+      return t;
+    }
   }
   return undefined;
 }
@@ -98,7 +115,9 @@ function overTerminal(terminals: Terminals, taskId: number): TermState | undefin
 // Whether the task's Canvas shows a terminal instead of its chat: a turn
 // that lands there now (a task action's answer) is out of sight.
 export function chatHidden(terminals: Terminals, task: TaskRow): boolean {
-  return Boolean(overTerminal(terminals, task.id) ?? agentTerminal(terminals, task));
+  return Boolean(
+    overTerminal(terminals, task.id) ?? agentTerminal(terminals, task),
+  );
 }
 
 type Compose = (initial: string, keep: (text: string) => void) => void;
@@ -252,7 +271,11 @@ export function Canvas(props: {
             const manager = () => riker.manager(p().project.id);
             return (
               <>
-                <ProjectView item={p()} width={width()} talking={Boolean(manager())} />
+                <ProjectView
+                  item={p()}
+                  width={width()}
+                  talking={Boolean(manager())}
+                />
                 <Show when={manager()}>
                   {(m: Accessor<TaskRow>) => (
                     <TaskChat
@@ -291,7 +314,9 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   const meta = () => (lane() ? metaOf(lane()!) : null);
   const came = createMemo(() => {
     // A timer is Riker's own line, not where the task came from.
-    const first = riker.messages(props.task.id).find((m) => m.channel !== Channel.timer);
+    const first = riker
+      .messages(props.task.id)
+      .find((m) => m.channel !== Channel.timer);
     const from = first
       ? `${CHANNEL_WORD[first.channel]} · ${first.author_name} · ${first.title}`
       : "typed by you";
@@ -303,12 +328,17 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
       .taskLinks(props.task.id)
       .map((l) => l.title ?? l.url.replace(/^https?:\/\//, ""));
     return names.length
-      ? truncate(`links · ${names.join(" · ")}  (o opens)`, Math.max(20, props.width - 4))
+      ? truncate(
+          `links · ${names.join(" · ")}  (o opens)`,
+          Math.max(20, props.width - 4),
+        )
       : null;
   });
   // What is due on it: follow-ups, schedules, the reminder.
   const timers = createMemo(() => {
-    const lines = riker.timers(props.task.id).map((t) => timerLine(t, riker.now()));
+    const lines = riker
+      .timers(props.task.id)
+      .map((t) => timerLine(t, riker.now()));
     return lines.length
       ? truncate(`timers · ${lines.join(" · ")}`, Math.max(20, props.width - 4))
       : null;
@@ -316,7 +346,9 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   // The task's PR as of the last read; P opens it in ghdash.
   const pr = createMemo(() => {
     const found = riker.taskPrStatus(props.task);
-    if (!found) return null;
+    if (!found) {
+      return null;
+    }
     const { pr: ref, status } = found;
     const text = status
       ? prLine(status)
@@ -331,10 +363,17 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   const story = createMemo(() => {
     const t = props.task;
     const project = t.project_id ? riker.project(t.project_id) : null;
-    if (!storySwitchOf(riker.desk.config(), t, project).on) return null;
+    if (!storySwitchOf(riker.desk.config(), t, project).on) {
+      return null;
+    }
     const v = riker.story(t.id);
     const width = Math.max(20, props.width - 4);
-    if (!v) return truncate("story · written up when a session finishes  (V read, J off)", width);
+    if (!v) {
+      return truncate(
+        "story · written up when a session finishes  (V read, J off)",
+        width,
+      );
+    }
     const first = (field: string, label: string) => {
       const item = lines(field)[0];
       return item ? `${label}: ${item}` : null;
@@ -344,7 +383,10 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
       first(v.next, "next"),
       first(v.blocked, "blocked"),
     ].filter(Boolean);
-    return truncate(`story · ${parts.join(" · ") || "nothing left to do"}  (V read, J off)`, width);
+    return truncate(
+      `story · ${parts.join(" · ") || "nothing left to do"}  (V read, J off)`,
+      width,
+    );
   });
   // What its headless turns have cost (riker-tools spend, the Board's Cost).
   const spent = () => {
@@ -353,11 +395,15 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   };
   const says = () => {
     const t = props.task;
-    if (t.agent_state === AgentState.waiting && t.agent_says)
+    if (t.agent_state === AgentState.waiting && t.agent_says) {
       return `agent ${t.agent_says}`;
-    if (t.agent_state === AgentState.queued && t.queue_reason)
+    }
+    if (t.agent_state === AgentState.queued && t.queue_reason) {
       return `waiting to start: ${t.queue_reason}`;
-    if (t.waiting_on) return `waiting on ${t.waiting_on}`;
+    }
+    if (t.waiting_on) {
+      return `waiting on ${t.waiting_on}`;
+    }
     return null;
   };
 
@@ -476,19 +522,21 @@ function TaskChat(props: {
   );
   const hint = createMemo((): [string, string][] => {
     const t = props.task;
-    if (t.kind === Kind.home)
+    if (t.kind === Kind.home) {
       return [
         ["i", "talk"],
         ["@", "name a task or project"],
         ["a", "back here from anywhere"],
       ];
-    if (t.kind === Kind.manager)
+    }
+    if (t.kind === Kind.manager) {
       return [
         ["i", "talk to the manager"],
         ["@", "name a task"],
         ["S", "stop its turn"],
       ];
-    if (t.kind === Kind.system)
+    }
+    if (t.kind === Kind.system) {
       return proposals().length
         ? [
             ["e", "read the diff"],
@@ -502,27 +550,31 @@ function TaskChat(props: {
             ["y", "accept"],
             ["x", "skip"],
           ];
-    if (isClosed(t))
+    }
+    if (isClosed(t)) {
       return [
         ["d", "reopen"],
         ["i", "type: reopens it too"],
       ];
+    }
     const edit: [string, string][] =
       brief() === null ? [] : [["e", "edit the brief"]];
-    if (t.kind === Kind.coding)
+    if (t.kind === Kind.coding) {
       return [
         ["s", "start the coding agent"],
         ...edit,
         ["i", "add a note first"],
         ["d", "mark done"],
       ];
-    if (t.kind === Kind.task)
+    }
+    if (t.kind === Kind.task) {
       return [
         ["s", "hand it to an agent"],
         ...edit,
         ["d", "mark done"],
         ["r", "later"],
       ];
+    }
     return [
       ["i", "type to the agent"],
       ["s", "run it again"],
@@ -665,7 +717,9 @@ function ChatInput(props: {
   const take = () => {
     const at = mention();
     const chosen = suggestions()[pick()];
-    if (!input || !at || !chosen) return false;
+    if (!input || !at || !chosen) {
+      return false;
+    }
     const value = input.value;
     const cut = before().length;
     const ref = `@${mentionRef(chosen)} `;
@@ -678,19 +732,25 @@ function ChatInput(props: {
   onMount(() => {
     const text = unsent.get(props.draft);
     unsent.delete(props.draft);
-    if (input && text) input.value = text;
+    if (input && text) {
+      input.value = text;
+    }
   });
   // Read at unmount, when the task accessor may already be gone.
   let shown = props.draft;
   const keep = () => {
     const text = input?.value ?? "";
-    if (text) unsent.set(shown, text);
+    if (text) {
+      unsent.set(shown, text);
+    }
   };
   createEffect(
     on(
       () => props.draft,
       (id) => {
-        if (!input) return;
+        if (!input) {
+          return;
+        }
         keep();
         shown = id;
         input.value = unsent.get(id) ?? "";
@@ -704,37 +764,53 @@ function ChatInput(props: {
 
   // Focusing the pane focuses the field inside it.
   createEffect(() => {
-    if (p.isFocused()) setTimeout(() => input?.focus(), 0);
+    if (p.isFocused()) {
+      setTimeout(() => input?.focus(), 0);
+    }
   });
 
   useScope(
     "input",
     {
       [Commands.INPUT_SUBMIT]: () => {
-        if (offering()) return take();
+        if (offering()) {
+          return take();
+        }
         const text = input?.value ?? "";
-        if (!text.trim()) return;
+        if (!text.trim()) {
+          return;
+        }
         props.onSay(text);
-        if (input) input.value = "";
+        if (input) {
+          input.value = "";
+        }
         track();
       },
       [Commands.INPUT_COMPLETE]: () => (offering() ? take() : false),
       [Commands.INPUT_PICK_UP]: () => {
-        if (!offering()) return false;
+        if (!offering()) {
+          return false;
+        }
         setPick((i) => (i + suggestions().length - 1) % suggestions().length);
       },
       [Commands.INPUT_PICK_DOWN]: () => {
-        if (!offering()) return false;
+        if (!offering()) {
+          return false;
+        }
         setPick((i) => (i + 1) % suggestions().length);
       },
       [Commands.INPUT_LEAVE]: () => {
-        if (offering()) return void setDismissed(before());
+        if (offering()) {
+          return void setDismissed(before());
+        }
         setActivePane("canvas");
       },
       [Commands.INPUT_EDITOR]: () => {
         const id = props.draft;
         props.onCompose(input?.value ?? "", (text) => {
-          if (text) unsent.set(id, text);
+          if (text) {
+            unsent.set(id, text);
+          }
         });
       },
     },
@@ -764,7 +840,10 @@ function ChatInput(props: {
                 }
                 bg={i() === pick() ? theme.secondary : undefined}
               >
-                {truncate(mentionLine(m, (p) => riker.projectSummary(p).open), 70)}
+                {truncate(
+                  mentionLine(m, (p) => riker.projectSummary(p).open),
+                  70,
+                )}
               </text>
             )}
           </For>
@@ -815,25 +894,41 @@ function ProjectView(props: {
       .tasksForProject(p().id)
       .filter((t) => t.status === "open" || t.status === "later");
   });
-  const shown = () => (props.talking ? tasks().slice(0, TALKING_TASK_ROWS) : tasks());
+  const shown = () =>
+    props.talking ? tasks().slice(0, TALKING_TASK_ROWS) : tasks();
   const more = () => tasks().length - shown().length;
-  const candidates = createMemo(() => (props.talking ? [] : overseerCandidates(tasks())));
+  const candidates = createMemo(() =>
+    props.talking ? [] : overseerCandidates(tasks()),
+  );
   const metaOf = useLaneMeta();
   const laneOfTask = (t: TaskRow) => {
-    const row = riker.items().find((i) => i.type === "task" && i.task.id === t.id);
+    const row = riker
+      .items()
+      .find((i) => i.type === "task" && i.task.id === t.id);
     return row?.type === "task" ? metaOf(row.lane) : null;
   };
   const standing = () => {
     const text = p().standing;
-    if (!text) return null;
-    const at = p().standing_at ? ` · ${dayClock(p().standing_at!, riker.now())}` : "";
-    return { text: props.talking ? truncate(lines(text).join(" · "), Math.max(20, props.width - 14)) : text, at };
+    if (!text) {
+      return null;
+    }
+    const at = p().standing_at
+      ? ` · ${dayClock(p().standing_at!, riker.now())}`
+      : "";
+    return {
+      text: props.talking
+        ? truncate(lines(text).join(" · "), Math.max(20, props.width - 14))
+        : text,
+      at,
+    };
   };
   const row = (t: TaskRow) => {
     const meta = laneOfTask(t);
     return (
       <text>
-        <span style={{ fg: meta ? toneColor(theme, meta.tone) : theme.textMuted }}>
+        <span
+          style={{ fg: meta ? toneColor(theme, meta.tone) : theme.textMuted }}
+        >
           {`${meta?.mark ?? "·"} `}
         </span>
         <span style={{ fg: theme.textMuted }}>{`${taskRef(t.id)}  `}</span>
@@ -885,16 +980,16 @@ function ProjectView(props: {
             <For
               each={shown()}
               fallback={
-                <text fg={theme.textMuted}>
-                  Nothing open here yet.
-                </text>
+                <text fg={theme.textMuted}>Nothing open here yet.</text>
               }
             >
               {row}
             </For>
             <box marginTop={1} flexDirection="column">
               <text fg={theme.textMuted} wrapMode="word">
-                No manager yet. Type below (i) and one starts: it reads the whole project, answers about it, keeps its standing and runs its tasks.
+                No manager yet. Type below (i) and one starts: it reads the
+                whole project, answers about it, keeps its standing and runs its
+                tasks.
               </text>
               <For each={candidates()}>
                 {(t) => (
@@ -910,7 +1005,9 @@ function ProjectView(props: {
         <box flexDirection="column" marginTop={1} flexShrink={0}>
           <For each={shown()}>{row}</For>
           <Show when={more() > 0}>
-            <text fg={theme.textMuted}>{`+${more()} more (fold open on the rail)`}</text>
+            <text
+              fg={theme.textMuted}
+            >{`+${more()} more (fold open on the rail)`}</text>
           </Show>
         </box>
       </Show>
@@ -943,7 +1040,9 @@ function Opening() {
   const lanes = createMemo(() => {
     const counts = new Map<string, number>();
     for (const i of riker.items()) {
-      if (i.type !== "task" || i.copy) continue;
+      if (i.type !== "task" || i.copy) {
+        continue;
+      }
       counts.set(i.lane, (counts.get(i.lane) ?? 0) + 1);
     }
     return [...counts.entries()];

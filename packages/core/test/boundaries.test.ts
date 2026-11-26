@@ -16,17 +16,36 @@ const ALLOWED: Record<string, readonly string[]> = {
   github: ["core"],
   slack: ["core"],
   fixtures: ["core", "triage", "github", "slack"],
-  tui: ["core", "fixtures", "triage", "github", "slack", "code-review-plannotator"],
-  cli: ["core", "tui", "fixtures", "triage", "github", "slack", "code-review-plannotator"],
+  tui: [
+    "core",
+    "fixtures",
+    "triage",
+    "github",
+    "slack",
+    "code-review-plannotator",
+  ],
+  cli: [
+    "core",
+    "tui",
+    "fixtures",
+    "triage",
+    "github",
+    "slack",
+    "code-review-plannotator",
+  ],
 };
 
 function importsOf(text: string): string[] {
-  return [...text.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)].map((m) => m[1]!);
+  return [...text.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)].map(
+    (m) => m[1]!,
+  );
 }
 
 test("every package imports only the packages below it", async () => {
   const wrong: string[] = [];
-  for (const file of new Glob("packages/*/{src,test,script}/**/*.{ts,tsx}").scanSync(ROOT)) {
+  for (const file of new Glob(
+    "packages/*/{src,test,script}/**/*.{ts,tsx}",
+  ).scanSync(ROOT)) {
     const own = file.split("/")[1]!;
     const allowed = ALLOWED[own];
     if (!allowed) {
@@ -34,10 +53,16 @@ test("every package imports only the packages below it", async () => {
       continue;
     }
     for (const spec of importsOf(await Bun.file(join(ROOT, file)).text())) {
-      if (spec.startsWith("../") && /^(\.\.\/)+packages\//.test(spec)) wrong.push(`${file}: ${spec} (by path)`);
+      if (spec.startsWith("../") && /^(\.\.\/)+packages\//.test(spec)) {
+        wrong.push(`${file}: ${spec} (by path)`);
+      }
       const m = spec.match(/^@riker\/([^/]+)/);
-      if (!m || m[1] === own) continue;
-      if (!allowed.includes(m[1]!)) wrong.push(`${file}: ${spec}`);
+      if (!m || m[1] === own) {
+        continue;
+      }
+      if (!allowed.includes(m[1]!)) {
+        wrong.push(`${file}: ${spec}`);
+      }
     }
   }
   expect(wrong).toEqual([]);
@@ -46,17 +71,28 @@ test("every package imports only the packages below it", async () => {
 test("each package.json names the packages it imports", async () => {
   const missing: string[] = [];
   for (const [pkg, allowed] of Object.entries(ALLOWED)) {
-    const json = (await Bun.file(join(ROOT, "packages", pkg, "package.json")).json()) as {
+    const json = (await Bun.file(
+      join(ROOT, "packages", pkg, "package.json"),
+    ).json()) as {
       dependencies?: Record<string, string>;
     };
     const deps = Object.keys(json.dependencies ?? {});
     const used = new Set<string>();
-    for (const file of new Glob(`packages/${pkg}/src/**/*.{ts,tsx}`).scanSync(ROOT))
+    for (const file of new Glob(`packages/${pkg}/src/**/*.{ts,tsx}`).scanSync(
+      ROOT,
+    )) {
       for (const spec of importsOf(await Bun.file(join(ROOT, file)).text())) {
         const m = spec.match(/^@riker\/([^/]+)/);
-        if (m && m[1] !== pkg && allowed.includes(m[1]!)) used.add(`@riker/${m[1]}`);
+        if (m && m[1] !== pkg && allowed.includes(m[1]!)) {
+          used.add(`@riker/${m[1]}`);
+        }
       }
-    for (const u of used) if (!deps.includes(u)) missing.push(`${pkg} imports ${u}`);
+    }
+    for (const u of used) {
+      if (!deps.includes(u)) {
+        missing.push(`${pkg} imports ${u}`);
+      }
+    }
   }
   expect(missing).toEqual([]);
 });

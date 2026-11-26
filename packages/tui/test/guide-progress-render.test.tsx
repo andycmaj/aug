@@ -6,7 +6,10 @@ import { testRender } from "@opentui/solid";
 import { App } from "../src/app";
 import { installFixture } from "@riker/fixtures/demo";
 import { setGuideTool } from "@riker/code-review-plannotator/guide";
-import { bigAnswer, bigRepo } from "@riker/code-review-plannotator/test/support/repo";
+import {
+  bigAnswer,
+  bigRepo,
+} from "@riker/code-review-plannotator/test/support/repo";
 import { setBrain, type BrainResult } from "@riker/core/brain";
 import * as store from "@riker/core/store";
 
@@ -17,7 +20,9 @@ let home: string | undefined;
 afterEach(() => {
   destroy?.();
   setGuideTool(null);
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (home) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 // AUG-0192: a guide on a big change runs a while. Its stage shows on the
@@ -37,9 +42,22 @@ test("a guide in batches shows its stage on the rail and the Canvas", async () =
     await held();
     const job = /job: (.*)$/m.exec(call.prompt)![1]!;
     const text = job.startsWith("notes")
-      ? JSON.stringify({ files: [{ file: `part${/batch (\d+)/.exec(job)![1]}.ts`, summary: "A part." }] })
+      ? JSON.stringify({
+          files: [
+            {
+              file: `part${/batch (\d+)/.exec(job)![1]}.ts`,
+              summary: "A part.",
+            },
+          ],
+        })
       : JSON.stringify(bigAnswer(5));
-    return { text, structured: null, sessionId: null, durationMs: 1, isError: false };
+    return {
+      text,
+      structured: null,
+      sessionId: null,
+      durationMs: 1,
+      isError: false,
+    };
   });
   setGuideTool({
     async save() {
@@ -48,7 +66,10 @@ test("a guide in batches shows its stage on the rail and the Canvas", async () =
     },
   });
 
-  const setup = await testRender(() => <App engine={engine} />, { width: 150, height: 50 });
+  const setup = await testRender(() => <App engine={engine} />, {
+    width: 150,
+    height: 50,
+  });
   destroy = () => setup.renderer.destroy();
   const settle = async () => {
     await Bun.sleep(60);
@@ -71,17 +92,25 @@ test("a guide in batches shows its stage on the rail and the Canvas", async () =
     return text;
   };
   const until = async (n: number) => {
-    for (let i = 0; i < 200 && waiting.length < n; i++) await Bun.sleep(10);
+    for (let i = 0; i < 200 && waiting.length < n; i++) {
+      await Bun.sleep(10);
+    }
     expect(waiting.length).toBe(n);
   };
   // The sub line under the task's title in the rail.
   const railRow = (text: string) => {
     const rail = text.split("\n").map((l) => l.slice(0, 46));
-    return rail[rail.findIndex((l) => l.includes("CSV import fails on a BOM")) + 1] ?? "";
+    return (
+      rail[
+        rail.findIndex((l) => l.includes("CSV import fails on a BOM")) + 1
+      ] ?? ""
+    );
   };
 
   const started = engine.desk.runAction(ID, "guide");
-  if ("error" in started) throw new Error(started.error);
+  if ("error" in started) {
+    throw new Error(started.error);
+  }
 
   await until(3);
   let shown = await frame("first three batches sent");
@@ -113,5 +142,7 @@ test("a guide in batches shows its stage on the rail and the Canvas", async () =
   expect(shown).not.toContain("▸ saving to Plannotator");
   expect(shown).toContain("Big change");
 
-  if (process.env.GUIDE_FRAMES) writeFileSync(process.env.GUIDE_FRAMES, `${frames.join("\n\n")}\n`);
+  if (process.env.GUIDE_FRAMES) {
+    writeFileSync(process.env.GUIDE_FRAMES, `${frames.join("\n\n")}\n`);
+  }
 });

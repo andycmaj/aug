@@ -10,7 +10,12 @@ import { basename, join } from "node:path";
 import { OWN_ENTRYPOINTS } from "./brand";
 import { adoptedTitle, claudeDir, gitInfo, type GitInfo } from "./adopt";
 import type { RikerConfig } from "./config";
-import { EndReason, sessionEnded, sessionStarted, turnEnded } from "./lifecycle";
+import {
+  EndReason,
+  sessionEnded,
+  sessionStarted,
+  turnEnded,
+} from "./lifecycle";
 import { logger } from "./log";
 import { mux, type PaneInfo } from "./mux";
 import { takeWindow } from "./projects";
@@ -55,9 +60,13 @@ export function parseClaudeProcess(text: string): ClaudeProcess | null {
   // claude -p and SDK sessions run once and go; only interactive ones are
   // someone's work in progress.
   const kind = str(raw.kind);
-  if (!pid || !sessionId || !cwd || (kind && kind !== "interactive")) return null;
+  if (!pid || !sessionId || !cwd || (kind && kind !== "interactive")) {
+    return null;
+  }
   // Riker's own headless claudes (claudeEnv).
-  if (OWN_ENTRYPOINTS.includes(str(raw.entrypoint) ?? "")) return null;
+  if (OWN_ENTRYPOINTS.includes(str(raw.entrypoint) ?? "")) {
+    return null;
+  }
   const pane = str(raw.tmux)?.match(/(%\d+)$/)?.[1] ?? null;
   // A name claude derived from the folder (beanstream-00) names nothing.
   const source = str(raw.nameSource);
@@ -65,7 +74,9 @@ export function parseClaudeProcess(text: string): ClaudeProcess | null {
   return { pid, sessionId, cwd, pane, name, status: str(raw.status) };
 }
 
-export function readClaudeProcesses(dir = join(claudeDir(), "sessions")): ClaudeProcess[] {
+export function readClaudeProcesses(
+  dir = join(claudeDir(), "sessions"),
+): ClaudeProcess[] {
   let files: string[];
   try {
     files = readdirSync(dir).filter((f) => f.endsWith(".json"));
@@ -76,7 +87,9 @@ export function readClaudeProcesses(dir = join(claudeDir(), "sessions")): Claude
   for (const file of files) {
     try {
       const p = parseClaudeProcess(readFileSync(join(dir, file), "utf8"));
-      if (p) found.push(p);
+      if (p) {
+        found.push(p);
+      }
     } catch {
       // gone between the listing and the read
     }
@@ -94,11 +107,16 @@ function pidAlive(pid: number): boolean {
 }
 
 function parentMap(): Map<number, number> {
-  const r = Bun.spawnSync(["ps", "-A", "-o", "pid=,ppid="], { stdout: "pipe", stderr: "ignore" });
+  const r = Bun.spawnSync(["ps", "-A", "-o", "pid=,ppid="], {
+    stdout: "pipe",
+    stderr: "ignore",
+  });
   const parents = new Map<number, number>();
   for (const line of r.stdout.toString().split("\n")) {
     const [pid, ppid] = line.trim().split(/\s+/).map(Number);
-    if (pid && ppid) parents.set(pid, ppid);
+    if (pid && ppid) {
+      parents.set(pid, ppid);
+    }
   }
   return parents;
 }
@@ -120,8 +138,15 @@ export function realSource(): StraySource {
     alive: pidAlive,
     under(pid, ancestor) {
       parents ??= parentMap();
-      for (let p: number | undefined = pid, n = 0; p && n < 64; p = parents.get(p), n++)
-        if (p === ancestor) return true;
+      for (
+        let p: number | undefined = pid, n = 0;
+        p && n < 64;
+        p = parents.get(p), n++
+      ) {
+        if (p === ancestor) {
+          return true;
+        }
+      }
       return false;
     },
     git: gitInfo,
@@ -143,9 +168,13 @@ export interface Stray {
 }
 
 export function strayLabel(s: Stray): string {
-  const where = s.pane ? `${s.pane.sessionName}:${s.pane.windowName}` : "terminal";
+  const where = s.pane
+    ? `${s.pane.sessionName}:${s.pane.windowName}`
+    : "terminal";
   const branch = s.git.branch ?? basename(s.claude.cwd);
-  return [where, branch, s.claude.name, s.claude.status].filter(Boolean).join(" · ");
+  return [where, branch, s.claude.name, s.claude.status]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 // What a move or the CLI names a stray by.
@@ -155,18 +184,30 @@ export function strayRef(s: Stray): string {
 
 // Running claudes that are nobody's task: not Riker's own, not in a window a
 // task already holds, and not the claude in the window Riker runs in.
-export async function findStrays(source: StraySource = (current ?? realSource)()): Promise<Stray[]> {
+export async function findStrays(
+  source: StraySource = (current ?? realSource)(),
+): Promise<Stray[]> {
   const host = await mux().hostWindow();
   const strays: Stray[] = [];
   const windows = new Set<string>();
   for (const claude of source.claudes()) {
-    if (!source.alive(claude.pid)) continue;
-    if (store.getSession(claude.sessionId)) continue;
+    if (!source.alive(claude.pid)) {
+      continue;
+    }
+    if (store.getSession(claude.sessionId)) {
+      continue;
+    }
     let pane = claude.pane ? await mux().paneInfo(claude.pane) : null;
-    if (pane && !source.under(claude.pid, pane.panePid)) pane = null;
+    if (pane && !source.under(claude.pid, pane.panePid)) {
+      pane = null;
+    }
     if (pane) {
-      if (pane.taskId && store.getTask(pane.taskId)) continue;
-      if (pane.windowId === host || windows.has(pane.windowId)) continue;
+      if (pane.taskId && store.getTask(pane.taskId)) {
+        continue;
+      }
+      if (pane.windowId === host || windows.has(pane.windowId)) {
+        continue;
+      }
       windows.add(pane.windowId);
     }
     strays.push({ claude, pane, git: source.git(claude.cwd) });
@@ -185,11 +226,20 @@ export function matchStray(strays: Stray[], ref: string): Stray {
       s.pane?.sessionName === want ||
       String(s.claude.pid) === want,
   );
-  if (hits.length === 1) return hits[0];
-  const list = strays.map((s) => `${strayRef(s)} (${strayLabel(s)})`).join("; ");
-  if (hits.length > 1)
-    throw new Error(`${want} names ${hits.length} claudes: ${hits.map((s) => `${strayRef(s)} (${strayLabel(s)})`).join("; ")}`);
-  throw new Error(`no stray claude ${want}. ${strays.length ? `Strays: ${list}.` : "There are none."}`);
+  if (hits.length === 1) {
+    return hits[0];
+  }
+  const list = strays
+    .map((s) => `${strayRef(s)} (${strayLabel(s)})`)
+    .join("; ");
+  if (hits.length > 1) {
+    throw new Error(
+      `${want} names ${hits.length} claudes: ${hits.map((s) => `${strayRef(s)} (${strayLabel(s)})`).join("; ")}`,
+    );
+  }
+  throw new Error(
+    `no stray claude ${want}. ${strays.length ? `Strays: ${list}.` : "There are none."}`,
+  );
 }
 
 export async function adoptStray(
@@ -199,7 +249,11 @@ export async function adoptStray(
 ): Promise<TaskRow> {
   const { claude, pane, git } = stray;
   const task = store.createTask({
-    title: adoptedTitle(git, claude.name ?? undefined, pane?.sessionName || basename(claude.cwd)),
+    title: adoptedTitle(
+      git,
+      claude.name ?? undefined,
+      pane?.sessionName || basename(claude.cwd),
+    ),
     kind: Kind.coding,
     channel: Channel.owner,
     repo: git.repo,
@@ -209,7 +263,9 @@ export async function adoptStray(
   });
   // claude --resume finds a session by the directory it ran in.
   store.updateTask(task.id, { worktree: claude.cwd });
-  if (git.repo) store.addProjectRepo(project.id, git.repo);
+  if (git.repo) {
+    store.addProjectRepo(project.id, git.repo);
+  }
   store.addTurn({
     taskId: task.id,
     role: TurnRole.trigger,
@@ -234,7 +290,9 @@ export async function adoptStray(
       startedBy: "owner",
       tmuxWindow: pane.windowId,
     });
-    if (claude.status === "idle") turnEnded(ref, null);
+    if (claude.status === "idle") {
+      turnEnded(ref, null);
+    }
   } else {
     sessionStarted({
       id: claude.sessionId,
@@ -245,6 +303,11 @@ export async function adoptStray(
     });
     sessionEnded(ref, EndReason.adopted);
   }
-  log.info("adopted stray", { task: task.id, project: project.id, pane: claude.pane, tmux: !!pane });
+  log.info("adopted stray", {
+    task: task.id,
+    project: project.id,
+    pane: claude.pane,
+    tmux: !!pane,
+  });
   return store.getTask(task.id)!;
 }

@@ -33,16 +33,26 @@ function rail(now: Date, pending: Set<number>): RailSection[] {
   const tasks = store.listTasks();
   const lastHeard = new Map<number, string>();
   for (const t of tasks) {
-    if (!t.waiting_on) continue;
-    const heard = [...store.messagesForTask(t.id)].reverse().find((m) => !m.from_me);
-    if (heard) lastHeard.set(t.id, heard.received_at);
+    if (!t.waiting_on) {
+      continue;
+    }
+    const heard = [...store.messagesForTask(t.id)]
+      .reverse()
+      .find((m) => !m.from_me);
+    if (heard) {
+      lastHeard.set(t.id, heard.received_at);
+    }
   }
   const reviews = store.tasksFromReviewRequests(REVIEW_LINK_BY);
   // A review has waited since someone last asked or wrote on it.
   const asked = new Map<number, string>();
   for (const id of reviews) {
-    const last = [...store.messagesForTask(id)].reverse().find((m) => !m.from_me);
-    if (last) asked.set(id, last.received_at);
+    const last = [...store.messagesForTask(id)]
+      .reverse()
+      .find((m) => !m.from_me);
+    if (last) {
+      asked.set(id, last.received_at);
+    }
   }
   return buildRail({
     home: store.homeTask(),
@@ -70,8 +80,14 @@ function board(pending: Set<number>): Record<BoardColumn, TaskRow[]> {
     ready: [],
   };
   for (const task of store.listTasks()) {
-    const col = boardColumnOf(task, { hasPendingAction: pending.has(task.id) }, today);
-    if (col) out[col].push(task);
+    const col = boardColumnOf(
+      task,
+      { hasPendingAction: pending.has(task.id) },
+      today,
+    );
+    if (col) {
+      out[col].push(task);
+    }
   }
   return out;
 }
@@ -115,7 +131,10 @@ function reads(desk: LiveCheck) {
     isLive: [[T.sessions, T.tasks], (task: TaskRow) => desk.isLive(task)],
     prStatus: [[T.prStatus], store.prStatus],
     taskPr: [[T.tasks, T.taskThreads, T.messages, T.taskLinks], taskPr],
-    taskPrStatus: [[T.tasks, T.taskThreads, T.messages, T.taskLinks, T.prStatus], taskPrStatus],
+    taskPrStatus: [
+      [T.tasks, T.taskThreads, T.messages, T.taskLinks, T.prStatus],
+      taskPrStatus,
+    ],
     briefEditable: [[T.tasks, T.sessions], briefEditable],
     proposals: [[T.proposals], store.proposalsForTask],
     project: [[T.projects], store.getProject],
@@ -145,7 +164,16 @@ function reads(desk: LiveCheck) {
     board: [[T.tasks], board],
     inbox: [[T.messages, T.ideas], inboxRows],
     documents: [
-      [T.taskLinks, T.projectLinks, T.projects, T.tasks, T.taskThreads, T.turns, T.notes, T.messages],
+      [
+        T.taskLinks,
+        T.projectLinks,
+        T.projects,
+        T.tasks,
+        T.taskThreads,
+        T.turns,
+        T.notes,
+        T.messages,
+      ],
       () => documents(store.documentSources()),
     ],
     inboxCount: [[T.messages, T.ideas], inboxCount],
@@ -154,7 +182,15 @@ function reads(desk: LiveCheck) {
     taskSpend: [[T.spend], store.taskSpend],
     spendReport: [[T.spend, T.tasks], spendReport],
     winsDay: [
-      [T.wins, T.taskEvents, T.tasks, T.turns, T.moves, T.prStatus, T.taskBlockers],
+      [
+        T.wins,
+        T.taskEvents,
+        T.tasks,
+        T.turns,
+        T.moves,
+        T.prStatus,
+        T.taskBlockers,
+      ],
       winsDay,
     ],
     winDetail: [
@@ -193,7 +229,9 @@ export function readModel(track: Track, desk: LiveCheck): ReadModel {
     const op = `read.${name}`;
     out[name] = (...args: unknown[]) => {
       track(tables);
-      if (!perfOn()) return read(...args);
+      if (!perfOn()) {
+        return read(...args);
+      }
       runs++;
       const started = performance.now();
       try {

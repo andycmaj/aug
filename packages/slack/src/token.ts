@@ -32,8 +32,9 @@ export function slackApi(token: string): SlackApi {
     );
     const json = (await res.json()) as Record<string, unknown>;
     log.trace("api", { method, ok: json.ok === true, status: res.status });
-    if (!json.ok)
+    if (!json.ok) {
       throw new Error(`slack ${method}: ${String(json.error ?? res.status)}`);
+    }
     return json;
   };
 }
@@ -51,8 +52,9 @@ export function slackPostApi(token: string): SlackApi {
     });
     const json = (await res.json()) as Record<string, unknown>;
     log.trace("api", { method, ok: json.ok === true, status: res.status });
-    if (!json.ok)
+    if (!json.ok) {
       throw new Error(`slack ${method}: ${String(json.error ?? res.status)}`);
+    }
     return json;
   };
 }
@@ -122,9 +124,13 @@ export async function pollSlack(
   const { me, team } = input.who ?? (await whoAmI(api));
   const names = input.names ?? new Map<string, string>();
   const nameOf = async (id: string | undefined): Promise<string> => {
-    if (!id) return "someone";
+    if (!id) {
+      return "someone";
+    }
     const known = names.get(id);
-    if (known) return known;
+    if (known) {
+      return known;
+    }
     try {
       const info = (await api("users.info", { user: id })) as {
         user?: { real_name?: string; name?: string };
@@ -145,11 +151,16 @@ export async function pollSlack(
     where: string,
     dm: boolean,
   ): Promise<NewMessage | null> => {
-    if (msg.subtype && msg.subtype !== "thread_broadcast") return null;
-    if (!msg.text?.trim()) return null;
+    if (msg.subtype && msg.subtype !== "thread_broadcast") {
+      return null;
+    }
+    if (!msg.text?.trim()) {
+      return null;
+    }
     const authorName = await nameOf(msg.user);
-    for (const id of msg.text.matchAll(/<@([UW][A-Z0-9]+)/g))
+    for (const id of msg.text.matchAll(/<@([UW][A-Z0-9]+)/g)) {
       await nameOf(id[1]);
+    }
     return rawToNewMessage({
       channel,
       where,
@@ -225,7 +236,9 @@ export async function pollSlack(
   const threads = () =>
     mapLimit(input.trackedThreads, READ_CONCURRENCY, async (tracked) => {
       const [channel, threadTs] = tracked.split(":");
-      if (!channel || !threadTs) return null;
+      if (!channel || !threadTs) {
+        return null;
+      }
       const key = `slack:${channel}:${threadTs}`;
       const oldest = cursor.threads[key] ?? threadTs;
       try {
@@ -237,7 +250,13 @@ export async function pollSlack(
         })) as {
           messages?: SlackMessage[];
         };
-        return { channel, threadTs, key, oldest, messages: replies.messages ?? [] };
+        return {
+          channel,
+          threadTs,
+          key,
+          oldest,
+          messages: replies.messages ?? [],
+        };
       } catch (err) {
         log.warn("thread skipped", { thread: tracked, err });
         return null;
@@ -251,7 +270,9 @@ export async function pollSlack(
   ]);
 
   for (const read of histories) {
-    if (!read) continue;
+    if (!read) {
+      continue;
+    }
     const { conv } = read;
     const dm = Boolean(conv.is_im || conv.is_mpim);
     const msgs = [...read.messages].reverse();
@@ -265,47 +286,65 @@ export async function pollSlack(
         : `#${conv.name ?? conv.id}`;
     for (const msg of msgs) {
       const m = await toMessage(msg, conv.id, where, dm);
-      if (m) out.push(m);
-      if (!cursor.channels[conv.id] || msg.ts > cursor.channels[conv.id])
+      if (m) {
+        out.push(m);
+      }
+      if (!cursor.channels[conv.id] || msg.ts > cursor.channels[conv.id]) {
         cursor.channels[conv.id] = msg.ts;
+      }
     }
-    if (!cursor.channels[conv.id])
+    if (!cursor.channels[conv.id]) {
       cursor.channels[conv.id] = String(Date.now() / 1000);
+    }
   }
 
   if (matches) {
     const after = cursor.searchedAt ?? firstLook;
     for (const match of [...matches].reverse()) {
-      if (match.ts <= after || !match.channel?.id) continue;
+      if (match.ts <= after || !match.channel?.id) {
+        continue;
+      }
       const dm = Boolean(match.channel.is_im || match.channel.is_mpim);
-      if (dm) continue;
+      if (dm) {
+        continue;
+      }
       const m = await toMessage(
         match,
         match.channel.id,
         `#${match.channel.name ?? match.channel.id}`,
         false,
       );
-      if (m) out.push(m);
-      if (!cursor.searchedAt || match.ts > cursor.searchedAt)
+      if (m) {
+        out.push(m);
+      }
+      if (!cursor.searchedAt || match.ts > cursor.searchedAt) {
         cursor.searchedAt = match.ts;
+      }
     }
     cursor.searchedAt ??= String(Date.now() / 1000);
   }
 
   for (const read of replies) {
-    if (!read) continue;
+    if (!read) {
+      continue;
+    }
     const { channel, threadTs, key, oldest } = read;
     for (const msg of read.messages) {
-      if (msg.ts <= oldest) continue;
+      if (msg.ts <= oldest) {
+        continue;
+      }
       const m = await toMessage(
         { ...msg, thread_ts: threadTs },
         channel,
         "thread",
         false,
       );
-      if (m) out.push(m);
-      if (!cursor.threads[key] || msg.ts > cursor.threads[key])
+      if (m) {
+        out.push(m);
+      }
+      if (!cursor.threads[key] || msg.ts > cursor.threads[key]) {
         cursor.threads[key] = msg.ts;
+      }
     }
   }
 
@@ -329,7 +368,9 @@ export async function slackPost(
     }),
   });
   const json = (await res.json()) as { ok: boolean; error?: string };
-  if (!json.ok) throw new Error(`Slack refused: ${json.error ?? res.status}`);
+  if (!json.ok) {
+    throw new Error(`Slack refused: ${json.error ?? res.status}`);
+  }
   return `posted to Slack${action.to ? ` for ${action.to}` : ""}`;
 }
 
@@ -355,10 +396,18 @@ export class TokenTransport implements SlackTransport {
   }
 
   async poll(ctx: PollContext): Promise<SlackPollResult> {
-    if (!this.token) throw new Error("no Slack token");
+    if (!this.token) {
+      throw new Error("no Slack token");
+    }
     const api = (this.api ??= slackApi(this.token));
     this.who ??= await whoAmI(api);
-    return pollSlack({ ...ctx, api, maxDms: 25, who: this.who, names: this.names });
+    return pollSlack({
+      ...ctx,
+      api,
+      maxDms: 25,
+      who: this.who,
+      names: this.names,
+    });
   }
 
   send(action: SlackReply): Promise<string> {

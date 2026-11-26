@@ -9,10 +9,14 @@ const live = new Set<PtySession>();
 let hooksInstalled = false;
 
 function installExitHooks(): void {
-  if (hooksInstalled) return;
+  if (hooksInstalled) {
+    return;
+  }
   hooksInstalled = true;
   const killAll = () => {
-    for (const session of live) session.kill();
+    for (const session of live) {
+      session.kill();
+    }
   };
   process.on("exit", killAll);
   process.on("SIGHUP", () => {
@@ -52,7 +56,9 @@ export class PtySession {
         cols: options.cols,
         rows: options.rows,
         data: (_terminal, data) => {
-          if (!this.killed) options.onData(data);
+          if (!this.killed) {
+            options.onData(data);
+          }
         },
       },
     });
@@ -66,15 +72,21 @@ export class PtySession {
   }
 
   write(data: string): void {
-    if (this.running) this.proc.terminal?.write(data);
+    if (this.running) {
+      this.proc.terminal?.write(data);
+    }
   }
 
   resize(cols: number, rows: number): void {
-    if (this.running) this.proc.terminal?.resize(cols, rows);
+    if (this.running) {
+      this.proc.terminal?.resize(cols, rows);
+    }
   }
 
   kill(): void {
     this.killed = true;
-    if (this.running) this.proc.kill();
+    if (this.running) {
+      this.proc.kill();
+    }
   }
 }

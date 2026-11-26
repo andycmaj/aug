@@ -47,7 +47,10 @@ interface ResultEvent {
     cache_read_input_tokens?: number;
     cache_creation_input_tokens?: number;
   };
-  permission_denials?: { tool_name?: string; tool_input?: Record<string, unknown> }[];
+  permission_denials?: {
+    tool_name?: string;
+    tool_input?: Record<string, unknown>;
+  }[];
 }
 
 const DENIED_INPUT_CHARS = 200;
@@ -82,7 +85,9 @@ export function claudeArgs(opts: ClaudeAskOptions): string[] {
 function deniedCalls(event: ResultEvent): string[] {
   return (event.permission_denials ?? []).map((d) => {
     const command = d.tool_input?.command;
-    if (typeof command === "string") return `${d.tool_name ?? "tool"} ${command}`;
+    if (typeof command === "string") {
+      return `${d.tool_name ?? "tool"} ${command}`;
+    }
     const input = JSON.stringify(d.tool_input ?? {});
     return `${d.tool_name ?? "tool"} ${input.length > DENIED_INPUT_CHARS ? `${input.slice(0, DENIED_INPUT_CHARS)}…` : input}`;
   });
@@ -100,7 +105,10 @@ export function claudeAsk(opts: ClaudeAskOptions): ClaudeAsk {
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "code-review-plannotator" },
+      env: {
+        ...process.env,
+        CLAUDE_CODE_ENTRYPOINT: "code-review-plannotator",
+      },
     });
     proc.stdin.write(prompt);
     await proc.stdin.end();
@@ -113,7 +121,9 @@ export function claudeAsk(opts: ClaudeAskOptions): ClaudeAsk {
     try {
       event = JSON.parse(out) as ResultEvent;
     } catch {
-      throw new Error(`claude exited ${code} without a result: ${(err || out).trim().slice(0, 500)}`);
+      throw new Error(
+        `claude exited ${code} without a result: ${(err || out).trim().slice(0, 500)}`,
+      );
     }
     const u = event.usage ?? {};
     const call: CallUsage = {
@@ -128,7 +138,9 @@ export function claudeAsk(opts: ClaudeAskOptions): ClaudeAsk {
       isError: event.is_error === true,
     };
     calls.push(call);
-    if (call.isError) throw new Error(event.result || `claude failed (${label})`);
+    if (call.isError) {
+      throw new Error(event.result || `claude failed (${label})`);
+    }
     return { text: event.result ?? "", denied: call.denied };
   };
   return {
@@ -145,7 +157,15 @@ export function claudeAsk(opts: ClaudeAskOptions): ClaudeAsk {
           cacheReadTokens: t.cacheReadTokens + c.cacheReadTokens,
           cacheWriteTokens: t.cacheWriteTokens + c.cacheWriteTokens,
         }),
-        { calls: 0, ms: 0, costUsd: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        {
+          calls: 0,
+          ms: 0,
+          costUsd: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
       );
     },
   };

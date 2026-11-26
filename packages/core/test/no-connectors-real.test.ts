@@ -35,8 +35,9 @@ async function init(call: BrainCall): Promise<Init> {
       buffer += decoder.decode(chunk, { stream: true });
       for (const line of buffer.split("\n").slice(0, -1)) {
         const event = JSON.parse(line) as { type: string; subtype?: string };
-        if (event.type === "system" && event.subtype === "init")
+        if (event.type === "system" && event.subtype === "init") {
           return event as unknown as Init;
+        }
       }
     }
   } finally {
@@ -61,27 +62,24 @@ function granted(assistant: string[]): RikerConfig {
   };
 }
 
-describe.skipIf(!process.env.RIKER_REAL_CLAUDE)("connectors in a headless turn", () => {
-  test(
-    "the Assistant with no MCP grant loads no MCP server",
-    async () => {
+describe.skipIf(!process.env.RIKER_REAL_CLAUDE)(
+  "connectors in a headless turn",
+  () => {
+    test("the Assistant with no MCP grant loads no MCP server", async () => {
       freshHome();
       const got = await init(assistantCall(granted([])));
       expect(got.mcp_servers).toEqual([]);
       expect(got.tools.filter((t) => t.startsWith("mcp__"))).toEqual([]);
-    },
-    60_000,
-  );
+    }, 60_000);
 
-  test(
-    "with slack.read granted, the claude.ai connectors load and connect",
-    async () => {
+    test("with slack.read granted, the claude.ai connectors load and connect", async () => {
       freshHome();
       const got = await init(assistantCall(granted(["slack.read"])));
       const slack = got.mcp_servers.find((s) => s.name === "claude.ai Slack");
       expect(slack?.status).toBe("connected");
-      expect(got.tools.some((t) => t.startsWith("mcp__claude_ai_Slack__"))).toBe(true);
-    },
-    60_000,
-  );
-});
+      expect(
+        got.tools.some((t) => t.startsWith("mcp__claude_ai_Slack__")),
+      ).toBe(true);
+    }, 60_000);
+  },
+);
