@@ -878,7 +878,7 @@ export class TmuxMux implements Mux {
       proc.exited,
     ]);
     if (code !== 0)
-      throw new MuxError(stderr.trim().split("\n").pop() || `${argv[0]} exited ${code}`);
+      throw new MuxError(wtError(stderr, `${argv[0]} exited ${code}`));
     const made = parseWorktree(stdout);
     if (!made) throw new MuxError(`no worktree path in: ${stdout.trim().slice(0, 200)}`);
     return made;
@@ -892,9 +892,30 @@ export class TmuxMux implements Mux {
       timeout: WT_TIMEOUT_MS,
     });
     const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
-    if (code !== 0)
-      throw new MuxError(stderr.trim().split("\n").pop() || `wt remove exited ${code}`);
+    if (code !== 0) throw new MuxError(wtError(stderr, `wt remove exited ${code}`));
   }
+}
+
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
+// wt puts the reason on a ✗ line, the files it is about indented under it,
+// and a ↳ hint last: the last line alone is the hint, which hid the reason
+// ("To list branches, run ..." for a branch that is gone).
+export function wtError(stderr: string, fallback: string): string {
+  let reason = "";
+  const detail: string[] = [];
+  const hints: string[] = [];
+  for (const raw of stderr.replace(ANSI, "").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("↳")) hints.push(line.slice(1).trim());
+    else if (line.startsWith("✗")) reason = line.slice(1).trim();
+    else if (!reason) reason = line;
+    else detail.push(line);
+  }
+  if (!reason) return hints.join(" ") || fallback;
+  const head = detail.length ? `${reason} (${detail.join(", ")})` : reason;
+  return [head, ...hints].join(". ");
 }
 
 // Every call to the real tmux is timed while perf is on, as mux.<method>.

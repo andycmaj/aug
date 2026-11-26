@@ -314,6 +314,32 @@ describe("closing, moving, reconciling", () => {
     expect(store.getTask(t.id)!.worktree).not.toBeNull();
   });
 
+  // wt switch to a branch the main checkout has out answers the main
+  // checkout's path, so a task can hold it as its worktree.
+  test("close leaves a main checkout alone and says nothing of it", async () => {
+    const t = codingTask();
+    await startTask(config(), t.id);
+    store.updateTask(t.id, { worktree: "/src/api" });
+    fake.checkouts.set("/src/api", { kind: "checkout", repos: ["acme/api"] });
+    fake.removeFails = "The main worktree cannot be removed";
+    const r = await closeTask(config(), t.id);
+    expect(r.warnings).toEqual([]);
+    expect(fake.removed).toEqual([]);
+    expect(store.getTask(t.id)!.worktree).toBeNull();
+  });
+
+  test("close skips a worktree already gone from disk", async () => {
+    const t = codingTask();
+    await startTask(config(), t.id);
+    const wt = store.getTask(t.id)!.worktree!;
+    fake.gone.add(wt);
+    fake.removeFails = "No branch named fix-login-redirect";
+    const r = await closeTask(config(), t.id);
+    expect(r.warnings).toEqual([]);
+    expect(fake.removed).toEqual([]);
+    expect(store.getTask(t.id)!.worktree).toBeNull();
+  });
+
   test("moving a task moves its live window and empties the solo project", async () => {
     const t = codingTask();
     await startTask(config(), t.id);

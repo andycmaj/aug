@@ -428,7 +428,13 @@ export async function closeTask(
   endTmuxSessions(taskId, EndReason.closed);
   dropLaunchFiles(taskId);
   const path = repoPath(config, task.repo);
-  if (task.worktree && task.branch && path) {
+  // wt switch answers the main checkout when its branch is out there, so a
+  // task can hold the owner's own checkout: never Riker's to remove (wt
+  // refuses it anyway). One already gone has nothing left to remove.
+  const at = task.worktree ? mux().inspectCheckout(task.worktree).kind : null;
+  if (at === "checkout" || at === "missing") {
+    store.updateTask(taskId, { worktree: null });
+  } else if (task.worktree && task.branch && path) {
     try {
       await mux().removeWorktree(path, task.branch);
       store.updateTask(taskId, { worktree: null });
