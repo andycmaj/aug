@@ -15,6 +15,7 @@ import {
   type BrainCall,
   type BrainResult,
 } from "../src/brain";
+import { SHELL_HOWTO } from "../src/capabilities";
 import { DEFAULT_CONFIG, mergeConfig } from "../src/config";
 import { Engine } from "../src/engine";
 import { sessionStarted, workFinished } from "../src/lifecycle";
@@ -249,6 +250,22 @@ describe("running one", () => {
     expect(call.resume).toBeUndefined();
     // Not the agent: its state is untouched.
     expect(store.getTask(t.id)!.agent_state).toBe(t.agent_state);
+  });
+
+  // Its git rules match `git log`, not `git -C <dir> log`, and the
+  // checkout's path in the prompt had the model write the second.
+  test("in the checkout: told to run git there, without -C", async () => {
+    const wt = mkdtempSync(join(tmpdir(), "riker-wt-"));
+    const t = task(Kind.coding, { worktree: wt, branch: "fix-build" });
+    const started = engine.desk.runAction(t.id, "summarize");
+    if ("error" in started) throw new Error(started.error);
+    await started.done;
+    const call = calls.at(-1)!;
+    expect(call.cwd).toBe(wt);
+    expect(call.system).toContain(SHELL_HOWTO);
+    expect(SHELL_HOWTO).toContain("never with -C");
+    expect(call.prompt).toContain("Checkout: you run in it (branch fix-build), so run git there as is, never with -C.");
+    expect(call.prompt).not.toContain(`Checkout: ${wt}`);
   });
 
   test("fork: resumes a copy of the agent's session in its folder", async () => {

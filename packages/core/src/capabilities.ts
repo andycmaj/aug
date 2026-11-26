@@ -104,9 +104,10 @@ export const GH_READS = [
 ].map((c) => `Bash(${c}:*)`);
 
 // Rules match a command's prefix, and each part of `a && b` must match on its
-// own; `cd` into another folder never does. Said to every headless shell.
+// own; `cd` into another folder never does, nor `git -C <dir> log` a
+// `git log` rule. Said to every headless shell.
 export const SHELL_HOWTO =
-  `Run one command per Bash call, written out in full and starting with the command itself: no \`cd <dir> &&\` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). A quoted argument may span lines, blank ones too, but one with a line starting with # (a Markdown heading) is denied: such text goes in a file. Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout. A denied call means the command did not match, not that Bash is off: write it again that way (Riker's tools as ${TOOLS_NAME} <command>) and try once more before giving up. Never ask the owner to allow a command: they cannot, Riker sets what you may run.`;
+  `Run one command per Bash call, written out in full and starting with the command itself: no \`cd <dir> &&\` in front, no shell variables ($B), no chaining with ; or &&. Put each URL or argument with spaces in double quotes (a bare & in a URL splits the command). A quoted argument may span lines, blank ones too, but one with a line starting with # (a Markdown heading) is denied: such text goes in a file. Anything else is denied without asking. For gh, pass --repo owner/repo rather than changing into a checkout. Run git in the folder you start in, never with -C <dir>: write \`git log ...\`, not \`git -C /path log ...\`. A denied call means the command did not match, not that Bash is off: write it again that way (Riker's tools as ${TOOLS_NAME} <command>) and try once more before giving up. Never ask the owner to allow a command: they cannot, Riker sets what you may run.`;
 
 export const DENIED_STEP = "denied: ";
 // Said beside a denied connector call: what the owner sets to let it run.
