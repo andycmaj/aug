@@ -36,7 +36,7 @@ import {
 } from "./types";
 import type { BrainCall } from "./brain";
 
-const READS = ["Read", "Grep", "Glob", "WebSearch", "WebFetch"];
+export const READS = ["Read", "Grep", "Glob", "WebSearch", "WebFetch"];
 
 export const ASSISTANT_TOOLS = ["Bash", "Write", ...READS];
 
@@ -58,9 +58,11 @@ export function assistantAllow(config: RikerConfig): string[] {
   ];
 }
 
-// The moves as the model calls them, from the one registry.
-export function movesHelp(): string {
+// The moves as the model calls them, from the one registry; `allowed`
+// leaves out the ones the caller may not ask for.
+export function movesHelp(allowed: (verb: string) => boolean = () => true): string {
   return Object.entries(MOVES)
+    .filter(([verb]) => allowed(verb))
     .map(([verb, spec]) => {
       const positional = `${spec.task ? " RIKER-0000" : ""}${spec.positional ? ` <${spec.positional}>` : ""}`;
       const flags = Object.entries(spec.args)
@@ -74,6 +76,19 @@ export function movesHelp(): string {
     .join("\n");
 }
 
+// riker-tools' read commands, as the Assistant and a project's manager are
+// told them.
+export const LOOKUPS = [
+  "Look things up (read straight from Riker):",
+  "- tasks [words] [--all] [--project <name>]: open work, one line each",
+  "- task RIKER-0000: one task in full, with its recent chat",
+  "- projects [--all]: projects and their repos",
+  "- project <name>: one project in full: its brief, goals and how far each has come, docs, open work",
+  "- repos [--scan]: every repo Riker knows, where it is checked out and whether that checkout is good, and checkouts on disk with no path in Riker. When the owner names a repo with no path, look here and offer what is on disk (move repo <owner/repo> --path <it>); never map one they did not pick.",
+  "- notes: the agents' live handoff board",
+  "- knowledge search <words>: what agents learned",
+];
+
 // `lines` are what the plugins tell it (RikerPlugin.assistant): their own
 // tools and how a line from their place is answered.
 export function assistantSystem(config: RikerConfig, lines: readonly string[] = []): string {
@@ -83,14 +98,7 @@ export function assistantSystem(config: RikerConfig, lines: readonly string[] = 
     "",
     "## Your hands: riker-tools",
     `Run them with Bash as: ${tools} <command>`,
-    "Look things up (read straight from Riker):",
-    "- tasks [words] [--all] [--project <name>]: open work, one line each",
-    "- task RIKER-0000: one task in full, with its recent chat",
-    "- projects [--all]: projects and their repos",
-    "- project <name>: one project in full: its brief, goals and how far each has come, docs, open work",
-    "- repos [--scan]: every repo Riker knows, where it is checked out and whether that checkout is good, and checkouts on disk with no path in Riker. When the owner names a repo with no path, look here and offer what is on disk (move repo <owner/repo> --path <it>); never map one they did not pick.",
-    "- notes: the agents' live handoff board",
-    "- knowledge search <words>: what agents learned",
+    ...LOOKUPS,
     "Change things (the running riker makes the move and prints one line back; a failure says why):",
     movesHelp(),
     ...(lines.length ? ["", ...lines] : []),
@@ -149,10 +157,11 @@ export function whereThingsStand(): string {
 
 // What the Assistant's session was last told of where things stand, kept
 // once its turn finished so a turn that never ran is not counted as heard.
+// A project's manager keeps its own under another key.
 const WHERE_KEY = "assistant.where";
 
-export function heardWhere(sessionId: string): string | null {
-  const raw = store.kvGet(WHERE_KEY);
+export function heardWhere(sessionId: string, key = WHERE_KEY): string | null {
+  const raw = store.kvGet(key);
   if (!raw) return null;
   try {
     const kept = JSON.parse(raw) as { session?: string; where?: string };
@@ -164,22 +173,26 @@ export function heardWhere(sessionId: string): string | null {
   }
 }
 
-export function rememberWhere(sessionId: string, where: string): void {
-  store.kvSet(WHERE_KEY, JSON.stringify({ session: sessionId, where }));
+export function rememberWhere(sessionId: string, where: string, key = WHERE_KEY): void {
+  store.kvSet(key, JSON.stringify({ session: sessionId, where }));
 }
 
 // A resumed session already holds what it was told: send it what moved.
-function whereSection(where: string, heard: string | null): string {
+export function whereSection(
+  where: string,
+  heard: string | null,
+  title = "Where things stand",
+): string {
   const now = `Now: ${new Date().toString()}`;
-  if (heard === null) return `## Where things stand\n${now}\n${where}`;
+  if (heard === null) return `## ${title}\n${now}\n${where}`;
   if (heard === where)
-    return `## Where things stand: unchanged since your last turn\n${now}`;
+    return `## ${title}: unchanged since your last turn\n${now}`;
   const before = new Set(heard.split("\n"));
   const after = new Set(where.split("\n"));
   const gone = [...before].filter((l) => !after.has(l)).map((l) => `- ${l}`);
   const came = [...after].filter((l) => !before.has(l)).map((l) => `+ ${l}`);
   return [
-    "## Where things stand: changed since your last turn (- was, + is)",
+    `## ${title}: changed since your last turn (- was, + is)`,
     now,
     ...gone,
     ...came,
@@ -197,7 +210,7 @@ export function heardFrom(turns: TurnRow[]): string | null {
 }
 
 // What the owner said since the Assistant last answered.
-function unanswered(turns: TurnRow[]): TurnRow[] {
+export function unanswered(turns: TurnRow[]): TurnRow[] {
   const last = turns.findLastIndex((t) => t.role === TurnRole.agent);
   return turns.slice(last + 1);
 }

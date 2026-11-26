@@ -192,10 +192,14 @@ export function getTask(id: number): TaskRow | null {
   return one<TaskRow>("SELECT * FROM tasks WHERE id = ?", id);
 }
 
-// Work only: Home is not a task, and nothing that lists work sees it.
+// Home and the projects' managers are conversations, not work: nothing that
+// lists work sees them.
+const WORK = "kind NOT IN ('home', 'manager')";
+
+// Work only.
 export function listTasks(): TaskRow[] {
   return all<TaskRow>(
-    "SELECT * FROM tasks WHERE status != 'dropped' AND kind != 'home' ORDER BY created_at, id",
+    `SELECT * FROM tasks WHERE status != 'dropped' AND ${WORK} ORDER BY created_at, id`,
   );
 }
 
@@ -203,7 +207,7 @@ export function listTasks(): TaskRow[] {
 // read whenever tasks changed, not every row.
 export function agentStates(): { id: number; agent_state: AgentState }[] {
   return all<{ id: number; agent_state: AgentState }>(
-    "SELECT id, agent_state FROM tasks WHERE status IN ('open', 'later') AND kind != 'home'",
+    `SELECT id, agent_state FROM tasks WHERE status IN ('open', 'later') AND ${WORK}`,
   );
 }
 
@@ -211,7 +215,7 @@ export function agentStates(): { id: number; agent_state: AgentState }[] {
 // asked, since the rail no longer lists them.
 export function closedTasks(limit = 500): TaskRow[] {
   return all<TaskRow>(
-    "SELECT * FROM tasks WHERE status IN ('done', 'dropped') AND kind != 'home' ORDER BY closed_at DESC, id DESC LIMIT ?",
+    `SELECT * FROM tasks WHERE status IN ('done', 'dropped') AND ${WORK} ORDER BY closed_at DESC, id DESC LIMIT ?`,
     limit,
   );
 }
@@ -229,6 +233,27 @@ export function homeTask(): TaskRow {
     "SELECT * FROM tasks WHERE kind = 'home' ORDER BY id LIMIT 1",
   );
   return found ?? createTask({ title: "Home", kind: "home", channel: "owner" });
+}
+
+// A project's manager, if the owner has talked to the project yet.
+export function managerOf(projectId: number): TaskRow | null {
+  return one<TaskRow>(
+    "SELECT * FROM tasks WHERE kind = 'manager' AND project_id = ? ORDER BY id LIMIT 1",
+    projectId,
+  );
+}
+
+// Made the first time the owner talks to the project.
+export function ensureManager(projectId: number): TaskRow {
+  const found = managerOf(projectId);
+  if (found) return found;
+  const project = getProject(projectId);
+  return createTask({
+    title: `${project?.name ?? "Project"} manager`,
+    kind: "manager",
+    channel: "owner",
+    projectId,
+  });
 }
 
 // A task owns its own thread plus any linked to it (task_threads).
@@ -331,7 +356,7 @@ export function tasksWithRepo(repo: string): TaskRow[] {
 
 export function tasksForProject(projectId: number): TaskRow[] {
   return all<TaskRow>(
-    "SELECT * FROM tasks WHERE project_id = ? AND status != 'dropped' ORDER BY created_at, id",
+    `SELECT * FROM tasks WHERE project_id = ? AND status != 'dropped' AND ${WORK} ORDER BY created_at, id`,
     projectId,
   );
 }
@@ -466,7 +491,7 @@ export function documentSources(): DocumentSources {
     projectLinks: all<ProjectLinkRow>("SELECT * FROM project_links ORDER BY id"),
     projects: all("SELECT id, name, status FROM projects ORDER BY id"),
     tasks: all(
-      "SELECT id, title, url, project_id, created_at FROM tasks WHERE kind != 'home' ORDER BY id",
+      `SELECT id, title, url, project_id, created_at FROM tasks WHERE ${WORK} ORDER BY id`,
     ),
     threads: all(
       "SELECT task_id, thread_key, linked_at FROM task_threads ORDER BY linked_at",

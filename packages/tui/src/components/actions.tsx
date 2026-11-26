@@ -764,6 +764,21 @@ export function useActions(dialogs: Dialogs) {
     });
   }
 
+  function sayToProject(projectId: number, text: string) {
+    desk.sayToProject(projectId, text).catch((err) => {
+      log.error("say to project failed", { project: projectId, err });
+      showToast(`Not sent: ${errorMessage(err)}`, 4000, "error");
+    });
+  }
+
+  // The task leaves the rail for its project's row, where its chat goes on.
+  function promoteManager(task: TaskRow) {
+    const made = desk.promoteManager(task.id);
+    if (!made.ok) return void showToast(made.why, 4000, "error");
+    riker.select(`p${made.project.id}`);
+    showToast(`${taskRef(task.id)} is ${made.project.name}'s manager: talk to it on the project's row`);
+  }
+
   // ── on an Inbox row ───────────────────────────────────────────────────
 
   function goToTask(taskId: number) {
@@ -1201,7 +1216,15 @@ export function useActions(dialogs: Dialogs) {
       [Commands.EDIT_BRIEF]: onTask(editor.editBrief),
       [Commands.REDRAFT]: onTask(redraft),
       [Commands.START]: onTask(start, true),
-      [Commands.STOP]: onTask(stop, true),
+      [Commands.STOP]: () => {
+        const item = get();
+        if (item?.type === "project") {
+          const manager = riker.manager(item.project.id);
+          if (!manager) return false;
+          return void stop(manager);
+        }
+        return onTask(stop, true)();
+      },
       [Commands.JUMP]: () => {
         const item = get();
         if (item?.type === "project") return void jumpToProject(item.project.id);
@@ -1219,6 +1242,10 @@ export function useActions(dialogs: Dialogs) {
       [Commands.WAIT_ON]: onTask(waitOn),
       [Commands.TYPE]: () => {
         if (get()?.type !== "task") return false;
+        typeInto();
+      },
+      [Commands.PROJECT_TALK]: () => {
+        if (get()?.type !== "project") return false;
         typeInto();
       },
       [Commands.DOC_ACCEPT]: onSystem(acceptDocs),
@@ -1309,6 +1336,8 @@ export function useActions(dialogs: Dialogs) {
     reopen,
     send,
     say,
+    sayToProject,
+    promoteManager,
     compose: editor.compose,
     walk,
     newTask,

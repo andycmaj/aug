@@ -70,6 +70,7 @@ import {
   Verdict,
   type MessageRow,
   type NoteLabel,
+  type ProjectRow,
   type TaskRow,
   type TimerRow,
 } from "./types";
@@ -667,6 +668,71 @@ export class Desk {
 
   unlink(taskId: number, url: string): boolean {
     return this.onTask("unlink", taskId, () => store.removeTaskLink(taskId, url));
+  }
+
+  // ── a project's manager (core/manager.ts) ─────────────────────────────
+
+  // The owner talks to a project on its row: its manager is made the first
+  // time, and every line after continues the same conversation.
+  async sayToProject(projectId: number, text: string, author = "you"): Promise<boolean> {
+    if (!text.trim() || !store.getProject(projectId)) return false;
+    const manager = store.ensureManager(projectId);
+    return this.say(manager.id, text, author);
+  }
+
+  ensureManager(projectId: number): TaskRow {
+    return store.ensureManager(projectId);
+  }
+
+  // A task already overseeing the project (an overview, an epic) becomes its
+  // manager, keeping its chat. Its agent turns headless from here, so a
+  // running one is stopped first.
+  promoteManager(
+    taskId: number,
+    by = "you",
+  ): { ok: true; project: ProjectRow } | { ok: false; why: string } {
+    const task = store.getTask(taskId);
+    if (!task) return { ok: false, why: `no task ${taskId}` };
+    const ref = store.taskRef(taskId);
+    if (task.kind === Kind.manager) return { ok: false, why: `${ref} is already a manager` };
+    if (task.kind === Kind.home || task.kind === Kind.system)
+      return { ok: false, why: `${ref} is Riker's own, not project work` };
+    const project = task.project_id ? store.getProject(task.project_id) : null;
+    if (!project) return { ok: false, why: `${ref} is in no project: move it into one first` };
+    const had = store.managerOf(project.id);
+    if (had)
+      return { ok: false, why: `${project.name} already has a manager (${store.taskRef(had.id)})` };
+    if (this.drivers.for(task).isLive(task))
+      return { ok: false, why: `${ref}'s agent is running: stop it first` };
+    this.onTask("make manager", taskId, () =>
+      store.batch(() => {
+        if (task.status !== TaskStatus.open) store.reopen(taskId);
+        store.updateTask(taskId, {
+          kind: Kind.manager,
+          agent_state: AgentState.none,
+          agent_says: null,
+          unread_result: 0,
+        });
+        store.addTurn({
+          taskId,
+          role: TurnRole.trigger,
+          body: `Made ${project.name}'s manager by ${by}`,
+        });
+      }),
+    );
+    return { ok: true, project };
+  }
+
+  // Where the project stands, in its manager's or the owner's words.
+  setStanding(projectId: number, text: string, by = "you"): void {
+    store.updateProject(projectId, { standing: text.trim(), standing_at: now() });
+    const manager = store.managerOf(projectId);
+    if (manager && !by.startsWith("manager "))
+      store.addTurn({
+        taskId: manager.id,
+        role: TurnRole.trigger,
+        body: `${by} wrote the standing:\n${text.trim()}`,
+      });
   }
 
   // A project's doc off the project: only Riker's row goes.

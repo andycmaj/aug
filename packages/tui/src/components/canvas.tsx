@@ -57,6 +57,7 @@ import {
   type TaskRow,
 } from "@riker/core/types";
 import { inTmux } from "@riker/core/driver";
+import { overseerCandidates } from "@riker/core/manager";
 import { timerLine } from "@riker/core/timers";
 import { TerminalHost } from "./agent-terminal";
 import { ActionCard, ChatTurn } from "./chat-turn";
@@ -236,7 +237,8 @@ export function Canvas(props: {
               </Show>
               <PendingCard taskId={t().id} />
               <ChatInput
-                task={t()}
+                draft={`t${t().id}`}
+                placeholder={placeholderFor(t())}
                 hidden={attached}
                 onSay={props.onSay}
                 onCompose={props.onCompose}
@@ -245,12 +247,31 @@ export function Canvas(props: {
           )}
         </Match>
         <Match when={item()?.type === "project" && item()}>
-          {(i: Accessor<RailItem>) => (
-            <ProjectView
-              item={i() as Extract<RailItem, { type: "project" }>}
-              width={width()}
-            />
-          )}
+          {(i: Accessor<RailItem>) => {
+            const p = () => i() as Extract<RailItem, { type: "project" }>;
+            const manager = () => riker.manager(p().project.id);
+            return (
+              <>
+                <ProjectView item={p()} width={width()} talking={Boolean(manager())} />
+                <Show when={manager()}>
+                  {(m: Accessor<TaskRow>) => (
+                    <TaskChat
+                      task={m()}
+                      width={width()}
+                      scrollRef={(r) => (scrollRef = r)}
+                    />
+                  )}
+                </Show>
+                <ChatInput
+                  draft={`p${p().project.id}`}
+                  placeholder={`Ask about ${p().project.name}, or tell its manager what to do... (@ names a task, ^g editor)`}
+                  hidden={() => false}
+                  onSay={props.onSay}
+                  onCompose={props.onCompose}
+                />
+              </>
+            );
+          }}
         </Match>
       </Switch>
     </Pane>
@@ -461,6 +482,12 @@ function TaskChat(props: {
         ["@", "name a task or project"],
         ["a", "back here from anywhere"],
       ];
+    if (t.kind === Kind.manager)
+      return [
+        ["i", "talk to the manager"],
+        ["@", "name a task"],
+        ["S", "stop its turn"],
+      ];
     if (t.kind === Kind.system)
       return proposals().length
         ? [
@@ -588,14 +615,24 @@ function mentionLine(m: Mention, openTasks: (p: ProjectRow) => number): string {
 // while the editor has the Canvas) and what was typed before the selection
 // moved on. The box stays mounted from task to task, so without this a draft
 // followed you, and ctrl+a carried it into Home's box, where enter sends it.
-const unsent = new Map<number, string>();
+const unsent = new Map<string, string>();
+
+function placeholderFor(task: TaskRow): string {
+  return task.kind === Kind.home
+    ? "Ask about anything, or tell riker what to do... (@ names a task or project, ^g editor)"
+    : task.kind === Kind.coding
+      ? "Tell the coding agent... (enter sends, ^g editor, esc leaves)"
+      : "Tell the agent what's wrong, or ask about anything here... (^g editor)";
+}
 
 // The box under the chat. Typing always continues the same conversation.
 // `@` offers tasks and projects to name; enter or tab takes the highlighted
 // one. While a live terminal is attached, keys go to it, so the box hides
 // (but keeps its draft) until detach.
+// `draft` keys its unsent text: `t<id>` for a task, `p<id>` for a project.
 function ChatInput(props: {
-  task: TaskRow;
+  draft: string;
+  placeholder: string;
   hidden: () => boolean;
   onSay: (text: string) => void;
   onCompose: Compose;
@@ -639,19 +676,19 @@ function ChatInput(props: {
   };
 
   onMount(() => {
-    const text = unsent.get(props.task.id);
-    unsent.delete(props.task.id);
+    const text = unsent.get(props.draft);
+    unsent.delete(props.draft);
     if (input && text) input.value = text;
   });
   // Read at unmount, when the task accessor may already be gone.
-  let shown = props.task.id;
+  let shown = props.draft;
   const keep = () => {
     const text = input?.value ?? "";
     if (text) unsent.set(shown, text);
   };
   createEffect(
     on(
-      () => props.task.id,
+      () => props.draft,
       (id) => {
         if (!input) return;
         keep();
@@ -695,7 +732,7 @@ function ChatInput(props: {
         setActivePane("canvas");
       },
       [Commands.INPUT_EDITOR]: () => {
-        const id = props.task.id;
+        const id = props.draft;
         props.onCompose(input?.value ?? "", (text) => {
           if (text) unsent.set(id, text);
         });
@@ -703,13 +740,6 @@ function ChatInput(props: {
     },
     { target: p.target },
   );
-
-  const placeholder = () =>
-    props.task.kind === Kind.home
-      ? "Ask about anything, or tell riker what to do... (@ names a task or project, ^g editor)"
-      : props.task.kind === Kind.coding
-        ? "Tell the coding agent... (enter sends, ^g editor, esc leaves)"
-        : "Tell the agent what's wrong, or ask about anything here... (^g editor)";
 
   return (
     <box flexDirection="column" flexShrink={0} visible={!props.hidden()}>
@@ -755,7 +785,7 @@ function ChatInput(props: {
       >
         <input
           ref={(r: InputRenderable) => (input = r)}
-          placeholder={placeholder()}
+          placeholder={props.placeholder}
           onInput={track}
           focusedBackgroundColor={theme.background}
           backgroundColor={theme.background}
@@ -768,22 +798,53 @@ function ChatInput(props: {
   );
 }
 
+// While the project has a manager its chat takes the Canvas, so the view
+// shrinks to a few lines over it.
+const TALKING_TASK_ROWS = 5;
+
 function ProjectView(props: {
   item: Extract<RailItem, { type: "project" }>;
   width: number;
+  talking: boolean;
 }) {
   const theme = useTheme();
   const riker = useRiker();
-  const p = () => props.item.project;
+  const p = () => riker.project(props.item.project.id) ?? props.item.project;
   const tasks = createMemo(() => {
     return riker
       .tasksForProject(p().id)
       .filter((t) => t.status === "open" || t.status === "later");
   });
+  const shown = () => (props.talking ? tasks().slice(0, TALKING_TASK_ROWS) : tasks());
+  const more = () => tasks().length - shown().length;
+  const candidates = createMemo(() => (props.talking ? [] : overseerCandidates(tasks())));
   const metaOf = useLaneMeta();
   const laneOfTask = (t: TaskRow) => {
     const row = riker.items().find((i) => i.type === "task" && i.task.id === t.id);
     return row?.type === "task" ? metaOf(row.lane) : null;
+  };
+  const standing = () => {
+    const text = p().standing;
+    if (!text) return null;
+    const at = p().standing_at ? ` · ${dayClock(p().standing_at!, riker.now())}` : "";
+    return { text: props.talking ? truncate(lines(text).join(" · "), Math.max(20, props.width - 14)) : text, at };
+  };
+  const row = (t: TaskRow) => {
+    const meta = laneOfTask(t);
+    return (
+      <text>
+        <span style={{ fg: meta ? toneColor(theme, meta.tone) : theme.textMuted }}>
+          {`${meta?.mark ?? "·"} `}
+        </span>
+        <span style={{ fg: theme.textMuted }}>{`${taskRef(t.id)}  `}</span>
+        <span style={{ fg: theme.text }}>
+          {truncate(t.title, Math.max(20, props.width - 40))}
+        </span>
+        <span style={{ fg: theme.textMuted }}>
+          {`  ${t.kind}${meta ? ` · ${meta.word}` : ""}${t.branch ? ` · ${t.branch}` : ""}`}
+        </span>
+      </text>
+    );
   };
   return (
     <box
@@ -791,8 +852,9 @@ function ProjectView(props: {
       paddingLeft={2}
       paddingRight={2}
       paddingTop={1}
-      flexGrow={1}
-      flexBasis={0}
+      flexGrow={props.talking ? 0 : 1}
+      flexShrink={0}
+      flexBasis={props.talking ? "auto" : 0}
     >
       <text fg={theme.secondary} attributes={1}>
         {`Project · ${p().name}`}
@@ -803,45 +865,62 @@ function ProjectView(props: {
           props.item.repos.join(", ") || "no repo",
           `${props.item.open} open`,
           props.item.working ? `${props.item.working} working` : "",
-          switchWords("journal", journalSwitch(riker.desk.config(), riker.project(p().id) ?? p())),
+          switchWords("journal", journalSwitch(riker.desk.config(), p())),
         ]
           .filter(Boolean)
           .join(" · ")}
       </text>
-      <scrollbox flexGrow={1} flexBasis={0} marginTop={1}>
-        <For
-          each={tasks()}
-          fallback={
-            <text fg={theme.textMuted}>
-              Nothing open here. Ask Home to make a task in it.
-            </text>
-          }
-        >
-          {(t) => {
-            const meta = laneOfTask(t);
-            return (
-              <text>
-                <span style={{ fg: meta ? toneColor(theme, meta.tone) : theme.textMuted }}>
-                  {`${meta?.mark ?? "·"} `}
-                </span>
-                <span style={{ fg: theme.textMuted }}>{`${taskRef(t.id)}  `}</span>
-                <span style={{ fg: theme.text }}>
-                  {truncate(t.title, Math.max(20, props.width - 40))}
-                </span>
-                <span style={{ fg: theme.textMuted }}>
-                  {`  ${t.kind}${meta ? ` · ${meta.word}` : ""}${t.branch ? ` · ${t.branch}` : ""}`}
-                </span>
+      <Show when={standing()}>
+        {(st: Accessor<{ text: string; at: string }>) => (
+          <box flexDirection="column" marginTop={1}>
+            <text fg={theme.textMuted}>{`standing${st().at}`}</text>
+            <text wrapMode="word">{st().text}</text>
+          </box>
+        )}
+      </Show>
+      <Show
+        when={props.talking}
+        fallback={
+          <scrollbox flexGrow={1} flexBasis={0} marginTop={1}>
+            <For
+              each={shown()}
+              fallback={
+                <text fg={theme.textMuted}>
+                  Nothing open here yet.
+                </text>
+              }
+            >
+              {row}
+            </For>
+            <box marginTop={1} flexDirection="column">
+              <text fg={theme.textMuted} wrapMode="word">
+                No manager yet. Type below (i) and one starts: it reads the whole project, answers about it, keeps its standing and runs its tasks.
               </text>
-            );
-          }}
-        </For>
-      </scrollbox>
+              <For each={candidates()}>
+                {(t) => (
+                  <text fg={theme.textMuted} wrapMode="word">
+                    {`${taskRef(t.id)} reads as an overview: make it the manager from the palette (:), its chat kept.`}
+                  </text>
+                )}
+              </For>
+            </box>
+          </scrollbox>
+        }
+      >
+        <box flexDirection="column" marginTop={1} flexShrink={0}>
+          <For each={shown()}>{row}</For>
+          <Show when={more() > 0}>
+            <text fg={theme.textMuted}>{`+${more()} more (fold open on the rail)`}</text>
+          </Show>
+        </box>
+      </Show>
       <KeyHints
         hints={[
-          ["space", "rail: fold / unfold its tasks"],
-          ["T", "jump to its tmux session"],
+          ["i", "talk to its manager"],
+          ["space", "fold"],
+          ["T", "tmux"],
           ["x", "archive"],
-          ["V", "read the journal"],
+          ["V", "journal"],
           ["J", "journal on/off"],
           ["I", "info"],
         ]}

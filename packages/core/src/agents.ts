@@ -10,6 +10,7 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { assistantCall, rememberWhere, whereThingsStand } from "./assistant";
+import { managerCall, pictureKey, projectPicture } from "./manager";
 import { think, BrainError, type BrainCall } from "./brain";
 import {
   capabilityAllow,
@@ -472,15 +473,21 @@ export class AgentPool {
     const config = this.options.config.get();
     const history = store.turnsForTask(taskId);
     // Home's agent is the Assistant: it talks, and runs Riker with riker-tools.
+    // A project's manager is the same about one project.
     const home = task.kind === Kind.home;
+    const project =
+      task.kind === Kind.manager && task.project_id
+        ? store.getProject(task.project_id)
+        : null;
+    const runsRiker = home || project !== null;
     const prior = chatResume(taskId, history);
     const priorRow = prior ? store.getSession(prior) : null;
-    const left = priorRow ? leaveSession(priorRow, history, home, config) : null;
+    const left = priorRow ? leaveSession(priorRow, history, runsRiker, config) : null;
     if (left) log.info("new session", { task: taskId, left: prior, why: left });
     const resume = left ? undefined : prior;
     const sessionId = resume ?? randomUUID();
     const ref = { taskId, sessionId };
-    const author = home ? SELF : "agent";
+    const author = home ? SELF : project ? "manager" : "agent";
     let turn: TurnRow;
     try {
       turn = store.batch(() => {
@@ -521,23 +528,33 @@ export class AgentPool {
     };
 
     const steps: string[] = [];
-    const where = home ? whereThingsStand() : "";
+    const lines = runsRiker ? (this.options.assistantLines?.(config) ?? []) : [];
+    const where = home
+      ? whereThingsStand()
+      : project
+        ? projectPicture(project, config)
+        : "";
     try {
       const result = await think({
         ...(home
-          ? assistantCall(config, history, reason, resume, where, this.options.assistantLines?.(config) ?? [])
-          : generalCall(config, task, history, reason, Boolean(resume))),
+          ? assistantCall(config, history, reason, resume, where, lines)
+          : project
+            ? managerCall(config, task, project, history, reason, resume, where, lines)
+            : generalCall(config, task, history, reason, Boolean(resume))),
         cwd,
         ...(resume ? { resume } : { sessionId }),
-        spend: { role: home ? SpendRole.assistant : SpendRole.general, taskId },
+        spend: {
+          role: home ? SpendRole.assistant : project ? SpendRole.manager : SpendRole.general,
+          taskId,
+        },
         signal: abort.signal,
         onStep: (step) => {
           steps.push(step);
           store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
           store.updateSession(sessionId, { last_tool: step });
         },
-        // Home is not a task to link to: the Assistant links with a move.
-        onTool: home
+        // Home and a manager are not tasks to link to: they link with a move.
+        onTool: runsRiker
           ? undefined
           : (call) =>
               linkMadeArtifact(taskId, {
@@ -551,11 +568,12 @@ export class AgentPool {
       if (result.denied?.length) {
         steps.push(
           ...result.denied.map((d) => `${DENIED_STEP}${d}`),
-          ...grantSteps(result.denied, home ? "assistant" : "general", config),
+          ...grantSteps(result.denied, runsRiker ? "assistant" : "general", config),
         );
         store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
       }
       if (home) rememberWhere(sessionId, where);
+      if (project) rememberWhere(sessionId, where, pictureKey(taskId));
       const answer = result.structured as TurnAnswer | null;
       const finished = now();
       recordFiles();

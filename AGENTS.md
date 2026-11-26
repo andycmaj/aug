@@ -340,6 +340,21 @@ Tests live beside their package (`packages/<name>/test/`).
   puts them in every brief of a task in the project, so a task's own brief
   need not repeat them; `core/project-doc.ts` is the one file the owner edits
   them in. A goal is met only by the owner's say, never by its tasks closing.
+- **A project's manager is `core/manager.ts`**: a `kind: manager` task
+  (`store.managerOf`, one per project), made by the owner's first line on
+  the project's row (`desk.sayToProject`) or promoted from a task in it
+  (`manager` move, `desk.promoteManager`; `overseerCandidates` names the
+  ones that read as an overview). Like Home it is a conversation, not
+  work: `store.ts`'s `WORK` filter keeps it out of every list, its kind out
+  of `task_events`, and `runMove` refuses moves on it but `tell` and
+  `stop`. Its turn is the pool's, Assistant-shaped (`managerCall`): the
+  project whole each turn (`projectPicture`, the changed lines on a
+  resumed session), asking as `manager RIKER-0000`, which `runMove` scopes
+  to its project's tasks and the ones it made (`managerRefuses`,
+  `MANAGER_DENIED`). It writes `projects.standing` (`project_standing`),
+  which the project's detail, Canvas and journal status show. The rail's
+  project row wears its mark (`managerMark`, from the task's state and
+  `updated_at`, never sessions, which every step bumps).
 - **A finished session is written up once** (`core/digests.ts`,
   docs/session-digests-design.md): a `digests` row from `riker-tools done`'s
   flags, or from the haiku watcher (`core/digest-watcher.ts`) for a coding

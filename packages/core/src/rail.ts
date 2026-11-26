@@ -23,7 +23,62 @@ export interface RailProject {
   // Goals met of the ones not dropped; both 0 for a project without goals.
   goalsMet: number;
   goals: number;
+  // Its manager (core/manager.ts), once the owner has talked to it.
+  manager: ManagerInfo | null;
 }
+
+// What the project's row says of its manager. Active is a session a next
+// line would resume (within the prompt cache's idle hour, config.chat);
+// asleep is one past it, which starts over reading the chat back.
+export const ManagerMark = {
+  working: "working",
+  waiting: "waiting",
+  active: "active",
+  asleep: "asleep",
+} as const;
+export type ManagerMark = (typeof ManagerMark)[keyof typeof ManagerMark];
+
+// Beside the project's name; working shows the spinner instead. Apart from
+// every lane mark (◆ is a task waiting on you, ◇ an idle agent).
+export const MANAGER_GLYPH: Record<ManagerMark, string> = {
+  working: "✦",
+  waiting: "✦",
+  active: "✦",
+  asleep: "✧",
+};
+
+export const MANAGER_WORD: Record<ManagerMark, string> = {
+  working: "manager working",
+  waiting: "manager asks",
+  active: "manager on",
+  asleep: "manager asleep",
+};
+
+export interface ManagerInfo {
+  id: number;
+  state: AgentState;
+  // When its task last changed: its last turn's end, or the start of the
+  // one it is in.
+  lastAt: string | null;
+}
+
+export function managerMark(
+  info: ManagerInfo | null,
+  now: Date,
+  idleMinutes: number,
+): ManagerMark | null {
+  if (!info) return null;
+  if (info.state === AgentState.working || info.state === AgentState.queued)
+    return ManagerMark.working;
+  // Never run as a manager yet (just made or promoted), or stopped.
+  if (!info.lastAt || info.state === AgentState.none || info.state === AgentState.stopped)
+    return ManagerMark.asleep;
+  const idle = now.getTime() - Date.parse(info.lastAt);
+  const warm = idleMinutes <= 0 || idle <= idleMinutes * 60_000;
+  if (!warm) return ManagerMark.asleep;
+  return info.state === AgentState.waiting ? ManagerMark.waiting : ManagerMark.active;
+}
+
 
 export const Section = {
   home: "home",

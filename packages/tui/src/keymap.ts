@@ -415,6 +415,13 @@ const taskActions: BindingSpec<HelpCtx>[] = [
     relevant: isTask,
   },
   {
+    key: "i",
+    cmd: Commands.PROJECT_TALK,
+    desc: "talk to the project's manager (made on your first line)",
+    help: "talk",
+    relevant: (c) => c.item === "project",
+  },
+  {
     key: ".",
     cmd: Commands.ACTIONS,
     desc: "actions: summarize the work, ... (pick one)",

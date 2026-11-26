@@ -154,6 +154,13 @@ export function statusLines(project: ProjectRow): string[] {
   });
 }
 
+// The project's standing, as its manager or the owner last wrote it: first
+// in the status block, one line.
+export function standingLine(project: ProjectRow): string[] {
+  const text = lines(project.standing).join("; ");
+  return text ? [`Standing (${stamp(project.standing_at ?? project.updated_at)}): ${text}`] : [];
+}
+
 // ── placing it in the file ──────────────────────────────────────────────
 
 function between(text: string, begin: string, end: string): { start: number; stop: number } | null {
@@ -278,7 +285,7 @@ export function writeJournal(project: ProjectRow, entry: string, at: string): st
     title: `${project.name}: journal`,
     entry,
     month,
-    status: statusLines(project),
+    status: [...standingLine(store.getProject(project.id) ?? project), ...statusLines(project)],
   });
   for (const [m, entries] of placed.rolled) {
     const archive = archiveFile(project, m);
