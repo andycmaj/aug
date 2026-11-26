@@ -12,6 +12,7 @@ import {
   ModalCommands,
   ModalFilterInput,
   ModalHeader,
+  modalListRows,
   modalNavBindings,
   Markdown,
   useTheme,
@@ -589,10 +590,9 @@ export function ReaderModal(props: {
 }
 
 const SEARCH_ROWS = 14;
-// Rows the go-to modal takes above and below its list (offset, frame, header,
-// filter, the Open | All toggle), so a short terminal shrinks the list instead
-// of the frame running off the bottom.
-const SEARCH_CHROME_ROWS = 11;
+// The card's rows besides its list: padding, header, filter, the gaps and
+// the Open | All toggle. A short terminal shrinks the list, not the frame.
+const SEARCH_OTHER_ROWS = 7;
 const SEARCH_HINT_MAX = 48;
 const SEARCH_TOGGLE_DONE = "search.toggleDone";
 const SEARCH_MODES = [
@@ -623,10 +623,10 @@ export function SearchModal(props: {
   const riker = useRiker();
   const dims = useTerminalDimensions();
   let scrollRef: ScrollBoxRenderable | undefined;
-  // Read once: list navigation takes a fixed page size.
-  const listRows = Math.max(
-    4,
-    Math.min(SEARCH_ROWS, dims().height - SEARCH_CHROME_ROWS),
+  // Every row of the scrollbox holds an item (its padding scrolls with its
+  // content), and the page follows a resize.
+  const listRows = createMemo(() =>
+    modalListRows(SEARCH_ROWS, SEARCH_OTHER_ROWS, dims().height),
   );
   // Re-read only when the store moves, not on every keystroke.
   const docs = createMemo(() => {
@@ -682,7 +682,7 @@ export function SearchModal(props: {
       />
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
-        maxHeight={listRows}
+        maxHeight={listRows()}
         paddingLeft={2}
         paddingRight={2}
       >

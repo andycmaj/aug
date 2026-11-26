@@ -11,6 +11,7 @@ import {
   Modal,
   ModalCommands,
   ModalHeader,
+  modalListRows,
   mergeByCommand,
   navBindings,
   useTheme,
@@ -42,9 +43,9 @@ function digitRange(keys: string): string {
   return run ? `${parts[0]}-${parts[parts.length - 1]}` : keys;
 }
 
-// Rows the modal takes around its scrollbox: its top offset, frame, padding,
-// header and a row below, so the frame's bottom edge stays on screen.
-const CHROME_ROWS = 9;
+// The card's rows besides its scrollbox: padding and header. The list takes
+// the rest of the screen, so the frame's bottom edge stays on it.
+const OTHER_ROWS = 4;
 // Most of the screen, so long descriptions sit on one line.
 const WIDTH_SHARE = 0.8;
 
@@ -97,7 +98,7 @@ export function FocusHelp(props: {
       <ModalHeader title="Keys here" hint="j/k scroll · esc/q/?" paddingX={4} />
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
-        maxHeight={Math.max(6, dims().height - CHROME_ROWS)}
+        maxHeight={modalListRows(Infinity, OTHER_ROWS, dims().height)}
         paddingLeft={4}
         paddingRight={4}
       >
