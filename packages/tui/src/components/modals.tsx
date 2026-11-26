@@ -29,7 +29,7 @@ import { Kind, type DraftAction, type TurnRow } from "@riker/core/types";
 import { ActionTurn } from "./chat-turn";
 import { linkOf } from "./connector-line";
 import { LinkMark } from "./link-mark";
-import { dayClock, ModeToggle } from "./ui";
+import { dayClock, ModeToggle, projectChip } from "./ui";
 
 export function PromptModal(props: {
   title: string;
@@ -719,6 +719,10 @@ export function SearchModal(props: {
                     </text>
                   </box>
                 );
+              const project = () =>
+                hit.item.type === "task" && hit.item.task.project_id
+                  ? projectChip(riker.project(hit.item.task.project_id))
+                  : null;
               return (
                 <box
                   flexDirection="row"
@@ -740,6 +744,14 @@ export function SearchModal(props: {
                       {hit.title}
                     </text>
                   </box>
+                  {/* Which project, so like titles across projects differ. */}
+                  <Show when={project()}>
+                    {(chip: Accessor<string>) => (
+                      <text flexShrink={0} fg={fg() ?? theme.textMuted}>
+                        {`${chip()} ·`}
+                      </text>
+                    )}
+                  </Show>
                   <text flexShrink={0} fg={fg() ?? theme.textMuted}>
                     {truncate(
                       hit.why

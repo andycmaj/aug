@@ -11,7 +11,14 @@ import {
 import { useRiker } from "../context/riker";
 import { nerdFont } from "@riker/core/glyphs";
 import { laneMeta, type Lane, type LaneMeta, type Tone } from "@riker/core/lanes";
-import type { Channel, Priority } from "@riker/core/types";
+import type { Channel, Priority, ProjectRow } from "@riker/core/types";
+
+// A task in a project names it by its short tmux name: the rail's row and
+// the go-to list show the same chip.
+export function projectChip(project: ProjectRow | null): string | null {
+  const name = project?.tmux_session;
+  return name ? `◫ ${name.length > 14 ? `${name.slice(0, 13)}…` : name}` : null;
+}
 
 export function toneColor(theme: Theme, tone: Tone): ThemeColor {
   switch (tone) {
