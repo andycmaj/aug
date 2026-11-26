@@ -10,7 +10,7 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { assistantCall, rememberWhere, whereThingsStand } from "./assistant";
-import { managerCall, pictureKey, projectPicture } from "./manager";
+import { managerCall, managerModel, pictureKey, projectPicture } from "./manager";
 import { think, BrainError, type BrainCall } from "./brain";
 import {
   capabilityAllow,
@@ -515,7 +515,14 @@ export class AgentPool {
     const pick = home
       ? homeModel(config, history, priorRow && !idle ? priorRow : null)
       : null;
-    const left = idle ?? pick?.leave ?? null;
+    // A manager's session too keeps its model: a changed projectManagerModel
+    // starts a new one rather than re-write the cache on the new model.
+    const was = priorRow?.model ?? config.brain.assistantModel;
+    const managerLeave =
+      project && priorRow && !idle && was !== managerModel(config)
+        ? `model ${was} to ${managerModel(config)}`
+        : null;
+    const left = idle ?? pick?.leave ?? managerLeave;
     if (left) log.info("new session", { task: taskId, left: prior, why: left });
     const resume = left ? undefined : prior;
     const sessionId = resume ?? randomUUID();

@@ -347,7 +347,7 @@ Tests live beside their package (`packages/<name>/test/`).
   ones that read as an overview). Like Home it is a conversation, not
   work: `store.ts`'s `WORK` filter keeps it out of every list, its kind out
   of `task_events`, and `runMove` refuses moves on it but `tell` and
-  `stop`. Its turn is the pool's, Assistant-shaped (`managerCall`): the
+  `stop`. Its turn is the pool's, Assistant-shaped (`managerCall`, on `brain.projectManagerModel`, else `assistantModel`): the
   project whole each turn (`projectPicture`, the changed lines on a
   resumed session), asking as `manager RIKER-0000`, which `runMove` scopes
   to its project's tasks and the ones it made (`managerRefuses`,

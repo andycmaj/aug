@@ -60,6 +60,9 @@ export interface RikerConfig {
     // A Home turn that is one short move or lookup (core/home-model.ts) runs
     // on this one instead, when set; empty is off.
     assistantSimpleModel?: string;
+    // A project's manager (core/manager.ts); unset or empty is
+    // assistantModel.
+    projectManagerModel?: string;
   };
   // How many agents may be working at once, chat and coding alike. Past it,
   // chat turns Riker starts by itself and your coding Starts wait their turn;

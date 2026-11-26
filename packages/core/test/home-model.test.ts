@@ -193,13 +193,33 @@ describe("Home's model per turn", () => {
     expect(calls[0].model).toBe(config().brain.agentModel);
   });
 
-  test("a project manager's simple line stays on assistantModel: its moves carry judgment about the plan", async () => {
+  test("a project manager's simple line is not routed: unset projectManagerModel is assistantModel", async () => {
     const p = store.createProject({ name: "rail-polish", tmuxSession: "rail-polish" });
     const manager = store.ensureManager(p.id);
     store.addTurn({ taskId: manager.id, role: TurnRole.you, author: "you", body: "done RIKER-0001" });
     await new AgentPool({ config: simpleOn() }).request(manager.id, "typed", "owner");
     expect(calls[0].model).toBe("sonnet");
     expect(store.getSession(calls[0].sessionId!)!.model).toBe("sonnet");
+  });
+
+  test("a manager runs on projectManagerModel, and a change to it starts a new session", async () => {
+    const source = simpleOn();
+    source.update((c) => ({ ...c, brain: { ...c.brain, projectManagerModel: "opus" } }));
+    const p = store.createProject({ name: "billing", tmuxSession: "billing" });
+    const manager = store.ensureManager(p.id);
+    const pool = new AgentPool({ config: source });
+    store.addTurn({ taskId: manager.id, role: TurnRole.you, author: "you", body: "status" });
+    await pool.request(manager.id, "typed", "owner");
+    expect(calls[0].model).toBe("opus");
+    store.addTurn({ taskId: manager.id, role: TurnRole.you, author: "you", body: "and the next step?" });
+    await pool.request(manager.id, "typed", "owner");
+    expect(calls[1].resume).toBe(calls[0].sessionId);
+    source.update((c) => ({ ...c, brain: { ...c.brain, projectManagerModel: "sonnet" } }));
+    store.addTurn({ taskId: manager.id, role: TurnRole.you, author: "you", body: "what now?" });
+    await pool.request(manager.id, "typed", "owner");
+    expect(calls[2].model).toBe("sonnet");
+    expect(calls[2].resume).toBeUndefined();
+    expect(store.getSession(calls[2].sessionId!)!.model).toBe("sonnet");
   });
 
   test("a session from before models were kept counts as the full model", async () => {

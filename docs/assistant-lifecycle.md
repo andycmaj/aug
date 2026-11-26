@@ -35,7 +35,8 @@ where its cost goes.
    new one. The simple model only starts with a session that starts anyway.
    A project's manager (`core/manager.ts`) is not routed: even a short line
    on its row asks it to judge the plan (unblock the next task, start an
-   agent, rewrite the standing), so it stays on `assistantModel`.
+   agent, rewrite the standing), so it runs on `brain.projectManagerModel`
+   (`assistantModel` when unset), and leaves a session started on another.
 4. **Call.** `assistantCall` (`core/assistant.ts`) builds it:
    - `system`: `assistantSystem(config)`, the role, the riker-tools commands,
      the moves, grants (`grantedNote`, `connectorNote`, `docsNote`) and the
