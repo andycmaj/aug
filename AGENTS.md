@@ -79,7 +79,7 @@ other way (a new package gets a line in its `ALLOWED`).
   run by hand: `script/version.ts` bumps the root package.json (what
   `riker --version` says, `core/version.ts`) and tags vX.Y.Z, the binaries
   go up as the release's assets (`mise use -g github:andycmaj/riker`), and
-  the opentui-apps site is told when `SITE_DISPATCH_TOKEN` is set. The entry tells core where
+  the opentui-apps site is told through the opentui-site-dispatch GitHub App once `SITE_APP_CLIENT_ID`/`SITE_APP_KEY` are set. The entry tells core where
   riker-tools is (`setToolsEntry`, `core/self.ts`); core never reaches up for
   it. Run from a linked worktree, it names the main checkout's copy
   (`lastingEntry`), since briefs and hooks outlive the worktree;
