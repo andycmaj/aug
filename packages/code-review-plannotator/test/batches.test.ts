@@ -180,6 +180,22 @@ describe("the base", () => {
     expect(patch.base).toBe("main");
     expect(splitPatch(patch.text).map((f) => f.file)).toEqual(["mine.ts"]);
   });
+
+  test("origin/<base> for a slashed base only the remote has (a stacked PR's parent)", () => {
+    const { dir, origin } = cloned();
+    git(origin, "checkout", "-qb", "team/parent");
+    write(origin, { "parent.ts": "the parent PR's work\n" });
+    git(origin, "add", ".");
+    git(origin, "commit", "-qm", "parent");
+    git(dir, "fetch", "-q");
+    git(dir, "checkout", "-qb", "team/child", "origin/team/parent");
+    write(dir, { "mine.ts": "mine\n" });
+    git(dir, "add", ".");
+    git(dir, "commit", "-qm", "mine");
+    const patch = patchFor(dir, "team/parent") as Patch;
+    expect(patch.base).toBe("origin/team/parent");
+    expect(splitPatch(patch.text).map((f) => f.file)).toEqual(["mine.ts"]);
+  });
 });
 
 describe("the guide's calls", () => {

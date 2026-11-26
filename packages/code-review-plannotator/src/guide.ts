@@ -143,7 +143,7 @@ function mergeBase(cwd: string, base: string): { ref: string; sha: string } | nu
   const local = git(cwd, ["merge-base", base, "HEAD"]);
   const remoteRef = `origin/${base}`;
   const remote =
-    !base.includes("/") && git(cwd, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remoteRef}`]).ok
+    git(cwd, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remoteRef}`]).ok
       ? git(cwd, ["merge-base", remoteRef, "HEAD"])
       : null;
   const l = local.ok ? local.out.trim() : null;
