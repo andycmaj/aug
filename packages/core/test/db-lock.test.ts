@@ -35,7 +35,7 @@ async function holdWriteLock(file: string, holdMs = 0): Promise<Holder> {
   expect((await lines.read()).value?.trim()).toBe("locked");
   return {
     release: async () => {
-      proc.stdin.end();
+      await proc.stdin.end();
       expect(await proc.exited).toBe(0);
     },
   };

@@ -125,7 +125,7 @@ export const realSpawn: SpawnFn = (argv) => {
   }
   return {
     write: (line) => {
-      proc.stdin.write(line);
+      void proc.stdin.write(line);
       void proc.stdin.flush();
     },
     lines: lines(),

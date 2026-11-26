@@ -380,7 +380,7 @@ export async function claudeBrain(call: BrainCall): Promise<BrainResult> {
   });
   const abort = () => proc.kill();
   call.signal?.addEventListener("abort", abort);
-  proc.stdin.write(call.prompt);
+  await proc.stdin.write(call.prompt);
   await proc.stdin.end();
 
   const acc: StreamAcc = { text: "", result: null, sessionId: null };

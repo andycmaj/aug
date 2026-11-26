@@ -566,7 +566,11 @@ export class Engine {
   }
 
   async pollNow(): Promise<void> {
-    await Promise.all(this.connectors.map((c) => c.pollNow?.()));
+    await Promise.all(
+      this.connectors.map(async (c) => {
+        await c.pollNow?.();
+      }),
+    );
   }
 
   private async advisorTick(force = false): Promise<void> {

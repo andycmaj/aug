@@ -110,7 +110,7 @@ export function claudeAsk(opts: ClaudeAskOptions): ClaudeAsk {
         CLAUDE_CODE_ENTRYPOINT: "code-review-plannotator",
       },
     });
-    proc.stdin.write(prompt);
+    await proc.stdin.write(prompt);
     await proc.stdin.end();
     const [out, err, code] = await Promise.all([
       new Response(proc.stdout).text(),

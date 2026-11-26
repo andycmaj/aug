@@ -26,7 +26,7 @@ async function init(call: BrainCall): Promise<Init> {
     // Connect before init, so a connector that loads is listed as connected.
     env: claudeEnv({ ...brainEnv(call), MCP_CONNECTION_NONBLOCKING: "false" }),
   });
-  proc.stdin.write(call.prompt);
+  await proc.stdin.write(call.prompt);
   await proc.stdin.end();
   const decoder = new TextDecoder();
   let buffer = "";
