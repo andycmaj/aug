@@ -76,7 +76,7 @@ function seedTask(
   t: {
     title: string;
     summary: string;
-    kind: Exclude<Kind, "home" | "system">;
+    kind: Exclude<Kind, "home" | "system" | "manager">;
     priority?: Priority;
     reason: string;
     repo?: string;
@@ -827,6 +827,19 @@ export async function demoBrain(call: BrainCall): Promise<BrainResult> {
       ? `This is the demo, so I answer from a script. You named **${asked}**. In your own riker I'd read it, answer, and move it if you asked: make a coding task from it, put it in a project, start its agent.`
       : `This is the demo, so I answer from a script. There are ${named.length} open tasks. Name one with @ and ask me about it, or tell me to make, move, start or close something.`;
     return { ...done(null), text };
+  }
+  // A project's manager: about one project, read whole each turn.
+  if (call.env?.RIKER_ASKED_BY?.startsWith("manager ")) {
+    const project = call.system?.match(/manager of the project (.+?) in Riker/)?.[1] ?? "this project";
+    const open = [...call.prompt.matchAll(/^ {2}(RIKER-\d{4}) \[/gm)].length;
+    for (const step of [`Bash riker-tools project ${project}`, "Bash riker-tools tasks --project"]) {
+      await sleep(600);
+      call.onStep?.(step);
+    }
+    return {
+      ...done(null),
+      text: `This is the demo, so I answer from a script. I manage **${project}**: ${open} open task${open === 1 ? "" : "s"}. In your own riker I'd plan its work as tasks in order, keep its standing, and start, stop or close its tasks when you say.`,
+    };
   }
   if ("ideas" in props) return done({ ideas: [] });
   if ("verdict" in props)

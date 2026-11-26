@@ -31,6 +31,10 @@ export const Kind = {
   task: "task",
   // The one Home thread: you and the Assistant. Not work, never closes.
   home: "home",
+  // A project's manager: one per project, made when the owner first talks
+  // to the project (or promoted from a task in it). Like Home, a
+  // conversation and not work, so nothing that lists tasks sees it.
+  manager: "manager",
   // Riker asking about its own install: a brain doc proposal, a shipped doc
   // you did not get, the onboarding offer. No agent; accept or reject.
   system: "system",
@@ -163,6 +167,10 @@ export interface ProjectRow {
   // config (core/digests.ts).
   journal: number | null;
   story: number | null;
+  // Where the project stands, in its manager's (or the owner's) words, and
+  // when that was written.
+  standing: string;
+  standing_at: string | null;
   created_at: string;
   updated_at: string;
   archived_at: string | null;
@@ -601,6 +609,8 @@ export const SpendRole = {
   learn: "learn",
   redraft: "redraft",
   assistant: "assistant",
+  // A project's manager (core/manager.ts).
+  manager: "manager",
   general: "general",
   slack: "slack",
   action: "action",

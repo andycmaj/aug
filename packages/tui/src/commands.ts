@@ -77,6 +77,7 @@ export const Commands = {
   ACTIONS: "task.actions",
   PR_DASH: "pr.dash",
   TYPE: "chat.type",
+  PROJECT_TALK: "project.talk",
   DOC_ACCEPT: "docs.accept",
   DOC_REJECT: "docs.reject",
   DOC_REVIEW: "docs.review",

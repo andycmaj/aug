@@ -305,6 +305,14 @@ Marks that change neither lifecycle nor agent state:
 - **slipped** (derived): a theirs row quiet 3 days; red bar. Never for
   blocked.
 - **project, goal**: the project chip, nesting under the project row.
+- **a project's manager** (`core/manager.ts`, `managerMark` in
+  `core/rail.ts`): a project row wears `✦` beside its name while its
+  manager's session would resume (a turn ended within `chat.idleMinutes`),
+  in the warning color when the manager asked something, the spinner while
+  it works, and a muted `✧` once it sleeps past that (or was just made or
+  promoted and has not run). Its sub line leads with `manager on`,
+  `manager asks` or `manager working`. No manager, no mark: a project
+  starts without one, and the owner's first line on its row makes it.
 - **PR chip**: what is in the way on its PR. Shown in any lane.
 - **Win** (AUG-0050), new:
   - Table `wins(day, task_id, pinned_at)`, primary key `(day, task_id)`;

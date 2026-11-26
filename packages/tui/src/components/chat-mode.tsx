@@ -16,6 +16,7 @@ import { useShell } from "./shell";
 import { PaletteGroup, type PaletteExtra } from "../palette";
 import { actionsFor } from "@riker/core/task-actions";
 import { OPEN_REVIEW_TITLE } from "@riker/core/guide-turn";
+import { overseerCandidates } from "@riker/core/manager";
 
 export function ChatMode() {
   const riker = useRiker();
@@ -28,13 +29,42 @@ export function ChatMode() {
     extraPalette: () => taskActionEntries(),
   });
 
+  // A task overseeing its project can become the project's manager: offered
+  // on the task, and on the project for the tasks that read as one.
+  const managerEntries = (): PaletteExtra[] => {
+    const item = isPaneFocused("rail") ? riker.cursorItem() : riker.selected();
+    if (item?.type === "project") {
+      if (riker.manager(item.project.id)) return [];
+      return overseerCandidates(riker.tasksForProject(item.project.id)).map((t) => ({
+        id: `manager-${t.id}`,
+        group: PaletteGroup.row,
+        label: `Make ${taskRef(t.id)} ${t.title} its manager`,
+        inContext: true,
+        run: () => shell.actions.promoteManager(t),
+      }));
+    }
+    if (item?.type !== "task") return [];
+    const task = riker.task(item.task.id);
+    if (!task?.project_id || task.kind === Kind.home || task.kind === Kind.system) return [];
+    if (riker.manager(task.project_id)) return [];
+    return [
+      {
+        id: "manager-promote",
+        group: PaletteGroup.row,
+        label: "Make it its project's manager",
+        inContext: true,
+        run: () => shell.actions.promoteManager(task),
+      },
+    ];
+  };
+
   // Every action that applies to the row the keys act on, one entry each.
   const taskActionEntries = (): PaletteExtra[] => {
     const item = isPaneFocused("rail") ? riker.cursorItem() : riker.selected();
-    if (item?.type !== "task") return [];
+    if (item?.type !== "task") return managerEntries();
     const task = riker.task(item.task.id);
     if (!task) return [];
-    return actionsFor(riker.desk.config(), task).map((a) => ({
+    return actionsFor(riker.desk.config(), task).map((a): PaletteExtra => ({
       id: `action-${a.name}`,
       group: PaletteGroup.row,
       label: `Action: ${a.title}`,
@@ -52,7 +82,7 @@ export function ChatMode() {
             run: () => shell.actions.openGuideReview(task),
           }]
         : [],
-    );
+    ).concat(managerEntries());
   };
 
   // `a` from anywhere (the Board too) lands in Home's box.
@@ -72,8 +102,11 @@ export function ChatMode() {
     setActivePane("input");
   });
 
+  // On a project's row, the line goes to its manager (made on the first).
   const onSay = (text: string) => {
     const item = riker.selected();
+    if (item?.type === "project")
+      return shell.actions.sayToProject(item.project.id, text);
     if (item?.type !== "task") return;
     const task = riker.task(item.task.id);
     if (task) shell.actions.say(task, text);
@@ -81,6 +114,12 @@ export function ChatMode() {
 
   const onCompose = (initial: string, keep: (text: string) => void) => {
     const item = riker.selected();
+    if (item?.type === "project")
+      return shell.actions.compose(
+        riker.desk.ensureManager(item.project.id),
+        initial,
+        keep,
+      );
     if (item?.type !== "task") return;
     const task = riker.task(item.task.id);
     if (task) shell.actions.compose(task, initial, keep);
@@ -99,17 +138,20 @@ export function ChatMode() {
         started: false,
         pr: false,
       };
-    if (item.type !== "task")
+    if (item.type === "project") {
+      // A project's row stops its manager's turn.
+      const manager = riker.manager(item.project.id);
       return {
-        item: item.type,
+        item: "project",
         kind: null,
         hasDraft: false,
-        live: false,
+        live: manager?.agent_state === AgentState.working,
         coding: false,
         watching: false,
         started: false,
         pr: false,
       };
+    }
     const t = item.task;
     const live =
       t.agent_state === AgentState.working ||

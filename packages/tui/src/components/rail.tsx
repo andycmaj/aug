@@ -29,6 +29,10 @@ import { Lane, LANE_META } from "@riker/core/lanes";
 import {
   ageLabel,
   baseKey,
+  MANAGER_GLYPH,
+  MANAGER_WORD,
+  ManagerMark,
+  managerMark,
   RAIL_FILTERS,
   SECTION_TITLES,
   TAG_MARK,
@@ -66,6 +70,8 @@ interface RowView {
   // Tag marks beside the title (★ Win, ◉ watched), where the row's place
   // does not already say it.
   tags?: string;
+  // Theirs when not the tag color (a project's manager mark).
+  tagColor?: ThemeColor;
   sub: string;
   lead?: string;
   chip?: { text: string; color: ThemeColor } | null;
@@ -159,8 +165,8 @@ export function Rail(props: { actions: TaskActions }) {
       [Commands.NAV_UP]: () => move((i) => i - 1),
       [Commands.NAV_TOP]: () => move(() => 0),
       [Commands.NAV_BOTTOM]: () => move((_, n) => n - 1),
-      // enter selects the row under the cursor; a project's view
-      // has nothing to type into, so the rail keeps focus.
+      // enter selects the row under the cursor; on a project's row the
+      // rail keeps focus (space folds it, i talks to its manager).
       [Commands.OPEN]: () => {
         const item = riker.cursorItem();
         riker.select(riker.cursorKey());
@@ -439,6 +445,13 @@ function RailRow(props: {
             if (i.lane === Lane.ready) review++;
             if (i.lane === Lane.approve) ready++;
           }
+        // Its manager, once the owner has talked to it: on while its
+        // session would resume, asleep past the idle hour.
+        const manager = managerMark(
+          item.manager,
+          now,
+          riker.desk.config().chat.idleMinutes,
+        );
         return {
           bar: item.working ? theme().info : theme().secondary,
           bar2: theme().borderSubtle ?? theme().textMuted,
@@ -446,7 +459,19 @@ function RailRow(props: {
           markColor: item.working ? theme().info : theme().secondary,
           title: item.project.name,
           titleColor: theme().text,
+          tags: manager
+            ? manager === ManagerMark.working
+              ? riker.spinner()
+              : MANAGER_GLYPH[manager]
+            : undefined,
+          tagColor:
+            manager === ManagerMark.asleep
+              ? theme().textMuted
+              : manager === ManagerMark.waiting
+                ? theme().warning
+                : theme().accent,
           sub: [
+            manager && manager !== ManagerMark.asleep ? MANAGER_WORD[manager] : "",
             `${item.open} open`,
             item.working ? `${item.working} working` : "",
             item.goals ? `goals ${item.goalsMet}/${item.goals}` : "",
@@ -476,7 +501,7 @@ function RailRow(props: {
           <text bg={view().bar}> </text>
           <text fg={lit() ? selFg() : view().markColor}>{view().mark}</text>
           <Show when={view().tags}>
-            <text fg={lit() ? selFg() : theme().warning}>{view().tags}</text>
+            <text fg={lit() ? selFg() : (view().tagColor ?? theme().warning)}>{view().tags}</text>
           </Show>
           <text
             fg={lit() ? selFg() : view().titleColor}
@@ -586,6 +611,18 @@ export function RailLegend() {
       mark: "⊟",
       markColor: theme.info,
       word: "project, agents working",
+    },
+    {
+      bar: theme.secondary,
+      mark: MANAGER_GLYPH.active,
+      markColor: theme.accent,
+      word: "project's manager on",
+    },
+    {
+      bar: theme.secondary,
+      mark: MANAGER_GLYPH.asleep,
+      markColor: theme.textMuted,
+      word: "project's manager asleep",
     },
   ];
   const columns = () => {

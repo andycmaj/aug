@@ -21,7 +21,12 @@ export type Track = (tables: readonly Table[]) => void;
 // A task's brief can be edited until an agent has started from it.
 export function briefEditable(taskId: number): boolean {
   const task = store.getTask(taskId);
-  return Boolean(task) && task?.kind !== Kind.home && !store.latestSession(taskId);
+  return (
+    Boolean(task) &&
+    task?.kind !== Kind.home &&
+    task?.kind !== Kind.manager &&
+    !store.latestSession(taskId)
+  );
 }
 
 function rail(now: Date, pending: Set<number>): RailSection[] {
@@ -93,6 +98,7 @@ type Read = readonly [readonly Table[], (...args: never[]) => unknown];
 function reads(desk: LiveCheck) {
   return {
     home: [[T.tasks], store.homeTask],
+    manager: [[T.tasks], store.managerOf],
     task: [[T.tasks], store.getTask],
     tasksForProject: [[T.tasks], store.tasksForProject],
     tasksWithPendingAction: [[T.turns], store.tasksWithPendingAction],
@@ -122,7 +128,16 @@ function reads(desk: LiveCheck) {
     searchSources: [[T.messages, T.turns], searchSources],
     closedTasks: [[T.tasks], store.closedTasks],
     rail: [
-      [T.tasks, T.messages, T.projects, T.goals, T.prStatus, T.taskBlockers, T.wins, T.taskLinks],
+      [
+        T.tasks,
+        T.messages,
+        T.projects,
+        T.goals,
+        T.prStatus,
+        T.taskBlockers,
+        T.wins,
+        T.taskLinks,
+      ],
       rail,
     ],
     blockers: [[T.taskBlockers], store.blockersOf],

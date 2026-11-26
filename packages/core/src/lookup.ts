@@ -9,7 +9,7 @@ import { storyBlock } from "./story";
 import { transcript } from "./transcript";
 import * as store from "./store";
 import { timerLine, timerRef } from "./timers";
-import type { RailProject } from "./rail";
+import type { ManagerInfo, RailProject } from "./rail";
 import {
   AgentState,
   GoalStatus,
@@ -125,6 +125,18 @@ export function projectSummary(p: ProjectRow): RailProject {
     repos: store.projectRepos(p),
     goalsMet: goals.filter((g) => g.status === GoalStatus.met).length,
     goals: goals.length,
+    manager: managerInfo(p.id),
+  };
+}
+
+export function managerInfo(projectId: number): ManagerInfo | null {
+  const manager = store.managerOf(projectId);
+  if (!manager) return null;
+  return {
+    id: manager.id,
+    state: manager.agent_state,
+    // Moves when a turn finishes: tasks, not the sessions every step bumps.
+    lastAt: manager.updated_at,
   };
 }
 
@@ -194,6 +206,8 @@ export function projectDetail(p: ProjectRow, config?: RikerConfig): string {
     projectLine(p),
     config ? projectSwitches(config, p) : "",
     p.brief ? `\nBrief:\n${p.brief}` : "\nNo brief yet.",
+    standingBlock(p),
+    managerLine(p),
     goals.length
       ? `\nGoals:\n${goals
           .map((g) =>
@@ -208,6 +222,21 @@ export function projectDetail(p: ProjectRow, config?: RikerConfig): string {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+// Where the project stands, as its manager or the owner last wrote it.
+export function standingBlock(p: ProjectRow): string {
+  return p.standing
+    ? `\nStanding (${p.standing_at?.slice(0, 16) ?? "earlier"}):\n${p.standing}`
+    : "";
+}
+
+// Whom to ask about it: Home is told the project has a manager to tell.
+function managerLine(p: ProjectRow): string {
+  const manager = store.managerOf(p.id);
+  return manager
+    ? `Manager: ${store.taskRef(manager.id)} (tell it with: move tell ${store.taskRef(manager.id)} --text ...)`
+    : "";
 }
 
 // What the project's journal and its tasks' stories default to, and why.
@@ -226,6 +255,8 @@ export function projectBrief(p: ProjectRow): string {
   return [
     projectLine(p),
     p.brief ? `\nBrief:\n${p.brief}` : "\nNo brief yet.",
+    standingBlock(p),
+    managerLine(p),
     goals.length ? `\nGoals:\n${goals.map(goalLine).join("\n")}` : "\nNo goals yet.",
     links.length ? `\nDocs:\n${links.map((l) => `- ${linkLine(l)}`).join("\n")}` : "",
   ]

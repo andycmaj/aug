@@ -569,7 +569,9 @@ export const MOVES: Record<string, MoveSpec> = {
           ? (store.projectRepos(project)[0] ?? null)
           : null;
       const brief = briefText(args, "brief");
-      const fromId = args.from ? store.parseTaskRef(args.from) : agentTask(by);
+      const fromId = args.from
+        ? store.parseTaskRef(args.from)
+        : (agentTask(by) ?? askingManager(by)?.id ?? null);
       const from = fromId ? store.getTask(fromId) : null;
       if (args.from && !from) throw new MoveError(`no task ${args.from}`);
       const task = store.batch(() => {
@@ -943,6 +945,30 @@ export const MOVES: Record<string, MoveSpec> = {
       return `${project.name}'s brief rewritten`;
     },
   },
+  project_standing: {
+    help: "Write where a project stands: a few lines on where it is, what is next, what blocks it. Its journal, its row and every look at the project show it",
+    task: false,
+    positional: "project",
+    args: {
+      project: { help: "the project's name", required: true },
+      text: { help: "the whole new standing", required: true },
+    },
+    run(desk, _task, args, by) {
+      const project = projectNamed(args.project);
+      desk.setStanding(project.id, args.text, by);
+      return `${project.name}'s standing written`;
+    },
+  },
+  manager: {
+    help: "Make a task its project's manager: an overview or overseer task becomes the agent the owner talks to on the project's row, its chat kept. Not while its agent runs",
+    task: true,
+    args: {},
+    run(desk, task, _args, by) {
+      const made = desk.promoteManager(task!.id, by);
+      if (!made.ok) throw new MoveError(made.why);
+      return `${ref(task)} is ${made.project.name}'s manager now: talk to it on the project's row`;
+    },
+  },
   journal: {
     help: "Turn a project's journal (a file of its finished sessions and task events) on, off, or back to config's default; --stories sets its tasks' story default instead",
     task: false,
@@ -1107,6 +1133,72 @@ export const AGENT_MOVES: ReadonlySet<string> = new Set([
   "project_link",
 ]);
 
+// A project's manager asks as `manager RIKER-0301` (RIKER_ASKED_BY): its
+// project's tasks are its to run, Riker's own settings and other projects
+// stay the owner's and the Assistant's.
+export const managerAsker = (manager: TaskRow): string =>
+  `manager ${store.taskRef(manager.id)}`;
+
+export function askingManager(by: string): TaskRow | null {
+  if (!by.startsWith("manager ")) return null;
+  const id = store.parseTaskRef(by.slice("manager ".length));
+  const task = id ? store.getTask(id) : null;
+  return task?.kind === Kind.manager && task.project_id !== null ? task : null;
+}
+
+export const MANAGER_DENIED: ReadonlySet<string> = new Set([
+  "noise",
+  "repo",
+  "onboard",
+  "propose_doc",
+  "remember",
+  "project_new",
+  "adopt",
+  "project_archive",
+  "manager",
+]);
+
+// Why a manager may not make this move, or null. A move that names a
+// project gets the manager's own when it names none.
+function managerRefuses(
+  manager: TaskRow,
+  verb: string,
+  spec: MoveSpec,
+  task: TaskRow | null,
+  args: Record<string, string>,
+): string | null {
+  const project = store.getProject(manager.project_id ?? 0);
+  if (!project) return "this manager's project is gone";
+  if (MANAGER_DENIED.has(verb))
+    return `${verb} is the owner's move: ask them to make it in Home`;
+  const outside = (t: TaskRow) =>
+    t.project_id !== project.id && t.from_task_id !== manager.id;
+  if (task?.id === manager.id) return "that is you, the manager, not a task";
+  if (task && outside(task))
+    return `${ref(task)} is not in ${project.name}: a manager changes only its project's tasks`;
+  // schedule names its task with --task.
+  if (!spec.task && args.task?.trim()) {
+    const id = store.parseTaskRef(args.task);
+    const named = id ? store.getTask(id) : null;
+    if (named && outside(named))
+      return `${ref(named)} is not in ${project.name}: a manager changes only its project's tasks`;
+  }
+  // Moving a task out of the project is its to do; any other project named
+  // must be its own.
+  if ("project" in spec.args && verb !== "project") {
+    if (!args.project?.trim()) args.project = project.name;
+    else if (findProject(args.project)?.id !== project.id)
+      return `a manager works only in ${project.name}`;
+  }
+  if (verb === "goal_set") {
+    const id = store.parseGoalRef(args.goal ?? "");
+    const goal = id ? store.getGoal(id) : null;
+    if (goal && goal.project_id !== project.id)
+      return `${args.goal} is not ${project.name}'s goal`;
+  }
+  return null;
+}
+
 // What the onboarding interview's agent (on a System task) may ask for.
 const INTERVIEW_MOVES: ReadonlySet<string> = new Set(["propose_doc"]);
 
@@ -1142,6 +1234,17 @@ export async function runMove(
       };
     if (task.kind === Kind.home)
       return { ok: false, result: `${args.task} is Home, not a task` };
+    // A manager is talked to, or stopped mid-turn; it is not work to move.
+    if (task.kind === Kind.manager && verb !== "tell" && verb !== "stop")
+      return {
+        ok: false,
+        result: `${args.task} is ${store.getProject(task.project_id ?? 0)?.name ?? "a project"}'s manager, not a task: tell it, or stop it`,
+      };
+  }
+  const manager = askingManager(by);
+  if (manager) {
+    const refused = managerRefuses(manager, verb, spec, task, args);
+    if (refused) return { ok: false, result: refused };
   }
   const own = agentTask(by);
   if (own !== null) {

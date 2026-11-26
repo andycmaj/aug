@@ -466,15 +466,19 @@ const SQL_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
 // Task changes into task_events. After migrate: merged_at is an added
 // column. A chat session "ends" with every turn, so only a coding (tmux)
-// session's end is an event. Home is not work, so it has no events.
+// session's end is an event. Home and a project's manager are not work, so
+// they have no events. The two that name kinds are made again at every
+// start, so a kind added later reaches a file that already has them.
 const EVENT_TRIGGERS = `
+DROP TRIGGER IF EXISTS ev_task_created;
+DROP TRIGGER IF EXISTS ev_task_status;
 CREATE TRIGGER IF NOT EXISTS ev_task_created AFTER INSERT ON tasks
-WHEN NEW.kind != 'home'
+WHEN NEW.kind NOT IN ('home', 'manager')
 BEGIN
   INSERT INTO task_events (task_id, kind, detail, at) VALUES (NEW.id, 'created', NEW.kind, NEW.created_at);
 END;
 CREATE TRIGGER IF NOT EXISTS ev_task_status AFTER UPDATE OF status ON tasks
-WHEN NEW.status != OLD.status AND NEW.kind != 'home'
+WHEN NEW.status != OLD.status AND NEW.kind NOT IN ('home', 'manager')
   AND (NEW.status != 'open' OR OLD.status IN ('done', 'dropped'))
 BEGIN
   INSERT INTO task_events (task_id, kind, detail, at) VALUES (
@@ -580,6 +584,8 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "hub", column: "retired_at", ddl: "TEXT" },
   { table: "hub", column: "retired_why", ddl: "TEXT" },
   { table: "hub", column: "superseded_by", ddl: "INTEGER REFERENCES hub(id)" },
+  { table: "projects", column: "standing", ddl: "TEXT NOT NULL DEFAULT ''" },
+  { table: "projects", column: "standing_at", ddl: "TEXT" },
 ];
 
 // Agent states renamed or merged (docs/rail-status-design.md): blocked is

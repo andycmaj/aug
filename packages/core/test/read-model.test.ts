@@ -128,6 +128,7 @@ describe("read model", () => {
     const pending = reads.tasksWithPendingAction();
     const calls: Record<ReadName, (r: ReadModel) => unknown> = {
       home: (r) => r.home(),
+      manager: (r) => r.manager(project.id),
       task: (r) => r.task(plain.id),
       tasksForProject: (r) => r.tasksForProject(project.id),
       tasksWithPendingAction: (r) => r.tasksWithPendingAction(),
