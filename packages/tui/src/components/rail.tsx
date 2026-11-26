@@ -40,16 +40,16 @@ import {
 } from "@riker/core/rail";
 import { prChip, prQueueWord } from "@riker/core/pr";
 import { actionRailWord, taskRef } from "@riker/core/rows";
-import { AgentState, Kind, TaskStatus, type ProjectRow } from "@riker/core/types";
-import { CHANNEL_WORD, priorityColor, toneColor, useLaneMeta } from "./ui";
+import { AgentState, Kind, TaskStatus } from "@riker/core/types";
+import {
+  CHANNEL_WORD,
+  priorityColor,
+  projectChip,
+  toneColor,
+  useLaneMeta,
+} from "./ui";
 import { ConnectorLine } from "./connector-line";
 import type { TaskActions } from "./task-actions";
-
-// A task in a project shows the project's name where its channel would be.
-function projectChip(project: ProjectRow | null): string | null {
-  const name = project?.tmux_session;
-  return name ? `◫ ${name.length > 14 ? `${name.slice(0, 13)}…` : name}` : null;
-}
 
 export const RAIL_WIDTH = 46;
 // A task under its project's row sits this much further in.
