@@ -231,6 +231,7 @@ export class FakeMux implements Mux {
     const branch = w.branch.startsWith("pr:") ? `pr-head-${w.branch.slice(3)}` : w.branch;
     const path = `${w.repoPath}.${branch}`;
     this.worktrees.push({ ...w, path });
+    if (!this.checkouts.has(path)) this.checkouts.set(path, { kind: "worktree", main: w.repoPath });
     return { path, branch };
   }
 
