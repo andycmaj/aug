@@ -386,16 +386,22 @@ export function useActions(dialogs: Dialogs) {
     );
   }
 
-  // d on a done or dropped row reopens it instead (reopen below). Work
-  // whose PR has not landed asks first, No under the cursor.
+  // d on a done or dropped row reopens it instead (reopen below). A task
+  // not merged asks first, No under the cursor, saying what its PR or
+  // branch says when either says more.
   function done(task: TaskRow) {
     if (isClosed(task)) return false;
-    const unmerged = riker.unmergedPr(task);
-    if (!unmerged) return closeDone(task);
+    void desk.unmergedWork(task.id).then(
+      (open) => (open ? confirmDone(task, open.why) : closeDone(task)),
+      () => confirmDone(task, null),
+    );
+  }
+
+  function confirmDone(task: TaskRow, why: string | null) {
     dialogs.show(() => (
       <ChoiceModal
         title={`Mark ${taskRef(task.id)} done?`}
-        hint={`${unmerged}. Mark it done anyway?`}
+        hint={`${why ?? "It is not merged"}. Mark it done anyway?`}
         choices={[
           { label: "No, keep it open", run: () => {} },
           { label: "Yes, mark it done", run: () => closeDone(task) },

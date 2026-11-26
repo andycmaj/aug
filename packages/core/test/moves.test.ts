@@ -73,6 +73,17 @@ describe("the moves bus", () => {
     expect(store.getTask(task.id)!.status).toBe(TaskStatus.done);
   });
 
+  test("done on a branch with unmerged commits and no PR closes it and says so", async () => {
+    const task = store.createTask({ title: "Stream Deck", kind: Kind.coding, channel: "owner", repo: "acme/api", branch: "deck" });
+    fake.merged.set("deck", false);
+    fake.ahead.set("deck", 4);
+    const move = ask("done", { task: store.taskRef(task.id) });
+    await engine.drainMoves();
+    expect(store.getMove(move.id)!.result).toBe(
+      `${store.taskRef(task.id)} marked done; Branch deck has 4 commits not merged; reopen undoes it`,
+    );
+  });
+
   test("two drains at once never run a move twice", async () => {
     const task = engine.desk.newTask("Ping Sam", Kind.general);
     ask("tell", { task: store.taskRef(task.id), text: "hello" });

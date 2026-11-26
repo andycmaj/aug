@@ -8,7 +8,7 @@ import type { RikerConfig } from "./config";
 import { mergeUndone, workMerged } from "./lifecycle";
 import { errorMessage, logger } from "./log";
 import { type Mux, mux } from "./mux";
-import { taskPrStatus } from "./pr";
+import { taskPrStatus, unmergedPr } from "./pr";
 import { repoPath } from "./repos";
 import * as store from "./store";
 import { PrState, TaskStatus, type TaskRow } from "./types";
@@ -124,4 +124,33 @@ export async function checkMerges(config: RikerConfig): Promise<number> {
     if (await checkOne(config, task, path ? keys.get(path) : undefined)) changed++;
   }
   return changed;
+}
+
+// Whether the task's work has merged, for the owner's yes before done: null
+// when it has (merged_at, or its PR or branch landed before the sweep marked
+// it), else why not. Every other task asks, with or without a PR or branch;
+// `why` is what its PR (read first: open, a draft, closed) or its branch
+// (commits not in the base) says, null when neither says more. Git failing
+// leaves `why` empty and never holds up done.
+export interface NotMerged {
+  why: string | null;
+}
+
+export async function unmergedWork(config: RikerConfig, task: TaskRow): Promise<NotMerged | null> {
+  if (task.merged_at) return null;
+  const pr = taskPrStatus(task)?.status ?? null;
+  if (pr?.state === PrState.merged) return null;
+  if (pr?.state === PrState.closed) return { why: `PR #${pr.number} was closed, not merged` };
+  if (pr) return { why: unmergedPr(task) };
+  const path = repoPath(config, task.repo);
+  if (!task.branch || !path) return { why: null };
+  try {
+    if (await branchLanded(path, task.branch, undefined)) return null;
+    const ahead = await mux().branchAhead(path, task.branch);
+    if (!ahead) return { why: null };
+    return { why: `Branch ${task.branch} has ${ahead} commit${ahead === 1 ? "" : "s"} not merged` };
+  } catch (err) {
+    log.warn("unmerged check failed", { task: task.id, error: errorMessage(err) });
+    return { why: null };
+  }
 }
