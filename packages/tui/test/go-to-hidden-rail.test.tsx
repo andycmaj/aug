@@ -49,7 +49,7 @@ async function boot() {
 }
 
 // The rail's pills row ends with the inbox badge.
-const railShown = (frame: string) => /\d+\s+inbox \d+/.test(frame);
+const railShown = (frame: string) => /\d+\s+✉ \d+/.test(frame);
 
 test("go to from the Canvas with the rail hidden keeps a pane focused", async () => {
   const { press, goTo, renderer, frame } = await boot();
