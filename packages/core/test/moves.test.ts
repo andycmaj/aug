@@ -148,6 +148,8 @@ describe("the moves bus", () => {
 describe("the moves bus when changes counts trigger rows (bun 1.3)", () => {
   // `run` is each statement's own property, and query() caches statements,
   // so wrap each one once as query() hands it out.
+  // Called only through .call(this, ...) below.
+  // oxlint-disable-next-line typescript/unbound-method
   const plainQuery = Database.prototype.query;
   const wrapped = new WeakSet<object>();
   beforeEach(() => {

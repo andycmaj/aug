@@ -25,7 +25,6 @@ import { paths } from "./paths";
 import { checkMapped, pathNeed, repoPath, type PathNeed } from "./repos";
 import * as store from "./store";
 import {
-  AgentState,
   SessionKind,
   TaskStatus,
   TurnRole,

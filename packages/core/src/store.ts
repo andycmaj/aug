@@ -4,7 +4,7 @@
 
 import type { SQLQueryBindings } from "bun:sqlite";
 import { db, now } from "./db";
-import { noteReadBy, projectRepos, taskRef, turnSteps } from "./rows";
+import { noteReadBy, projectRepos, taskRef } from "./rows";
 import {
   ActionState,
   AgentState,

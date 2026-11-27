@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG } from "../src/config";
 import { Engine } from "../src/engine";
 import { Lane } from "../src/lanes";
 import { handleDone } from "../src/hooks";

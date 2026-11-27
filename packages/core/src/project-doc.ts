@@ -110,7 +110,7 @@ export function parseProjectDoc(text: string): ParsedProject {
     } else if (heading === DOCS.toLowerCase()) {
       part = "docs";
     } else if (part === "brief") {
-      if (!(brief.length === 0 && /^# /.test(line))) {
+      if (!(brief.length === 0 && line.startsWith("# "))) {
         brief.push(raw);
       }
     } else if (part === "goals") {

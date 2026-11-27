@@ -336,7 +336,7 @@ export function installHooks(file = claudeSettingsPath()): string {
   ensureHome();
   writeFileSync(guardPath(), guardScript());
   chmodSync(guardPath(), 0o755);
-  const hooks = { ...(settings.hooks ?? {}) };
+  const hooks = { ...settings.hooks };
   for (const [claudeEvent, rikerEvent, matcher] of HOOK_EVENTS) {
     hooks[claudeEvent] = [
       ...(hooks[claudeEvent] ?? []),

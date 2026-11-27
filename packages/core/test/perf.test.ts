@@ -97,7 +97,7 @@ describe("perf", () => {
     resetPerf();
     const db = openPerfDb();
     const buckets = JSON.stringify(
-      new Array(BOUNDS.length + 1).fill(0).map((_, i) => (i === 3 ? 2 : 0)),
+      Array.from({ length: BOUNDS.length + 1 }, (_, i) => (i === 3 ? 2 : 0)),
     );
     const old = new Date(Date.now() - 48 * 3600_000).toISOString().slice(0, 16);
     db.run(
@@ -168,12 +168,12 @@ describe("perf", () => {
 
 describe("quantile", () => {
   test("never past max, zero when empty", () => {
-    const b = new Array(BOUNDS.length + 1).fill(0);
+    const b = Array.from({ length: BOUNDS.length + 1 }, () => 0);
     expect(quantile(b, 0.5, 0)).toBe(0);
     b[BOUNDS.length] = 1; // past 30s
     expect(quantile(b, 0.95, 45_000)).toBeLessThanOrEqual(45_000);
     expect(quantile(b, 0.95, 45_000)).toBeGreaterThanOrEqual(30_000);
-    const one = new Array(BOUNDS.length + 1).fill(0);
+    const one = Array.from({ length: BOUNDS.length + 1 }, () => 0);
     one[6] = 1; // (20, 50]
     expect(quantile(one, 0.5, 30)).toBeLessThanOrEqual(30);
   });

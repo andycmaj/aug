@@ -24,9 +24,10 @@ async function work(steps: [string, Record<string, unknown>][]) {
   for (const [tool, input] of steps) {
     await sleep(900);
     handleHook("tool", { tool_name: tool, tool_input: input }, env);
-    const detail = String(
-      input.file_path ?? input.command ?? input.pattern ?? "",
-    );
+    const detail =
+      [input.file_path, input.command, input.pattern].find(
+        (v) => typeof v === "string",
+      ) ?? "";
     console.log(`${orange("⏺")} ${tool}(${detail})`);
     console.log(dim("  ⎿  ok"));
   }

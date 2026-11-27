@@ -155,7 +155,7 @@ export async function pollGithub(
     query.set("since", sinceIso);
   }
   const notifications = (await api(
-    `notifications?${query}`,
+    `notifications?${query.toString()}`,
   )) as GhNotification[];
   // Oldest first so a thread's messages land in the order they were written.
   const messages = await mapLimit(

@@ -815,17 +815,15 @@ describe("review requests become coding tasks", () => {
     taskClosed(unmapped.taskId!, "reviewed");
     testConfig().update((c) => ({ ...c, repos: { "acme/api": "/src/api" } }));
     const m = store.insertMessage({
-      ...{
-        channel: "github" as const,
-        externalId: "gh:other",
-        threadKey: "github:acme/api#41",
-        author: "erin",
-        authorName: "erin",
-        title: "acme/api#41 PR: other (review requested)",
-        body: "and this one",
-        url: "https://github.com/acme/api/pull/41",
-        receivedAt: new Date(Date.UTC(2026, 10, 5, 12, 0)).toISOString(),
-      },
+      channel: "github" as const,
+      externalId: "gh:other",
+      threadKey: "github:acme/api#41",
+      author: "erin",
+      authorName: "erin",
+      title: "acme/api#41 PR: other (review requested)",
+      body: "and this one",
+      url: "https://github.com/acme/api/pull/41",
+      receivedAt: new Date(Date.UTC(2026, 10, 5, 12, 0)).toISOString(),
       meta: {
         repo: "acme/api",
         number: 41,

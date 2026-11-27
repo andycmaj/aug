@@ -30,20 +30,6 @@ function issueTask(threadKey = "github:acme/ledger#214") {
   });
 }
 
-function message(threadKey: string, type: string) {
-  return store.insertMessage({
-    channel: "github",
-    externalId: `gh:${threadKey}`,
-    threadKey,
-    author: "erin",
-    authorName: "erin",
-    title: "t",
-    body: "b",
-    receivedAt: new Date().toISOString(),
-    meta: { repo: "acme/ledger", type, reason: "review_requested" },
-  });
-}
-
 const view = (v: GhPrView) => readPrView(v);
 
 describe("reading gh pr view", () => {
