@@ -268,10 +268,11 @@ not ring (`ringsForOwner`). Opening the task on the Canvas
 (or `x` on its Inbox row) reads it, and the row goes. Due sits right under
 Home so a timer coming due is never below the fold. Due, then Wins, are
 walked first (`WALKED`). The rail holds tasks and projects only:
-messages and Advisor ideas are on the Board's Inbox tab (4), and the
-`✉ N` at the end of the pills row (open ideas plus messages triage
-could not place) says when one needs you. There is no other header: the
-pills already count the work (AUG-0139).
+messages and Advisor ideas are on the Board's Inbox tab (4), and `✉ N`
+(open ideas plus messages triage could not place) says when one needs
+you, at the right end of the rail's foot beside the connections. It is
+not rail work, so it stays out of the pills. There is no other header:
+the pills already count the work (AUG-0139).
 
 ### Filters
 

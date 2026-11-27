@@ -54,9 +54,11 @@ test("the rail survives a write that turns a task row into a heading", async () 
   expect(errors.map(String)).toEqual([]);
 });
 
-// One header over the rail: the filter pills, with the inbox badge (✉ and
-// its count) at the end. A second row repeating the pills' counts said the same thing twice.
-test("the rail's only header is the filter pills and the inbox badge", async () => {
+// One header over the rail: the filter pills. A second row repeating the
+// pills' counts said the same thing twice. The inbox badge (✉ and its count)
+// is not work on the rail, so it sits at the foot's right end, beside the
+// connections.
+test("the rail's only header is the filter pills; the inbox badge is at its foot", async () => {
   home = mkdtempSync(join(tmpdir(), "riker-rail-render-"));
   process.env.RIKER_HOME = home;
   const engine = installFixture("demo");
@@ -73,8 +75,12 @@ test("the rail's only header is the filter pills and the inbox badge", async () 
   const rail = lines.map((l) => l.slice(0, 46));
   const pills = rail.findIndex((l) => /◆ \d/.test(l));
   expect(pills).toBeGreaterThanOrEqual(0);
-  expect(rail[pills]).toMatch(/✉ \d+/);
+  expect(rail[pills]).not.toContain("✉");
   expect(rail.filter((l) => /◆ \d/.test(l))).toHaveLength(1);
+  const foot = rail.findIndex((l) => /○ github/.test(l));
+  expect(foot).toBeGreaterThan(pills);
+  expect(rail[foot].trimEnd()).toMatch(/○ slack\s+✉ \d+$/);
+  expect(rail[foot].trimEnd().length).toBeGreaterThan(40);
   const above = rail.slice(0, pills).join("");
   expect(above).not.toMatch(/\d+ open/);
   expect(above).not.toContain("Work");
@@ -144,7 +150,7 @@ test("a filter names what it shows, under the pills, until 0 clears it", async (
   expect(rail().join("\n")).not.toContain("0 all");
   await press("1");
   const lines = rail();
-  const pills = lines.findIndex((l) => /✉ \d+/.test(l));
+  const pills = lines.findIndex((l) => /◆ \d/.test(l));
   const named = lines.findIndex((l) => l.includes("0 all"));
   expect(named).toBeGreaterThan(pills);
   expect(lines[named]).toContain("agent waiting on you");
