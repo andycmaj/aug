@@ -16,6 +16,7 @@ import {
   type TaskRow,
 } from "../src/types";
 import {
+  carriesOver,
   dayBounds,
   Outcome,
   outcomeOf,
@@ -260,6 +261,51 @@ describe("winsDay", () => {
       TaskEventKind.done,
       TaskEventKind.merged,
     ]);
+  });
+
+  test("an earlier day's Win carries over while its task is open; today's and closed ones do not", () => {
+    const yday = shiftDay(today(), -1);
+    const open = task("still open");
+    const later = task("for later");
+    const closed = task("closed");
+    const other = task("not a Win");
+    for (const t of [open, later, closed]) {
+      store.addWin(yday, t.id);
+    }
+    store.updateTask(later.id, { status: TaskStatus.later });
+    store.updateTask(closed.id, {
+      status: TaskStatus.done,
+      closed_at: noon(yday),
+      closed_by: "you",
+    });
+    store.addTurn({
+      taskId: other.id,
+      role: TurnRole.you,
+      body: "hi",
+      startedAt: noon(yday),
+    });
+    const past = winsDay(yday, now());
+    const carry = (id: number) =>
+      carriesOver(
+        [...past.wins, ...past.also].find((r) => r.task.id === id)!,
+        yday,
+        { day: today(), wins: store.winsOn(today()) },
+      );
+    expect(carry(open.id)).toBe(true);
+    expect(carry(later.id)).toBe(true);
+    expect(carry(closed.id)).toBe(false);
+    expect(carry(other.id)).toBe(false);
+
+    // Pinned today already: nothing to carry, there or on today's row.
+    store.addWin(today(), open.id);
+    expect(carry(open.id)).toBe(false);
+    const present = winsDay(today(), now());
+    expect(
+      carriesOver(present.wins[0], today(), {
+        day: today(),
+        wins: [],
+      }),
+    ).toBe(false);
   });
 
   test("an empty day is empty", () => {
