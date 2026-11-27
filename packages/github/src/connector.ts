@@ -197,7 +197,7 @@ export class GithubConnector implements Connector {
   }
 
   // New notifications into the inbox, then the cursor. Who gh is logged in
-  // as is asked once a process: it was half of every quiet poll.
+  // as is asked once a process: asked per poll, it is half of a quiet one.
   private async notifications(api: GhApi): Promise<number> {
     const startedAt = now();
     const since =

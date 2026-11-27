@@ -196,7 +196,7 @@ describe("the GitHub status line", () => {
 });
 
 // The turn that merged a PR should not wait for the clock, nor for a
-// GraphQL rate limit (RIKER-0223's merge sat unmarked behind one).
+// GraphQL rate limit.
 describe("a task's PR at its turn's end", () => {
   const merged: PrFetch = async (refs) => ({
     views: new Map(refs.map((r) => [r.url, { state: "MERGED" }])),
