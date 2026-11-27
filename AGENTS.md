@@ -520,10 +520,41 @@ Tests live beside their package (`packages/<name>/test/`).
   leaves Markdown and template literal contents alone. `bun run format`
   fixes the braces and the formatting; the rest is by hand.
 - Never use `any`. Node/Bun types only.
-- Comments explain why, not what. No JSDoc.
+- Comments follow **Comments** below. No JSDoc.
 - Enums as `const X = {...} as const`, never TS `enum`.
 - Read Solid props lazily. Annotate `<Show>`/`<Match>` accessor children (they
   do not infer here).
+
+## Comments
+
+A comment is short and stays true with nothing but the file to read it by.
+
+- Say why, or the constraint the code cannot show (a tool's limit, a
+  workaround, an order that matters). Never what the line plainly does:
+  delete a comment that only restates the code.
+- No history. No task refs (`RIKER-0123`, `AUG-0045`), agent sessions,
+  past versions, what changed or why it changed: that is the commit
+  message. A ref used as data (a parser's example input, a demo task) is
+  fine.
+- Code that reads old data (a migration, aug's names) says what that data
+  looks like, not how it came to be.
+- A file opens with a few lines on what it is for, not a design doc; one
+  that needs more points at `docs/`.
+- A test says what it holds, not which bug it came from.
+
+```ts
+// Bad: history, and a ref that means nothing in a year.
+// RIKER-0223: ctrl+o added, since ctrl+[ used to get folded into Esc.
+
+// Good: the constraint, standing alone.
+// tmux folds ctrl+[ into Esc; ctrl+o gets through.
+
+// Bad: restates the code. Delete it.
+// Skip closed tasks.
+if (task.status === "closed") {
+  continue;
+}
+```
 
 ## Testing the TUI
 
