@@ -5,7 +5,7 @@
 
 import { laneOf, type Lane } from "./lanes";
 import { localDay } from "./rail";
-import { parseTaskRef } from "./rows";
+import { isClosed, parseTaskRef } from "./rows";
 import { taskPrStatus } from "./pr";
 import * as store from "./store";
 import {
@@ -128,6 +128,22 @@ function outcomeNow(task: TaskRow): Outcome {
     return Outcome.later;
   }
   return Outcome.open;
+}
+
+// A Win from a day before today whose task is still open now and not
+// pinned today yet: z pins it as one of today's Wins again
+// (desk.carryWin). A done or dropped one is left as it came out.
+export function carriesOver(
+  row: DayRow,
+  day: string,
+  today: { day: string; wins: readonly number[] },
+): boolean {
+  return (
+    row.win &&
+    day < today.day &&
+    !isClosed(row.task) &&
+    !today.wins.includes(row.task.id)
+  );
 }
 
 // What lifts a non-Win into "also done": a close, a merge, a finish.

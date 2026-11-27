@@ -556,6 +556,11 @@ export function useActions(dialogs: Dialogs) {
     showToast(said.text, 3000, said.ok ? undefined : "error");
   }
 
+  function carryWin(task: TaskRow) {
+    const said = desk.carryWin(task.id);
+    showToast(said.text, 3000, said.ok ? undefined : "error");
+  }
+
   function acceptDocs(task: TaskRow) {
     showToast(riker.desk.acceptDocs(task.id), 4000);
   }
@@ -1561,6 +1566,7 @@ export function useActions(dialogs: Dialogs) {
     stop,
     done,
     reopen,
+    carryWin,
     send,
     say,
     sayToProject,

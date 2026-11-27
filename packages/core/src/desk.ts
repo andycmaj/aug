@@ -30,6 +30,7 @@ import {
   taskReopened,
 } from "./lifecycle";
 import { localDay, MAX_WINS, readFolds, writeFolds } from "./rail";
+import { isClosed } from "./rows";
 import type { RikerConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
 import { unmergedWork, type NotMerged } from "./merge";
@@ -1379,6 +1380,20 @@ export class Desk {
           : `${ref}: no earlier story version`;
       },
     );
+  }
+
+  // A Win from an earlier day, still unfinished, pinned again for today.
+  // A closed one stays where it came out.
+  carryWin(taskId: number, at = new Date()): { ok: boolean; text: string } {
+    const task = store.getTask(taskId);
+    const ref = store.taskRef(taskId);
+    if (!task) {
+      return { ok: false, text: `no task ${ref}` };
+    }
+    if (isClosed(task)) {
+      return { ok: false, text: `${ref} is ${task.status}: nothing to carry` };
+    }
+    return this.setWin(taskId, true, at);
   }
 
   toggleWin(taskId: number, at = new Date()): { ok: boolean; text: string } {

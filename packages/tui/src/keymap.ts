@@ -55,6 +55,8 @@ export interface HelpCtx {
   inboxWork?: boolean;
   // The Wins tab shows today (l and 0 have nowhere to go).
   winsToday?: boolean;
+  // A Wins row that is an earlier day's Win still open: z carries it to today.
+  winCarry?: boolean;
   // A Docs row a task or project owns (t has somewhere to go).
   docOwned?: boolean;
   // A Docs row someone attached, so it can be taken off.
@@ -604,6 +606,14 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "leave the box",
       help: "leave",
     },
+    // As it detaches from an agent. jk or kj typed fast does the same
+    // (rail-chord.ts): two letters, so no binding here.
+    {
+      key: "ctrl+]",
+      cmd: Commands.INPUT_TO_RAIL,
+      desc: "back to the rail (or type jk / kj fast)",
+      help: "rail",
+    },
   ],
   // While an error toast is up, over every pane and modal (its layer
   // exists only then): Esc dismisses the newest and does nothing else. An
@@ -621,7 +631,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     {
       key: "ctrl+]",
       cmd: Commands.TERMINAL_DETACH,
-      desc: "detach from the terminal",
+      desc: "detach from the terminal (on an agent, or type jk / kj fast)",
       help: "detach",
     },
     {
@@ -731,6 +741,13 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "Wins: go to the task",
       help: "go to task",
       relevant: (c) => onWins(c) && c.item !== null,
+    },
+    {
+      key: "z",
+      cmd: Commands.WINS_CARRY,
+      desc: "Wins: pin an earlier day's open Win as one of today's again",
+      help: "win today",
+      relevant: (c) => onWins(c) && Boolean(c.winCarry),
     },
     {
       key: "h",
