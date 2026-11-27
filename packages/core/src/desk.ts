@@ -52,6 +52,7 @@ import { capReached } from "./spend";
 import {
   ActionEvent,
   ActionVia,
+  actionBase,
   actionNamed,
   invocation,
   makesCheckout,
@@ -77,7 +78,7 @@ import type {
   TriageOutcome,
 } from "./plugins";
 import { reviewedPr, taskPr } from "./pr";
-import type { HeadInput } from "./pr-head";
+import type { HeadInput, ReviewStart } from "./pr-head";
 import {
   AgentState,
   IdeaStatus,
@@ -347,8 +348,10 @@ export class Desk {
         error: "a System task has no agent: y accepts, x rejects",
       };
     }
+    const review = opts.review ?? this.reviewStart(task);
+    const withReview = review ? { ...opts, review } : opts;
     return this.undos.trackAsync(
-      () => this.drivers.for(task).start(task, opts),
+      () => this.drivers.for(task).start(task, withReview),
       (r) =>
         r.type === "started" || r.type === "queued"
           ? {
@@ -516,6 +519,14 @@ export class Desk {
       source: { head },
       rewrite: reviewedPr(task)?.url === pr.url,
     };
+  }
+
+  // An agent started on a PR asked of the owner reviews the PR as pushed:
+  // its worktree (made by wt from refs that may be old) is brought to the
+  // head first, with the base fetched.
+  private reviewStart(task: TaskRow): ReviewStart | undefined {
+    const head = reviewedPr(task) ? this.prHead(task) : undefined;
+    return head ? { head, base: actionBase(task) } : undefined;
   }
 
   // A guide's review closed (`output` is what plannotator printed). A

@@ -64,6 +64,9 @@ export function useAgentStart(
         showToast(`${taskRef(taskId)}: ${result.reason}`);
         return;
       case "started":
+        if (result.warning) {
+          showToast(`${taskRef(taskId)}: ${result.warning}`, 6000, "error");
+        }
         if (!coding) {
           showToast(`${taskRef(taskId)}: agent started`);
           return;

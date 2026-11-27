@@ -296,10 +296,13 @@ Tests live beside their package (`packages/<name>/test/`).
   trigger) needs it on disk. `desk.prepareAction` makes it in between, on
   the task's branch with no agent (`projects.ensureCheckout`), so a review
   triage files offers its guide on arrival and never runs it by itself.
-  A worktree stays where it was made, so before the guide reads one (and
-  before its review opens again) `core/pr-head.ts` fetches the PR's head
-  and fast-forwards a clean worktree on its branch; anything it cannot
-  move is reviewed as is, said to be possibly out of date. The findings
+  A worktree stays where it was made (wt makes it from the refs on disk
+  and fetches nothing), so before the guide reads one, before its review
+  opens again, and before an agent starts on a PR asked of the owner
+  (`readyReview`), `core/pr-head.ts` fetches the PR's head and base and
+  fast-forwards a clean worktree on its branch; anything it cannot move is
+  reviewed as is, said to be possibly out of date, and a start whose
+  worktree still shows no change says so. The findings
   keep the commit they were written against, and a review reopened after
   the PR moved past it leaves them out.
   Triage marks that PR as one to review (`reviewedPr`, `core/pr.ts`): its

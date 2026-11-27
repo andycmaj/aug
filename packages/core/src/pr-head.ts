@@ -4,8 +4,10 @@
 // PR's head is asked of GitHub, fetched with its base, and a clean worktree
 // on the PR's branch is brought to it. Nothing uncommitted is ever moved: a
 // dirty worktree, one on another branch, or a fetch or read that failed is
-// left as it is, and the line says the review may be out of date.
+// left as it is, and the line says the review may be out of date. An agent
+// started on a PR asked of the owner gets the same, first (readyReview).
 
+import { patchFor } from "@riker/code-review-plannotator/guide";
 import { errorMessage, logger } from "./log";
 import type { PrRef } from "./pr";
 import type { PrHead, ReviewSource } from "./plugins";
@@ -149,6 +151,56 @@ async function bringTo(
     moved: true,
     stale: false,
     line: `the PR's history was rewritten: moved to its head ${short(want.oid)} (was ${short(had)})`,
+  };
+}
+
+export interface ReviewStart {
+  head: HeadInput;
+  // The PR's base branch, as its last read said.
+  base: string;
+}
+
+export interface ReviewReady {
+  // For the task's thread, which the agent's brief carries.
+  line: string;
+  // For the owner, when the review will not show what the PR is: the
+  // worktree still shows no change, or what it shows may be old.
+  warning: string | null;
+}
+
+// Before an agent starts on a PR asked of the owner. wt makes the worktree
+// from the refs on disk and fetches nothing, so a remote branch last fetched
+// before the author pushed (still at the base) gives a worktree with no
+// change at all. The PR's head and base are fetched and a clean worktree is
+// brought to the head; if the patch is still empty after that, it says so
+// rather than leave the owner a review with nothing in it.
+export async function readyReview(
+  cwd: string,
+  review: ReviewStart,
+  branches: (string | null | undefined)[],
+): Promise<ReviewReady> {
+  const synced = await syncPrHead({
+    cwd,
+    input: review.head,
+    base: review.base,
+    branches,
+  });
+  const patch = patchFor(cwd, review.base);
+  const empty =
+    "error" in patch && patch.error.startsWith("no change against")
+      ? `the worktree shows ${patch.error} after fetching`
+      : null;
+  if (empty) {
+    log.warn("review start: empty patch", { pr: review.head.pr.url, empty });
+  }
+  const said = [synced.line, empty].filter(Boolean).join("; ");
+  return {
+    line: `Before the review started: ${said}.`,
+    warning: empty
+      ? `nothing to review: ${empty}${synced.stale ? ` (${synced.line})` : ""}`
+      : synced.stale
+        ? synced.line
+        : null,
   };
 }
 
