@@ -100,7 +100,7 @@ export function ChatMode() {
                 label: `Action: ${OPEN_REVIEW_TITLE}`,
                 hint: ".",
                 inContext: true,
-                run: () => shell.actions.openGuideReview(task),
+                run: () => void shell.actions.openGuideReview(task),
               },
             ]
           : [],

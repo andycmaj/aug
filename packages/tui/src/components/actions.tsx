@@ -685,8 +685,8 @@ export function useActions(dialogs: Dialogs) {
   }
 
   // The last guide's review, with its findings posted again: no model run.
-  function openGuideReview(task: TaskRow) {
-    const opened = desk.guideReview(task.id);
+  async function openGuideReview(task: TaskRow) {
+    const opened = await desk.guideReview(task.id);
     if ("error" in opened) {
       showToast(opened.error, 5000, "error");
       return;
@@ -814,7 +814,7 @@ export function useActions(dialogs: Dialogs) {
                   {
                     label: OPEN_REVIEW_TITLE,
                     hint: "the last guide, no run",
-                    run: () => openGuideReview(task),
+                    run: () => void openGuideReview(task),
                   },
                 ]
               : [],
@@ -916,7 +916,7 @@ export function useActions(dialogs: Dialogs) {
   function promoteManager(task: TaskRow) {
     const made = desk.promoteManager(task.id);
     if (!made.ok) {
-      return void showToast(made.why, 4000, "error");
+      return showToast(made.why, 4000, "error");
     }
     riker.select(`p${made.project.id}`);
     showToast(
@@ -1422,7 +1422,7 @@ export function useActions(dialogs: Dialogs) {
           if (!manager) {
             return false;
           }
-          return void stop(manager);
+          return stop(manager);
         }
         return onTask(stop, true)();
       },

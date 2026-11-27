@@ -42,6 +42,9 @@ interface WinsLine {
 
 // Kept across tab switches, like the Board's tab. null is today, so the
 // tab follows the clock past midnight.
+// A ref and a space, so a longer prefix never wraps it onto a second line.
+const REF_WIDTH = taskRef(0).length + 1;
+
 const [focusDay, setFocusDay] = createSignal<string | null>(null);
 const cursor = listCursor();
 
@@ -302,16 +305,17 @@ function WinsView(props: {
     const o = OUTCOME_LOOK[r.outcome];
     return { mark: o.mark, word: o.word, color: toneColor(theme, o.tone) };
   };
-  const titleWidth = () => Math.max(16, Math.min(56, props.width - 70));
+  const titleWidth = () =>
+    Math.max(16, Math.min(56, props.width - 62 - REF_WIDTH));
 
   return (
     <box flexDirection="column" flexGrow={1} flexBasis={0} paddingLeft={1}>
       <box flexDirection="row" gap={2} flexShrink={0} paddingBottom={1}>
         <text fg={theme.textMuted}>
           {[
-            "h the day before",
-            props.days[0]?.isToday ? null : "l the day after · 0 today",
-            props.canCarry ? "z on an open Win: win today" : null,
+            "h earlier",
+            props.days[0]?.isToday ? null : "l later · 0 today",
+            props.canCarry ? "z win today" : null,
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -333,7 +337,7 @@ function WinsView(props: {
               <text fg={fg(lk.color)} width={2} flexShrink={0}>
                 {lk.mark}
               </text>
-              <text fg={fg(theme.textMuted)} width={8} flexShrink={0}>
+              <text fg={fg(theme.textMuted)} width={REF_WIDTH} flexShrink={0}>
                 {taskRef(l.row.task.id)}
               </text>
               <text fg={fg(theme.text)} width={titleWidth()} flexShrink={0}>
@@ -345,7 +349,7 @@ function WinsView(props: {
               <text fg={fg(theme.textMuted)} flexGrow={1}>
                 {truncate(
                   rowSays(l.row),
-                  Math.max(10, props.width - titleWidth() - 46),
+                  Math.max(10, props.width - titleWidth() - 38 - REF_WIDTH),
                 )}
               </text>
             </>

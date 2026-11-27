@@ -4,7 +4,7 @@
 // read, only when the owner runs the guide.
 
 import type { PrRef } from "@riker/core/pr";
-import type { ReviewContext, ReviewSource } from "@riker/core/plugins";
+import type { PrHead, ReviewContext, ReviewSource } from "@riker/core/plugins";
 
 export interface ReviewContextData {
   viewer: { login: string };
@@ -56,6 +56,27 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
     }
   }
 }`;
+
+// Where the PR's head is now, read just before the guide fetches it.
+const HEAD_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) { headRefOid headRefName }
+  }
+}`;
+
+interface PrHeadData {
+  repository: {
+    pullRequest: { headRefOid: string; headRefName: string } | null;
+  } | null;
+}
+
+export function readPrHead(pr: PrRef, data: PrHeadData): PrHead {
+  const node = data.repository?.pullRequest;
+  if (!node?.headRefOid) {
+    throw new Error(`${pr.repo}#${pr.number} not found`);
+  }
+  return { oid: node.headRefOid, branch: node.headRefName };
+}
 
 // Long words are cut: the guide sends this with every batch.
 const BODY_MAX = 4000;
@@ -156,21 +177,24 @@ export type GraphqlRun = (
 ) => Promise<unknown>;
 
 export function githubReviews(run: GraphqlRun): ReviewSource {
+  async function ask<T>(query: string, pr: PrRef): Promise<T> {
+    const [owner, name] = pr.repo.split("/");
+    const answer = (await run(query, {
+      owner: owner!,
+      name: name!,
+      number: pr.number,
+    })) as { data?: T; errors?: { message: string }[] };
+    if (!answer.data) {
+      throw new Error(answer.errors?.[0]?.message ?? "no answer");
+    }
+    return answer.data;
+  }
   return {
     async context(pr) {
-      const [owner, name] = pr.repo.split("/");
-      const answer = (await run(QUERY, {
-        owner: owner!,
-        name: name!,
-        number: pr.number,
-      })) as {
-        data?: ReviewContextData;
-        errors?: { message: string }[];
-      };
-      if (!answer.data) {
-        throw new Error(answer.errors?.[0]?.message ?? "no answer");
-      }
-      return readReviewContext(pr, answer.data);
+      return readReviewContext(pr, await ask<ReviewContextData>(QUERY, pr));
+    },
+    async head(pr) {
+      return readPrHead(pr, await ask<PrHeadData>(HEAD_QUERY, pr));
     },
   };
 }

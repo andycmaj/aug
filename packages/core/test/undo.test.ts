@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG } from "../src/config";
 import { db } from "../src/db";
 import { Engine } from "../src/engine";
 import { HELD_FOR_START } from "../src/lifecycle";

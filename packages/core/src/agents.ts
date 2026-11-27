@@ -58,7 +58,6 @@ import { labeled } from "./rows";
 import { storyBlock } from "./story";
 import * as store from "./store";
 import {
-  AgentState,
   Kind,
   SessionKind,
   SpendRole,

@@ -135,7 +135,11 @@ describe("search", () => {
     store.setWatching(watched.id, true);
     const hits = find("cert");
     // Watched, it is listed under Watching too, and found at its own row.
-    expect(hits.map((h) => [h.title, h.section]).sort()).toEqual([
+    expect(
+      hits
+        .map((h) => [h.title, h.section])
+        .sort((a, b) => a[0]!.localeCompare(b[0]!)),
+    ).toEqual([
       ["Cert rollout", "Tasks"],
       ["Renew the cert", "For later"],
     ]);

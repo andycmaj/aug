@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_CONFIG } from "../src/config";
 import { Lane, laneOf } from "../src/lanes";
 import { Engine } from "../src/engine";
 import { checkMerges, unmergedWork } from "../src/merge";

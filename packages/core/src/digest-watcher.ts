@@ -102,7 +102,8 @@ export function sliceText(jsonl: string): { text: string; changed: boolean } {
       }
       if (
         p.name === "Bash" &&
-        /\bgit\s+commit\b/.test(String(p.input?.command ?? ""))
+        typeof p.input?.command === "string" &&
+        /\bgit\s+commit\b/.test(p.input.command)
       ) {
         changed = true;
       }

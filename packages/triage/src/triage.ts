@@ -342,7 +342,7 @@ export interface Inbound {
   config: TriageConfig;
   // The model's verdict. Asked on first call and only then, so a message a
   // gate claims costs nothing.
-  judged(): Promise<Judged>;
+  judged: () => Promise<Judged>;
 }
 
 export interface TriageRule {

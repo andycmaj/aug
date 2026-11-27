@@ -95,8 +95,8 @@ describe("a follow-up", () => {
     addFollowup(theirs.id, local(21, 9), "b", "assistant");
     addFollowup(slack.id, local(21, 9), "c", "assistant via Slack");
     await tick(local(21, 9));
-    expect([...store.ringingTimers().keys()].sort()).toEqual(
-      [mine.id, theirs.id, slack.id].sort(),
+    expect([...store.ringingTimers().keys()].sort((a, b) => a - b)).toEqual(
+      [mine.id, theirs.id, slack.id].sort((a, b) => a - b),
     );
     engine.desk.seenTimers(mine.id);
     expect(store.ringingTimers().has(mine.id)).toBe(false);

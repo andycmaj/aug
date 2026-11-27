@@ -159,8 +159,18 @@ export interface ReviewContext {
   lastReviewed: string | null;
 }
 
+// Where a PR's head is now: its commit and the branch it is on.
+export interface PrHead {
+  oid: string;
+  branch: string;
+}
+
 export interface ReviewSource {
   context(pr: PrRef): Promise<ReviewContext>;
+  // The PR's head as GitHub has it now, so the guide reviews the code as
+  // pushed rather than as its worktree was made. A source without it (the
+  // sim) reviews the worktree as it is.
+  head?(pr: PrRef): Promise<PrHead>;
 }
 
 export interface RikerPlugin {

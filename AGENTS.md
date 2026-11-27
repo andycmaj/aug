@@ -32,7 +32,8 @@ other way (a new package gets a line in its `ALLOWED`).
   sections (`configSection(key, defaults, merge)`: core keeps what the file
   holds under that key as written, the plugin reads it whole with
   `section.of(config)`), a `reviews` source (what the guide reads beside a
-  PR asked of the owner, and the commit they last reviewed) and
+  PR asked of the owner, the commit they last reviewed, and where a PR's
+  head is now) and
   `assistant` lines for the Assistant's system prompt. Core's vocabulary stays open: a `Channel` is a string, a
   `DraftAction` a `type` plus the plugin's own fields. An entry point hands
   the engine its list (`rikerPlugins()` in `tui/src/plugins.ts`, which
@@ -295,6 +296,12 @@ Tests live beside their package (`packages/<name>/test/`).
   trigger) needs it on disk. `desk.prepareAction` makes it in between, on
   the task's branch with no agent (`projects.ensureCheckout`), so a review
   triage files offers its guide on arrival and never runs it by itself.
+  A worktree stays where it was made, so before the guide reads one (and
+  before its review opens again) `core/pr-head.ts` fetches the PR's head
+  and fast-forwards a clean worktree on its branch; anything it cannot
+  move is reviewed as is, said to be possibly out of date. The findings
+  keep the commit they were written against, and a review reopened after
+  the PR moved past it leaves them out.
   Triage marks that PR as one to review (`reviewedPr`, `core/pr.ts`): its
   guide's review opens in Plannotator's PR mode, whose Post to GitHub
   sends the owner's review and closes the task, and nothing goes to the
@@ -510,7 +517,9 @@ Tests live beside their package (`packages/<name>/test/`).
 ## TypeScript
 
 - `bun run lint` is oxlint then `oxfmt --check`; show it passing beside
-  `bun run typecheck`. oxlint (`.oxlintrc.json`) wants every `if`, `else`,
+  `bun run typecheck`. oxlint (`.oxlintrc.json`) runs its correctness
+  rules (no unused imports or variables, among them; `no-control-regex` is
+  off, since terminal code matches escapes), wants every `if`, `else`,
   `for` and `while` body braced, nested ones too, and runs type-aware rules
   on the real compiler: no floating or misused promises, no `await` on a
   non-promise, no switch that misses a case of its union without a

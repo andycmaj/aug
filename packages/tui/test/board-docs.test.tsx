@@ -93,6 +93,15 @@ test("Wins still lists today's Wins and what else got done", async () => {
   expect(frame()).toContain("Also done today");
 });
 
+test("Wins keeps each task's whole ref on its row's one line", async () => {
+  const { board, frame } = await boot();
+  await board("1");
+  const row = frame()
+    .split("\n")
+    .find((l) => l.includes("September overtime by site"));
+  expect(row).toContain(store.taskRef(5));
+});
+
 test("z on yesterday's open Win pins it for today; with five today it says so", async () => {
   const { press, board, frame } = await boot();
   const today = localDay(new Date());
@@ -103,7 +112,8 @@ test("z on yesterday's open Win pins it for today; with five today it says so", 
   const [carry, refused] = open;
   store.addWin(yday, carry.id);
   await board("1");
-  expect(frame()).toContain("z on an open Win: win today");
+  // The tab's hint names it; the footer does too, on the row.
+  expect(frame()).toContain("h earlier · z win today");
 
   // Walk down to the first row z applies to: the footer names it there.
   const walkToCarry = async () => {
@@ -119,7 +129,7 @@ test("z on yesterday's open Win pins it for today; with five today it says so", 
   expect(frame()).toContain(`${store.taskRef(carry.id)} is a Win today (`);
   // Yesterday's Win is not touched, and z is no longer offered on it.
   expect(store.winsOn(yday)).toContain(carry.id);
-  expect(frame()).not.toContain("z on an open Win: win today");
+  expect(frame()).not.toContain("z win today");
 
   // Today full: z says so and pins nothing.
   for (const t of open.slice(2, 2 + (5 - store.winsOn(today).length))) {
@@ -134,7 +144,7 @@ test("z on yesterday's open Win pins it for today; with five today it says so", 
 });
 
 test("Docs lists the demo's PRs, issues and project doc, one row per address", async () => {
-  const { press, board, find, frame } = await boot();
+  const { board, find, frame } = await boot();
   await board("6");
   expect(frame()).toContain("6 Docs");
   expect(frame()).toContain("month-end close runbook");
@@ -191,7 +201,7 @@ test("Enter shows the address and owners; L attaches it elsewhere; x takes it of
   expect(frame()).toContain("Yes, take it off");
   await press("return");
   const left = [task.id, other.id].map((id) => store.linksForTask(id).length);
-  expect(left.sort()).toEqual([0, 1]);
+  expect(left.sort((a, b) => a - b)).toEqual([0, 1]);
 });
 
 test("f cycles kinds; a PR its branch opened has nothing to take off", async () => {
