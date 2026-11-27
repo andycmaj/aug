@@ -1,4 +1,4 @@
-// AUG-0140: a task is made without the owner only when an escalation rule
+// A task is made without the owner only when an escalation rule
 // names the message (triage.escalate); other work waits in the Inbox, and
 // m makes it a task. Joined messages fold into one Inbox row per task.
 
