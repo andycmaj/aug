@@ -1,5 +1,5 @@
 // Claude Docs from a real headless `claude -p`, under a task agent's own
-// tools, allow rules and dontAsk mode (AUG-0119). Costs tokens and needs the
+// tools, allow rules and dontAsk mode. Costs tokens and needs the
 // claude.ai Claude Docs connector, so it runs only with RIKER_REAL_CLAUDE=1:
 //   RIKER_REAL_CLAUDE=1 bun test test/docs-grant-real.test.ts
 // Nothing here writes a doc: the write is only ever denied.
@@ -64,7 +64,7 @@ describe.skipIf(!process.env.RIKER_REAL_CLAUDE)(
     test("ungranted, a doc's create never runs and the turn says what to grant", async () => {
       freshHome();
       setBrain(claudeBrain);
-      // Some connector grant, as in AUG-0402: with no mcp__ rule at all no
+      // Some connector grant: with no mcp__ rule at all no
       // connector loads (--strict-mcp-config) and the tool is absent, not denied.
       const config = granted(["slack.read"]);
       const got = await run(

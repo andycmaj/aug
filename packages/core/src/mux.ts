@@ -1,9 +1,10 @@
-// The one door to tmux, worktrunk and the checkouts on disk. tmux owns every coding agent's claude,
-// so it outlives Riker and you can reach it from any client; Riker only tags what
-// it made and reads the tags back. Identity is the @riker_project / @riker_task
-// user options, never a name, so renaming a session or window breaks nothing.
-// Only this file imports libtmux (alpha, pinned exactly): its API churn and
-// any macOS trouble stay here. Tests swap in a fake with setMux.
+// The one door to tmux, worktrunk and the checkouts on disk. tmux owns every
+// coding agent's claude, so it outlives Riker and you can reach it from any
+// client; Riker only tags what it made and reads the tags back. Identity is the
+// @riker_project / @riker_task user options, never a name, so renaming a
+// session or window breaks nothing. Only this file imports libtmux (alpha,
+// pinned exactly): its API churn and any macOS trouble stay here. Tests swap in
+// a fake with setMux.
 
 import { randomUUID } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
@@ -919,21 +920,15 @@ export class TmuxMux implements Mux {
     sessionId: string,
     windowId: string,
   ): string[] {
-    // One client process makes a session of its own, links the task's window
-    // into it and drops the placeholder, so the session holds claude and
-    // nothing else. Linked, not grouped: tmux 3.7's choose-tree draws nothing
-    // at all while any session group exists. The options make it a plain
-    // view: no status bar, no prefix (keys reach claude), gone as soon as Riker
-    // detaches. Riker itself may run inside tmux, which refuses to nest while
-    // TMUX is set.
-    // It is still an ordinary session, the most recent one, so a bare
-    // `tmux a`, switch-client or a destroyed session can drop your own
-    // terminal in here with no prefix (and keep it alive past Riker). Any
-    // client but Riker's is sent on to the project session. In a hook,
-    // client_name is the session's most recent client (usually Riker's), so
-    // the one that came in is hook_client, and only run-shell -C expands it
-    // for -c. The id is escaped because tmux expands $VARS when the hook
-    // runs.
+    // A session of its own holding only the task's window, linked rather
+    // than grouped (tmux 3.7's choose-tree draws nothing while any session
+    // group exists): no status bar, no prefix, gone when Riker detaches.
+    // TMUX is unset, since tmux refuses to nest.
+    // It is still the most recent session, so a bare `tmux a` could land
+    // your own terminal here with no prefix: any client but Riker's is sent
+    // on to the project session. In a hook that client is hook_client (not
+    // client_name), which only run-shell -C expands for -c, and the id is
+    // escaped because tmux expands $VARS when the hook runs.
     const bounce =
       `if -F "#{!=:#{hook_client},#{${CLIENT_OPTION}}}" ` +
       `"run-shell -C \\"switch-client -c '#{hook_client}' -t '${sessionId.replaceAll("$", "\\\\$")}'\\""`;

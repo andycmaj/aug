@@ -179,8 +179,8 @@ function checkoutLine(task: TaskRow, cwd: string): string {
 
 // The guide's patch: against the PR's base, so a PR stacked on another
 // shows only its own files, as Plannotator's diff against its parent does.
-// A base this checkout cannot find (the parent's branch never fetched) is
-// taken against main instead, as before the PR's base was known.
+// A base this checkout cannot find (the parent's branch never fetched)
+// falls back to main.
 export function guidePatch(
   task: TaskRow,
   cwd: string,
@@ -563,8 +563,9 @@ async function reviewScope(
   };
 }
 
-// The guide's calls (@riker/code-review-plannotator run.ts), each a headless call with the
-// action's tools; every step lands on the turn, named by its call.
+// The guide's calls (@riker/code-review-plannotator run.ts), each a headless
+// call with the action's tools; every step lands on the turn, named by its
+// call.
 async function runGuide(
   config: RikerConfig,
   task: TaskRow,
@@ -775,11 +776,11 @@ function prToReview(task: TaskRow): string | null {
   return prReviews ? (reviewedPr(task)?.url ?? null) : null;
 }
 
-// `plannotator review` on a port Riker picks, so it can post the findings;
-// how the owner ended it (one --json record) lands in guide-feedback.md. A PR the owner was asked
-// to review opens on the PR (Plannotator's PR mode), whose own Post to
-// GitHub sends their review; their own work opens on the worktree, against
-// its base, and what they send goes to its agent.
+// `plannotator review` on a port Riker picks, so it can post the findings; how
+// the owner ended it (one --json record) lands in guide-feedback.md. A PR the
+// owner was asked to review opens on the PR (Plannotator's PR mode), whose own
+// Post to GitHub sends their review; their own work opens on the worktree,
+// against its base, and what they send goes to its agent.
 function reviewTerminal(
   cwd: string,
   dir: string,

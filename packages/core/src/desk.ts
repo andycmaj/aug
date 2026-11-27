@@ -481,7 +481,8 @@ export class Desk {
   }
 
   // The task's last guide, reopened in Plannotator with its findings and no
-  // model run (@riker/code-review-plannotator). Nothing to undo: it opens a review.
+  // model run (@riker/code-review-plannotator). Nothing to undo: it opens a
+  // review.
   hasGuideReview(taskId: number): boolean {
     const task = store.getTask(taskId);
     return !!task && hasGuideReview(task);
@@ -591,10 +592,10 @@ export class Desk {
     return { title: spec.title, turnId: run.turnId, done: run.done };
   }
 
-  // Actions an event runs by itself (their `on` triggers): each once per
-  // task, action and event (a run the spend cap or an error kept from
-  // starting is not counted), one at a time behind each other. What it opens for the owner (the guide's review)
-  // waits for them to open it. Returns the names queued.
+  // Actions an event runs by itself (their `on` triggers): each once per task,
+  // action and event (a run the spend cap or an error kept from starting is not
+  // counted), one at a time behind each other. What it opens for the owner (the
+  // guide's review) waits for them to open it. Returns the names queued.
   private autoRuns: Promise<void> = Promise.resolve();
 
   fireActions(
@@ -1080,8 +1081,8 @@ export class Desk {
 
   // Ignore: dropped if nothing was done on it, otherwise Mark done. Either
   // way ctrl+z takes it back. Nothing is learned from it: what an ignore
-  // teaches is the owner's to say, and learning from every x put lines in
-  // LEARNED.md from tasks triage never saw.
+  // teaches is the owner's to say, and learning from every x would put
+  // lines in LEARNED.md from tasks triage never saw.
   async ignore(taskId: number, why = ""): Promise<void> {
     const task = store.getTask(taskId);
     if (!task) {

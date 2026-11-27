@@ -1,4 +1,4 @@
-// AUG-0175: a Win or a watched task is listed under its header and stays in
+// A Win or a watched task is listed under its header and stays in
 // its project. The two rows are one task: counted once, found once, walked
 // once.
 

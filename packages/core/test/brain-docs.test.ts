@@ -390,9 +390,9 @@ describe("the daily doc pass", () => {
     expect(readDoc(DocName.job)).toBe(shippedText(DocName.job));
   });
 
-  // AUG-0142: a proposal is a whole doc drafted against the file as it was.
-  // A line written after it (remember, a new lesson) is not in that text, so
-  // the review read it as deleted and accept deleted it.
+  // A proposal is a whole doc drafted against the file as it was then. A
+  // line written after it (remember, a new lesson) is not in that text, so a
+  // plain diff would read it as deleted.
   test("a line added after a LEARNED.md proposal is never proposed for deletion", async () => {
     const a = "- Clarify the ask first [s:2 | ev: c1 | seen: 2026-11-08]";
     const b =

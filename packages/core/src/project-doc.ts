@@ -1,7 +1,8 @@
-// A project's brief, goals, repos and docs as one Markdown file the owner
-// edits in $EDITOR. Goals are a checklist keyed by their ref, so a retitled line stays
-// the same goal and the tasks pointing at it keep pointing; a line without a
-// ref is a new goal, and a goal whose line is gone is dropped (never deleted).
+// A project's brief, goals, repos and docs as one Markdown file the owner edits
+// in $EDITOR. Goals are a checklist keyed by their ref, so a retitled line
+// stays the same goal and the tasks pointing at it keep pointing; a line
+// without a ref is a new goal, and a goal whose line is gone is dropped (never
+// deleted).
 
 import {
   checkMapped,

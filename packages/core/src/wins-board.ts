@@ -1,7 +1,8 @@
-// The Board's Wins tab: a day's Wins and how each came out, then what else
-// got done that day. A day is the owner's local date, as Wins are pinned
-// (localDay). Everything reads newest first. History comes from task_events (triggers in db.ts), turns
-// and moves, so a past day reads the same after its tasks move on.
+// The Board's Wins tab: a day's Wins and how each came out, then what else got
+// done that day. A day is the owner's local date, as Wins are pinned
+// (localDay). Everything reads newest first. History comes from task_events
+// (triggers in db.ts), turns and moves, so a past day reads the same after its
+// tasks move on.
 
 import { laneOf, type Lane } from "./lanes";
 import { localDay } from "./rail";
