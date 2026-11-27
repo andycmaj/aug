@@ -85,6 +85,15 @@ test("Wins still lists today's Wins and what else got done", async () => {
   expect(frame()).toContain("Also done today");
 });
 
+test("Wins keeps each task's whole ref on its row's one line", async () => {
+  const { board, frame } = await boot();
+  await board("1");
+  const row = frame()
+    .split("\n")
+    .find((l) => l.includes("September overtime by site"));
+  expect(row).toContain(store.taskRef(5));
+});
+
 test("Docs lists the demo's PRs, issues and project doc, one row per address", async () => {
   const { board, find, frame } = await boot();
   await board("6");
