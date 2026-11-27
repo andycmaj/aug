@@ -5,7 +5,6 @@
 - general: worth thinking about - research, a recommendation, making sense of a thread.
 - coding: an agent at a keyboard. A bug, a failing check, a requested change in a repository.
 - task: mine to do in the world - decide, attend, review by hand.
-- watch: a thread I care about that somebody else will handle.
 
 A pull request review asked of me is coding (a review on its branch) unless JOB.md says otherwise.
 A question in a DM is usually reply.

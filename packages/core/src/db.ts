@@ -15,7 +15,6 @@ CREATE TABLE IF NOT EXISTS tasks (
   status TEXT NOT NULL DEFAULT 'open',
   priority TEXT NOT NULL DEFAULT 'regular',
   priority_pinned INTEGER NOT NULL DEFAULT 0,
-  watching INTEGER NOT NULL DEFAULT 0,
   remind_at TEXT,
   waiting_on TEXT,
   repo TEXT,
@@ -684,6 +683,10 @@ export function migrate(db: Database): void {
   }
   backfillTriage(db);
   remindersToTimers(db);
+  // Watching is gone: a watched task stays as it was, an ordinary task.
+  if (columns(db, "tasks").includes("watching")) {
+    db.exec("ALTER TABLE tasks DROP COLUMN watching");
+  }
 }
 
 // Before spend kept sessions, a resumed chat turn was recorded at its

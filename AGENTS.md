@@ -190,7 +190,7 @@ Tests live beside their package (`packages/<name>/test/`).
   Canvas" and "selected", never "the table", "content" or "on the table".
   Task actions (`components/task-actions.ts`, the key handlers on a row) act
   on the cursor row from the rail and on the selected row from the Canvas,
-  and `select()` moves both. A Win or watched task has a second row under
+  and `select()` moves both. A Win or Due task has a second row under
   its heading (`t<id>@wins`, `copy: true`): `selectedKey` is always the
   task's `t<id>`, the cursor a row key, so find rows with `rowFor` and
   compare with `baseKey`, and leave copies out of anything that counts or
@@ -270,7 +270,7 @@ Tests live beside their package (`packages/<name>/test/`).
   the task's lifecycle (`status` plus a phase derived from `merged_at`,
   `pr_status` and `task_blockers`: `phaseOf`), the agent's state, rail
   grouping (`laneOf` in `core/lanes.ts`, whose order is the rule) and tags
-  (priority, watching, Wins). A new lane gets a filter pill in
+  (priority, Wins). A new lane gets a filter pill in
   `RAIL_FILTERS` or a place in `UNFILTERED_LANES`; `packages/core/test/rail.test.ts`
   fails otherwise.
 - **A task's agent is behind `core/driver.ts`.** `ChatDriver` (the pool's

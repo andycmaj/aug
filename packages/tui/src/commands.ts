@@ -33,7 +33,6 @@ export const Commands = {
   DONE: "task.done",
   REOPEN: "task.reopen",
   REMIND: "task.remind",
-  WATCH: "task.watch",
   WIN: "task.win",
   IGNORE: "task.ignore",
   INBOX_READ: "inbox.read",

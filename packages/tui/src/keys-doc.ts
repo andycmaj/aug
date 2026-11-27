@@ -47,7 +47,6 @@ const task: HelpCtx = {
   hasDraft: false,
   live: false,
   coding: false,
-  watching: false,
   started: true,
   pr: false,
 };

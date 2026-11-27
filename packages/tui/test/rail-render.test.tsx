@@ -113,7 +113,12 @@ test("a cut sub line keeps the lane's word and drops the ref whole", async () =>
   // A ref shows whole or not at all.
   const rail = lines.map((l) => l.slice(0, 46)).join("\n");
   expect(rail).not.toMatch(/· R[A-Z-]*\d*…/);
-  expect(sub("Rotate staging certs")).toContain("watching · RIKER-0008");
+  expect(sub("Badge printer quote from Marcus")).toContain(
+    "slipped · RIKER-0007",
+  );
+  // Too long for the ref: the lane's word stays, the ref goes.
+  expect(sub("Rotate staging certs")).toContain("waiting on them");
+  expect(sub("Rotate staging certs")).not.toContain("RIKER-");
 });
 
 async function demoRail() {
@@ -167,6 +172,6 @@ test("an urgent or important row carries a priority mark beside its title", asyn
   await settle();
   const title = (t: string) => rail().find((l) => l.includes(t)) ?? "";
   expect(title("September overtime by site")).toMatch(/◆ !! September/);
-  expect(title("Rotate staging certs")).toMatch(/○ ! Rotate staging certs/);
+  expect(title("Rotate staging certs")).toMatch(/→ ! Rotate staging certs/);
   expect(title("Bump pydantic to 2.9")).not.toContain("!");
 });

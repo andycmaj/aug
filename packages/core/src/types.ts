@@ -13,14 +13,13 @@ export const Channel = {
 } as const;
 export type Channel = string;
 
-// Triage's five roads plus watch. fyi creates no task; the rest are task kinds.
+// Triage's five roads. fyi creates no task; the rest are task kinds.
 export const Verdict = {
   fyi: "fyi",
   reply: "reply",
   general: "general",
   coding: "coding",
   task: "task",
-  watch: "watch",
 } as const;
 export type Verdict = (typeof Verdict)[keyof typeof Verdict];
 
@@ -82,7 +81,6 @@ export interface TaskRow {
   priority: Priority;
   // A hand-set priority is never raised again by triage.
   priority_pinned: number;
-  watching: number;
   remind_at: string | null;
   waiting_on: string | null;
   repo: string | null;

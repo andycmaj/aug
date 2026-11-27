@@ -181,6 +181,10 @@ export async function askVerdict(
     spend: { role: SpendRole.triage },
   });
   const answer = result.structured as VerdictAnswer | null;
+  // Watch is no longer offered; a TRIAGE.md that still names it gets fyi.
+  if (answer && (answer.verdict as string) === "watch") {
+    return { ...answer, verdict: Verdict.fyi };
+  }
   if (!answer || !Object.values(Verdict).includes(answer.verdict)) {
     throw new Error("unreadable verdict");
   }
@@ -863,7 +867,7 @@ function attach(
     if (task.status === TaskStatus.done || task.status === TaskStatus.later) {
       store.reopen(task.id);
     }
-    store.updateTask(task.id, { waiting_on: null, watching: 0 });
+    store.updateTask(task.id, { waiting_on: null });
     finishSuperseded(task.id);
   });
   if (isLive(task)) {
@@ -945,7 +949,13 @@ export function heldVerdict(messageId: number): VerdictAnswer | null {
     }
     try {
       const v = JSON.parse(run.verdict) as Partial<VerdictAnswer>;
-      if (v.verdict && v.verdict !== Verdict.fyi && v.title) {
+      // A verdict no longer offered (watch) is read as fyi: no task.
+      if (
+        v.verdict &&
+        v.verdict !== Verdict.fyi &&
+        Object.values(Verdict).includes(v.verdict) &&
+        v.title
+      ) {
         return v as VerdictAnswer;
       }
     } catch {
@@ -962,15 +972,11 @@ function createFromVerdict(
 ): TriageOutcome {
   // A review the owner is asked for is coding, wherever it was asked: a
   // review request the gate left to the model, or a PR named in a thread.
-  const pr =
-    answer.verdict === Verdict.watch
-      ? null
-      : (requestedPr(message) ?? prFromUrl(answer.review_pr));
+  const pr = requestedPr(message) ?? prFromUrl(answer.review_pr);
   if (pr) {
     return createReview(message, pr, answer, answer.reason, config);
   }
-  const kind: Kind =
-    answer.verdict === Verdict.watch ? Kind.task : (answer.verdict as Kind);
+  const kind = answer.verdict as Kind;
   const meta = messageMeta(message);
   const repo = answer.repo || (meta.channel === "github" ? meta.repo : null);
   const project = pickProject(repo ?? null, answer.project);
@@ -980,7 +986,6 @@ function createFromVerdict(
       summary: answer.summary,
       kind,
       priority: answer.priority,
-      watching: answer.verdict === Verdict.watch,
       repo,
       projectId: project.projectId,
       threadKey: message.thread_key,

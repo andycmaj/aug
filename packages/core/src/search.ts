@@ -156,7 +156,7 @@ export function searchIndex(
   const docs: SearchDoc[] = [];
   for (const s of sections) {
     for (const item of s.items) {
-      // A Win or watched task listed twice is found once, at its own row.
+      // A Win or Due task listed twice is found once, at its own row.
       if (item.type === "task" && item.copy) {
         continue;
       }

@@ -100,7 +100,6 @@ export const Section = {
   system: "system",
   tasks: "tasks",
   reviews: "reviews",
-  watching: "watching",
   later: "later",
 } as const;
 export type Section = (typeof Section)[keyof typeof Section];
@@ -112,25 +111,17 @@ export const SECTION_TITLES: Record<Section, string> = {
   system: "System",
   tasks: "Tasks",
   reviews: "Code Reviews",
-  watching: "Watching",
   later: "For later",
 };
 
 // The walk visits these in order; For later is never offered by Next, nor is
 // a project row.
-export const WALKED: Section[] = [
-  "due",
-  "wins",
-  "system",
-  "tasks",
-  "reviews",
-  "watching",
-];
+export const WALKED: Section[] = ["due", "wins", "system", "tasks", "reviews"];
 
-// A tag a row wears beside its mark: pinned as today's Win, or watched.
-export const Tag = { win: "win", watching: "watching" } as const;
+// A tag a row wears beside its mark: pinned as today's Win.
+export const Tag = { win: "win" } as const;
 export type Tag = (typeof Tag)[keyof typeof Tag];
-export const TAG_MARK: Record<Tag, string> = { win: "★", watching: "◉" };
+export const TAG_MARK: Record<Tag, string> = { win: "★" };
 
 export type RailItem =
   | {
@@ -143,8 +134,8 @@ export type RailItem =
       at: string;
       // The project whose row it sits under in Tasks, folding with it.
       group: number | null;
-      // The second row of a task that is also listed under Wins or
-      // Watching: the task sits in its project too, and that row is the
+      // The second row of a task that is also listed under Wins or Due:
+      // the task sits in its project too, and that row is the
       // one counted, searched and gone to. Its key is `t<id>@<section>`.
       copy: boolean;
       // Tags the row's place does not already say (no ★ under Wins).
@@ -251,7 +242,7 @@ export function isSlipped(
   return now.getTime() - Date.parse(since) > SLIPPED_AFTER_MS;
 }
 
-// Where a task sits on the rail, Wins and Watching aside: they list it
+// Where a task sits on the rail, Wins and Due aside: they list it
 // again (buildRail). Null: off the rail.
 function placeOf(task: TaskRow, lane: Lane, onYou: Section): Section | null {
   // Riker asking about its own docs: on you until answered, never later.
@@ -282,7 +273,6 @@ export function buildRail(input: RailInput): RailSection[] {
     system: [],
     tasks: [],
     reviews: [],
-    watching: [],
     later: [],
   };
 
@@ -348,21 +338,9 @@ export function buildRail(input: RailInput): RailSection[] {
       wins.has(task.id) &&
       task.kind !== Kind.system &&
       task.status !== TaskStatus.dropped;
-    // Watching lists an open task you watch; it stays in its project too.
-    const watched =
-      Boolean(task.watching) &&
-      task.status === TaskStatus.open &&
-      task.kind !== Kind.system;
     const place = placeOf(task, lane, onYou);
-    const tagsFor = (section: Section | null): Tag[] => [
-      ...(win && section !== Section.wins ? [Tag.win] : []),
-      // The watching lane's mark already says it.
-      ...(task.watching &&
-      section !== Section.watching &&
-      lane !== Lane.watching
-        ? [Tag.watching]
-        : []),
-    ];
+    const tagsFor = (section: Section | null): Tag[] =>
+      win && section !== Section.wins ? [Tag.win] : [];
     if (place === Section.later) {
       sections.later.push({
         ...item,
@@ -382,9 +360,6 @@ export function buildRail(input: RailInput): RailSection[] {
     });
     if (win) {
       winItems[wins.get(task.id)!] = copy(Section.wins);
-    }
-    if (watched) {
-      sections.watching.push(copy(Section.watching));
     }
     // Due lists an open task a timer fired on; it stays where it sits too.
     const fired = input.due?.get(task.id);
@@ -547,9 +522,9 @@ export const RAIL_FILTERS: {
   },
   {
     filter: "waiting",
-    lanes: [Lane.blocked, Lane.theirs, Lane.watching, Lane.later],
+    lanes: [Lane.blocked, Lane.theirs, Lane.later],
     ...pill(Lane.theirs),
-    word: "blocked, waiting on them, watching, later",
+    word: "blocked, waiting on them, later",
   },
 ];
 
@@ -574,7 +549,7 @@ const isHome = (item: RailItem) =>
   item.type === "task" && item.task.kind === Kind.home;
 
 // Tasks under each pill, Home left out: it is not work. Each task once: a
-// Win or a watched task listed twice is one task.
+// Win or a Due task listed twice is one task.
 export function filterCounts(
   sections: RailSection[],
 ): Record<RailFilter, number> {

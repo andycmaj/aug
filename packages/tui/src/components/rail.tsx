@@ -368,9 +368,9 @@ function EmptyRail() {
 // The highlight is the cursor while the rail has focus, and the selected row
 // while it does not (tilt-tui's focused/unfocused selection). The selected
 // row carries a ▸ in the gutter, beside its mark rather than in
-// place of it: the task you are watching is the one whose lane you want to
-// see move. The selected task's other row (a Win or a watched task is
-// listed twice) carries a dim ▹: the same task.
+// place of it: the task you are on is the one whose lane you want to see
+// move. The selected task's other row (a Win or a Due task is listed
+// twice) carries a dim ▹: the same task.
 function RailRow(props: {
   item: RailItem;
   onPress: () => void;
@@ -707,12 +707,6 @@ export function RailLegend() {
       mark: TAG_MARK.win,
       markColor: theme.warning,
       word: "Win, listed under Wins",
-    },
-    {
-      bar: theme.borderSubtle ?? theme.textMuted,
-      mark: TAG_MARK.watching,
-      markColor: theme.warning,
-      word: "watched, under Watching",
     },
     {
       bar: theme.secondary,

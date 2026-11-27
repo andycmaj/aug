@@ -281,7 +281,6 @@ export function BoardMode() {
         t && (t.agent_state === AgentState.working || riker.isLive(t)),
       ),
       coding: t?.kind === Kind.coding,
-      watching: false,
       started: false,
       pr: Boolean(t && riker.taskPr(t)),
       closed: Boolean(t && isClosed(t)),

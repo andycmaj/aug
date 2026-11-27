@@ -268,7 +268,6 @@ export function taskClosed(taskId: number, by = "you"): void {
       closed_at: now(),
       closed_by: by,
       unread_result: 0,
-      watching: 0,
       remind_at: null,
       ...(agentLive ? { agent_state: AgentState.stopped } : {}),
     });
