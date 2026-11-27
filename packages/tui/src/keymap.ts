@@ -606,6 +606,14 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "leave the box",
       help: "leave",
     },
+    // As it detaches from an agent. jk or kj typed fast does the same
+    // (rail-chord.ts): two letters, so no binding here.
+    {
+      key: "ctrl+]",
+      cmd: Commands.INPUT_TO_RAIL,
+      desc: "back to the rail (or type jk / kj fast)",
+      help: "rail",
+    },
   ],
   // While an error toast is up, over every pane and modal (its layer
   // exists only then): Esc dismisses the newest and does nothing else. An
@@ -623,7 +631,7 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     {
       key: "ctrl+]",
       cmd: Commands.TERMINAL_DETACH,
-      desc: "detach from the terminal",
+      desc: "detach from the terminal (on an agent, or type jk / kj fast)",
       help: "detach",
     },
     {
