@@ -1,11 +1,11 @@
-// The guide's patch cut into batches, each small enough for one model call
-// to hold whole (Riker's docs/task-actions-design.md, guide in batches). Every file's
-// diff goes into exactly one batch's prompt, so nothing depends on the model
-// choosing to read it. Related files share a batch, so a finding that needs
-// both is in reach: files changed in the same commit of the branch, a test
-// and what it tests, and a file whose diff names what another one defines.
-// None of it parses a language; a miss only splits two related files, and
-// each batch may still Read the other.
+// The guide's patch cut into batches, each small enough for one model call to
+// hold whole (Riker's docs/task-actions-design.md, guide in batches). Every
+// file's diff goes into exactly one batch's prompt, so nothing depends on the
+// model choosing to read it. Related files share a batch, so a finding that
+// needs both is in reach: files changed in the same commit of the branch, a
+// test and what it tests, and a file whose diff names what another one defines.
+// None of it parses a language; a miss only splits two related files, and each
+// batch may still Read the other.
 
 import { basename, dirname } from "node:path";
 import { numberedPatch, type Patch } from "./guide";
