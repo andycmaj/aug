@@ -79,3 +79,33 @@ test("the rail's only header is the filter pills and the inbox badge", async () 
   expect(above).not.toMatch(/\d+ open/);
   expect(above).not.toContain("Work");
 });
+
+// The rail is narrow and a sub line is cut at its end. What the row's lane
+// says is what the owner acts on, so it comes before the ref, and a ref that
+// does not fit is left off (the Canvas header shows it once selected).
+test("a cut sub line keeps the lane's word and drops the ref whole", async () => {
+  home = mkdtempSync(join(tmpdir(), "riker-rail-render-"));
+  process.env.RIKER_HOME = home;
+  const engine = installFixture("demo");
+  const setup = await testRender(() => <App engine={engine} />, {
+    width: 140,
+    height: 45,
+  });
+  destroy = () => setup.renderer.destroy();
+  await setup.renderOnce();
+  await Bun.sleep(40);
+  await setup.renderOnce();
+
+  const lines = setup.captureCharFrame().split("\n");
+  const sub = (title: string) => {
+    const at = lines.findIndex((l) => l.includes(title));
+    return lines[at + 1].slice(0, 46);
+  };
+  // A row with a PR chip, and one without.
+  expect(sub("CSV import fails on a BOM")).toContain("ready to send");
+  expect(sub("Bump pydantic to 2.9")).toContain("merged, ready to close");
+  // A ref shows whole or not at all.
+  const rail = lines.map((l) => l.slice(0, 46)).join("\n");
+  expect(rail).not.toMatch(/· R[A-Z-]*\d*…/);
+  expect(sub("Rotate staging certs")).toContain("watching · RIKER-0008");
+});

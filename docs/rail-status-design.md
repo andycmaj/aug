@@ -242,7 +242,10 @@ then the agent at rest, then whose it is.
 `saved` and the old `blocked` lane go. The legend reads `LANE_META`, so it
 follows. A lane with a `nerdMark` shows it only where the font is a Nerd
 Font (`laneMeta`, `core/glyphs.ts`: config `nerdFont`, else one installed),
-and its plain `mark` elsewhere. A blocked row's sub line names its blockers (`blocked by
+and its plain `mark` elsewhere. A sub line reads age, where it came from
+(or its PR chip), the lane's word, then the ref, which is left off whole
+when it does not fit: the word is what the owner acts on, and the Canvas
+header carries the ref. A blocked row's sub line names its blockers (`blocked by
 AUG-0012`); a stopped row's says why it ended; a ready row's says
 `yours to close` or `its agent closed it`; a working row whose task is
 already merged says `merged, agent working` (working outranks merged: an

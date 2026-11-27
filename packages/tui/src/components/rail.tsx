@@ -73,8 +73,15 @@ interface RowView {
   // Theirs when not the tag color (a project's manager mark).
   tagColor?: ThemeColor;
   sub: string;
+  // The task's ref, after sub when it fits whole: a cut ref reads as noise.
+  ref?: string;
   lead?: string;
   chip?: { text: string; color: ThemeColor } | null;
+}
+
+function withRef(sub: string, ref: string | undefined, room: number): string {
+  const full = ref ? `${sub} · ${ref}` : sub;
+  return full.length <= room ? full : sub;
 }
 
 export function Rail(props: { actions: TaskActions }) {
@@ -452,19 +459,18 @@ function RailRow(props: {
           titleColor: item.priority === "urgent" ? theme().error : theme().text,
           tags: item.tags.map((t) => TAG_MARK[t]).join(""),
           // A copy under Wins or Watching is out of its project: it names it,
-          // PR chip or not.
+          // PR chip or not. The lane's word comes before the ref: the line is
+          // cut at its end, and the ref is in the Canvas header once selected.
           sub: acting
-            ? [word, taskRef(item.task.id)].join(" · ")
+            ? word
             : chip
-              ? [taskRef(item.task.id), item.copy ? project : null, word]
-                  .filter(Boolean)
-                  .join(" · ")
+              ? [item.copy ? project : null, word].filter(Boolean).join(" · ")
               : [
                   age,
                   (!props.nested && project) || CHANNEL_WORD[item.task.channel],
-                  taskRef(item.task.id),
                   word,
                 ].join(" · "),
+          ref: taskRef(item.task.id),
           lead: `${age} · `,
           chip: chip && {
             text: chip.text,
@@ -575,7 +581,10 @@ function RailRow(props: {
             when={view().chip}
             fallback={
               <text fg={lit() ? selFg() : theme().textMuted}>
-                {truncate(view().sub, subWidth())}
+                {truncate(
+                  withRef(view().sub, view().ref, subWidth()),
+                  subWidth(),
+                )}
               </text>
             }
           >
@@ -586,15 +595,18 @@ function RailRow(props: {
                   {chip().text}
                 </span>
                 <span>
-                  {truncate(
-                    ` · ${view().sub}`,
-                    Math.max(
+                  {(() => {
+                    const room = Math.max(
                       0,
                       subWidth() -
                         (view().lead ?? "").length -
                         chip().text.length,
-                    ),
-                  )}
+                    );
+                    return truncate(
+                      withRef(` · ${view().sub}`, view().ref, room),
+                      room,
+                    );
+                  })()}
                 </span>
               </text>
             )}
