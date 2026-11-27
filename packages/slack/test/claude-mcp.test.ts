@@ -98,9 +98,9 @@ describe("the Slack session's spend", () => {
 });
 
 describe("Riker's own claudes", () => {
-  // Riker run in a pane of a task's window once had its Slack claude (which
-  // loads user settings, so the guard) adopted as that task's newest
-  // session; s then resumed an id claude had no conversation for.
+  // Riker may run in a pane of a task's window, and its Slack claude loads
+  // user settings (so the guard): adopted as that task's newest session, s
+  // would resume an id claude has no conversation for.
   test("carry no pane, so the guard never adopts them", async () => {
     const before = process.env.TMUX_PANE;
     process.env.TMUX_PANE = "%5";

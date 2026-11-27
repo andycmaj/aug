@@ -93,7 +93,7 @@ describe("a token poll on a big workspace", () => {
     });
     expect(slack.most()).toBeGreaterThan(1);
     expect(slack.most()).toBeLessThanOrEqual(13);
-    // In the order the reads used to run: DMs, channels, then threads.
+    // In a fixed order: DMs, channels, then threads.
     expect(first.messages.map((m) => m.body)).toEqual([
       "hi from D1",
       "hi from C1",

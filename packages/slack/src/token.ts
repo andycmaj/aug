@@ -185,8 +185,9 @@ export async function pollSlack(
 
   // The conversation list and the mention search do not depend on each
   // other, nor do the history and reply reads after them: they all go out
-  // at once, a few at a time. What they found is then read in the order the
-  // calls used to run, so messages and cursors come out the same.
+  // at once, a few at a time. What they found is then read in a fixed order
+  // (DMs, channels, then threads), so messages and cursors come out the same
+  // whichever call answers first.
   const conversations = async () => {
     // Direct messages: the most active ones, every message.
     const convs = (await api("users.conversations", {
@@ -279,7 +280,7 @@ export async function pollSlack(
     const { conv } = read;
     const dm = Boolean(conv.is_im || conv.is_mpim);
     const msgs = [...read.messages].reverse();
-    // A quiet DM needs no name: looking it up was a call per DM per poll.
+    // A quiet DM needs no name, which saves a call per DM per poll.
     const where = !msgs.length
       ? ""
       : dm
@@ -381,7 +382,7 @@ export class TokenTransport implements SlackTransport {
   readonly kind = "token" as const;
 
   private who: SlackWho | null = null;
-  // Names looked up so far, kept across polls: each was a users.info call.
+  // Names looked up so far, kept across polls: each is a users.info call.
   private names = new Map<string, string>();
 
   constructor(
