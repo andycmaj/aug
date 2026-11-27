@@ -207,7 +207,7 @@ describe("on GitHub, as an App", () => {
       calls.push({
         method: init?.method ?? "GET",
         path,
-        body: init?.body ? JSON.parse(String(init.body)) : null,
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
       });
       if (!(key in answers)) {
         return new Response("not here", { status: 404 });

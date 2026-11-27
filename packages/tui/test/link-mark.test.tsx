@@ -136,7 +136,7 @@ test("LinkMark animates only while connecting, with motion on", async () => {
   while (seen.size < 2 && Date.now() < end) {
     await Bun.sleep(50);
     await setup.renderOnce();
-    const mark = [...setup.captureCharFrame()].find((c) =>
+    const mark = Array.from(setup.captureCharFrame()).find((c) =>
       (LINK_FRAMES as readonly string[]).includes(c),
     );
     if (mark) {

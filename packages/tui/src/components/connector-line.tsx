@@ -3,12 +3,10 @@
 // reason beside a failure.
 
 import { For } from "solid-js";
-import { useTheme } from "@andycmaj/opentui-app";
 import { useRiker } from "../context/riker";
 import { foldConnector, type Link } from "@riker/core/link-state";
 import type { ConnectorStatus } from "@riker/core/engine";
-import { localDay } from "@riker/core/rail";
-import { dailyCap, usd } from "@riker/core/spend";
+import { usd } from "@riker/core/spend";
 import { LinkMark } from "./link-mark";
 
 // The tracked link, or the status read as one before the first change.
@@ -40,7 +38,6 @@ export function spendWords(
 
 export function ConnectorLine() {
   const riker = useRiker();
-  const theme = useTheme();
   // const spend = () =>
   //   spendWords(
   //     riker.spendOn(localDay(riker.now())).cost,

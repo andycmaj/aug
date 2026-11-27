@@ -9,7 +9,7 @@ export async function mapLimit<T, R>(
   limit: number,
   fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
-  const out = new Array<R>(items.length);
+  const out: R[] = [];
   let next = 0;
   let failed: { err: unknown } | null = null;
   const worker = async () => {

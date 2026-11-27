@@ -163,7 +163,7 @@ export class Engine {
       wake: (taskId, reason) => {
         const task = store.getTask(taskId);
         if (task) {
-          void this.drivers.for(task).wake(task, reason);
+          this.drivers.for(task).wake(task, reason);
         }
       },
       runMove: (verb, args, by) => this.runMove(verb, args, by),

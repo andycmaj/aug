@@ -43,7 +43,8 @@ async function helpWidth(width: number): Promise<number> {
     .find((l) => l.includes("Keys here"));
   expect(line).toBeDefined();
   // The card's frame: from its left edge to its right.
-  return [...line!].lastIndexOf("▕") - [...line!].indexOf("▏") + 1;
+  const chars = Array.from(line!);
+  return chars.lastIndexOf("▕") - chars.indexOf("▏") + 1;
 }
 
 test("the help is at least 80% of the terminal's width", async () => {

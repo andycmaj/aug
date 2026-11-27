@@ -14,7 +14,7 @@ import { setMux } from "../src/mux";
 import { docDraftsDir } from "../src/paths";
 import { labeled } from "../src/rows";
 import * as store from "../src/store";
-import { Kind, MoveStatus } from "../src/types";
+import { MoveStatus } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
 import { config, fakeBrain, freshHome, testConfig } from "./support/helpers";
 

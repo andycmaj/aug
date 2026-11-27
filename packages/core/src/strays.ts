@@ -21,7 +21,6 @@ import { mux, type PaneInfo } from "./mux";
 import { takeWindow } from "./projects";
 import * as store from "./store";
 import {
-  AgentState,
   Channel,
   Kind,
   SessionKind,

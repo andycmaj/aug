@@ -3,7 +3,6 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adoptHook, type GitInfo } from "../src/adopt";
-import { DEFAULT_CONFIG } from "../src/config";
 import { Engine } from "../src/engine";
 import { setMux } from "../src/mux";
 import { createProject } from "../src/projects";

@@ -510,7 +510,9 @@ Tests live beside their package (`packages/<name>/test/`).
 ## TypeScript
 
 - `bun run lint` is oxlint then `oxfmt --check`; show it passing beside
-  `bun run typecheck`. oxlint (`.oxlintrc.json`) wants every `if`, `else`,
+  `bun run typecheck`. oxlint (`.oxlintrc.json`) runs its correctness
+  rules (no unused imports or variables, among them; `no-control-regex` is
+  off, since terminal code matches escapes), wants every `if`, `else`,
   `for` and `while` body braced, nested ones too, and runs type-aware rules
   on the real compiler: no floating or misused promises, no `await` on a
   non-promise, no switch that misses a case of its union without a
