@@ -100,7 +100,7 @@ function add(op: string, value: number, unit: PerfUnit): void {
       count: 0,
       total: 0,
       max: 0,
-      buckets: new Array<number>(BOUNDS.length + 1).fill(0),
+      buckets: Array.from({ length: BOUNDS.length + 1 }, () => 0),
     };
     aggs.set(op, agg);
     ensureFlushing();
@@ -528,7 +528,7 @@ export function perfReport(
         count: 0,
         total: 0,
         max: 0,
-        buckets: new Array<number>(BOUNDS.length + 1).fill(0),
+        buckets: Array.from({ length: BOUNDS.length + 1 }, () => 0),
       };
       merged.set(m.op, agg);
     }

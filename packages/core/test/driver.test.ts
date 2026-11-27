@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG } from "../src/config";
 import { Engine } from "../src/engine";
 import { sessionActivity } from "../src/lifecycle";
 import { setMux } from "../src/mux";

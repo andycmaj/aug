@@ -40,7 +40,7 @@ import {
 } from "@riker/core/rail";
 import { prChip, prQueueWord } from "@riker/core/pr";
 import { actionRailWord, taskRef } from "@riker/core/rows";
-import { AgentState, Kind, TaskStatus } from "@riker/core/types";
+import { AgentState, Kind, TaskStatus, type Priority } from "@riker/core/types";
 import {
   CHANNEL_WORD,
   priorityColor,
@@ -72,9 +72,25 @@ interface RowView {
   tags?: string;
   // Theirs when not the tag color (a project's manager mark).
   tagColor?: ThemeColor;
+  // A mark beside the title for priority, so it never rests on color alone.
+  prio?: { mark: string; color: ThemeColor };
   sub: string;
+  // The task's ref, after sub when it fits whole: a cut ref reads as noise.
+  ref?: string;
   lead?: string;
   chip?: { text: string; color: ThemeColor } | null;
+}
+
+// Two cells for urgent: ‼ is drawn as a wide emoji by some terminals.
+const PRIORITY_MARK: Record<Priority, string> = {
+  urgent: "!!",
+  important: "!",
+  regular: "",
+};
+
+function withRef(sub: string, ref: string | undefined, room: number): string {
+  const full = ref ? `${sub} · ${ref}` : sub;
+  return full.length <= room ? full : sub;
 }
 
 export function Rail(props: { actions: TaskActions }) {
@@ -277,47 +293,54 @@ export function Rail(props: { actions: TaskActions }) {
 // status filter bar: a pill per status with its count, lit while it
 // filters. Digits 1-9 toggle the pills in this order; f steps through them.
 // Nine pills fit the rail only as mark+count with one space between. It is
-// the rail's only header: the pills already count the work, so the inbox
-// badge (ideas and messages wait on the Board's Inbox) rides at its end, and
-// wraps under the pills when all nine are lit.
+// the rail's only header: the pills already count the work. A lit pill is a mark and a
+// count, so a line under the pills says in words what the rail shows, and
+// the footer's word for showing everything again.
 function FilterBar() {
   const riker = useRiker();
   const theme = useTheme();
   const anyOn = () => riker.railFilter().size > 0;
+  const shown = () =>
+    RAIL_FILTERS.filter((f) => riker.railFilter().has(f.filter))
+      .map((f) => f.word)
+      .join(" + ");
   return (
-    <box
-      flexDirection="row"
-      paddingLeft={2}
-      paddingTop={1}
-      paddingBottom={1}
-      flexShrink={0}
-      flexWrap="wrap"
-      justifyContent="space-evenly"
-    >
-      <For each={RAIL_FILTERS}>
-        {(f) => {
-          const on = () => riker.railFilter().has(f.filter);
-          const count = () => riker.filterCounts()[f.filter];
-          const color = () => toneColor(theme, f.tone);
-          const fg = () =>
-            on()
-              ? contrastingForeground(color())
-              : anyOn() || count() === 0
-                ? (theme.borderSubtle ?? theme.textMuted)
-                : color();
-          return (
-            <Show when={count() > 0}>
-              <text
-                fg={fg()}
-                bg={on() ? color() : undefined}
-                attributes={on() ? 1 : 0}
-              >{` ${f.mark} ${count()} `}</text>
-            </Show>
-          );
-        }}
-      </For>
-      <Show when={riker.inboxCount() > 0}>
-        <text fg={theme.warning}>{` inbox ${riker.inboxCount()} `}</text>
+    <box flexDirection="column" paddingTop={1} paddingBottom={1} flexShrink={0}>
+      <box
+        flexDirection="row"
+        paddingLeft={2}
+        flexWrap="wrap"
+        justifyContent="space-evenly"
+      >
+        <For each={RAIL_FILTERS}>
+          {(f) => {
+            const on = () => riker.railFilter().has(f.filter);
+            const count = () => riker.filterCounts()[f.filter];
+            const color = () => toneColor(theme, f.tone);
+            const fg = () =>
+              on()
+                ? contrastingForeground(color())
+                : anyOn() || count() === 0
+                  ? (theme.borderSubtle ?? theme.textMuted)
+                  : color();
+            return (
+              <Show when={count() > 0}>
+                <text
+                  fg={fg()}
+                  bg={on() ? color() : undefined}
+                  attributes={on() ? 1 : 0}
+                >{` ${f.mark} ${count()} `}</text>
+              </Show>
+            );
+          }}
+        </For>
+      </box>
+      <Show when={anyOn()}>
+        <box paddingLeft={3}>
+          <text fg={theme.textMuted}>
+            {truncate(`${shown()} · 0 all`, RAIL_WIDTH - 5)}
+          </text>
+        </box>
       </Show>
     </box>
   );
@@ -450,21 +473,26 @@ function RailRow(props: {
             : toneColor(theme(), meta.tone),
           title: item.task.title,
           titleColor: item.priority === "urgent" ? theme().error : theme().text,
+          prio: PRIORITY_MARK[item.priority]
+            ? {
+                mark: PRIORITY_MARK[item.priority],
+                color: priorityColor(theme(), item.priority),
+              }
+            : undefined,
           tags: item.tags.map((t) => TAG_MARK[t]).join(""),
           // A copy under Wins or Watching is out of its project: it names it,
-          // PR chip or not.
+          // PR chip or not. The lane's word comes before the ref: the line is
+          // cut at its end, and the ref is in the Canvas header once selected.
           sub: acting
-            ? [word, taskRef(item.task.id)].join(" · ")
+            ? word
             : chip
-              ? [taskRef(item.task.id), item.copy ? project : null, word]
-                  .filter(Boolean)
-                  .join(" · ")
+              ? [item.copy ? project : null, word].filter(Boolean).join(" · ")
               : [
                   age,
                   (!props.nested && project) || CHANNEL_WORD[item.task.channel],
-                  taskRef(item.task.id),
                   word,
                 ].join(" · "),
+          ref: taskRef(item.task.id),
           lead: `${age} · `,
           chip: chip && {
             text: chip.text,
@@ -551,6 +579,11 @@ function RailRow(props: {
         <box flexDirection="row" gap={1}>
           <text bg={view().bar}> </text>
           <text fg={lit() ? selFg() : view().markColor}>{view().mark}</text>
+          <Show when={view().prio}>
+            {(prio: Accessor<{ mark: string; color: ThemeColor }>) => (
+              <text fg={lit() ? selFg() : prio().color}>{prio().mark}</text>
+            )}
+          </Show>
           <Show when={view().tags}>
             <text fg={lit() ? selFg() : (view().tagColor ?? theme().warning)}>
               {view().tags}
@@ -565,7 +598,8 @@ function RailRow(props: {
               RAIL_WIDTH -
                 9 -
                 (props.nested ? NEST : 0) -
-                (view().tags ? (view().tags ?? "").length + 1 : 0),
+                (view().tags ? (view().tags ?? "").length + 1 : 0) -
+                (view().prio ? (view().prio?.mark.length ?? 0) + 1 : 0),
             )}
           </text>
         </box>
@@ -575,7 +609,10 @@ function RailRow(props: {
             when={view().chip}
             fallback={
               <text fg={lit() ? selFg() : theme().textMuted}>
-                {truncate(view().sub, subWidth())}
+                {truncate(
+                  withRef(view().sub, view().ref, subWidth()),
+                  subWidth(),
+                )}
               </text>
             }
           >
@@ -586,15 +623,18 @@ function RailRow(props: {
                   {chip().text}
                 </span>
                 <span>
-                  {truncate(
-                    ` · ${view().sub}`,
-                    Math.max(
+                  {(() => {
+                    const room = Math.max(
                       0,
                       subWidth() -
                         (view().lead ?? "").length -
                         chip().text.length,
-                    ),
-                  )}
+                    );
+                    return truncate(
+                      withRef(` · ${view().sub}`, view().ref, room),
+                      room,
+                    );
+                  })()}
                 </span>
               </text>
             )}
@@ -709,8 +749,10 @@ export function RailLegend() {
       <box flexDirection="row" gap={1} marginTop={1}>
         <text fg={theme.textMuted}>lower bar</text>
         <text bg={theme.error}> </text>
+        <text fg={theme.error}>{PRIORITY_MARK.urgent}</text>
         <text fg={theme.textMuted}>urgent</text>
         <text bg={theme.secondary}> </text>
+        <text fg={theme.secondary}>{PRIORITY_MARK.important}</text>
         <text fg={theme.textMuted}>important</text>
         <text fg={theme.accent}>▸</text>
         <text fg={theme.textMuted}>selected</text>

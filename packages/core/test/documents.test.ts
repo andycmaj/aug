@@ -432,7 +432,10 @@ describe("from the store", () => {
     const rest = rows.filter((r) => r.owners[0].source !== DocSource.brain);
     expect(rows).toEqual([...rest, ...own]);
     expect(rest.map((r) => r.at)).toEqual(
-      [...rest.map((r) => r.at)].sort().reverse(),
+      rest
+        .map((r) => r.at)
+        .sort()
+        .reverse(),
     );
   });
 });

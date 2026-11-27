@@ -12,7 +12,6 @@ import { join } from "node:path";
 import { guardScript, installHooks } from "../src/adopt";
 import { codingLaunch } from "../src/agents";
 import { envName } from "../src/brand";
-import { DEFAULT_CONFIG } from "../src/config";
 import { installState, InstallState, refreshInstalls } from "../src/install";
 import { setMux } from "../src/mux";
 import { startTask } from "../src/projects";

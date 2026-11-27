@@ -22,10 +22,13 @@ export type SlackApi = (
   params: Record<string, string>,
 ) => Promise<Record<string, unknown>>;
 
+const slackError = (json: Record<string, unknown>) =>
+  typeof json.error === "string" ? json.error : undefined;
+
 export function slackApi(token: string): SlackApi {
   return async (method, params) => {
     const res = await fetch(
-      `https://slack.com/api/${method}?${new URLSearchParams(params)}`,
+      `https://slack.com/api/${method}?${new URLSearchParams(params).toString()}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -33,7 +36,7 @@ export function slackApi(token: string): SlackApi {
     const json = (await res.json()) as Record<string, unknown>;
     log.trace("api", { method, ok: json.ok === true, status: res.status });
     if (!json.ok) {
-      throw new Error(`slack ${method}: ${String(json.error ?? res.status)}`);
+      throw new Error(`slack ${method}: ${slackError(json) ?? res.status}`);
     }
     return json;
   };
@@ -53,7 +56,7 @@ export function slackPostApi(token: string): SlackApi {
     const json = (await res.json()) as Record<string, unknown>;
     log.trace("api", { method, ok: json.ok === true, status: res.status });
     if (!json.ok) {
-      throw new Error(`slack ${method}: ${String(json.error ?? res.status)}`);
+      throw new Error(`slack ${method}: ${slackError(json) ?? res.status}`);
     }
     return json;
   };
@@ -108,7 +111,7 @@ export async function whoAmI(api: SlackApi): Promise<SlackWho> {
   const auth = await api("auth.test", {});
   return {
     me: String(auth.user_id),
-    team: String(auth.url ?? "").replace(/\/$/, ""),
+    team: (typeof auth.url === "string" ? auth.url : "").replace(/\/$/, ""),
   };
 }
 

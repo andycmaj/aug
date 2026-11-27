@@ -192,7 +192,9 @@ describe("Knowledge in the daily doc pass", () => {
     expect(merged.author).toMatch(
       /^riker \(merged #\d+, #\d+ on \d{4}-\d\d-\d\d\)$/,
     );
-    expect(live().sort()).toEqual([keep, merged.id].sort());
+    expect(live().sort((a, b) => a - b)).toEqual(
+      [keep, merged.id].sort((a, b) => a - b),
+    );
     expect(store.getKnowledge(a)).toMatchObject({
       superseded_by: merged.id,
       retired_why: `merged into #${merged.id}`,

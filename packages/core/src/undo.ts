@@ -18,7 +18,6 @@ import {
   AgentState,
   Kind,
   SessionKind,
-  TaskStatus,
   TimerState,
   TurnRole,
   type MessageRow,

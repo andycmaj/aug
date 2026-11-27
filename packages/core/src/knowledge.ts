@@ -88,7 +88,7 @@ const BODY_CHARS = 1500;
 // Paths an entry cites: a/b.ts, packages/core/src/x.ts. Not URLs (the scheme
 // stops the match) and not absolute or home paths, which are not a repo's.
 const PATH =
-  /(?:^|[\s`'"(\[])((?:[\w.-]+\/)+[\w-][\w.-]*\.[A-Za-z]{1,5})(?=$|[\s`'"),:;\].])/g;
+  /(?:^|[\s`'"([])((?:[\w.-]+\/)+[\w-][\w.-]*\.[A-Za-z]{1,5})(?=$|[\s`'"),:;\].])/g;
 
 export function citedPaths(text: string): string[] {
   return [...new Set([...text.matchAll(PATH)].map((m) => m[1]))];

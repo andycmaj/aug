@@ -264,7 +264,7 @@ export function TerminalsProvider(props: ParentProps) {
   }
 
   onCleanup(() => {
-    for (const id of [...terms.keys()]) {
+    for (const id of terms.keys()) {
       close(id);
     }
   });

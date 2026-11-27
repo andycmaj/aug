@@ -60,7 +60,7 @@ export class TokenRemoteLink implements RemoteLink {
       return this.me;
     }
     const auth = await this.api("auth.test", {});
-    this.me = String(auth.user_id ?? "");
+    this.me = typeof auth.user_id === "string" ? auth.user_id : "";
     return this.me;
   }
 

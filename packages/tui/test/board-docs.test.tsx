@@ -85,8 +85,17 @@ test("Wins still lists today's Wins and what else got done", async () => {
   expect(frame()).toContain("Also done today");
 });
 
+test("Wins keeps each task's whole ref on its row's one line", async () => {
+  const { board, frame } = await boot();
+  await board("1");
+  const row = frame()
+    .split("\n")
+    .find((l) => l.includes("September overtime by site"));
+  expect(row).toContain(store.taskRef(5));
+});
+
 test("Docs lists the demo's PRs, issues and project doc, one row per address", async () => {
-  const { press, board, find, frame } = await boot();
+  const { board, find, frame } = await boot();
   await board("6");
   expect(frame()).toContain("6 Docs");
   expect(frame()).toContain("month-end close runbook");
@@ -143,7 +152,7 @@ test("Enter shows the address and owners; L attaches it elsewhere; x takes it of
   expect(frame()).toContain("Yes, take it off");
   await press("return");
   const left = [task.id, other.id].map((id) => store.linksForTask(id).length);
-  expect(left.sort()).toEqual([0, 1]);
+  expect(left.sort((a, b) => a - b)).toEqual([0, 1]);
 });
 
 test("f cycles kinds; a PR its branch opened has nothing to take off", async () => {

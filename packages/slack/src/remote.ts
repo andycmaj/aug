@@ -541,7 +541,7 @@ export class Remote {
     if (idle && unheard) {
       this.deps.wake(home.id);
     }
-    for (const w of [...state.waiting]) {
+    for (const w of state.waiting) {
       const turn = agentTurns.find((t) => t.id > w.turnId);
       if (turn?.status === TurnStatus.running) {
         continue;

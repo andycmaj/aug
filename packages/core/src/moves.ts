@@ -23,7 +23,6 @@ import {
 } from "./timers";
 import { findProject, projectLine } from "./lookup";
 import { actionNamed, actionsFor, ActionVia } from "./task-actions";
-import { mux } from "./mux";
 import { checkLink } from "./links";
 import { docDraftsDir } from "./paths";
 import * as repos from "./repos";

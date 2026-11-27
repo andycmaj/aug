@@ -911,7 +911,7 @@ export function useActions(dialogs: Dialogs) {
   function promoteManager(task: TaskRow) {
     const made = desk.promoteManager(task.id);
     if (!made.ok) {
-      return void showToast(made.why, 4000, "error");
+      return showToast(made.why, 4000, "error");
     }
     riker.select(`p${made.project.id}`);
     showToast(
@@ -1417,7 +1417,7 @@ export function useActions(dialogs: Dialogs) {
           if (!manager) {
             return false;
           }
-          return void stop(manager);
+          return stop(manager);
         }
         return onTask(stop, true)();
       },

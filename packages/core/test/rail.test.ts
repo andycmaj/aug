@@ -29,7 +29,7 @@ import { REVIEW_LINK_BY } from "../src/pr";
 import { taskClosed } from "../src/lifecycle";
 import { fireDue, routeTimer } from "../src/timers";
 import * as store from "../src/store";
-import { AgentState, Kind, TaskStatus, TurnRole } from "../src/types";
+import { AgentState, Kind, TaskStatus } from "../src/types";
 import { freshHome } from "./support/helpers";
 
 const at = (h: number) => new Date(Date.UTC(2026, 10, 5, h)).toISOString();
@@ -269,7 +269,9 @@ describe("rail", () => {
       REVIEW_LINK_BY,
     );
     const reviews = store.tasksFromReviewRequests(REVIEW_LINK_BY);
-    expect([...reviews].sort()).toEqual([tagged.id, early.id].sort());
+    expect([...reviews].sort((a, b) => a - b)).toEqual(
+      [tagged.id, early.id].sort((a, b) => a - b),
+    );
     // Asked again later: it has waited since then, so it goes last.
     const rail = buildRail({
       tasks: store.listTasks(),

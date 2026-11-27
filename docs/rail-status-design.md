@@ -242,7 +242,10 @@ then the agent at rest, then whose it is.
 `saved` and the old `blocked` lane go. The legend reads `LANE_META`, so it
 follows. A lane with a `nerdMark` shows it only where the font is a Nerd
 Font (`laneMeta`, `core/glyphs.ts`: config `nerdFont`, else one installed),
-and its plain `mark` elsewhere. A blocked row's sub line names its blockers (`blocked by
+and its plain `mark` elsewhere. A sub line reads age, where it came from
+(or its PR chip), the lane's word, then the ref, which is left off whole
+when it does not fit: the word is what the owner acts on, and the Canvas
+header carries the ref. A blocked row's sub line names its blockers (`blocked by
 AUG-0012`); a stopped row's says why it ended; a ready row's says
 `yours to close` or `its agent closed it`; a working row whose task is
 already merged says `merged, agent working` (working outranks merged: an
@@ -265,10 +268,11 @@ not ring (`ringsForOwner`). Opening the task on the Canvas
 (or `x` on its Inbox row) reads it, and the row goes. Due sits right under
 Home so a timer coming due is never below the fold. Due, then Wins, are
 walked first (`WALKED`). The rail holds tasks and projects only:
-messages and Advisor ideas are on the Board's Inbox tab (4), and the
-`inbox N` at the end of the pills row (open ideas plus messages triage
-could not place) says when one needs you. There is no other header: the
-pills already count the work (AUG-0139).
+messages and Advisor ideas are on the Board's Inbox tab (4), and `✉ N`
+(open ideas plus messages triage could not place) says when one needs
+you, at the right end of the rail's foot beside the connections. It is
+not rail work, so it stays out of the pills. There is no other header:
+the pills already count the work (AUG-0139).
 
 ### Filters
 
@@ -289,7 +293,9 @@ one thing share a pill:
 
 Omitted on purpose: done (never on the rail, except as an unread
 ready (done), which is under ready). To fit nine pills in the rail's 46
-columns, a pill is `mark+count` with one space between pills.
+columns, a pill is `mark+count` with one space between pills. While a
+filter is on, a line under the pills names it in words (each lit pill's
+`word`, then `0 all`), so a lit mark never has to be recalled.
 
 A filter applies inside every section, Wins included. Project rows stay
 when a task under them stays.
@@ -298,8 +304,10 @@ when a task under them stays.
 
 Marks that change neither lifecycle nor agent state:
 
-- **priority** (urgent, important): the lower bar's color; urgent reddens
-  the title. Unchanged.
+- **priority** (urgent, important): the lower bar's color, and a mark
+  after the lane's, `!!` urgent or `!` important, in the same color, so
+  priority never rests on color alone; urgent reddens the title. `!!`
+  rather than `‼`, which some terminals draw as a wide emoji.
 - **watching**: lists the task under Watching too (AUG-0175); it stays in
   its project. Its row there wears `◉` unless its lane is already watching.
 - **slipped** (derived): a theirs row quiet 3 days; red bar. Never for

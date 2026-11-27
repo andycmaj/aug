@@ -10,7 +10,7 @@ import { inTmux, type StartOptions } from "@riker/core/driver";
 import { errorMessage } from "@riker/core/log";
 import { describeProblem, type PathNeed } from "@riker/core/repos";
 import { taskRef } from "@riker/core/rows";
-import { Kind, type TaskRow } from "@riker/core/types";
+import { type TaskRow } from "@riker/core/types";
 import type { Dialogs } from "./actions";
 import { ChoiceModal, PromptModal } from "./modals";
 import { useRepos } from "./use-repos";

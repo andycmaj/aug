@@ -93,7 +93,6 @@ import {
   TurnRole,
   Verdict,
   type MessageRow,
-  type NoteLabel,
   type ProjectRow,
   type TaskRow,
   type TimerRow,
@@ -1493,7 +1492,7 @@ export class Desk {
         this.timerFired(task, effect.turnId, effect.reason);
         continue;
       }
-      void this.drivers
+      this.drivers
         .for(task)
         .wake(
           task,
