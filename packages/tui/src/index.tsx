@@ -77,9 +77,9 @@ started();
 timing("startup.engine", performance.now());
 
 // opentui answers SIGHUP/SIGTERM by tearing the renderer down and nothing
-// more, so the engine's timers kept a closed window's Riker running headless
-// forever. The terminal is restored by the time this runs.
-// A restart asked for (CrashGuard) exits with the code the dev launcher restarts on.
+// more, so the engine's timers would keep a closed window's Riker running
+// headless. The terminal is restored by the time this runs. A restart asked
+// for (CrashGuard) exits with the code the dev launcher restarts on.
 await runApp(
   () => (
     <CrashGuard>

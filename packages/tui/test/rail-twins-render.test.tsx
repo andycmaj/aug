@@ -1,4 +1,4 @@
-// AUG-0175: a Win or a watched task shows in its project and under its
+// A Win or a watched task shows in its project and under its
 // header, on the real rail, and both rows are the one task.
 
 import { afterEach, expect, test } from "bun:test";

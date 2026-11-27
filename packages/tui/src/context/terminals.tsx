@@ -1,8 +1,7 @@
-// Every embedded terminal: coding agents (one per session), one-off
-// editors ($EDITOR on a draft or a doc) and ghdash on a task's PR. Sessions and their renderables live
+// Every embedded terminal: coding agents (one per session), one-off editors
+// ($EDITOR on a draft or a doc) and ghdash on a task's PR. Sessions live
 // here, not in a pane, so they survive a pane remounting or the view
-// switching; a host box adopts the renderable when it
-// mounts and gives it back when it goes.
+// switching; a host box adopts the renderable while it is mounted.
 
 import {
   createSignal,

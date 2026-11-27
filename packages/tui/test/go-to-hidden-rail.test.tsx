@@ -1,5 +1,5 @@
-// Issue #9: go to (ctrl+\) with the rail hidden sent focus to the rail,
-// which was not mounted, so nothing held focus and every key went dead.
+// Go to (ctrl+\) with the rail hidden must not focus the unmounted rail,
+// which would leave nothing focused and every key dead.
 
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";

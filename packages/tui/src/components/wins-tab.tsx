@@ -1,7 +1,6 @@
-// The Wins tab: the day and the day before it, newest first, each with its Wins and how they
-// came out, then what else landed or moved. Today and yesterday by default;
-// h and l walk the pair back and forth a day. Enter opens a row in place
-// (the day's events, turns, moves, PR and agent time); t goes to the task.
+// The Wins tab: a day and the day before it, newest first, each with its
+// Wins and how they came out, then what else landed or moved. h and l walk
+// the pair a day; Enter opens a row in place; t goes to the task.
 
 import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
 import { truncate, useTheme } from "@andycmaj/opentui-app";

@@ -29,7 +29,7 @@ import { LinkMark } from "./link-mark";
 
 // Just the screen: adopts the session's renderable while mounted. The Canvas
 // keeps one mounted as you move between live tasks, so it follows the id;
-// adopting once showed the first task's claude while keys went to the next.
+// adopting once would show the first task's claude while keys go to the next.
 export function TermView(props: {
   id: string;
   // Shown but not taking keys: the screen is greyed out under a veil.

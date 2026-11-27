@@ -1,4 +1,4 @@
-// RIKER-0241: a task's story and a project's journal read as markdown over
+// A task's story and a project's journal read as markdown over
 // the Canvas (V), and e there opens $EDITOR in the app: a story rewrite
 // saves as the owner's new version.
 

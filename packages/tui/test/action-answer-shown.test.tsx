@@ -1,7 +1,6 @@
-// RIKER-0240: a task action's answer is a turn in the task's chat, but a
-// coding task whose agent is live shows the agent's terminal on the Canvas
-// instead of its chat, so a summary run there showed nowhere. Done, the
-// answer opens over the Canvas, and the . picker reads it again.
+// A task action's answer is a turn in the task's chat, but a live coding
+// agent's terminal hides that chat on the Canvas. There the answer opens
+// over the Canvas, and the . picker reads it again.
 
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";

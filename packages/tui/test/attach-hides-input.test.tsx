@@ -1,4 +1,4 @@
-// AUG-0137: while an agent's terminal is attached its keys go to the agent,
+// While an agent's terminal is attached its keys go to the agent,
 // so the chat box under it hides; detach brings it back with its draft.
 
 import { afterEach, expect, test } from "bun:test";

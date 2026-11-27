@@ -1,5 +1,6 @@
 // What both modes share: the app-wide keys, and the modals they open
-// (palette, help, connections, and whatever dialog an action asked for). Each mode has its own FocusProvider, so this runs once per mode.
+// (palette, help, connections, and whatever dialog an action asked for).
+// Each mode has its own FocusProvider, so this runs once per mode.
 
 import { Show, type Accessor, type JSX } from "solid-js";
 import type { Renderable } from "@opentui/core";
@@ -148,11 +149,10 @@ export function useShell(opts: {
 
   // Back (ctrl+o, ctrl+[) and Home (ctrl+a) mean the same everywhere: a
   // layer with no target, so a modal (outside the layout), the chat box and
-  // the rail all reach it. It
-  // sits below every other layer: an attached agent's own (agent-terminal.tsx)
-  // detaches first and declines to it, and a terminal with no agent keeps the
-  // key. Back leaves the dialog, the box or the agent before going back, so it
-  // lands on the rail, never typing into a box or attached to a terminal.
+  // the rail all reach it. It sits below every other layer: an attached
+  // agent's own (agent-terminal.tsx) detaches first and declines to it, and
+  // a terminal with no agent keeps the key. Back leaves the dialog, the box
+  // or the agent first, so it lands on the rail.
   const leaveAll = () => {
     if (focus.isModalOpen()) {
       closeModal();

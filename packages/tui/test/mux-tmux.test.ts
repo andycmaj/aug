@@ -448,8 +448,7 @@ describe.skipIf(!hasTmux)("host window", () => {
 
 // A live server's socket file deleted under it: the server runs on, and the
 // next new-session starts a second one at the same path. Riker's own pane is
-// on the first, its agents on the second, and a jump said "not in tmux"
-// (RIKER-0232).
+// on the first, its agents on the second, and a jump must still find them.
 describe.skipIf(!hasTmux)("a server that lost its socket", () => {
   const orphans: number[] = [];
   afterEach(() => {

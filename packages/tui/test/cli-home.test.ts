@@ -1,7 +1,7 @@
-// `riker install` and friends write into the home, and they run inside
-// parseCLI, before index.tsx moves aug's home. Run on an unmoved ~/.aug they
-// made a fresh ~/.riker, and the next start then refused to move ~/.aug over
-// it. Each runs `riker` with HOME on a scratch folder, never the real one.
+// `riker install` and friends write into the home inside parseCLI, before
+// index.tsx moves aug's home, so on an unmoved ~/.aug they must not make a
+// fresh ~/.riker that blocks the move. Each runs `riker` with HOME on a
+// scratch folder, never the real one.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {

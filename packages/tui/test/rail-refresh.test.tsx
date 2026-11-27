@@ -16,7 +16,7 @@ afterEach(() => {
   }
 });
 
-// The demo's "September overtime" (AUG-0005) is a general task whose agent
+// The demo's "September overtime" (task 5) is a general task whose agent
 // waits on you; nothing selects it at start.
 const ID = 5;
 const TITLE = "September overtime";
@@ -72,12 +72,12 @@ test("a row's lane follows writes from this process and from another", async () 
   expect(proc.exitCode).toBe(0);
   await settle(600);
   expect(row()[0]).toContain("◆");
-  // RIKER-0005 is two wider than AUG-0005 was: the word is clipped.
+  // The ref leaves too little room for the whole word.
   expect(row()[1]).toContain("agent wait");
 });
 
-// AUG-0123: the selected row drew ▸ where its mark goes, so the task you
-// were watching never showed its lane move until you selected another.
+// The ▸ on the selected row sits beside its lane mark, not over it, so a
+// lane move shows on the row you are watching.
 test("the selected row keeps its lane mark beside the ▸", async () => {
   const { settle, row, setup } = await boot();
   // Home is selected at start; the cursor walks down to this row.

@@ -1,4 +1,4 @@
-// RIKER-0195: ctrl+[ goes back from anywhere (the rail, the Canvas, the chat
+// ctrl+[ goes back from anywhere (the rail, the Canvas, the chat
 // box, a dialog, the Board, an attached agent: detach first), and ctrl+a goes
 // to the Assistant from anywhere. ctrl+[ is the Esc byte unless the terminal
 // speaks the kitty protocol to Riker; tmux folds it into Esc, so there it
@@ -258,8 +258,8 @@ test("legacy: ctrl+[ is Esc, so the chat box is left but nothing goes back", asy
   expect(s.shows(BADGE)).toBe(true);
 });
 
-// RIKER-0223: ctrl+o is back from anywhere as well, and unlike ctrl+[ it
-// gets through tmux and a legacy terminal, so it works in both.
+// ctrl+o is back from anywhere as well, and unlike ctrl+[ it gets through
+// tmux and a legacy terminal.
 for (const kitty of [true, false]) {
   const t = kitty ? "kitty" : "legacy";
 

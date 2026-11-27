@@ -1,5 +1,4 @@
-// AUG-0140: the Inbox's t and x, pressed through the real keymap on the
-// demo day.
+// The Inbox's t and x, pressed through the real keymap on the demo day.
 
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -59,7 +58,7 @@ async function boot() {
   return { press, find, frame, settle };
 }
 
-// The demo's Ruth Okafor message made AUG-0002, "Copier renewal".
+// The demo's Ruth Okafor message made task 2, "Copier renewal".
 const RUTH = "Ruth Okafor";
 const RUTH_TASK = 2;
 
@@ -103,7 +102,7 @@ test("x dismisses every message that joined a task, and the task stays", async (
   expect(frame()).toContain("Nothing matches");
 });
 
-// The demo's first idea is about AUG-0002; it made nothing.
+// The demo's first idea is about task 2; it made nothing.
 test("an idea's task column says it is only about that task", async () => {
   const { find, frame } = await boot();
   await find("seat count");
