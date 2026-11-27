@@ -55,6 +55,8 @@ export interface HelpCtx {
   inboxWork?: boolean;
   // The Wins tab shows today (l and 0 have nowhere to go).
   winsToday?: boolean;
+  // A Wins row that is an earlier day's Win still open: z carries it to today.
+  winCarry?: boolean;
   // A Docs row a task or project owns (t has somewhere to go).
   docOwned?: boolean;
   // A Docs row someone attached, so it can be taken off.
@@ -731,6 +733,13 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "Wins: go to the task",
       help: "go to task",
       relevant: (c) => onWins(c) && c.item !== null,
+    },
+    {
+      key: "z",
+      cmd: Commands.WINS_CARRY,
+      desc: "Wins: pin an earlier day's open Win as one of today's again",
+      help: "win today",
+      relevant: (c) => onWins(c) && Boolean(c.winCarry),
     },
     {
       key: "h",

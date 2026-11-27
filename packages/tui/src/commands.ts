@@ -121,6 +121,7 @@ export const Commands = {
   WINS_PREV_DAY: "wins.prev-day",
   WINS_NEXT_DAY: "wins.next-day",
   WINS_TODAY: "wins.today",
+  WINS_CARRY: "wins.carry",
   INBOX_EXPAND: "inbox.expand",
   INBOX_FILTER: "inbox.filter",
   INBOX_SEARCH: "inbox.search",

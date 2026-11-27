@@ -10,6 +10,9 @@ import { testRender } from "@opentui/solid";
 import { App } from "../src/app";
 import { installFixture } from "@riker/fixtures/demo";
 import * as store from "@riker/core/store";
+import { localDay } from "@riker/core/rail";
+import { isClosed } from "@riker/core/rows";
+import { shiftDay } from "@riker/core/wins-board";
 import { setBoardTab } from "../src/components/board-tab";
 import { BoardTab } from "../src/keymap";
 
@@ -32,7 +35,12 @@ async function boot() {
     width: 160,
     height: 45,
   });
-  destroy = () => setup.renderer.destroy();
+  // The engine's timers outlive the renderer: a later file's brain would
+  // hear this one's Advisor (a pinned Win moves its work picture).
+  destroy = () => {
+    setup.renderer.destroy();
+    engine.stop();
+  };
   const settle = async (ms = 40) => {
     await Bun.sleep(ms);
     await setup.renderOnce();
@@ -92,6 +100,47 @@ test("Wins keeps each task's whole ref on its row's one line", async () => {
     .split("\n")
     .find((l) => l.includes("September overtime by site"));
   expect(row).toContain(store.taskRef(5));
+});
+
+test("z on yesterday's open Win pins it for today; with five today it says so", async () => {
+  const { press, board, frame } = await boot();
+  const today = localDay(new Date());
+  const yday = shiftDay(today, -1);
+  const open = store
+    .listTasks()
+    .filter((t) => !isClosed(t) && !store.winsOn(today).includes(t.id));
+  const [carry, refused] = open;
+  store.addWin(yday, carry.id);
+  await board("1");
+  // The tab's hint names it; the footer does too, on the row.
+  expect(frame()).toContain("h earlier · z win today");
+
+  // Walk down to the first row z applies to: the footer names it there.
+  const walkToCarry = async () => {
+    await press("g");
+    for (let i = 0; i < 40 && !frame().includes("win today ·"); i++) {
+      await press("j");
+    }
+  };
+  await walkToCarry();
+  await press("z");
+  expect(store.winsOn(today)).toContain(carry.id);
+  // The toast wraps: "RIKER-0007 is a Win today (3/5)".
+  expect(frame()).toContain(`${store.taskRef(carry.id)} is a Win today (`);
+  // Yesterday's Win is not touched, and z is no longer offered on it.
+  expect(store.winsOn(yday)).toContain(carry.id);
+  expect(frame()).not.toContain("z win today");
+
+  // Today full: z says so and pins nothing.
+  for (const t of open.slice(2, 2 + (5 - store.winsOn(today).length))) {
+    store.addWin(today, t.id);
+  }
+  store.addWin(yday, refused.id);
+  await walkToCarry();
+  await press("z");
+  expect(frame()).toContain("Today has 5 Wins");
+  expect(store.winsOn(today)).not.toContain(refused.id);
+  expect(store.winsOn(today)).toHaveLength(5);
 });
 
 test("Docs lists the demo's PRs, issues and project doc, one row per address", async () => {
