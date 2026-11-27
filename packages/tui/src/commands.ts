@@ -89,6 +89,7 @@ export const Commands = {
   INPUT_SUBMIT: "input.submit",
   INPUT_LEAVE: "input.leave",
   INPUT_EDITOR: "input.editor",
+  INPUT_TO_RAIL: "input.rail",
   INPUT_COMPLETE: "input.complete",
   INPUT_PICK_UP: "input.pick.up",
   INPUT_PICK_DOWN: "input.pick.down",

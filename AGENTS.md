@@ -475,7 +475,14 @@ Tests live beside their package (`packages/<name>/test/`).
   search list, `ctrl+t` jumps your tmux client to the agent, and `ctrl+e`
   shows or hides the rail and stays attached (the agent loses them; a
   terminal with no agent gets them). `buildKeymap` swaps config's navigation
-  keys in at start.
+  keys in at start. `ctrl+]` in the chat box goes to the rail too.
+- jk or kj typed fast (`packages/tui/src/rail-chord.ts`, config
+  `keys.railChord` and `keys.railChordMs`, read each time; `[]` turns it
+  off) goes back to the rail from the chat box or an attached agent. It is
+  two keys, so not a binding: an agent's `TerminalHost` holds the first
+  letter and sends it on a timeout or a break, the chat box types it and
+  takes it back out. A terminal with no agent (the editor, ghdash) never
+  gets it, so its j and k never wait.
 - `ctrl+o` (and `ctrl+[`) goes back and `ctrl+a` goes Home from anywhere:
   a modal, the chat box, the Board, an attached agent (detach first). They
   are a layer with no target under every other (`shell.tsx`), which the
