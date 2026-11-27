@@ -538,8 +538,9 @@ A comment is short and stays true with nothing but the file to read it by.
   fine.
 - Code that reads old data (a migration, aug's names) says what that data
   looks like, not how it came to be.
-- A file opens with a few lines on what it is for, not a design doc; one
-  that needs more points at `docs/`.
+- A file opens with a short paragraph on what it is for and the rules it
+  keeps, not a design doc; one that needs more points at `docs/`.
+- Wrap at 80 columns, like the code.
 - A test says what it holds, not which bug it came from.
 
 ```ts
