@@ -61,6 +61,9 @@ interface RikerContextValue extends ReadModel {
   links: Accessor<Record<string, Link>>;
   now: Accessor<Date>;
   spinner: Accessor<string>;
+  // A start asked and not answered yet (desk.isStarting): the row and the
+  // Canvas say "starting" until the agent is up or the start fails.
+  isStarting: (taskId: number) => boolean;
   // Every row, folded ones included.
   rail: Accessor<RailSection[]>;
   items: Accessor<RailItem[]>;
@@ -195,6 +198,8 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     }
   };
   const motion = () => motionOn(engine.desk.config());
+  const [starting, setStarting] = createSignal<ReadonlySet<number>>(new Set());
+  const isStarting = (taskId: number) => starting().has(taskId);
   const [now, setNow] = createSignal(new Date());
   const [frame, setFrame] = createSignal(0);
   const [mode, setMode] = createSignal<ViewMode>(ViewMode.chat);
@@ -215,6 +220,7 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
       setStatus(s);
       applyLinks(s);
     });
+    const offStarting = engine.desk.onStarting(setStarting);
     let seen = dataVersion();
     const poll = setInterval(() => {
       const v = dataVersion();
@@ -228,6 +234,7 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     onCleanup(() => {
       offChange();
       offStatus();
+      offStarting();
       clearInterval(poll);
       clearInterval(clock);
       for (const t of trackers.values()) {
@@ -494,12 +501,15 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
     return trail.recent().flatMap((k) => rowFor(list, k) ?? []);
   });
 
-  const anyWorking = createMemo(() =>
-    items().some(
-      (i) => i.type === "task" && i.task.agent_state === AgentState.working,
-    ),
+  const anyWorking = createMemo(
+    () =>
+      starting().size > 0 ||
+      items().some(
+        (i) => i.type === "task" && i.task.agent_state === AgentState.working,
+      ),
   );
-  // Ticks only while an agent works: nothing redraws for it otherwise.
+  // Ticks only while an agent works or starts: nothing redraws for it
+  // otherwise.
   // Motion is read once per run, not per row per frame (config is a file).
   let spinMoves = true;
   createEffect(() => {
@@ -535,6 +545,7 @@ export function RikerProvider(props: ParentProps<{ engine: Engine }>) {
         links,
         now,
         spinner,
+        isStarting,
         rail,
         items,
         shownRail,

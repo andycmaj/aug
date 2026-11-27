@@ -101,6 +101,55 @@ describe("a coding task's driver", () => {
       { windowId: fake.windows[0].id, text: "later" },
     ]);
   });
+
+  test("a second start while one is in flight is refused, not run", async () => {
+    const task = engine.desk.newTask("Add a flag", Kind.coding, "", {
+      repo: "acme/api",
+    });
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const newWindow = fake.newWindow.bind(fake);
+    fake.newWindow = async (w) => {
+      await gate;
+      return newWindow(w);
+    };
+    const seen: number[][] = [];
+    const off = engine.desk.onStarting((ids) => seen.push([...ids]));
+
+    const first = engine.desk.startAgent(task.id, { branch: "flag" });
+    await Bun.sleep(5);
+    expect(engine.desk.isStarting(task.id)).toBe(true);
+    expect(await engine.desk.startAgent(task.id, { branch: "flag" })).toEqual({
+      type: "starting",
+    });
+    const moved = await engine.runMove("start", { task: ref(task.id) });
+    expect(moved).toMatchObject({ ok: true });
+    expect(moved.result).toContain("already starting");
+
+    open();
+    expect((await first).type).toBe("started");
+    expect(fake.windows).toHaveLength(1);
+    expect(engine.desk.isStarting(task.id)).toBe(false);
+    expect(seen).toEqual([[task.id], []]);
+    off();
+  });
+
+  test("a failed start clears the guard, so it can be tried again", async () => {
+    const task = engine.desk.newTask("Add a flag", Kind.coding, "", {
+      repo: "acme/api",
+    });
+    const worktree = fake.worktree.bind(fake);
+    fake.worktree = async () => {
+      throw new Error("disk full");
+    };
+    const failed = await engine.desk.startAgent(task.id, { branch: "flag" });
+    expect(failed.type).toBe("failed");
+    expect(engine.desk.isStarting(task.id)).toBe(false);
+    fake.worktree = worktree;
+    expect(
+      (await engine.desk.startAgent(task.id, { branch: "flag" })).type,
+    ).toBe("started");
+  });
 });
 
 describe("a general task's driver", () => {

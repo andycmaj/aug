@@ -346,17 +346,54 @@ export class Desk {
         error: "a System task has no agent: y accepts, x rejects",
       };
     }
-    return this.undos.trackAsync(
-      () => this.drivers.for(task).start(task, opts),
-      (r) =>
-        r.type === "started" || r.type === "queued"
-          ? {
-              type: "cannot",
-              what: `start ${store.taskRef(taskId)}`,
-              why: "it started an agent",
-            }
-          : null,
-    );
+    // A start can take seconds (a worktree, a window, claude's launch) with
+    // nothing to show yet; a second one in that gap would launch another
+    // agent. Held until the first answers, whatever it answers.
+    if (this.startingTasks.has(taskId)) {
+      return { type: "starting" };
+    }
+    this.setStarting(taskId, true);
+    try {
+      return await this.undos.trackAsync(
+        () => this.drivers.for(task).start(task, opts),
+        (r) =>
+          r.type === "started" || r.type === "queued"
+            ? {
+                type: "cannot",
+                what: `start ${store.taskRef(taskId)}`,
+                why: "it started an agent",
+              }
+            : null,
+      );
+    } finally {
+      this.setStarting(taskId, false);
+    }
+  }
+
+  // Tasks whose start is in flight, in this process only: the TUI and the
+  // moves both start through this desk, and a start never outlives it.
+  private startingTasks = new Set<number>();
+  private startingListeners = new Set<(ids: ReadonlySet<number>) => void>();
+
+  isStarting(taskId: number): boolean {
+    return this.startingTasks.has(taskId);
+  }
+
+  onStarting(listener: (ids: ReadonlySet<number>) => void): () => void {
+    this.startingListeners.add(listener);
+    return () => this.startingListeners.delete(listener);
+  }
+
+  private setStarting(taskId: number, on: boolean): void {
+    if (on) {
+      this.startingTasks.add(taskId);
+    } else {
+      this.startingTasks.delete(taskId);
+    }
+    const ids: ReadonlySet<number> = new Set(this.startingTasks);
+    for (const listener of this.startingListeners) {
+      listener(ids);
+    }
   }
 
   // The owner's Stop: stopped, and Start resumes it.
@@ -546,6 +583,11 @@ export class Desk {
     if (started.type === "needs") {
       return {
         text: `Your review notes are on ${ref}: s starts its agent with them`,
+      };
+    }
+    if (started.type === "starting") {
+      return {
+        text: `Your review notes are on ${ref}; its agent was already starting`,
       };
     }
     return {

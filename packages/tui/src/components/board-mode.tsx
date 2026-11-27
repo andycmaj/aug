@@ -489,6 +489,9 @@ function Card(props: {
   const line = () => {
     const t = props.task;
     const s = session();
+    if (riker.isStarting(t.id)) {
+      return `${props.spinner} starting agent…`;
+    }
     if (t.agent_state === AgentState.working) {
       return `${props.spinner} ${s?.last_tool ?? "working"} · ${s ? duration(s.started_at, null) : ""}`;
     }

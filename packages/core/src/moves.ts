@@ -353,6 +353,8 @@ async function start(
         : `started ${ref(task)}'s agent`;
     case "queued":
       return `${ref(task)} is ${result.reason}: it starts by itself when one finishes`;
+    case "starting":
+      return `${ref(task)}'s agent is already starting`;
     case "needs":
       switch (result.need.what) {
         case "repo":

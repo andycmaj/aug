@@ -444,11 +444,16 @@ function RailRow(props: {
           riker.latestActionTurns().get(item.task.id),
           now,
         );
-        const word = acting
-          ? acting.text
-          : item.slipped
-            ? "slipped"
-            : laneWord(item);
+        // A start in flight says so until the agent is up: nothing else on
+        // the row moves yet, and a second s would be refused.
+        const starting = riker.isStarting(item.task.id);
+        const word = starting
+          ? "starting agent…"
+          : acting
+            ? acting.text
+            : item.slipped
+              ? "slipped"
+              : laneWord(item);
         const age =
           item.lane === Lane.later && item.task.remind_at
             ? ageLabel(item.task.remind_at, now)
@@ -457,7 +462,7 @@ function RailRow(props: {
         // A running action's words lead and its PR chip waits: the row is
         // narrow, and where the run is matters most while it runs.
         const status = riker.prStatus(item.task.id);
-        const chip = status && !acting ? prChip(status) : null;
+        const chip = status && !acting && !starting ? prChip(status) : null;
         const project = projectChip(
           item.task.project_id ? riker.project(item.task.project_id) : null,
         );
@@ -467,7 +472,10 @@ function RailRow(props: {
             priorityColor(theme(), item.priority) ??
             theme().borderSubtle ??
             theme().textMuted,
-          mark: working || acting?.running ? riker.spinner() : meta.mark,
+          mark:
+            working || starting || acting?.running
+              ? riker.spinner()
+              : meta.mark,
           markColor: acting?.failed
             ? theme().error
             : toneColor(theme(), meta.tone),
@@ -483,15 +491,17 @@ function RailRow(props: {
           // A copy under Wins or Watching is out of its project: it names it,
           // PR chip or not. The lane's word comes before the ref: the line is
           // cut at its end, and the ref is in the Canvas header once selected.
-          sub: acting
-            ? word
-            : chip
-              ? [item.copy ? project : null, word].filter(Boolean).join(" · ")
-              : [
-                  age,
-                  (!props.nested && project) || CHANNEL_WORD[item.task.channel],
-                  word,
-                ].join(" · "),
+          sub:
+            acting || starting
+              ? word
+              : chip
+                ? [item.copy ? project : null, word].filter(Boolean).join(" · ")
+                : [
+                    age,
+                    (!props.nested && project) ||
+                      CHANNEL_WORD[item.task.channel],
+                    word,
+                  ].join(" · "),
           ref: taskRef(item.task.id),
           lead: `${age} · `,
           chip: chip && {

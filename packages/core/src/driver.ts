@@ -42,7 +42,10 @@ export type StartResult =
   // Agents at once is reached: it starts by itself when a slot frees.
   | { type: "queued"; reason: string }
   | { type: "needs"; need: StartNeed }
-  | { type: "failed"; error: string };
+  | { type: "failed"; error: string }
+  // The desk's, never a driver's: a start for this task is still in flight,
+  // so this one did nothing.
+  | { type: "starting" };
 
 export type CloseResult = projects.CloseResult;
 
