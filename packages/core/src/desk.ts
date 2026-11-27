@@ -76,7 +76,8 @@ import type {
   TriageEffect,
   TriageOutcome,
 } from "./plugins";
-import { reviewedPr } from "./pr";
+import { reviewedPr, taskPr } from "./pr";
+import type { HeadInput } from "./pr-head";
 import {
   AgentState,
   IdeaStatus,
@@ -493,12 +494,28 @@ export class Desk {
     return !!task && reviewedPr(task) !== null;
   }
 
-  guideReview(taskId: number): ActionResult | { error: string } {
+  async guideReview(taskId: number): Promise<ActionResult | { error: string }> {
     const task = store.getTask(taskId);
     if (!task) {
       return { error: `no task ${store.taskRef(taskId)}` };
     }
-    return guideReview(task);
+    return guideReview(task, this.prHead(task));
+  }
+
+  // Where the task's PR head is read before a guide reads its worktree:
+  // none without a PR or a source that can tell (the sim).
+  private prHead(task: TaskRow): HeadInput | undefined {
+    const pr = taskPr(task);
+    const source = this.options.reviews;
+    if (!pr || !source?.head) {
+      return undefined;
+    }
+    const head = source.head.bind(source);
+    return {
+      pr,
+      source: { head },
+      rewrite: reviewedPr(task)?.url === pr.url,
+    };
   }
 
   // A guide's review closed (`output` is what plannotator printed). A
@@ -584,6 +601,7 @@ export class Desk {
       pr && this.options.reviews
         ? { pr, source: this.options.reviews, whole }
         : undefined,
+      this.prHead(task),
     );
     if ("error" in run) {
       return run;

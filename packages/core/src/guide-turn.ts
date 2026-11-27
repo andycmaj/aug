@@ -48,7 +48,13 @@ export function guideOffer(
 // so no notes may mean it did not look, not that nothing stood out.
 export function guideMarkdown(
   saved: SavedGuide,
-  opts: { opened?: boolean; denied?: string[]; gaps?: string[] } = {},
+  opts: {
+    opened?: boolean;
+    denied?: string[];
+    gaps?: string[];
+    // Why the code it read may be behind the PR.
+    stale?: string;
+  } = {},
 ): string {
   const opened = opts.opened ?? true;
   const denied = opts.denied ?? [];
@@ -62,6 +68,7 @@ export function guideMarkdown(
     `**${saved.guide.title}**`,
     saved.guide.intent,
     "",
+    ...(opts.stale ? [`Warning: ${opts.stale}.`, ""] : []),
     `${saved.guide.sections.length} chapter${saved.guide.sections.length === 1 ? "" : "s"}: ${saved.guide.sections.map((s) => s.title).join("; ")}.`,
     ...(denied.length
       ? [
