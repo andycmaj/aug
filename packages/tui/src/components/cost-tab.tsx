@@ -37,7 +37,7 @@ function Row(props: {
         style={{ fg: theme.text }}
       >{` ${usd(props.total.cost).padStart(8)}`}</span>
       <span style={{ fg: theme.textMuted }}>
-        {`  ${String(props.total.calls).padStart(4)} calls  ${tokens(props.total.tokens).padStart(5)} tok${props.extra ? `  ${truncate(props.extra, Math.max(10, props.width - 60))}` : ""}`}
+        {`  ${String(props.total.calls).padStart(4)} ${props.total.calls === 1 ? "call " : "calls"}  ${tokens(props.total.tokens).padStart(5)} tok${props.extra ? `  ${truncate(props.extra, Math.max(10, props.width - 60))}` : ""}`}
       </span>
     </text>
   );
@@ -84,7 +84,7 @@ export function CostTab(props: {
           {report().cap === null
             ? "  · no daily cap"
             : `  of ${usd(report().cap ?? 0)} cap`}
-          {`  · ${report().today.calls} calls · ${tokens(report().today.tokens)} tokens`}
+          {`  · ${report().today.calls} ${report().today.calls === 1 ? "call" : "calls"} · ${tokens(report().today.tokens)} tokens`}
         </span>
       </text>
       <Show when={report().cap !== null}>

@@ -1,8 +1,11 @@
 // The sidebar's foot: each connection's state in one line, like tilt-tui's
 // connection status, drawn by LinkMark: animated while it connects, the
-// reason beside a failure.
+// reason beside a failure. The inbox badge (ideas and messages waiting on the
+// Board's Inbox) sits at its right end: it is not work on the rail, so it
+// stays out of the pills above.
 
-import { For } from "solid-js";
+import { For, Show } from "solid-js";
+import { useTheme } from "@andycmaj/opentui-app";
 import { useRiker } from "../context/riker";
 import { foldConnector, type Link } from "@riker/core/link-state";
 import type { ConnectorStatus } from "@riker/core/engine";
@@ -38,6 +41,7 @@ export function spendWords(
 
 export function ConnectorLine() {
   const riker = useRiker();
+  const theme = useTheme();
   // const spend = () =>
   //   spendWords(
   //     riker.spendOn(localDay(riker.now())).cost,
@@ -68,6 +72,10 @@ export function ConnectorLine() {
           </text>
         )}
       </For>
+      <Show when={riker.inboxCount() > 0}>
+        <box flexGrow={1} />
+        <text fg={theme.warning}>{`✉ ${riker.inboxCount()}`}</text>
+      </Show>
       {/* spend section. hide until we have a better design 
       <text
         fg={
