@@ -12,7 +12,7 @@ Seven docs in `~/.riker/docs`, down from eight:
 | PERSONA.md | red lines that outrank everything, and how Riker speaks to you | owner (onboarding drafts it) |
 | JOB.md | what your job is; weighs importance | owner (onboarding drafts it) |
 | STYLE.md | your voice in drafts sent for you | owner (onboarding drafts it) |
-| TRIAGE.md | what makes a task, reply, watch, FYI | shipped |
+| TRIAGE.md | what makes a task, reply, FYI | shipped |
 | ASSISTANT.md | how a general agent works | shipped |
 | CODING.md | how a coding agent works | shipped |
 | LEARNED.md | lessons from corrections | Riker, automatically |

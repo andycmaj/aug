@@ -514,13 +514,6 @@ export function useActions(dialogs: Dialogs) {
     ));
   }
 
-  function watch(task: TaskRow) {
-    desk.watch(task.id, !task.watching);
-    showToast(
-      task.watching ? "Back in Tasks" : "Watching: not yours, kept open",
-    );
-  }
-
   // J flips what the row says now: an unset switch takes the opposite of
   // what it follows. `move story|journal ... default` clears it.
   function flipStory(task: TaskRow) {
@@ -1438,7 +1431,6 @@ export function useActions(dialogs: Dialogs) {
       [Commands.DONE]: onTask(done),
       [Commands.REOPEN]: onTask(reopen),
       [Commands.REMIND]: onTask(remind),
-      [Commands.WATCH]: onTask(watch),
       [Commands.WIN]: onTask(win),
       [Commands.PRIORITY]: onTask(cyclePriority),
       [Commands.KIND]: onTask(changeKind),

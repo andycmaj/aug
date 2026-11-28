@@ -69,7 +69,7 @@ export const DOC_PURPOSE: Record<DocName, string> = {
     "red lines that outrank everything, and how Riker speaks to you",
   "JOB.md": "what your job is; weighs importance, never intent",
   "STYLE.md": "your voice in the drafts Riker writes for you",
-  "TRIAGE.md": "what makes something a task, a reply, a watch or an FYI",
+  "TRIAGE.md": "what makes something a task, a reply or an FYI",
   "ASSISTANT.md": "how a general agent works a task",
   "CODING.md": "how a coding agent works and closes out",
   "LEARNED.md": "what was learned from what you do",

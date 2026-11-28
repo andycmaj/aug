@@ -72,7 +72,7 @@ interface RikerContextValue extends ReadModel {
   shownRail: Accessor<RailSection[]>;
   shownItems: Accessor<RailItem[]>;
   // The selected task's key (`t<id>`, never a copy's row key): what the
-  // Canvas shows. A task listed twice (a Win, a watched task) is one
+  // Canvas shows. A task listed twice (a Win, a Due task) is one
   // selection on either row.
   selectedKey: Accessor<string | null>;
   selected: Accessor<RailItem | null>;

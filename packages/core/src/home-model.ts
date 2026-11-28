@@ -24,7 +24,7 @@ const NEEDS_THOUGHT =
   /\b(plan|project|brief|goals?|why|how come|explain|review|draft|reply|write|design|think|should|could|would|compare|summari[sz]e|break (it )?down|idea|suggest|prioriti[sz]e|and then|also|after that)\b/;
 
 const MOVE_VERB =
-  "(?:start|stop|done|finish|close|pause|resume|reopen|later|watch|unwatch)";
+  "(?:start|stop|done|finish|close|pause|resume|reopen|later|win)";
 
 const SIMPLE: readonly RegExp[] = [
   // start RIKER-0012, stop the agent on RIKER-0012, done RIKER-0012
