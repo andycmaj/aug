@@ -2,14 +2,18 @@
 // provider (its own panes); terminals, the store view and the Assistant's
 // conversation sit above them and survive the switch.
 
-import { Match, Switch } from "solid-js";
+import { Match, onCleanup, Switch } from "solid-js";
+import { CliRenderEvents, type Selection } from "@opentui/core";
+import { useRenderer } from "@opentui/solid";
 import {
+  copyToClipboard,
   FocusProvider,
   KeymapProvider,
   ThemeProvider,
   type ThemeName,
 } from "@andycmaj/opentui-app";
 import { RikerProvider, useRiker, ViewMode } from "./context/riker";
+import { useToast } from "./context/toast";
 import { TerminalsProvider } from "./context/terminals";
 import { ToastProvider } from "./context/toast";
 import { Toast } from "./components/toast";
@@ -41,7 +45,39 @@ function Modes() {
   );
 }
 
-export function App(props: { engine: Engine; theme?: ThemeName }) {
+// The mouse is opentui's, on by default; config `mouse: false` hands it back
+// to the terminal. Text dragged over (a chat, a brief) is copied once the
+// button comes up, since with the mouse ours the terminal's own drag to
+// select is gone.
+function Mouse(props: {
+  on: boolean;
+  clipboard: (text: string) => Promise<boolean>;
+}) {
+  const renderer = useRenderer();
+  const { showToast } = useToast();
+  renderer.useMouse = props.on;
+  const copy = (selection: Selection) => {
+    const text = selection.getSelectedText();
+    if (!text.trim()) {
+      return;
+    }
+    void props
+      .clipboard(text)
+      .then((ok) =>
+        ok ? showToast("Copied") : showToast("Could not copy", 4000, "error"),
+      );
+  };
+  renderer.on(CliRenderEvents.SELECTION, copy);
+  onCleanup(() => renderer.off(CliRenderEvents.SELECTION, copy));
+  return null;
+}
+
+export function App(props: {
+  engine: Engine;
+  theme?: ThemeName;
+  // Tests copy somewhere other than the system clipboard.
+  clipboard?: (text: string) => Promise<boolean>;
+}) {
   // Config's navigation and action keys are read once: the keymap engine
   // binds at start.
   const config = props.engine.desk.config();
@@ -58,6 +94,10 @@ export function App(props: { engine: Engine; theme?: ThemeName }) {
             <KeymapProvider keymap={keymap as KeymapTable}>
               <Modes />
               <Toast />
+              <Mouse
+                on={config.mouse !== false}
+                clipboard={props.clipboard ?? copyToClipboard}
+              />
             </KeymapProvider>
           </ToastProvider>
         </TerminalsProvider>

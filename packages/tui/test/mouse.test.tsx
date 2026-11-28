@@ -25,7 +25,9 @@ const CSV = "CSV import fails on a BOM";
 
 // A stand-in agent on the CSV task: asks for clicks (1000, SGR) unless told
 // not to, says it is up, then keeps every byte it gets.
-async function boot(opts: { agentMouse?: boolean; drags?: boolean } = {}) {
+async function boot(
+  opts: { agentMouse?: boolean; drags?: boolean; mouse?: boolean } = {},
+) {
   home = mkdtempSync(join(tmpdir(), "riker-mouse-"));
   process.env.RIKER_HOME = home;
   const log = join(home, "agent-bytes");
@@ -47,10 +49,22 @@ async function boot(opts: { agentMouse?: boolean; drags?: boolean } = {}) {
       `stty -icanon -echo min 1; printf '${modes}'; echo agent-up; exec cat > ${log}`,
     ],
   });
-  const setup = await testRender(() => <App engine={engine} />, {
-    width: 160,
-    height: 45,
-  });
+  if (opts.mouse !== undefined) {
+    const config = engine.desk.config.bind(engine.desk);
+    engine.desk.config = () => ({ ...config(), mouse: opts.mouse });
+  }
+  const copied: string[] = [];
+  const clipboard = async (text: string) => {
+    copied.push(text);
+    return true;
+  };
+  const setup = await testRender(
+    () => <App engine={engine} clipboard={clipboard} />,
+    {
+      width: 160,
+      height: 45,
+    },
+  );
   destroy = () => setup.renderer.destroy();
   const settle = async (ms = 40) => {
     await Bun.sleep(ms);
@@ -119,6 +133,7 @@ async function boot(opts: { agentMouse?: boolean; drags?: boolean } = {}) {
     until,
     bytes,
     showAgent,
+    copied,
   };
 }
 
@@ -180,10 +195,20 @@ test("a click on a Board tab switches to it", async () => {
 
 const ctrl = { ctrl: true };
 
-test("Inbox: a click moves the cursor, a second click opens the row", async () => {
-  const s = await boot();
+// The Inbox's filter, cursor and search are the module's, kept from other
+// tests: its first pill puts the first two back, / clears a search.
+async function freshInbox(s: Awaited<ReturnType<typeof boot>>) {
   await s.press("v");
   await s.press("4");
+  await s.click("actionable");
+  if (s.frame().includes('/ "')) {
+    await s.press("/");
+  }
+}
+
+test("Inbox: a click moves the cursor, a second click opens the row", async () => {
+  const s = await boot();
+  await freshInbox(s);
   const after = (words: string) => {
     const rows = s.frame().split("\n");
     const i = rows.findIndex((r) => r.includes(words));
@@ -200,8 +225,7 @@ test("Inbox: a click moves the cursor, a second click opens the row", async () =
 
 test("Inbox: a click on a filter pill filters by it", async () => {
   const s = await boot();
-  await s.press("v");
-  await s.press("4");
+  await freshInbox(s);
   expect(s.frame()).toContain("Ruth Okafor");
   await s.click("FYI 3");
   expect(s.frame()).not.toContain("Ruth Okafor");
@@ -297,4 +321,29 @@ test("attached, a drag under 1002 goes in as press, motion, release", async () =
   expect(got.startsWith("\x1b[<0;1;1M")).toBe(true);
   expect(got).toContain("\x1b[<32;4;1M");
   expect(got.endsWith("\x1b[<0;4;1m")).toBe(true);
+});
+
+test("a drag over text copies it and says so", async () => {
+  const s = await boot();
+  const rows = s.frame().split("\n");
+  const y = rows.findIndex((r) => r.includes("Ask about any work"));
+  const x = rows[y].indexOf("Ask about any work");
+  // The cell the drag ends on is selected too.
+  await s.setup.mockMouse.drag(x, y, x + 8, y);
+  await s.settle();
+  expect(await s.until(() => s.copied.length > 0)).toBe(true);
+  expect(s.copied).toEqual(["Ask about"]);
+  expect(await s.until(() => s.frame().includes("Copied"))).toBe(true);
+});
+
+test("a plain click on text copies nothing", async () => {
+  const s = await boot();
+  await s.click("Ask about any work");
+  await Bun.sleep(100);
+  expect(s.copied).toEqual([]);
+});
+
+test("mouse: false in config: clicks are the terminal's, not Riker's", async () => {
+  const s = await boot({ mouse: false });
+  expect(s.setup.renderer.useMouse).toBe(false);
 });

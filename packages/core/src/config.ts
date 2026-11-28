@@ -126,6 +126,9 @@ export interface RikerConfig {
   // work) with a still mark instead of an animation; so does RIKER_MOTION=0
   // (core/link-state.ts).
   motion?: boolean;
+  // false leaves the mouse to the terminal (a plain drag selects there
+  // again): no clicks, wheel or drag-to-copy in Riker. Read at start.
+  mouse?: boolean;
   // The TUI's navigation keys, in opentui's spelling ("alt+g", "shift+h").
   // Read at start: a change needs a restart (but the rail chord).
   keys?: KeysConfig;
@@ -303,6 +306,7 @@ export const CORE_KEYS: ReadonlySet<string> = new Set([
   "docBudgets",
   "nerdFont",
   "motion",
+  "mouse",
   "keys",
   "scratchRepo",
   "repoRoots",

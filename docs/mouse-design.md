@@ -1,131 +1,103 @@
 # Mouse
 
-The keyboard stays the way to do everything; the mouse is a shortcut for
+You can do everything from the keyboard. The mouse is a shortcut for
 pointing at what is on screen. A click does what moving there and pressing
-the key would, through the same handlers, so nothing the mouse does needs a
-second code path or its own undo.
+the key would, through the same handlers, so nav history, undo and the
+Canvas follow, and the mouse has no code path or undo of its own.
 
-## What works already
+## What opentui gives
 
-opentui turns mouse reporting on by default (`useMouse`), hit-tests every
-event to the deepest renderable under it and bubbles it up the tree, and on
-a left press focuses the nearest focusable ancestor (`autoFocus`). Every
-`Pane` is focusable (`usePane`), and opentui-app's `activePane` follows the
-renderer's focus. So today, checked in `bun run demo` with SGR presses sent
-through tmux:
+opentui turns mouse reporting on (`useMouse`). It hit-tests every event to
+the deepest renderable under the pointer, bubbles the event up the tree,
+and on a left press focuses the nearest focusable ancestor (`autoFocus`).
+Every `Pane` is focusable (`usePane`), and opentui-app's `activePane`
+follows the renderer's focus. So with nothing of Riker's own:
 
 - A click anywhere in the rail, the Canvas or the chat box focuses that
-  pane (the focus border and the footer follow).
-- Clicking a live agent's terminal focuses the Canvas, which attaches it.
-- The wheel scrolls whatever scrollbox is under the pointer (the rail, a
-  chat, a list, a modal), and on a terminal it goes to the program when it
-  tracks the mouse (tmux with `mouse on`, Claude Code fullscreen), else
-  arrows on the alternate screen, else our own scrollback
-  (`TerminalModes.wheel`).
-
-What is missing is everything a click should *mean* beyond focus, and any
-click reaching the program in an agent's pane.
+  pane. Clicking a live agent's terminal focuses the Canvas, which
+  attaches it. Clicking the rail from an attached agent detaches it.
+- The wheel scrolls whatever scrollbox is under the pointer: the rail, a
+  chat, a list or a modal. It scrolls the view and never moves the cursor
+  or the selection.
 
 ## What a click does
 
-All on a left press (`down`): a row reacts as the button goes down, as
-lists do in most TUIs, and opentui focuses the pane right after the
-handler, so the pane and the row change together.
+Rows, tabs and pills act on a left press (`onPress` in `components/ui.tsx`),
+as the button goes down. opentui then focuses the pane under the pointer,
+so the pane and the row change together.
 
 | Where | Click | Same as |
 | --- | --- | --- |
-| Rail row (task, project, Home, Win copy) | select it | j/k there, then the selection follows |
-| Rail filter pill | toggle that filter | f, then the pill's key |
+| Rail row (task, project, Home, a Win's copy) | select it; the rail keeps focus | j/k there, enter |
+| Rail filter pill | toggle that filter | its digit |
 | Board tab title | switch tab | 1-6 |
-| Board Columns card | cursor to it | h/j/k/l |
-| Inbox / Wins / Docs row (`ExpandList`) | cursor to it; on the cursor row, open/close it | j/k, enter |
-| Filter pills on those tabs | toggle | the pill's key |
+| Columns card | cursor to it | h/j/k/l |
+| Inbox, Wins or Docs row (`ExpandList`) | cursor to it; on the cursor's row, open or close it | j/k, enter |
+| Inbox or Docs pill | that filter | f |
 | Knowledge entry | cursor to it | j/k |
-| Go-to list, palette, picker rows (modals) | pick it | enter |
-| Outside an open modal | close it | esc |
+| Go-to row, a choice in a picker | pick it | enter |
+| An Info line | select it | j/k |
 | Footer `chat \| board` | switch view | v |
-| Canvas header link | open it | o |
 
-A click on a rail row only ever selects it; enter stays the way into an
-agent or the chat box (or a click on the Canvas or the chat box itself).
+A click on a rail row only selects it. To go into an agent or the chat box,
+press enter or click the Canvas or the chat box.
 
-The wheel stays as it is: it scrolls the view under the pointer and never
-moves the cursor or the selection.
+The palette's rows take no clicks, and a click outside a modal does
+nothing. Both live in opentui-app (`CommandPalette`, `Modal`'s backdrop),
+not in Riker.
 
-## Into an agent's pane
+## Into a terminal
 
-The terminal is the one place a click must reach another program. While
-attached, the Canvas's `TerminalHost` forwards presses, releases and drags
-to the PTY when the program asked for them, the same way the wheel goes
-today:
+A terminal is the one place where a click must reach another program
+(`context/terminals.tsx`, `TerminalModes.click`):
 
-- `TerminalModes` already tracks 1000/1002/1003 and SGR (1006). It keeps
-  which ones are set, so motion goes only under 1002 (with a button held)
-  or 1003 (any), and a program that asked for none gets no clicks.
-- Coordinates are cells relative to the terminal's view (as the wheel's
-  are), buttons and shift/alt/ctrl in the xterm encoding, SGR when asked,
-  else X10 clamped at 223.
-- opentui captures a drag on the renderable it started on, so a drag that
-  leaves the terminal still ends in it with its release.
-- Detached, a click attaches and goes no further: the press that focuses
-  the pane is not also a click inside it (no surprise tmux pane switch or
-  Claude Code cursor move). The next one goes in.
-- The editor and ghdash terminals get the same forwarding; nothing about
-  it is agent-only.
+- Clicks go in only while that terminal is attached (`claimKeys`), and only
+  the kinds the program asked for: 9 is presses only, 1000 adds releases,
+  1002 adds drags with a button held, and 1003 adds any motion. A program
+  that asked for none gets none.
+- Clicks are encoded the way xterm does it. A click is in cells relative to
+  the terminal's view, with the button plus 4 for shift, 8 for alt and 16
+  for ctrl, and 32 more for motion. It is sent as SGR (1006) when the
+  program asked for that, else in the legacy encoding, which ends at cell
+  223.
+- The press that attaches a detached terminal goes no further: it is a
+  click on Riker, not in the program, so there is no surprise tmux pane
+  switch. A release or a drag goes in only after a press that went in, so
+  the program never sees half a click. A drag that leaves the terminal is
+  held at its edge, and opentui keeps sending it to the terminal it
+  started on.
+- The wheel goes to a program that tracks the mouse. On the alternate
+  screen without tracking it sends arrow keys, and otherwise it scrolls our
+  own scrollback (`TerminalModes.wheel`).
 
-In the owner's tmux (`mouse on`) that gives click-to-select-pane in a split
-(revdiff beside claude), drag to copy through tmux's copy mode and its own
-`MouseDragEnd1Pane` binding, and the wheel it already has.
+The agent's viewer is a tmux client, so with `mouse on` in your tmux
+config, a click picks a pane in a split (a diff viewer beside claude), and
+a drag copies through tmux's copy mode and your own `MouseDragEnd1Pane`
+binding.
 
-## Selecting text
+## Copying text
 
-With mouse reporting on, the outer terminal no longer selects on a plain
-drag; most terminals still do with shift (or option on macOS) held. opentui
-has its own selection on selectable text, but nothing copies it. A drag
-over chat text that ends with a selection copies it (OSC 52, as the
-terminal's clipboard replies already do) and toasts "copied". Inside an
-attached terminal, tmux's copy mode handles it, as above.
+While Riker has the mouse, a plain drag no longer selects text in your
+terminal. Most terminals still select with shift held (option in some
+macOS terminals). Riker selects text you drag over itself (chats, briefs,
+lists). When the button comes up it copies the text to the system clipboard
+and says "Copied". A click with no drag copies nothing.
 
 ## Turning it off
 
-Config `mouse: false` (read at start, like `motion`) starts the renderer
-with `useMouse: false`, for anyone who wants the terminal's own plain-drag
-selection back. Default on, since opentui already has it on today.
-
-## How it is built
-
-- One helper in `components/ui.tsx`, `onPress(fn)`, giving a renderable a
-  left-press handler that calls `fn` and leaves everything else (wheel,
-  other buttons, focus) alone. Rows, tabs, pills and the footer use it.
-  No manual hit-testing: opentui's hit test and bubbling find the row, and
-  a scrolled rail or list is already accounted for.
-- A row's handler calls the same function its key does (`riker.select`,
-  `setBoardTab`, the list cursor's `set`, the pill's toggle), so nav
-  history, undo and the Canvas follow without anything new.
-- The terminal forwarding is `TerminalModes.mouse(event, x, y)` beside
-  `wheel`, returning bytes or null, and one `onMouse` on the view in
-  `context/terminals.tsx`, which already owns `onMouseScroll`.
-- No keymap entries: a click is not a binding, so the footer, `?` help,
-  the palette and `docs/keyboard.html` are unchanged. The help card gets
-  one line saying the mouse works and what `mouse: false` does.
+Config `mouse: false`, read at start, hands the mouse back to the terminal:
+no clicks, wheel or copying in Riker, and a plain drag selects in the
+terminal again. The `?` help card says so.
 
 ## Proof
 
-- Unit: `TerminalModes.mouse` encodings (SGR and X10, each button,
-  modifiers, motion only under 1002/1003, nothing with no mode set).
-- Render tests with `testRender`'s `mockMouse`: click a rail row selects it
-  and focuses the rail; click a
-  Board tab switches; click an Inbox row moves the cursor then opens it;
-  click outside a modal closes it; click a detached terminal attaches
-  without writing to the PTY, and the next click writes SGR bytes.
-- In `bun run demo` driven through tmux with SGR bytes, captured before and
-  after, as above; and once by hand on a real agent in tmux with `mouse on`.
-
-## Order
-
-1. Rail rows and pills, Board tabs, footer view switch.
-2. `ExpandList` rows, Columns cards, Knowledge, modal rows, click outside.
-3. Forwarding into terminals.
-4. Copy on selection, `mouse: false`.
-
-Each step is a commit with its tests.
+- `packages/tui/src/terminal/modes.test.ts`: the click encodings (SGR and
+  legacy, each button, modifiers, motion only under 1002 and 1003, presses
+  only under 9, nothing with no mode set).
+- `packages/tui/test/mouse.test.tsx`: the real App under `testRender`'s
+  `mockMouse`. It checks rail rows and pills, the view switch, Board tabs,
+  Inbox rows and pills, cards, Knowledge, go-to, and an agent's terminal
+  (a click attaches it with no bytes in, the next click goes in as exact
+  SGR, a 1002 drag as press, motion and release, nothing to a program that
+  asked for no clicks, a rail click detaches). It also checks drag to copy,
+  a click that copies nothing, and `mouse: false`.
