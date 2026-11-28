@@ -178,11 +178,16 @@ test("a click on a filter pill toggles it", async () => {
   expect(s.line("◈ 2")).toBe(pills);
 });
 
-test("a click on chat | board switches the view, and back", async () => {
+test("the footer's view chip: a click on Board or Chat goes there", async () => {
   const s = await boot();
-  await s.click("chat | board");
+  expect(s.line("v  switch")).toContain("▌ Chat ▐  Board");
+  await s.click(" Board ", RAIL);
   expect(s.frame()).toContain("Agent board");
-  await s.click("chat | board");
+  expect(s.line("v  switch")).toContain(" Chat  ▌ Board ▐");
+  // The lit segment again: stays.
+  await s.click(" Board ", RAIL);
+  expect(s.frame()).toContain("Agent board");
+  await s.click(" Chat ", RAIL);
   expect(s.frame()).not.toContain("Agent board");
   expect(s.frame()).toContain("Home · the Assistant");
 });

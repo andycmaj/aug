@@ -132,14 +132,60 @@ export function Badge(props: { text: string; color: ThemeColor }) {
   );
 }
 
-// A modal's mode switch, drawn like the palette's Context | All footer: the
-// segments with the active one on the accent, then the key that switches.
+// A mode switch drawn like opentui-app's palette footer (Context | All): a
+// segmented chip with the active mode on the accent. A click on a segment
+// goes to that mode.
+export function ModeSegments<M extends string>(props: {
+  modes: readonly { mode: M; label: string }[];
+  active: M;
+  onPick?: (mode: M) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <box flexDirection="row" flexShrink={0}>
+      <For each={props.modes}>
+        {(m) => {
+          const on = () => props.active === m.mode;
+          return (
+            <box
+              flexDirection="row"
+              onMouseDown={onPress(() => props.onPick?.(m.mode))}
+            >
+              <text fg={theme.accent}>{on() ? "▌" : " "}</text>
+              <text
+                fg={
+                  on() ? contrastingForeground(theme.accent) : theme.textMuted
+                }
+                bg={on() ? theme.accent : undefined}
+                attributes={on() ? TextAttributes.BOLD : 0}
+              >
+                {` ${m.label} `}
+              </text>
+              <text fg={theme.accent}>{on() ? "▐" : " "}</text>
+            </box>
+          );
+        }}
+      </For>
+    </box>
+  );
+}
+
+// The key that switches the mode, after its segments.
+export function ModeKey(props: { keyName: string }) {
+  const theme = useTheme();
+  return (
+    <box flexDirection="row" flexShrink={0}>
+      <text fg={theme.text}>{props.keyName}</text>
+    </box>
+  );
+}
+
+// A modal's mode switch: the segments, then the key that switches.
 export function ModeToggle<M extends string>(props: {
   modes: readonly { mode: M; label: string }[];
   active: M;
   keyName: string;
 }) {
-  const theme = useTheme();
   return (
     <box
       flexDirection="row"
@@ -148,32 +194,8 @@ export function ModeToggle<M extends string>(props: {
       paddingLeft={2}
       paddingRight={2}
     >
-      <box flexDirection="row">
-        <For each={props.modes}>
-          {(m) => {
-            const on = () => props.active === m.mode;
-            return (
-              <box flexDirection="row">
-                <text fg={theme.accent}>{on() ? "▌" : " "}</text>
-                <text
-                  fg={
-                    on() ? contrastingForeground(theme.accent) : theme.textMuted
-                  }
-                  bg={on() ? theme.accent : undefined}
-                  attributes={on() ? TextAttributes.BOLD : 0}
-                >
-                  {` ${m.label} `}
-                </text>
-                <text fg={theme.accent}>{on() ? "▐" : " "}</text>
-              </box>
-            );
-          }}
-        </For>
-      </box>
-      <box flexDirection="row">
-        <text fg={theme.text}>{props.keyName}</text>
-        <text fg={theme.textMuted}>{"  switch"}</text>
-      </box>
+      <ModeSegments modes={props.modes} active={props.active} />
+      <ModeKey keyName={props.keyName} />
     </box>
   );
 }

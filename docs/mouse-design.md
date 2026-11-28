@@ -37,7 +37,7 @@ so the pane and the row change together.
 | Knowledge entry | cursor to it | j/k |
 | Go-to row, a choice in a picker | pick it | enter |
 | An Info line | select it | j/k |
-| Footer `chat \| board` | switch view | v |
+| Footer view chip (Chat, Board) | go to that view | v |
 
 A click on a rail row only selects it. To go into an agent or the chat box,
 press enter or click the Canvas or the chat box.
