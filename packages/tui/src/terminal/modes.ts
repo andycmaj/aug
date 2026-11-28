@@ -1,8 +1,10 @@
 // The emulator keeps no mode state we can read back, so follow the private
 // modes that decide where a wheel turn goes: a program that tracks the mouse
 // (Claude Code fullscreen) scrolls itself, an alt-screen program without it
-// gets arrow keys, and anything else scrolls our own scrollback. Bracketed
-// paste (2004) decides how a paste is wrapped.
+// gets arrow keys, and anything else scrolls our own scrollback. The same
+// modes say which clicks a program gets: 9 presses only, 1000 presses and
+// releases, 1002 drags too, 1003 any motion. Bracketed paste (2004) decides
+// how a paste is wrapped.
 
 const MOUSE = new Set([9, 1000, 1002, 1003]);
 const ALT = new Set([47, 1047, 1049]);
@@ -16,6 +18,12 @@ const MODE = /\x1b\[\?([0-9;]+)([hl])|\x1bc/g;
 const PARTIAL = /\x1b(?:\[\??[0-9;]*)?$/;
 
 export type Wheel = "up" | "down";
+export type Click = "press" | "release" | "drag" | "move";
+export interface ClickMods {
+  shift: boolean;
+  alt: boolean;
+  ctrl: boolean;
+}
 
 export class TerminalModes {
   private mouse = new Set<number>();
@@ -72,6 +80,40 @@ export class TerminalModes {
       return body;
     }
     return `${PASTE_START}${body.replaceAll(PASTE_END, "")}${PASTE_END}`;
+  }
+
+  // Bytes for a click at a 0-based cell, in xterm's encoding, or null when
+  // the program did not ask for this kind. The button is the one pressed
+  // (0 left, 1 middle, 2 right), also on its release and drags.
+  click(
+    kind: Click,
+    button: number,
+    x: number,
+    y: number,
+    mods: ClickMods,
+  ): string | null {
+    const mode = Math.max(0, ...this.mouse);
+    if (
+      mode === 0 ||
+      (mode === 9 && kind !== "press") ||
+      (kind === "drag" && mode < 1002) ||
+      (kind === "move" && mode < 1003)
+    ) {
+      return null;
+    }
+    // Motion with no button held is 3; a legacy release names no button.
+    let b = kind === "move" || (kind === "release" && !this.sgr) ? 3 : button;
+    if (mode !== 9) {
+      b += (mods.shift ? 4 : 0) + (mods.alt ? 8 : 0) + (mods.ctrl ? 16 : 0);
+    }
+    if (kind === "drag" || kind === "move") {
+      b += 32;
+    }
+    if (this.sgr) {
+      return `\x1b[<${b};${x + 1};${y + 1}${kind === "release" ? "m" : "M"}`;
+    }
+    const c = (n: number) => String.fromCharCode(32 + Math.min(n, 223));
+    return `\x1b[M${c(b)}${c(x + 1)}${c(y + 1)}`;
   }
 
   // Bytes for one wheel step at a 0-based cell, or null to scroll locally.
