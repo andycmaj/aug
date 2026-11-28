@@ -279,8 +279,8 @@ describe("running one", () => {
     expect(store.getTask(t.id)!.agent_state).toBe(t.agent_state);
   });
 
-  // Its git rules match `git log`, not `git -C <dir> log`, and the
-  // checkout's path in the prompt had the model write the second.
+  // Its git rules match `git log`, not `git -C <dir> log`, and a checkout
+  // path in the prompt leads the model to write the second.
   test("in the checkout: told to run git there, without -C", async () => {
     const wt = mkdtempSync(join(tmpdir(), "riker-wt-"));
     const t = task(Kind.coding, { worktree: wt, branch: "fix-build" });
@@ -539,7 +539,7 @@ describe("as a move", () => {
   });
 });
 
-// RIKER-0240: a coding task's live agent takes its Canvas, so the TUI
+// A coding task's live agent takes its Canvas, so the TUI
 // offers each action's last answer to read over it.
 describe("reading an answer again", () => {
   test("each action's last finished answer, newest first", async () => {

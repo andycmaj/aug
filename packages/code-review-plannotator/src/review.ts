@@ -25,7 +25,8 @@ export interface ReviewOptions {
   ask: GuideAsk;
   // `main` also tries `master`; `origin/<base>` when the remote is ahead.
   base?: string;
-  // The skill's arguments for a job; a plain one from base, pr and about by default.
+  // The skill's arguments for a job; a plain one from base, pr and about by
+  // default.
   prompt?: (job: string) => string;
   pr?: string;
   about?: string;

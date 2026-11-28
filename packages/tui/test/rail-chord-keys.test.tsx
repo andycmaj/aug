@@ -1,4 +1,4 @@
-// RIKER-0289: jk or kj typed fast in the chat box or on an attached agent
+// jk or kj typed fast in the chat box or on an attached agent
 // goes back to the rail. The box keeps a lone j or k as typed and takes the
 // chord's letter back out; the agent never sees a chord, and gets a lone
 // letter once it times out. ctrl+] leaves the box for the rail, as it

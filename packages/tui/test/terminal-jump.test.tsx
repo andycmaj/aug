@@ -1,7 +1,7 @@
-// AUG-0148: ctrl+t while attached detaches and jumps your tmux client to the
-// agent's window; a terminal with no window of its own (the editor) gets the
-// key as typed. AUG-0176: ctrl+e toggles the rail the same way and leaves you
-// attached. Pressed through the real keymap.
+// ctrl+t while attached detaches and jumps your tmux client to the agent's
+// window; a terminal with no window of its own (the editor) gets the key as
+// typed. ctrl+e toggles the rail the same way and leaves you attached.
+// Pressed through the real keymap.
 
 import { afterEach, expect, test } from "bun:test";
 import { onMount, Show } from "solid-js";
@@ -140,11 +140,10 @@ test("ctrl+e in a terminal with no window of its own goes to it as typed", async
   expect(focus()?.isPaneFocused("canvas")).toBe(true);
 });
 
-// RIKER-0195: ctrl+[ (sent apart from Esc by a kitty-protocol terminal) and
+// ctrl+[ (sent apart from Esc by a kitty-protocol terminal), ctrl+o and
 // ctrl+a detach an agent and decline, so the shell's layer goes back or Home
 // (go-back-anywhere.test.tsx); a terminal with no agent (the editor, where
 // ctrl+[ is how many type Esc) gets them as typed.
-// RIKER-0223: ctrl+o is back too (it gets through tmux), the same way.
 for (const [name, key, octal] of [
   ["ctrl+[", "[", "033"],
   ["ctrl+o", "o", "017"],

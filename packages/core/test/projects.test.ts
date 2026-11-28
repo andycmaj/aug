@@ -494,7 +494,7 @@ describe("closing, moving, reconciling", () => {
     ]);
   });
 
-  // shift+t, and ctrl+t while attached (AUG-0148).
+  // shift+t, and ctrl+t while attached.
   test("jump moves Riker's own client; outside tmux it answers the attach line", async () => {
     const t = codingTask();
     expect(await jump(t.id)).toBe("gone");

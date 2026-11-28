@@ -24,7 +24,7 @@ import {
 } from "../src/types";
 import { freshHome } from "./support/helpers";
 
-// Ready for review (AUG-0113): the agent is finished and the result waits on
+// Ready for review: the agent is finished and the result waits on
 // the owner. docs/rail-status-design.md has the states and the lane order.
 
 let n = 0;

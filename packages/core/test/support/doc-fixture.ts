@@ -1,6 +1,6 @@
 // A JOB.md like the onboarding interview drafts: headings, lists, quotes,
-// parentheses, backticks, an email and a $. Its `## ` lines are what got
-// the inline `--text` call denied (AUG-0093).
+// parentheses, backticks, an email and a $. Its `## ` lines get an inline
+// `--text` call denied, so it goes as a file.
 export const REAL_JOB = `# JOB
 
 What my job is. Triage weighs importance by this, never "intent".

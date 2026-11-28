@@ -1,4 +1,4 @@
-// RIKER-0265: an agent shown on the Canvas but not attached is greyed out,
+// An agent shown on the Canvas but not attached is greyed out,
 // so it is plain that typing does not go to it; attaching clears it. The
 // text stays: only its colours fade toward the background.
 

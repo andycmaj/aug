@@ -645,8 +645,8 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
     },
     // Reserved on an agent (a terminal with no agent, the editor, is sent
     // the key as typed): detach, then back or Home as anywhere else. The
-    // agent loses ctrl+o (claude's transcript toggle; the owner's call,
-    // RIKER-0223), ctrl+[ (Esc still reaches it) and ctrl+a (start of line
+    // agent loses ctrl+o (claude's transcript toggle, by the owner's
+    // choice), ctrl+[ (Esc still reaches it) and ctrl+a (start of line
     // in claude's prompt, and tmux's prefix where that is C-a). Each back
     // chord has a command of its own here, so a terminal with no agent is
     // sent the byte of the key pressed.
@@ -668,8 +668,8 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
       desc: "detach and go to the Assistant",
       help: "home",
     },
-    // Reserved, so the rail toggles while attached as it does anywhere (the
-    // owner's call, AUG-0176): the agent loses ctrl+e (end of line in
+    // Reserved, so the rail toggles while attached as it does anywhere (by
+    // the owner's choice): the agent loses ctrl+e (end of line in
     // claude's prompt; End still works). You stay attached either way. A
     // terminal with no agent (the editor) is sent the key as typed.
     {
@@ -1023,10 +1023,10 @@ const defaultKeymap: KeymapTable<HelpCtx> = {
   ],
 };
 
-// The binding table with config's navigation keys in place of the defaults, in every
-// scope that binds them (the go-to chord is in the terminal's too, which is
-// what lets it past an attached agent), and a key per task action that asks
-// for one (config.json `actions.<name>.key`), on the rail and the Canvas.
+// The binding table with config's navigation keys in place of the defaults,
+// in every scope that binds them (the go-to chord is in the terminal's too,
+// which lets it past an attached agent), and a key per task action that
+// asks for one (config.json `actions.<name>.key`), on the rail and Canvas.
 export function buildKeymap(
   keys: NavKeys = {},
   actions: ActionKey[] = [],

@@ -1,5 +1,5 @@
 // The Assistant handing in a real doc through a real `claude -p`, under the
-// same tools, allow rules and dontAsk mode as Home (AUG-0093). Costs tokens,
+// same tools, allow rules and dontAsk mode as Home. Costs tokens,
 // so it runs only with RIKER_REAL_CLAUDE=1:
 //   RIKER_REAL_CLAUDE=1 bun test test/propose-doc-real.test.ts
 

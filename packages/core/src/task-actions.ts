@@ -56,7 +56,8 @@ export const ActionOutput = {
   // The skill does its own output (a pane the owner talks in).
   none: "none",
   // The answer is Plannotator guide JSON: saved into Plannotator, opened in
-  // `plannotator review`, its findings listed on the turn (@riker/code-review-plannotator).
+  // `plannotator review`, its findings listed on the turn
+  // (@riker/code-review-plannotator).
   guide: "guide",
 } as const;
 export type ActionOutput = (typeof ActionOutput)[keyof typeof ActionOutput];

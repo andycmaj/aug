@@ -689,13 +689,12 @@ export function migrate(db: Database): void {
   }
 }
 
-// Before spend kept sessions, a resumed chat turn was recorded at its
-// session's running total (claude -p --resume restores the cost state), so
-// Home read $68 a turn. Each chat row is put on its session (its task's chat
-// session latest started by then) and keeps only the difference from the
-// row before it in that session; a session's first row, from the total
-// before it in the session's own log, when the log says. Task actions on
-// forks are left as they were.
+// A spend row with no session holds its session's running total (claude -p
+// --resume restores the cost state). Each chat row is put on its session
+// (its task's chat session latest started by then) and keeps only the
+// difference from the row before it in that session; a session's first row,
+// from the total before it in the session's own log, when the log says.
+// Task actions on forks are left alone.
 function spendBySession(db: Database): void {
   if (columns(db, "sessions").length === 0) {
     return;

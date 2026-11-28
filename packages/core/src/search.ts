@@ -342,8 +342,8 @@ function wordMatch(doc: SearchDoc, raw: string): Match | null {
     return doc.taskId === n ? { score: 1, why: null } : null;
   }
 
-  // RIKER-0023, AUG-0023, riker23, 23: the task number. A bare number may also be a
-  // GitHub number or just a number in the words.
+  // RIKER-0023, AUG-0023, riker23, 23: the task number. A bare number may also
+  // be a GitHub number or just a number in the words.
   const ref = word.match(/^((?:riker|aug)-?)?0*(\d+)$/);
   let match: Match | null = null;
   if (ref) {

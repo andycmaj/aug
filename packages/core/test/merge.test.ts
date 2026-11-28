@@ -95,8 +95,7 @@ describe("merged", () => {
 });
 
 // The turn that merges a PR is the one to look after: the clocks are minutes
-// away, and GitHub's may be paused by a rate limit (RIKER-0223's merge sat
-// unmarked behind one).
+// away, and GitHub's may be paused by a rate limit.
 describe("a turn's end", () => {
   class Refresher implements Connector {
     readonly name = "refresher";
@@ -165,10 +164,9 @@ describe("a turn's end", () => {
   });
 });
 
-// RIKER-0182: the sweep ran branchMerged (a handful of git calls) on every
-// task with a branch every couple of minutes and every GitHub poll, 14.6k a
-// day. Its answer moves only with the refs it reads, so a sweep reads them
-// once per repo and asks only where they moved.
+// branchMerged is a handful of git calls, and a sweep covers every task with
+// a branch every couple of minutes. Its answer moves only with the refs it
+// reads, so a sweep reads them once per repo and asks only where they moved.
 describe("a sweep's cost", () => {
   const seed = (n: number) =>
     Array.from({ length: n }, (_, i) => {
@@ -386,7 +384,7 @@ describe("branchMerged (real git)", () => {
   });
 
   // A PR merged on GitHub reaches origin/main with any fetch; the checkout's
-  // own main waits for the owner's pull (RIKER-0223: main not pulled).
+  // own main waits for the owner's pull.
   test("merged on origin while the local main is behind", async () => {
     const repo = mkdtempSync(join(tmpdir(), "riker-merge-"));
     const git = (...a: string[]) => sh(repo, "git", ...a);

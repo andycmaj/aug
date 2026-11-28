@@ -1,5 +1,5 @@
-// AUG-0175: a Win shows in its project and under Wins, on the real rail,
-// and both rows are the one task. w pins a row as a Win and unpins it.
+// A Win shows in its project and under Wins, on the real rail, and both
+// rows are the one task. w pins a row as a Win and unpins it.
 
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";

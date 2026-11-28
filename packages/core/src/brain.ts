@@ -235,7 +235,7 @@ export function claudeArgs(call: BrainCall): string[] {
   // claude.ai connectors load even with --setting-sources "". A call with no
   // mcp__ rule can't run one, yet a resumed session that loads them late
   // appends their 35 schemas (removal, then addition) each turn and misses
-  // the prompt cache: the whole context re-written (AUG-0160). Load none.
+  // the prompt cache: the whole context re-written. Load none.
   if (!wantsMcp(call)) {
     args.push("--strict-mcp-config");
   }

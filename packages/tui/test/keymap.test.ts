@@ -233,10 +233,10 @@ test("attached to a terminal, only its own keys are listed", () => {
   expect(keys.get("^a")).toBe(Commands.GO_HOME);
 });
 
-// RIKER-0195: ctrl+[ goes back and ctrl+a goes Home from anywhere. Each is in
-// the app table (the shell's layer under every other) and the terminal's
-// (what lets it past an attached agent), and means nothing else anywhere:
-// not the ctrl+j/k of RIKER-0024 and RIKER-0180, nor Esc.
+// ctrl+[ goes back and ctrl+a goes Home from anywhere. Each is in the app
+// table (the shell's layer under every other) and the terminal's (what lets
+// it past an attached agent), and means nothing else anywhere: not ctrl+j/k,
+// nor Esc.
 test("ctrl+[ is back and ctrl+a is Home, anywhere, an attached terminal too", () => {
   const uses = (key: string) =>
     Object.entries(keymap)
@@ -267,7 +267,7 @@ test("ctrl+[ is back and ctrl+a is Home, anywhere, an attached terminal too", ()
   }
 });
 
-// RIKER-0223: no default binding uses a chord that cannot reach Riker in a
+// No default binding uses a chord that cannot reach Riker in a
 // legacy terminal or tmux: ctrl+j/m/i/h are the newline, Enter, Tab and
 // Backspace bytes, ctrl+b is tmux's prefix, and vim-tmux-navigator (a common
 // tmux plugin) takes ctrl+h/j/k/l. ctrl+[ is allowed only beside ctrl+o and
@@ -337,7 +337,7 @@ test("ctrl+t is the attached terminal's tmux jump, and only that", () => {
   expect(others).toEqual([`terminal:${Commands.TERMINAL_JUMP}`]);
 });
 
-// AUG-0176: ctrl+e toggles the rail attached or not, so it means the same
+// ctrl+e toggles the rail attached or not, so it means the same
 // thing in both tables.
 test("ctrl+e is the rail toggle anywhere, an attached terminal too", () => {
   const uses = Object.entries(keymap).flatMap(([scope, bindings]) =>
@@ -428,7 +428,7 @@ test("the Inbox's keys say what they do to each row", () => {
     "noise filter",
     "re-triage",
   ]);
-  // AUG-0140: x dismisses every message, and drops no task; X undoes the
+  // x dismisses every message, and drops no task; X undoes the
   // task a message made, never one it only joined.
   const made = inbox("message", {
     inboxTask: true,

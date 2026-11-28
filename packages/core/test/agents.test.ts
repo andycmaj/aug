@@ -180,8 +180,8 @@ describe("coding agent", () => {
     ]);
   });
 
-  // tmux takes a command of about 16KB at most (RIKER-0228: a review's
-  // brief is often more), so the brief and a long note go in files.
+  // tmux takes a command of about 16KB at most (a review's brief is often
+  // more), so the brief and a long note go in files.
   test("a brief or note of any size leaves the command line short", () => {
     const t = store.createTask({
       title: "Review #12",

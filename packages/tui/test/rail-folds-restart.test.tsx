@@ -1,5 +1,4 @@
-// RIKER-0194: a project folded on the rail came back unfolded after a
-// restart, since the fold lived only in the TUI's memory.
+// A project folded on the rail stays folded across a restart.
 
 import { afterEach, expect, test } from "bun:test";
 import { rmSync } from "node:fs";

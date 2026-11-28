@@ -1,5 +1,5 @@
-// AUG-0175: a Win is listed under Wins and stays in its project. The two rows are one task: counted once, found once, walked
-// once.
+// A Win is listed under Wins and stays in its project. The two rows are one
+// task: counted once, found once, walked once.
 
 import { beforeEach, describe, expect, test } from "bun:test";
 import {

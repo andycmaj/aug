@@ -298,11 +298,11 @@ export function Rail(props: { actions: TaskActions }) {
   );
 }
 
-// status filter bar: a pill per status with its count, lit while it
+// The status filter bar: a pill per status with its count, lit while it
 // filters. Digits 1-9 toggle the pills in this order; f steps through them.
 // Nine pills fit the rail only as mark+count with one space between. It is
-// the rail's only header: the pills already count the work. A lit pill is a mark and a
-// count, so a line under the pills says in words what the rail shows, and
+// the rail's only header: the pills already count the work. A pill says
+// little, so a line under them says in words what the lit ones show, and
 // the footer's word for showing everything again.
 function FilterBar(props: { onToggle: (filter: RailFilter) => void }) {
   const riker = useRiker();

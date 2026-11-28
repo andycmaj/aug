@@ -164,8 +164,7 @@ test("a filter names what it shows, under the pills, until 0 clears it", async (
   expect(rail().join("\n")).not.toContain("0 all");
 });
 
-// Priority was the bar's color and the title's alone: a mark beside the
-// title says it without color.
+// A mark beside the title says priority without color.
 test("an urgent or important row carries a priority mark beside its title", async () => {
   const { rail, settle } = await demoRail();
   store.updateTask(8, { priority: "important" });

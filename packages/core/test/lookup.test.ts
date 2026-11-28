@@ -73,7 +73,8 @@ describe("@ mentions", () => {
     expect(refs("fixtures")).toEqual(["fixtures"]);
     // A number is a task ref, never a project.
     expect(refs(String(fix.id))).toEqual([store.taskRef(fix.id)]);
-    // "riker" (or "aug", from before the rename) may be a ref on its way; a project it begins comes first.
+    // "riker" (or "aug", from before the rename) may be a ref on its way; a
+    // project it begins comes first.
     expect(refs("riker")).toEqual(["riker-bootstrap", store.taskRef(fix.id)]);
     expect(refs("aug")).toEqual([store.taskRef(fix.id)]);
   });

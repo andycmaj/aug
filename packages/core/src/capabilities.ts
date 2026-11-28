@@ -1,23 +1,14 @@
-// Capabilities: names Riker owns ("slack.read"), mapped to the concrete MCP tool
-// names claude is allowed to call. Agents and the Home assistant are granted
-// capabilities in ~/.riker/config.json; this is the one place that knows what a
-// capability means for a given connector.
+// Capabilities: names Riker owns ("slack.read") mapped to the MCP tools
+// claude may call, granted per role in config.json.
 //
-// Fail closed: only tools named by a capability are ever allowed, and any name
-// that looks like a write is dropped even if a config override lists it. The
-// one way past that is a built-in write capability (docs.write): the writes it
-// may grant are named here, on its own connector, and an override can only
-// narrow them. Sessions run with --permission-mode dontAsk, so anything not
-// allowed here is simply denied.
+// Fail closed: only tools a capability names are allowed (dontAsk denies the
+// rest), and a name that looks like a write is dropped even when config
+// lists it, except the writes a built-in write capability (docs.write) names.
 //
-// A capability can also be a Claude Code plugin or a command, defined only in
-// config. Headless calls skip user settings, so an enabled plugin is not there
-// unless it is loaded with --plugin-dir. Its skills then run without a rule,
-// and once the model invokes one, that skill's allowed-tools join the
-// session's allow list. So a plugin loads only when every rule its skills
-// declare is one the role already has or a command the same capability grants
-// (pluginWidens). Coding agents are interactive and load the user's settings,
-// so they have every enabled plugin already.
+// A capability can also be a Claude Code plugin or a command. A plugin's
+// skills run without a rule and add their allowed-tools to the session once
+// invoked, so a plugin loads (--plugin-dir) only when its skills ask for
+// nothing the role lacks (pluginWidens).
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";

@@ -91,7 +91,8 @@ export function previewOf(name: string): Preview {
   return "none";
 }
 
-// RFC 4180-ish: quoted fields, doubled quotes, delimiters and newlines inside quotes.
+// RFC 4180-ish: quoted fields, doubled quotes, delimiters and newlines inside
+// quotes.
 export function parseCsv(text: string, delimiter = ","): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];

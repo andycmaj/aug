@@ -1,5 +1,5 @@
-// What MCP servers a real headless `claude -p` loads for the Assistant
-// (AUG-0162). claude.ai connectors load even with --setting-sources "", and a
+// What MCP servers a real headless `claude -p` loads for the Assistant.
+// claude.ai connectors load even with --setting-sources "", and a
 // resumed session that connects them late re-adds their schemas every turn,
 // missing the prompt cache. Ungranted, none may load. Reads only the init
 // line, then kills claude, so it costs next to nothing; still needs the real

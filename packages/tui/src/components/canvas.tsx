@@ -678,7 +678,7 @@ function mentionLine(m: Mention, openTasks: (p: ProjectRow) => number): string {
 // Each task's unsent text: what the editor handed back (the box unmounts
 // while the editor has the Canvas) and what was typed before the selection
 // moved on. The box stays mounted from task to task, so without this a draft
-// followed you, and ctrl+a carried it into Home's box, where enter sends it.
+// would follow you, even into Home's box, where enter sends it.
 const unsent = new Map<string, string>();
 
 function placeholderFor(task: TaskRow): string {

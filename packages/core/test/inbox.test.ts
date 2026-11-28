@@ -149,7 +149,7 @@ describe("filters", () => {
     );
   });
 
-  // AUG-0140: x reads any message, and a read one asks nothing more of you,
+  // x reads any message, and a read one asks nothing more of you,
   // whatever triage did with it. Its task is untouched.
   test("a dismissed message leaves actionable, needs-you and the badge", () => {
     const made = filed(Verdict.task, "a direct ask", true);

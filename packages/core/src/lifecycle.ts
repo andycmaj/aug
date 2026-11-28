@@ -1,11 +1,10 @@
 // The agent lifecycle, once. A task's agent_state is a summary of its newest
 // session, and both move together through a handful of named transitions.
 // Everything that starts, hears from, ends or finishes an agent calls one of
-// these; nothing else writes agent_state. The rules that used to be scattered
-// live here: an agent ready for review stays so while it winds down, closing a
-// task stops whatever was live on it, and a session that ends for any reason
-// leaves the task stopped with Continue. docs/rail-status-design.md has the
-// states and how they move.
+// these; nothing else writes agent_state. Its rules: an agent ready for
+// review stays so while it winds down, closing a task stops whatever was live
+// on it, and a session that ends for any reason leaves the task stopped with
+// Continue. docs/rail-status-design.md has the states and how they move.
 
 import { now } from "./db";
 import * as store from "./store";

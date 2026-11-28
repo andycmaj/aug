@@ -1,7 +1,7 @@
-// RIKER-0117: an error toast stays until Esc dismisses it, the newest first,
-// and that Esc does nothing else where focus is (the Canvas, the chat box, a
-// dialog). An attached agent still gets Esc; the toast says to detach first.
-// Info toasts still go on their own.
+// An error toast stays until Esc dismisses it, the newest first, and that
+// Esc does nothing else where focus is (the Canvas, the chat box, a dialog).
+// An attached agent still gets Esc; the toast says to detach first. Info
+// toasts go on their own.
 
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";

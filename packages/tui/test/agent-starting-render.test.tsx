@@ -19,7 +19,7 @@ afterEach(() => {
   }
 });
 
-// RIKER-0290: a start can take a while with nothing to see. From s until
+// A start can take a while with nothing to see. From s until
 // the start answers, the row and the Canvas say it is starting, and a
 // second s is refused instead of launching another agent. A failed start
 // clears it, so s can try again.

@@ -25,7 +25,7 @@ afterEach(() => {
   }
 });
 
-// AUG-0192: a guide on a big change runs a while. Its stage shows on the
+// A guide on a big change runs a while. Its stage shows on the
 // task's rail row and above its steps on the Canvas, batch by batch, and
 // the rail says when it is done. GUIDE_FRAMES=<file> keeps the frames.
 test("a guide in batches shows its stage on the rail and the Canvas", async () => {

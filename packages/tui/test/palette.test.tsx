@@ -1,4 +1,4 @@
-// AUG-0154: the command palette lists what the footer would (the keymap's
+// The command palette lists what the footer would (the keymap's
 // bindings that apply here) plus the moves with no key, and runs a key's
 // command as the key would.
 

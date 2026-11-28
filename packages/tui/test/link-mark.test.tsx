@@ -1,4 +1,4 @@
-// RIKER-0114: every connection in progress shows one animated mark, then
+// Every connection in progress shows one animated mark, then
 // connected or failed with a reason. The embedded terminal is the live one:
 // connecting from spawn to its first output, failed when it exits first or
 // stays silent past its timeout. Under bun test motion is off, so the

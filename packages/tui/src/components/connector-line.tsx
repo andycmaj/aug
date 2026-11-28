@@ -42,11 +42,6 @@ export function spendWords(
 export function ConnectorLine() {
   const riker = useRiker();
   const theme = useTheme();
-  // const spend = () =>
-  //   spendWords(
-  //     riker.spendOn(localDay(riker.now())).cost,
-  //     dailyCap(riker.desk.config()),
-  //   );
   const rows = () =>
     riker.engine.connections().flatMap((c) => {
       const s = riker.status()[c.name];
