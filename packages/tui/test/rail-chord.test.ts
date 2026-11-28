@@ -1,4 +1,4 @@
-// RIKER-0289: jk or kj typed fast goes back to the rail; the first letter is
+// jk or kj typed fast goes back to the rail; the first letter is
 // held until the chord fires (dropped), breaks (replayed first) or times out
 // (replayed).
 
