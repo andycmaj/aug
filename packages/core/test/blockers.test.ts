@@ -5,7 +5,7 @@ import { handleDone } from "../src/hooks";
 import { setMux } from "../src/mux";
 import { buildRail, flattenRail } from "../src/rail";
 import * as store from "../src/store";
-import { Kind, SessionKind, TurnRole } from "../src/types";
+import { Kind, SessionKind, TaskStatus, TurnRole } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
 import { fakeBrain, freshHome, testConfig } from "./support/helpers";
 
@@ -134,6 +134,41 @@ describe("Wins", () => {
     expect(engine.desk.setWin(ids[5], true, day).ok).toBe(true);
     expect(store.winsOn("2026-11-15")).toEqual([...ids.slice(1, 5), ids[5]]);
     expect(store.winsOn("2026-11-16")).toEqual([]);
+  });
+
+  test("carryWin pins an earlier day's open Win for today; a closed one, or a sixth, is refused", () => {
+    const yesterday = new Date(2026, 10, 14, 17);
+    const day = new Date(2026, 10, 15, 9);
+    const open = engine.desk.newTask("open", Kind.task).id;
+    const done = engine.desk.newTask("done", Kind.task).id;
+    engine.desk.setWin(open, true, yesterday);
+    engine.desk.setWin(done, true, yesterday);
+    store.updateTask(done, { status: TaskStatus.done, closed_by: "you" });
+
+    const carried = engine.desk.carryWin(open, day);
+    expect(carried).toEqual({
+      ok: true,
+      text: `${store.taskRef(open)} is a Win today (1/5)`,
+    });
+    expect(engine.desk.carryWin(open, day).text).toContain(
+      "is a Win today already",
+    );
+    const closed = engine.desk.carryWin(done, day);
+    expect(closed.ok).toBe(false);
+    expect(closed.text).toContain("is done: nothing to carry");
+    // Yesterday's Wins stay as they were.
+    expect(store.winsOn("2026-11-14")).toEqual([open, done]);
+    expect(store.winsOn("2026-11-15")).toEqual([open]);
+
+    for (let i = 0; i < 4; i++) {
+      engine.desk.setWin(engine.desk.newTask(`t${i}`, Kind.task).id, true, day);
+    }
+    const again = engine.desk.newTask("again", Kind.task).id;
+    engine.desk.setWin(again, true, yesterday);
+    const full = engine.desk.carryWin(again, day);
+    expect(full.ok).toBe(false);
+    expect(full.text).toBe("Today has 5 Wins: unpin one first");
+    expect(store.winsOn("2026-11-15")).not.toContain(again);
   });
 
   test("the win move pins and unpins; an agent may not", async () => {

@@ -49,6 +49,15 @@ export interface NavKeys {
   forward?: string;
 }
 
+// Config's keys: the navigation keys, and the chord back to the rail.
+export interface KeysConfig extends NavKeys {
+  // Two letters typed within railChordMs of each other in the chat box or an
+  // attached agent go back to the rail, like vim's jk. Default ["jk", "kj"]
+  // and 180ms; [] turns it off. Read each time, so an edit needs no restart.
+  railChord?: string[];
+  railChordMs?: number;
+}
+
 export interface RikerConfig {
   // owner/repo -> local checkout, where a coding agent works (core/repos.ts).
   // Read from github.repos in a file written before it moved here.
@@ -118,8 +127,8 @@ export interface RikerConfig {
   // (core/link-state.ts).
   motion?: boolean;
   // The TUI's navigation keys, in opentui's spelling ("alt+g", "shift+h").
-  // Read at start: a change needs a restart.
-  keys?: NavKeys;
+  // Read at start: a change needs a restart (but the rail chord).
+  keys?: KeysConfig;
   // Where a coding task with no mapped checkout works.
   scratchRepo?: string;
   // Folders searched for checkouts to offer (repos.ts); default ~/workspace,

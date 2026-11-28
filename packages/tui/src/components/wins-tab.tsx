@@ -1,6 +1,7 @@
 // The Wins tab: a day and the day before it, newest first, each with its
 // Wins and how they came out, then what else landed or moved. h and l walk
-// the pair a day; Enter opens a row in place; t goes to the task.
+// the pair a day; Enter opens a row in place; t goes to the task; z pins an
+// earlier day's open Win as one of today's again.
 
 import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
 import { truncate, useTheme } from "@andycmaj/opentui-app";
@@ -12,6 +13,7 @@ import { taskRef } from "@riker/core/rows";
 import { tokens, usd } from "@riker/core/spend";
 import { TurnRole, type TaskRow, type TurnRow } from "@riker/core/types";
 import {
+  carriesOver,
   eventWords,
   Outcome,
   shiftDay,
@@ -104,9 +106,26 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
       return fn(l);
     };
 
+  const fresh = (l: WinsLine): DayRow => ({
+    ...l.row,
+    task: riker.task(l.row.task.id) ?? l.row.task,
+  });
+  const todayWins = createMemo(() =>
+    opts.active()
+      ? riker.winsDay(today(), riker.now()).wins.map((r) => r.task.id)
+      : [],
+  );
+  const carries = (l: WinsLine | null): boolean =>
+    Boolean(
+      l && carriesOver(fresh(l), l.day, { day: today(), wins: todayWins() }),
+    );
+
   const commands: Record<string, Handler> = {
     [Commands.WINS_EXPAND]: onLine((l) => cursor.toggle(l.key)),
     [Commands.WINS_GO]: onLine((l) => opts.actions.goToTask(l.row.task.id)),
+    [Commands.WINS_CARRY]: onLine((l) =>
+      carries(l) ? opts.actions.carryWin(fresh(l).task) : false,
+    ),
     [Commands.WINS_PREV_DAY]: () => (opts.active() ? shift(-1) : false),
     [Commands.WINS_NEXT_DAY]: () =>
       opts.active() && focusDay() ? shift(1) : false,
@@ -128,7 +147,10 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
     commands,
     task,
     move,
-    ctx: () => ({ winsToday: focusDay() === null }),
+    ctx: () => ({
+      winsToday: focusDay() === null,
+      winCarry: opts.active() && carries(line()),
+    }),
     View: (props: { width: number }) => (
       <WinsView
         days={days()}
@@ -136,6 +158,7 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
         openKey={cursor.openKey()}
         today={today()}
         width={props.width}
+        canCarry={lines().some((l) => carries(l))}
       />
     ),
   };
@@ -180,6 +203,7 @@ function WinsView(props: {
   openKey: string | null;
   today: string;
   width: number;
+  canCarry: boolean;
 }) {
   const theme = useTheme();
   const lane = useLaneMeta();
@@ -287,9 +311,13 @@ function WinsView(props: {
     <box flexDirection="column" flexGrow={1} flexBasis={0} paddingLeft={1}>
       <box flexDirection="row" gap={2} flexShrink={0} paddingBottom={1}>
         <text fg={theme.textMuted}>
-          {props.days[0]?.isToday
-            ? "h earlier"
-            : "h earlier · l later · 0 today"}
+          {[
+            "h earlier",
+            props.days[0]?.isToday ? null : "l later · 0 today",
+            props.canCarry ? "z win today" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </text>
       </box>
       <ExpandList

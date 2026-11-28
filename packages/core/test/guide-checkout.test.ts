@@ -190,7 +190,7 @@ describe("the guide on a review with no worktree", () => {
     expect(run.comments!.list.length).toBeGreaterThan(0);
 
     // Opened again with no run: the same PR mode.
-    const again = engine.desk.guideReview(task.id);
+    const again = await engine.desk.guideReview(task.id);
     if ("error" in again) {
       throw new Error(again.error);
     }

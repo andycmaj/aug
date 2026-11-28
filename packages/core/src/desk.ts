@@ -30,6 +30,7 @@ import {
   taskReopened,
 } from "./lifecycle";
 import { localDay, MAX_WINS, readFolds, writeFolds } from "./rail";
+import { isClosed } from "./rows";
 import type { RikerConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
 import { unmergedWork, type NotMerged } from "./merge";
@@ -52,6 +53,7 @@ import { capReached } from "./spend";
 import {
   ActionEvent,
   ActionVia,
+  actionBase,
   actionNamed,
   invocation,
   makesCheckout,
@@ -76,7 +78,8 @@ import type {
   TriageEffect,
   TriageOutcome,
 } from "./plugins";
-import { reviewedPr } from "./pr";
+import { reviewedPr, taskPr } from "./pr";
+import type { HeadInput, ReviewStart } from "./pr-head";
 import {
   AgentState,
   IdeaStatus,
@@ -111,6 +114,9 @@ import { errorMessage, logger } from "./log";
 export { NoJump, type Jump } from "./projects";
 
 const log = logger("desk");
+
+// Past this a start's hold on its task lets go (Desk.startHoldMs).
+const START_HOLD_MS = 120_000;
 
 export type RetriageResult =
   | { ok: true; outcome: TriageOutcome }
@@ -346,17 +352,100 @@ export class Desk {
         error: "a System task has no agent: y accepts, x rejects",
       };
     }
-    return this.undos.trackAsync(
-      () => this.drivers.for(task).start(task, opts),
-      (r) =>
-        r.type === "started" || r.type === "queued"
-          ? {
-              type: "cannot",
-              what: `start ${store.taskRef(taskId)}`,
-              why: "it started an agent",
-            }
-          : null,
+    const review = opts.review ?? this.reviewStart(task);
+    const withReview = review ? { ...opts, review } : opts;
+    return this.startOnce(taskId, () =>
+      this.undos.trackAsync(
+        () => this.drivers.for(task).start(task, withReview),
+        (r) =>
+          r.type === "started" || r.type === "queued"
+            ? {
+                type: "cannot",
+                what: `start ${store.taskRef(taskId)}`,
+                why: "it started an agent",
+              }
+            : null,
+      ),
     );
+  }
+
+  // Tasks whose start is in flight, in this process only: the TUI, the
+  // moves and the timers all start through this desk, and a start never
+  // outlives it. Each entry is its own start's, so a late answer from one
+  // the hold let go never clears a newer one.
+  private starting = new Map<
+    number,
+    { token: symbol; done: Promise<StartResult> }
+  >();
+  private startingListeners = new Set<(ids: ReadonlySet<number>) => void>();
+  // How long a start may hold its task before the hold lets go: a start
+  // stuck in tmux or wt must not refuse s until Riker restarts. Tests
+  // shorten it.
+  startHoldMs = START_HOLD_MS;
+
+  isStarting(taskId: number): boolean {
+    return this.starting.has(taskId);
+  }
+
+  onStarting(listener: (ids: ReadonlySet<number>) => void): () => void {
+    this.startingListeners.add(listener);
+    return () => this.startingListeners.delete(listener);
+  }
+
+  // Every start of a task's agent goes through here. A start can take
+  // seconds (a worktree, a window, claude's launch) with nothing to show
+  // yet; a second one in that gap would launch another agent, so it
+  // answers `starting` until the first answers, whatever it answers.
+  private async startOnce(
+    taskId: number,
+    run: () => Promise<StartResult>,
+  ): Promise<StartResult> {
+    if (this.starting.has(taskId)) {
+      return { type: "starting" };
+    }
+    const token = Symbol(String(taskId));
+    let release!: (r: StartResult) => void;
+    const done = new Promise<StartResult>((r) => (release = r));
+    let hold: ReturnType<typeof setTimeout> | undefined;
+    const clear = () => {
+      if (this.starting.get(taskId)?.token === token) {
+        this.starting.delete(taskId);
+        this.startingChanged();
+      }
+    };
+    let result: StartResult = { type: "failed", error: "start threw" };
+    try {
+      this.starting.set(taskId, { token, done });
+      this.startingChanged();
+      hold = setTimeout(() => {
+        if (this.starting.get(taskId)?.token === token) {
+          log.warn("start hold let go", {
+            task: taskId,
+            ms: this.startHoldMs,
+          });
+          clear();
+        }
+      }, this.startHoldMs);
+      result = await run();
+      return result;
+    } finally {
+      clearTimeout(hold);
+      clear();
+      release(result);
+    }
+  }
+
+  // A listener's error is logged, never thrown: it must not keep a task
+  // held, nor replace what its start answered.
+  private startingChanged(): void {
+    const ids: ReadonlySet<number> = new Set(this.starting.keys());
+    for (const listener of this.startingListeners) {
+      try {
+        listener(ids);
+      } catch (err) {
+        log.warn("starting listener failed", { err: errorMessage(err) });
+      }
+    }
   }
 
   // The owner's Stop: stopped, and Start resumes it.
@@ -494,12 +583,36 @@ export class Desk {
     return !!task && reviewedPr(task) !== null;
   }
 
-  guideReview(taskId: number): ActionResult | { error: string } {
+  async guideReview(taskId: number): Promise<ActionResult | { error: string }> {
     const task = store.getTask(taskId);
     if (!task) {
       return { error: `no task ${store.taskRef(taskId)}` };
     }
-    return guideReview(task);
+    return guideReview(task, this.prHead(task));
+  }
+
+  // Where the task's PR head is read before a guide reads its worktree:
+  // none without a PR or a source that can tell (the sim).
+  private prHead(task: TaskRow): HeadInput | undefined {
+    const pr = taskPr(task);
+    const source = this.options.reviews;
+    if (!pr || !source?.head) {
+      return undefined;
+    }
+    const head = source.head.bind(source);
+    return {
+      pr,
+      source: { head },
+      rewrite: reviewedPr(task)?.url === pr.url,
+    };
+  }
+
+  // An agent started on a PR asked of the owner reviews the PR as pushed:
+  // its worktree (made by wt from refs that may be old) is brought to the
+  // head first, with the base fetched.
+  private reviewStart(task: TaskRow): ReviewStart | undefined {
+    const head = reviewedPr(task) ? this.prHead(task) : undefined;
+    return head ? { head, base: actionBase(task) } : undefined;
   }
 
   // A guide's review closed (`output` is what plannotator printed). A
@@ -549,6 +662,11 @@ export class Desk {
         text: `Your review notes are on ${ref}: s starts its agent with them`,
       };
     }
+    if (started.type === "starting") {
+      return {
+        text: `Your review notes are on ${ref}; its agent was already starting`,
+      };
+    }
     return {
       text: `Your review notes are on ${ref}, but its agent did not start: ${started.error}`,
       failed: true,
@@ -585,6 +703,7 @@ export class Desk {
       pr && this.options.reviews
         ? { pr, source: this.options.reviews, whole }
         : undefined,
+      this.prHead(task),
     );
     if ("error" in run) {
       return run;
@@ -1353,6 +1472,20 @@ export class Desk {
     );
   }
 
+  // A Win from an earlier day, still unfinished, pinned again for today.
+  // A closed one stays where it came out.
+  carryWin(taskId: number, at = new Date()): { ok: boolean; text: string } {
+    const task = store.getTask(taskId);
+    const ref = store.taskRef(taskId);
+    if (!task) {
+      return { ok: false, text: `no task ${ref}` };
+    }
+    if (isClosed(task)) {
+      return { ok: false, text: `${ref} is ${task.status}: nothing to carry` };
+    }
+    return this.setWin(taskId, true, at);
+  }
+
   toggleWin(taskId: number, at = new Date()): { ok: boolean; text: string } {
     return this.setWin(
       taskId,
@@ -1501,14 +1634,43 @@ export class Desk {
     store.setPending([turnId], true);
     if (driver.isLive(task)) {
       void driver.deliver(task);
-    } else if (driver.resumes(task)) {
-      void driver.start(task).catch((err: unknown) =>
+      return;
+    }
+    if (!driver.resumes(task)) {
+      return;
+    }
+    // A start already in flight (the owner's s) may have built its launch
+    // before this line was pending: once it answers, the line goes to the
+    // window it made.
+    const inFlight = this.starting.get(task.id)?.done;
+    if (inFlight) {
+      void inFlight
+        .then(async () => {
+          const fresh = store.getTask(task.id);
+          if (fresh && driver.isLive(fresh)) {
+            await driver.deliver(fresh);
+          }
+        })
+        .catch((err: unknown) =>
+          log.warn("timer line not delivered", {
+            task: task.id,
+            err: errorMessage(err),
+          }),
+        );
+      return;
+    }
+    void this.startOnce(task.id, () => driver.start(task)).then(
+      (r) => {
+        if (r.type === "failed") {
+          log.warn("timer resume failed", { task: task.id, err: r.error });
+        }
+      },
+      (err: unknown) =>
         log.warn("timer resume failed", {
           task: task.id,
           err: errorMessage(err),
         }),
-      );
-    }
+    );
   }
 
   // Triage again, as a new run. A message on a task is refused: a second

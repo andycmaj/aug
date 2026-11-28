@@ -129,6 +129,13 @@ const PLACES: {
     ctx: { ...task, board: BoardTab.wins, winsToday: true, closed: true },
   },
   {
+    id: "board-wins-open",
+    title: "Board · Wins, an open Win from yesterday",
+    where: "Board, tab 1, on an earlier day's Win whose task is still open",
+    scopes: ["board", "app"],
+    ctx: { ...task, board: BoardTab.wins, winsToday: true, winCarry: true },
+  },
+  {
     id: "board-columns",
     title: "Board · Columns",
     where: "Board, tab 2, on a task",

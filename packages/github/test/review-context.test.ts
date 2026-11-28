@@ -134,3 +134,37 @@ describe("what the guide reads beside a PR asked of you", () => {
     );
   });
 });
+
+describe("the PR's head", () => {
+  test("is its head commit and branch, read for that PR", async () => {
+    const calls: { query: string; vars: Record<string, string | number> }[] =
+      [];
+    const source = githubReviews(async (query, vars) => {
+      calls.push({ query, vars });
+      return {
+        data: {
+          repository: {
+            pullRequest: { headRefOid: "abc1234def", headRefName: "export" },
+          },
+        },
+      };
+    });
+    expect(await source.head!(pr)).toEqual({
+      oid: "abc1234def",
+      branch: "export",
+    });
+    expect(calls[0]!.vars).toEqual({ owner: "acme", name: "api", number: 40 });
+    expect(calls[0]!.query).toContain("headRefOid");
+  });
+
+  test("a PR GitHub does not answer for throws, so the guide says so", async () => {
+    const gone = githubReviews(async () => ({
+      data: { repository: { pullRequest: null } },
+    }));
+    await expect(gone.head!(pr)).rejects.toThrow("acme/api#40 not found");
+    const failing = githubReviews(async () => ({
+      errors: [{ message: "API rate limit exceeded" }],
+    }));
+    await expect(failing.head!(pr)).rejects.toThrow("API rate limit exceeded");
+  });
+});

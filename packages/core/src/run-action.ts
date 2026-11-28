@@ -25,6 +25,7 @@ import { paths } from "./paths";
 import { labeled } from "./rows";
 import { liveWindow } from "./projects";
 import { reviewedPr, type PrRef } from "./pr";
+import { contains, syncPrHead, type HeadInput, type HeadSync } from "./pr-head";
 import type { ReviewContext, ReviewSource } from "./plugins";
 import { toolsEnv, toolsRules, TOOLS_NAME } from "./self";
 import * as store from "./store";
@@ -224,6 +225,8 @@ export function startAction(
   // The event that ran it by itself; none when the owner asked.
   event?: string,
   review?: GuideReviewInput,
+  // Where the PR's head is read, so the guide reviews the code as pushed.
+  head?: HeadInput,
 ): ActionRun | { error: string } {
   if (spec.via === ActionVia.pane) {
     return startPane(config, task, spec);
@@ -277,6 +280,7 @@ export function startAction(
 
   const done = run(config, task, spec, turn, event, {
     ...(guide && review ? { review } : {}),
+    ...(guide && head ? { head } : {}),
     cwd,
     session: session?.id,
     as: source.as,
@@ -402,6 +406,7 @@ export interface GuideReviewInput {
 
 interface RunShape {
   review?: GuideReviewInput;
+  head?: HeadInput;
   cwd: string;
   session?: string;
   // The skill's name as this run loads it (a wrapped user skill's differs).
@@ -425,10 +430,11 @@ async function run(
   const timing = log.time("action done", { task: task.id, action: spec.name });
   try {
     if (shape.plan) {
+      const fresh = await freshen(task, shape, shape.plan, steps, turn);
       const { plan, context } = await reviewScope(
         task,
         shape,
-        shape.plan,
+        fresh.plan,
         steps,
         turn,
       );
@@ -443,6 +449,7 @@ async function run(
         steps,
         timing,
         context,
+        fresh.synced,
       );
     }
     const result = await think({
@@ -503,6 +510,38 @@ async function run(
     });
     return { ok: false, text: `${spec.name} failed: ${message}` };
   }
+}
+
+// The worktree brought to the PR's head before the guide reads it; the
+// patch planned before is taken again when that moved it. A failed fetch or
+// read reviews the worktree as it is, and says so.
+async function freshen(
+  task: TaskRow,
+  shape: RunShape,
+  plan: { patch: Patch; batches: BatchPlan },
+  steps: string[],
+  turn: TurnRow,
+): Promise<{ plan: { patch: Patch; batches: BatchPlan }; synced?: HeadSync }> {
+  if (!shape.head) {
+    return { plan };
+  }
+  const cwd = task.worktree ?? shape.cwd;
+  const synced = await syncPrHead({
+    cwd,
+    input: shape.head,
+    base: actionBase(task),
+    branches: [task.branch],
+  });
+  steps.push(synced.line);
+  store.updateTurn(turn.id, { steps: JSON.stringify(steps) });
+  if (!synced.moved) {
+    return { plan, synced };
+  }
+  const patch = guidePatch(task, cwd);
+  if ("error" in patch) {
+    throw new Error(patch.error);
+  }
+  return { plan: { patch, batches: planBatches(patch, cwd) }, synced };
 }
 
 // A PR asked of the owner: its words and threads join every call's prompt,
@@ -577,6 +616,7 @@ async function runGuide(
   steps: string[],
   timing: (fields?: Record<string, unknown>) => void,
   context?: string,
+  synced?: HeadSync,
 ): Promise<ActionResult> {
   const cwd = task.worktree ?? shape.cwd;
   const commits = branchCommits(cwd, plan.patch.mergeBase).length
@@ -638,7 +678,14 @@ async function runGuide(
     spec,
     turn,
     ran.guide,
-    { event, patch: plan.patch, denied: ran.denied, gaps: ran.gaps, progress },
+    {
+      event,
+      patch: plan.patch,
+      denied: ran.denied,
+      gaps: ran.gaps,
+      progress,
+      ...(synced?.stale ? { stale: synced.line } : {}),
+    },
     timing,
   );
 }
@@ -669,6 +716,8 @@ async function finishGuide(
     denied: string[];
     gaps: string[];
     progress: (p: GuideProgress) => void;
+    // Why the code it read may be behind the PR.
+    stale?: string;
   },
   timing: (fields?: Record<string, unknown>) => void,
 ): Promise<ActionResult> {
@@ -693,7 +742,12 @@ async function finishGuide(
   }
   store.updateTurn(turn.id, {
     status: TurnStatus.done,
-    body: guideMarkdown(saved, { opened: !event, denied, gaps: run.gaps }),
+    body: guideMarkdown(saved, {
+      opened: !event,
+      denied,
+      gaps: run.gaps,
+      ...(run.stale ? { stale: run.stale } : {}),
+    }),
     did: `${saved.guide.title}: ${saved.findings.length} review notes`,
     finished_at: now(),
     files: JSON.stringify([
@@ -705,11 +759,13 @@ async function finishGuide(
     ]),
   });
   timing({ ok: true });
-  const warn = denied.length
-    ? " (a read was denied: it may have missed things)"
-    : run.gaps.length
-      ? " (not all of it reviewed: see the turn)"
-      : "";
+  const warn = run.stale
+    ? ` (${run.stale})`
+    : denied.length
+      ? " (a read was denied: it may have missed things)"
+      : run.gaps.length
+        ? " (not all of it reviewed: see the turn)"
+        : "";
   if (event) {
     return {
       ok: true,
@@ -735,8 +791,14 @@ export function hasGuideReview(task: TaskRow): boolean {
 }
 
 // The last guide's review, with no model run: its findings refit to the
-// patch as it is now, to be posted once the review is up.
-export function guideReview(task: TaskRow): ActionResult | { error: string } {
+// patch as it is now, to be posted once the review is up. With the PR's head
+// to read, the worktree is brought to it first, and when the PR has moved on
+// past what the notes were written against they are left out as outdated
+// rather than pinned to code that changed under them.
+export async function guideReview(
+  task: TaskRow,
+  head?: HeadInput,
+): Promise<ActionResult | { error: string }> {
   const dir = paths.work(task.id);
   const kept = readFindings(dir);
   if (!kept) {
@@ -748,9 +810,35 @@ export function guideReview(task: TaskRow): ActionResult | { error: string } {
   if (!existsSync(cwd)) {
     return { error: `${cwd} is gone` };
   }
+  const synced = head
+    ? await syncPrHead({
+        cwd,
+        input: head,
+        base: kept.base.replace(/^origin\//, ""),
+        branches: [task.branch],
+      })
+    : null;
   const patch = patchFor(cwd, kept.base);
   if ("error" in patch) {
     return patch;
+  }
+  const title = kept.title || "Guide";
+  const outdated =
+    synced?.head && kept.head
+      ? !(await contains(cwd, kept.head, synced.head))
+      : false;
+  if (outdated) {
+    const n = kept.findings.length;
+    log.info("guide review outdated", {
+      task: task.id,
+      written: kept.head,
+      head: synced!.head,
+    });
+    return {
+      ok: true,
+      text: `${title}: opening Plannotator without its ${n} note${n === 1 ? "" : "s"}: the PR moved on since the guide (${kept.head.slice(0, 7)} → ${synced!.head!.slice(0, 7)}), run the guide again for notes on the code as it is`,
+      terminal: reviewTerminal(cwd, dir, patch.base, [], prToReview(task)),
+    };
   }
   const { comments, dropped } = reviewComments(kept.findings, patch.text);
   log.info("guide review", {
@@ -758,9 +846,13 @@ export function guideReview(task: TaskRow): ActionResult | { error: string } {
     comments: comments.length,
     dropped,
   });
+  const notes = dropped
+    ? ` (${dropped} note${dropped === 1 ? "" : "s"} on files no longer changed left out)`
+    : "";
+  const stale = synced?.stale ? ` (${synced.line})` : "";
   return {
     ok: true,
-    text: `${kept.title || "Guide"}: opening Plannotator${dropped ? ` (${dropped} note${dropped === 1 ? "" : "s"} on files no longer changed left out)` : ""}`,
+    text: `${title}: opening Plannotator${notes}${stale}`,
     terminal: reviewTerminal(cwd, dir, patch.base, comments, prToReview(task)),
   };
 }

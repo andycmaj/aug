@@ -556,6 +556,11 @@ export function useActions(dialogs: Dialogs) {
     showToast(said.text, 3000, said.ok ? undefined : "error");
   }
 
+  function carryWin(task: TaskRow) {
+    const said = desk.carryWin(task.id);
+    showToast(said.text, 3000, said.ok ? undefined : "error");
+  }
+
   function acceptDocs(task: TaskRow) {
     showToast(riker.desk.acceptDocs(task.id), 4000);
   }
@@ -680,8 +685,8 @@ export function useActions(dialogs: Dialogs) {
   }
 
   // The last guide's review, with its findings posted again: no model run.
-  function openGuideReview(task: TaskRow) {
-    const opened = desk.guideReview(task.id);
+  async function openGuideReview(task: TaskRow) {
+    const opened = await desk.guideReview(task.id);
     if ("error" in opened) {
       showToast(opened.error, 5000, "error");
       return;
@@ -809,7 +814,7 @@ export function useActions(dialogs: Dialogs) {
                   {
                     label: OPEN_REVIEW_TITLE,
                     hint: "the last guide, no run",
-                    run: () => openGuideReview(task),
+                    run: () => void openGuideReview(task),
                   },
                 ]
               : [],
@@ -1561,6 +1566,7 @@ export function useActions(dialogs: Dialogs) {
     stop,
     done,
     reopen,
+    carryWin,
     send,
     say,
     sayToProject,

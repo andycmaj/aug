@@ -161,6 +161,15 @@ as today):
 | stopped | ■ | agent stopped | not running; `s` resumes it | any session end |
 | ready | ◈ | ready for review | finished; the result waits on you to review, push or close (or, if it closed the task, to read) | `riker-tools done`, a chat turn that answered |
 
+A start in flight is not a state: it is the desk's (`desk.isStarting`), in
+memory, from `s`, `move start` or a timer's resume until the start
+answers. Meanwhile the row's mark is the spinner, its word "starting
+agent…" (in place of the lane's word and the PR chip), and the Canvas
+header says "starting the agent…". A second start in that time is refused
+("already starting"); a timer due then hands its line to the window that
+start makes. A failed start clears it, so `s` tries again, and one that
+has not answered in two minutes lets go of the task.
+
 ### Changes
 
 - **agentdone is renamed ready** (AUG-0113, value `ready`, migrated). An
@@ -336,7 +345,10 @@ Marks that change neither lifecycle nor agent state:
     progress (its only row: a done task has no other); the heading says
     `Wins (2/5)`, done of pinned.
   - Tomorrow the box is empty and yesterday's open Wins are back in their
-    sections. No carry-over.
+    sections. Nothing carries over by itself: `z` on an earlier day's Win
+    on the Board's Wins tab pins it for today again (`desk.carryWin`),
+    when its task is still open and not pinned today; a done or dropped
+    one is left as it came out, and with five today it says so.
   - The Board's Wins tab (1, the Board's first, AUG-0156, `core/wins-board.ts`,
     `components/wins-tab.tsx`) reads a day back: today on top, then
     yesterday; `h`/`l` a day earlier or later, `0` back to today.

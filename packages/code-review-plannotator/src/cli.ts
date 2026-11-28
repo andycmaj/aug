@@ -116,6 +116,7 @@ if (values["no-plannotator"]) {
     id,
     title: ran.guide.title,
     base: ran.patch.base,
+    head: ran.patch.head,
     findings: ran.findings,
   });
 } else {

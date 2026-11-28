@@ -27,6 +27,7 @@ import {
   Pane,
   truncate,
   useFocus,
+  useKeymap,
   usePane,
   useScope,
   useTheme,
@@ -70,6 +71,12 @@ import { actionTermId, unlessTyping, type TaskActions } from "./task-actions";
 import { docReviewId } from "./use-doc-review";
 import { prDashId, usePrDash } from "./use-pr-dash";
 import { RAIL_WIDTH } from "./rail";
+import {
+  chordLetter,
+  isRelease,
+  RailChord,
+  railChordKeys,
+} from "../rail-chord";
 import {
   Badge,
   CHANNEL_WORD,
@@ -131,6 +138,7 @@ export function Canvas(props: {
   const terminals = useTerminals();
   const { isPaneFocused, setActivePane, sidebarVisible } = useFocus();
   const leave = () => setActivePane("rail");
+  const railChord = () => railChordKeys(riker.desk.config().keys);
   const dims = useTerminalDimensions();
   let pane: Renderable | undefined;
   let scrollRef: ScrollBoxRenderable | undefined;
@@ -250,6 +258,7 @@ export function Canvas(props: {
                       pane={() => pane}
                       onDetach={leave}
                       onJump={() => void props.actions[Commands.JUMP]?.()}
+                      railChord={railChord}
                     />
                   )}
                 </Show>
@@ -395,6 +404,9 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   };
   const says = () => {
     const t = props.task;
+    if (riker.isStarting(t.id)) {
+      return "starting the agent…";
+    }
     if (t.agent_state === AgentState.waiting && t.agent_says) {
       return `agent ${t.agent_says}`;
     }
@@ -769,6 +781,40 @@ function ChatInput(props: {
     }
   });
 
+  // jk or kj typed fast goes back to the rail (rail-chord.ts). The box types
+  // the first letter as usual, so a lone j or k never waits; the chord takes
+  // it back out. Ahead of every layer, like a terminal's passthrough.
+  const chord = new RailChord<string>(
+    () => railChordKeys(riker.desk.config().keys),
+    () => {},
+  );
+  const stopChord = useKeymap().intercept("key", (ctx) => {
+    // The field itself, not the pane: a dialog over it (go to, the palette)
+    // has a box of its own, where jk is just typed.
+    if (!input?.focused || props.hidden()) {
+      return chord.drop();
+    }
+    if (isRelease(ctx.event)) {
+      return;
+    }
+    const letter = chordLetter(ctx.event);
+    const fed = chord.feed(letter, letter ?? "");
+    if (fed.step !== "fire") {
+      return;
+    }
+    ctx.consume({ preventDefault: true, stopPropagation: true });
+    const at = input?.cursorOffset ?? 0;
+    if (input && at > 0 && input.value.slice(at - 1, at) === fed.held) {
+      input.deleteCharBackward();
+      track();
+    }
+    setActivePane("rail");
+  });
+  onCleanup(() => {
+    stopChord();
+    chord.drop();
+  });
+
   useScope(
     "input",
     {
@@ -805,6 +851,7 @@ function ChatInput(props: {
         }
         setActivePane("canvas");
       },
+      [Commands.INPUT_TO_RAIL]: () => setActivePane("rail"),
       [Commands.INPUT_EDITOR]: () => {
         const id = props.draft;
         props.onCompose(input?.value ?? "", (text) => {
