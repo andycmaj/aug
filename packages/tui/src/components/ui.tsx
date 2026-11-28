@@ -176,6 +176,7 @@ export function ModeKey(props: { keyName: string }) {
   return (
     <box flexDirection="row" flexShrink={0}>
       <text fg={theme.text}>{props.keyName}</text>
+      <text fg={theme.textMuted}>{"  switch"}</text>
     </box>
   );
 }
