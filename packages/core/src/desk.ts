@@ -112,6 +112,9 @@ export { NoJump, type Jump } from "./projects";
 
 const log = logger("desk");
 
+// Past this a start's hold on its task lets go (Desk.startHoldMs).
+const START_HOLD_MS = 120_000;
+
 export type RetriageResult =
   | { ok: true; outcome: TriageOutcome }
   | { ok: false; why: string };
@@ -346,15 +349,8 @@ export class Desk {
         error: "a System task has no agent: y accepts, x rejects",
       };
     }
-    // A start can take seconds (a worktree, a window, claude's launch) with
-    // nothing to show yet; a second one in that gap would launch another
-    // agent. Held until the first answers, whatever it answers.
-    if (this.startingTasks.has(taskId)) {
-      return { type: "starting" };
-    }
-    this.setStarting(taskId, true);
-    try {
-      return await this.undos.trackAsync(
+    return this.startOnce(taskId, () =>
+      this.undos.trackAsync(
         () => this.drivers.for(task).start(task, opts),
         (r) =>
           r.type === "started" || r.type === "queued"
@@ -364,19 +360,26 @@ export class Desk {
                 why: "it started an agent",
               }
             : null,
-      );
-    } finally {
-      this.setStarting(taskId, false);
-    }
+      ),
+    );
   }
 
-  // Tasks whose start is in flight, in this process only: the TUI and the
-  // moves both start through this desk, and a start never outlives it.
-  private startingTasks = new Set<number>();
+  // Tasks whose start is in flight, in this process only: the TUI, the
+  // moves and the timers all start through this desk, and a start never
+  // outlives it. Each entry is its own start's, so a late answer from one
+  // the hold let go never clears a newer one.
+  private starting = new Map<
+    number,
+    { token: symbol; done: Promise<StartResult> }
+  >();
   private startingListeners = new Set<(ids: ReadonlySet<number>) => void>();
+  // How long a start may hold its task before the hold lets go: a start
+  // stuck in tmux or wt must not refuse s until Riker restarts. Tests
+  // shorten it.
+  startHoldMs = START_HOLD_MS;
 
   isStarting(taskId: number): boolean {
-    return this.startingTasks.has(taskId);
+    return this.starting.has(taskId);
   }
 
   onStarting(listener: (ids: ReadonlySet<number>) => void): () => void {
@@ -384,15 +387,59 @@ export class Desk {
     return () => this.startingListeners.delete(listener);
   }
 
-  private setStarting(taskId: number, on: boolean): void {
-    if (on) {
-      this.startingTasks.add(taskId);
-    } else {
-      this.startingTasks.delete(taskId);
+  // Every start of a task's agent goes through here. A start can take
+  // seconds (a worktree, a window, claude's launch) with nothing to show
+  // yet; a second one in that gap would launch another agent, so it
+  // answers `starting` until the first answers, whatever it answers.
+  private async startOnce(
+    taskId: number,
+    run: () => Promise<StartResult>,
+  ): Promise<StartResult> {
+    if (this.starting.has(taskId)) {
+      return { type: "starting" };
     }
-    const ids: ReadonlySet<number> = new Set(this.startingTasks);
+    const token = Symbol(String(taskId));
+    let release!: (r: StartResult) => void;
+    const done = new Promise<StartResult>((r) => (release = r));
+    let hold: ReturnType<typeof setTimeout> | undefined;
+    const clear = () => {
+      if (this.starting.get(taskId)?.token === token) {
+        this.starting.delete(taskId);
+        this.startingChanged();
+      }
+    };
+    let result: StartResult = { type: "failed", error: "start threw" };
+    try {
+      this.starting.set(taskId, { token, done });
+      this.startingChanged();
+      hold = setTimeout(() => {
+        if (this.starting.get(taskId)?.token === token) {
+          log.warn("start hold let go", {
+            task: taskId,
+            ms: this.startHoldMs,
+          });
+          clear();
+        }
+      }, this.startHoldMs);
+      result = await run();
+      return result;
+    } finally {
+      clearTimeout(hold);
+      clear();
+      release(result);
+    }
+  }
+
+  // A listener's error is logged, never thrown: it must not keep a task
+  // held, nor replace what its start answered.
+  private startingChanged(): void {
+    const ids: ReadonlySet<number> = new Set(this.starting.keys());
     for (const listener of this.startingListeners) {
-      listener(ids);
+      try {
+        listener(ids);
+      } catch (err) {
+        log.warn("starting listener failed", { err: errorMessage(err) });
+      }
     }
   }
 
@@ -1542,14 +1589,43 @@ export class Desk {
     store.setPending([turnId], true);
     if (driver.isLive(task)) {
       void driver.deliver(task);
-    } else if (driver.resumes(task)) {
-      void driver.start(task).catch((err: unknown) =>
+      return;
+    }
+    if (!driver.resumes(task)) {
+      return;
+    }
+    // A start already in flight (the owner's s) may have built its launch
+    // before this line was pending: once it answers, the line goes to the
+    // window it made.
+    const inFlight = this.starting.get(task.id)?.done;
+    if (inFlight) {
+      void inFlight
+        .then(async () => {
+          const fresh = store.getTask(task.id);
+          if (fresh && driver.isLive(fresh)) {
+            await driver.deliver(fresh);
+          }
+        })
+        .catch((err: unknown) =>
+          log.warn("timer line not delivered", {
+            task: task.id,
+            err: errorMessage(err),
+          }),
+        );
+      return;
+    }
+    void this.startOnce(task.id, () => driver.start(task)).then(
+      (r) => {
+        if (r.type === "failed") {
+          log.warn("timer resume failed", { task: task.id, err: r.error });
+        }
+      },
+      (err: unknown) =>
         log.warn("timer resume failed", {
           task: task.id,
           err: errorMessage(err),
         }),
-      );
-    }
+    );
   }
 
   // Triage again, as a new run. A message on a task is refused: a second

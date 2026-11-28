@@ -3,7 +3,7 @@ import { Engine } from "../src/engine";
 import { sessionActivity } from "../src/lifecycle";
 import { setMux } from "../src/mux";
 import * as store from "../src/store";
-import { AgentState, Kind, TaskStatus } from "../src/types";
+import { AgentState, Kind, TaskStatus, TurnRole } from "../src/types";
 import { FakeMux } from "./support/fake-mux";
 import { fakeBrain, freshHome, testConfig } from "./support/helpers";
 
@@ -131,6 +131,128 @@ describe("a coding task's driver", () => {
     expect(fake.windows).toHaveLength(1);
     expect(engine.desk.isStarting(task.id)).toBe(false);
     expect(seen).toEqual([[task.id], []]);
+    off();
+  });
+
+  test("a timer due during the owner's start makes no second window, and its line reaches the one made", async () => {
+    const task = engine.desk.newTask("Add a flag", Kind.coding, "", {
+      repo: "acme/api",
+    });
+    await engine.desk.startAgent(task.id, { branch: "flag" });
+    await engine.desk.stopAgent(task.id);
+    expect(fake.windows).toHaveLength(0);
+
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const newWindow = fake.newWindow.bind(fake);
+    let made = 0;
+    fake.newWindow = async (w) => {
+      made++;
+      await gate;
+      return newWindow(w);
+    };
+    const owner = engine.desk.startAgent(task.id);
+    await Bun.sleep(5);
+    expect(engine.desk.isStarting(task.id)).toBe(true);
+
+    const turn = store.addTurn({
+      taskId: task.id,
+      role: TurnRole.you,
+      author: "timer",
+      body: "check the deploy",
+    });
+    engine.desk.runEffects([
+      { type: "timer", taskId: task.id, turnId: turn.id, reason: "due" },
+    ]);
+    await Bun.sleep(5);
+    open();
+    expect((await owner).type).toBe("started");
+    await Bun.sleep(10);
+    expect(made).toBe(1);
+    expect(fake.windows).toHaveLength(1);
+    expect(store.pendingTurns(task.id)).toHaveLength(0);
+    expect(fake.sent.map((s) => s.text)).toContain("check the deploy");
+  });
+
+  test("a timer's own resume holds the task like the owner's start", async () => {
+    const task = engine.desk.newTask("Add a flag", Kind.coding, "", {
+      repo: "acme/api",
+    });
+    await engine.desk.startAgent(task.id, { branch: "flag" });
+    await engine.desk.stopAgent(task.id);
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const newWindow = fake.newWindow.bind(fake);
+    fake.newWindow = async (w) => {
+      await gate;
+      return newWindow(w);
+    };
+    const turn = store.addTurn({
+      taskId: task.id,
+      role: TurnRole.you,
+      author: "timer",
+      body: "check the deploy",
+    });
+    engine.desk.runEffects([
+      { type: "timer", taskId: task.id, turnId: turn.id, reason: "due" },
+    ]);
+    await Bun.sleep(5);
+    expect(engine.desk.isStarting(task.id)).toBe(true);
+    expect(await engine.desk.startAgent(task.id)).toEqual({
+      type: "starting",
+    });
+    open();
+    await Bun.sleep(10);
+    expect(fake.windows).toHaveLength(1);
+    expect(engine.desk.isStarting(task.id)).toBe(false);
+  });
+
+  test("a listener that throws neither keeps the task held nor changes the answer", async () => {
+    const task = engine.desk.newTask("Add a flag", Kind.coding, "", {
+      repo: "acme/api",
+    });
+    const off = engine.desk.onStarting(() => {
+      throw new Error("listener broke");
+    });
+    const r = await engine.desk.startAgent(task.id, { branch: "flag" });
+    off();
+    expect(r.type).toBe("started");
+    expect(engine.desk.isStarting(task.id)).toBe(false);
+  });
+
+  test("a start that never answers lets go of its task after the hold", async () => {
+    const task = engine.desk.newTask("Add a flag", Kind.coding, "", {
+      repo: "acme/api",
+    });
+    engine.desk.startHoldMs = 20;
+    const gates: (() => void)[] = [];
+    const newWindow = fake.newWindow.bind(fake);
+    fake.newWindow = async (w) => {
+      await new Promise<void>((resolve) => gates.push(resolve));
+      return newWindow(w);
+    };
+    const seen: number[][] = [];
+    const off = engine.desk.onStarting((ids) => seen.push([...ids]));
+
+    const stuck = engine.desk.startAgent(task.id, { branch: "flag" });
+    await Bun.sleep(5);
+    expect(engine.desk.isStarting(task.id)).toBe(true);
+    await Bun.sleep(40);
+    expect(engine.desk.isStarting(task.id)).toBe(false);
+    expect(seen).toEqual([[task.id], []]);
+
+    // s again is let through, and the stuck one answering late does not
+    // let go of the new one's hold.
+    engine.desk.startHoldMs = 60_000;
+    const again = engine.desk.startAgent(task.id, { branch: "flag" });
+    await Bun.sleep(5);
+    expect(engine.desk.isStarting(task.id)).toBe(true);
+    gates[0]!();
+    await stuck;
+    expect(engine.desk.isStarting(task.id)).toBe(true);
+    gates[1]!();
+    await again;
+    expect(engine.desk.isStarting(task.id)).toBe(false);
     off();
   });
 
