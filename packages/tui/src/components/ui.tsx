@@ -1,7 +1,7 @@
 // Small shared pieces: tone -> theme color, channel words, the inline key hint.
 
 import { For, Show } from "solid-js";
-import { TextAttributes } from "@opentui/core";
+import { MouseButton, TextAttributes, type MouseEvent } from "@opentui/core";
 import {
   contrastingForeground,
   useTheme,
@@ -176,4 +176,15 @@ export function ModeToggle<M extends string>(props: {
       </box>
     </box>
   );
+}
+
+// A left press on a row, a tab or a pill does what its key does. It acts as
+// the button goes down, and opentui then focuses the pane under it, so the
+// pane and the row change together. Other buttons and the wheel pass by.
+export function onPress(fn: () => void) {
+  return (event: MouseEvent) => {
+    if (event.button === MouseButton.LEFT) {
+      fn();
+    }
+  };
 }

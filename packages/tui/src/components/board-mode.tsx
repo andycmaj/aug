@@ -43,7 +43,7 @@ import { useWinsTab } from "./wins-tab";
 import { actionsFor } from "@riker/core/task-actions";
 import { PromptModal } from "./modals";
 import { useShell } from "./shell";
-import { duration, toneColor } from "./ui";
+import { duration, onPress, toneColor } from "./ui";
 
 const Tab = BoardTab;
 type Tab = BoardTab;
@@ -336,6 +336,7 @@ export function BoardMode() {
                       : theme.textMuted
                   }
                   bg={tab() === t.key ? theme.primary : undefined}
+                  onMouseDown={onPress(() => setTab(t.key))}
                 >{` ${t.label} `}</text>
               )}
             </For>

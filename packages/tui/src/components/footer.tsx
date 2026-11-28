@@ -21,6 +21,7 @@ import {
 } from "@andycmaj/opentui-app";
 import { useRiker, ViewMode } from "../context/riker";
 import { helpBindings, type HelpCtx } from "../keymap";
+import { onPress } from "./ui";
 
 // "escape" reads better as "esc" in a hint line.
 const KEY_WORDS: Record<string, string> = { escape: "esc" };
@@ -114,7 +115,14 @@ export function RikerFooter(props: {
           )}
         </For>
       </box>
-      <text flexShrink={0}>
+      <text
+        flexShrink={0}
+        onMouseDown={onPress(() =>
+          riker.setMode(
+            riker.mode() === ViewMode.chat ? ViewMode.board : ViewMode.chat,
+          ),
+        )}
+      >
         <span
           style={{
             fg:
