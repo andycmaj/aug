@@ -107,6 +107,8 @@ export async function f(n: number) {
 }
 `,
   );
-  expect(out).not.toContain("error");
+  // A diagnostic names its rule, eslint(curly); the summary oxlint prints
+  // outside an agent ("0 errors") must not count as one.
+  expect(out).not.toMatch(/[\w-]+\([\w/-]+\)/);
   expect(code).toBe(0);
 });
