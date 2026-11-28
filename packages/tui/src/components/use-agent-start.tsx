@@ -42,6 +42,10 @@ export function useAgentStart(
     if (coding && terminals.forTask(taskId)?.running) {
       return showTask(taskId);
     }
+    if (desk.isStarting(taskId)) {
+      showToast(`${taskRef(taskId)} is already starting`);
+      return;
+    }
     if (coding) {
       showToast(`Starting ${taskRef(taskId)}...`);
     }
@@ -62,6 +66,9 @@ export function useAgentStart(
         return;
       case "queued":
         showToast(`${taskRef(taskId)}: ${result.reason}`);
+        return;
+      case "starting":
+        showToast(`${taskRef(taskId)} is already starting`);
         return;
       case "started":
         if (result.warning) {

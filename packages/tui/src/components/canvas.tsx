@@ -404,6 +404,9 @@ function TaskHeader(props: { task: TaskRow; width: number }) {
   };
   const says = () => {
     const t = props.task;
+    if (riker.isStarting(t.id)) {
+      return "starting the agent…";
+    }
     if (t.agent_state === AgentState.waiting && t.agent_says) {
       return `agent ${t.agent_says}`;
     }

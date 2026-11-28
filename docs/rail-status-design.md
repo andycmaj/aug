@@ -161,6 +161,15 @@ as today):
 | stopped | ■ | agent stopped | not running; `s` resumes it | any session end |
 | ready | ◈ | ready for review | finished; the result waits on you to review, push or close (or, if it closed the task, to read) | `riker-tools done`, a chat turn that answered |
 
+A start in flight is not a state: it is the desk's (`desk.isStarting`), in
+memory, from `s`, `move start` or a timer's resume until the start
+answers. Meanwhile the row's mark is the spinner, its word "starting
+agent…" (in place of the lane's word and the PR chip), and the Canvas
+header says "starting the agent…". A second start in that time is refused
+("already starting"); a timer due then hands its line to the window that
+start makes. A failed start clears it, so `s` tries again, and one that
+has not answered in two minutes lets go of the task.
+
 ### Changes
 
 - **agentdone is renamed ready** (AUG-0113, value `ready`, migrated). An
