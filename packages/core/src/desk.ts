@@ -30,6 +30,7 @@ import {
   taskReopened,
 } from "./lifecycle";
 import { localDay, MAX_WINS, readFolds, writeFolds } from "./rail";
+import { isClosed } from "./rows";
 import type { RikerConfig, ConfigSource, NoiseRule } from "./config";
 import { now } from "./db";
 import { unmergedWork, type NotMerged } from "./merge";
@@ -52,6 +53,7 @@ import { capReached } from "./spend";
 import {
   ActionEvent,
   ActionVia,
+  actionBase,
   actionNamed,
   invocation,
   makesCheckout,
@@ -76,7 +78,8 @@ import type {
   TriageEffect,
   TriageOutcome,
 } from "./plugins";
-import { reviewedPr } from "./pr";
+import { reviewedPr, taskPr } from "./pr";
+import type { HeadInput, ReviewStart } from "./pr-head";
 import {
   AgentState,
   IdeaStatus,
@@ -349,9 +352,11 @@ export class Desk {
         error: "a System task has no agent: y accepts, x rejects",
       };
     }
+    const review = opts.review ?? this.reviewStart(task);
+    const withReview = review ? { ...opts, review } : opts;
     return this.startOnce(taskId, () =>
       this.undos.trackAsync(
-        () => this.drivers.for(task).start(task, opts),
+        () => this.drivers.for(task).start(task, withReview),
         (r) =>
           r.type === "started" || r.type === "queued"
             ? {
@@ -577,12 +582,36 @@ export class Desk {
     return !!task && reviewedPr(task) !== null;
   }
 
-  guideReview(taskId: number): ActionResult | { error: string } {
+  async guideReview(taskId: number): Promise<ActionResult | { error: string }> {
     const task = store.getTask(taskId);
     if (!task) {
       return { error: `no task ${store.taskRef(taskId)}` };
     }
-    return guideReview(task);
+    return guideReview(task, this.prHead(task));
+  }
+
+  // Where the task's PR head is read before a guide reads its worktree:
+  // none without a PR or a source that can tell (the sim).
+  private prHead(task: TaskRow): HeadInput | undefined {
+    const pr = taskPr(task);
+    const source = this.options.reviews;
+    if (!pr || !source?.head) {
+      return undefined;
+    }
+    const head = source.head.bind(source);
+    return {
+      pr,
+      source: { head },
+      rewrite: reviewedPr(task)?.url === pr.url,
+    };
+  }
+
+  // An agent started on a PR asked of the owner reviews the PR as pushed:
+  // its worktree (made by wt from refs that may be old) is brought to the
+  // head first, with the base fetched.
+  private reviewStart(task: TaskRow): ReviewStart | undefined {
+    const head = reviewedPr(task) ? this.prHead(task) : undefined;
+    return head ? { head, base: actionBase(task) } : undefined;
   }
 
   // A guide's review closed (`output` is what plannotator printed). A
@@ -673,6 +702,7 @@ export class Desk {
       pr && this.options.reviews
         ? { pr, source: this.options.reviews, whole }
         : undefined,
+      this.prHead(task),
     );
     if ("error" in run) {
       return run;
@@ -1439,6 +1469,20 @@ export class Desk {
           : `${ref}: no earlier story version`;
       },
     );
+  }
+
+  // A Win from an earlier day, still unfinished, pinned again for today.
+  // A closed one stays where it came out.
+  carryWin(taskId: number, at = new Date()): { ok: boolean; text: string } {
+    const task = store.getTask(taskId);
+    const ref = store.taskRef(taskId);
+    if (!task) {
+      return { ok: false, text: `no task ${ref}` };
+    }
+    if (isClosed(task)) {
+      return { ok: false, text: `${ref} is ${task.status}: nothing to carry` };
+    }
+    return this.setWin(taskId, true, at);
   }
 
   toggleWin(taskId: number, at = new Date()): { ok: boolean; text: string } {

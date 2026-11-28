@@ -347,10 +347,12 @@ async function start(
     });
   }
   switch (result.type) {
-    case "started":
-      return result.project
+    case "started": {
+      const said = result.project
         ? `started ${ref(task)}'s coding agent in project ${result.project.name}`
         : `started ${ref(task)}'s agent`;
+      return result.warning ? `${said}; warning: ${result.warning}` : said;
+    }
     case "queued":
       return `${ref(task)} is ${result.reason}: it starts by itself when one finishes`;
     case "starting":

@@ -123,7 +123,7 @@ describe("the guide action", () => {
     answering(`\`\`\`json\n${JSON.stringify(ANSWER)}\n\`\`\``);
     const { engine, task } = codingTask(dir);
     expect(engine.desk.hasGuideReview(task.id)).toBe(false);
-    expect(engine.desk.guideReview(task.id)).toHaveProperty("error");
+    expect(await engine.desk.guideReview(task.id)).toHaveProperty("error");
     const started = engine.desk.runAction(task.id, "guide");
     if ("error" in started) {
       throw new Error(started.error);
@@ -150,7 +150,7 @@ describe("the guide action", () => {
         isError: false,
       };
     });
-    const again = engine.desk.guideReview(task.id);
+    const again = await engine.desk.guideReview(task.id);
     if ("error" in again) {
       throw new Error(again.error);
     }
@@ -191,7 +191,7 @@ describe("the guide action", () => {
 
     // div is taken out again: math.ts is no longer in the change.
     sh(dir, "git", "checkout", "main", "--", "math.ts");
-    const later = engine.desk.guideReview(task.id);
+    const later = await engine.desk.guideReview(task.id);
     if ("error" in later) {
       throw new Error(later.error);
     }
@@ -301,7 +301,7 @@ describe("the guide action", () => {
       expect(prompts[0]).toContain("base parent");
       expect(readFindings(paths.work(task.id))!.base).toBe("parent");
       // Opened again later, it refits against the same base.
-      const again = engine.desk.guideReview(task.id);
+      const again = await engine.desk.guideReview(task.id);
       if ("error" in again) {
         throw new Error(again.error);
       }

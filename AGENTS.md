@@ -32,7 +32,8 @@ other way (a new package gets a line in its `ALLOWED`).
   sections (`configSection(key, defaults, merge)`: core keeps what the file
   holds under that key as written, the plugin reads it whole with
   `section.of(config)`), a `reviews` source (what the guide reads beside a
-  PR asked of the owner, and the commit they last reviewed) and
+  PR asked of the owner, the commit they last reviewed, and where a PR's
+  head is now) and
   `assistant` lines for the Assistant's system prompt. Core's vocabulary stays open: a `Channel` is a string, a
   `DraftAction` a `type` plus the plugin's own fields. An entry point hands
   the engine its list (`rikerPlugins()` in `tui/src/plugins.ts`, which
@@ -295,6 +296,15 @@ Tests live beside their package (`packages/<name>/test/`).
   trigger) needs it on disk. `desk.prepareAction` makes it in between, on
   the task's branch with no agent (`projects.ensureCheckout`), so a review
   triage files offers its guide on arrival and never runs it by itself.
+  A worktree stays where it was made (wt makes it from the refs on disk
+  and fetches nothing), so before the guide reads one, before its review
+  opens again, and before an agent starts on a PR asked of the owner
+  (`readyReview`), `core/pr-head.ts` fetches the PR's head and base and
+  fast-forwards a clean worktree on its branch; anything it cannot move is
+  reviewed as is, said to be possibly out of date, and a start whose
+  worktree still shows no change says so. The findings
+  keep the commit they were written against, and a review reopened after
+  the PR moved past it leaves them out.
   Triage marks that PR as one to review (`reviewedPr`, `core/pr.ts`): its
   guide's review opens in Plannotator's PR mode, whose Post to GitHub
   sends the owner's review and closes the task, and nothing goes to the
@@ -468,7 +478,14 @@ Tests live beside their package (`packages/<name>/test/`).
   search list, `ctrl+t` jumps your tmux client to the agent, and `ctrl+e`
   shows or hides the rail and stays attached (the agent loses them; a
   terminal with no agent gets them). `buildKeymap` swaps config's navigation
-  keys in at start.
+  keys in at start. `ctrl+]` in the chat box goes to the rail too.
+- jk or kj typed fast (`packages/tui/src/rail-chord.ts`, config
+  `keys.railChord` and `keys.railChordMs`, read each time; `[]` turns it
+  off) goes back to the rail from the chat box or an attached agent. It is
+  two keys, so not a binding: an agent's `TerminalHost` holds the first
+  letter and sends it on a timeout or a break, the chat box types it and
+  takes it back out. A terminal with no agent (the editor, ghdash) never
+  gets it, so its j and k never wait.
 - `ctrl+o` (and `ctrl+[`) goes back and `ctrl+a` goes Home from anywhere:
   a modal, the chat box, the Board, an attached agent (detach first). They
   are a layer with no target under every other (`shell.tsx`), which the

@@ -4,6 +4,7 @@
 // ctrl+t detaches too and moves your own tmux client to the agent's window;
 // ctrl+e shows or hides the rail and leaves you attached. ctrl+o (ctrl+[ in
 // a kitty terminal) and ctrl+a detach, then go back or Home (shell.tsx).
+// On an agent, jk or kj typed fast detaches too (rail-chord.ts).
 // A paste goes in too, bracketed when the program asked for it. Shown but
 // detached, the screen is greyed out under a veil, so it is plain that
 // typing goes elsewhere.
@@ -26,6 +27,13 @@ import { Commands } from "../commands";
 import { useTerminals } from "../context/terminals";
 import { encodeKey } from "../terminal/key-encode";
 import { LinkMark } from "./link-mark";
+import {
+  chordLetter,
+  isRelease,
+  RailChord,
+  RAIL_CHORD_DEFAULTS,
+  type RailChordKeys,
+} from "../rail-chord";
 
 // Just the screen: adopts the session's renderable while mounted. The Canvas
 // keeps one mounted as you move between live tasks, so it follows the id;
@@ -93,18 +101,38 @@ export function TerminalHost(props: {
   // Your tmux client to this terminal's window; none for one that has no
   // window of its own (the editor, ghdash), which get the key instead.
   onJump?: () => void;
+  // The chord back to the rail (jk, kj); none for a terminal that is not an
+  // agent (the editor, ghdash), whose own j and k must not wait.
+  railChord?: () => RailChordKeys;
 }) {
   const terminals = useTerminals();
   const theme = useTheme();
   const state = () => terminals.get(props.id);
   const running = () => state()?.running ?? false;
 
+  const write = (bytes: string) => {
+    if (bytes) {
+      terminals.write(props.id, bytes);
+    }
+  };
+  const chord = new RailChord<string>(
+    () => props.railChord?.() ?? { ...RAIL_CHORD_DEFAULTS, chords: [] },
+    write,
+  );
+  onCleanup(() => chord.flush());
   useKeyPassthrough(
     "terminal",
     (event) => {
       const bytes = encodeKey(event);
-      if (bytes) {
-        terminals.write(props.id, bytes);
+      if (isRelease(event)) {
+        return write(bytes);
+      }
+      const fed = chord.feed(chordLetter(event), bytes);
+      if (fed.step === "fire") {
+        return props.onDetach();
+      }
+      if (fed.step === "pass") {
+        write(bytes);
       }
     },
     { target: props.pane, enabled: () => running() && props.attached() },
@@ -131,6 +159,7 @@ export function TerminalHost(props: {
     if (event.metadata?.kind === "binary") {
       return;
     }
+    chord.flush();
     event.preventDefault();
     event.stopPropagation();
     terminals.paste(props.id, decodePasteBytes(event.bytes));

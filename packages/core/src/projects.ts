@@ -22,6 +22,7 @@ import {
   type MuxState,
 } from "./mux";
 import { paths } from "./paths";
+import { readyReview, type ReviewStart } from "./pr-head";
 import { checkMapped, pathNeed, repoPath, type PathNeed } from "./repos";
 import * as store from "./store";
 import {
@@ -180,6 +181,9 @@ export interface StartOptions {
   // Set when the owner declined to map the task's repo: work in scratch.
   noWorktree?: boolean;
   launchOverride?: (task: TaskRow, launch: CodingLaunch) => CodingLaunch;
+  // A PR asked of the owner: its worktree is brought to the PR's head, with
+  // its base fetched, before the agent starts in it.
+  review?: ReviewStart;
 }
 
 export type StartResult =
@@ -188,6 +192,8 @@ export type StartResult =
       session: SessionRow;
       windowId: string;
       project: ProjectRow;
+      // What the owner should know: the review may show nothing, or old code.
+      warning?: string;
     }
   | { type: "needs-path"; need: PathNeed }
   | { type: "failed"; error: string };
@@ -273,6 +279,18 @@ export async function startTask(
     if (cwd && task.repo) {
       store.addProjectRepo(project.id, task.repo);
     }
+    // Said on the thread before the brief is written, so the agent hears it.
+    const ready =
+      cwd && opts.review
+        ? await readyReview(cwd, opts.review, [branch, task.branch])
+        : null;
+    if (ready) {
+      store.addTurn({
+        taskId: task.id,
+        role: TurnRole.trigger,
+        body: ready.line,
+      });
+    }
     task = store.getTask(task.id)!;
 
     let launch = codingLaunch(config, task, {
@@ -293,7 +311,13 @@ export async function startTask(
     await mux().tagWindow(window.id, task.id);
 
     const row = recordStart(task, launch, window.id, opts.resume);
-    return { type: "started", session: row, windowId: window.id, project };
+    return {
+      type: "started",
+      session: row,
+      windowId: window.id,
+      project,
+      ...(ready?.warning ? { warning: ready.warning } : {}),
+    };
   } catch (err) {
     log.error("start failed", { task: taskId, err });
     return {

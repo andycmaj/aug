@@ -9,6 +9,7 @@ import type { AgentPool, CodingLaunch } from "./agents";
 import type { RikerConfig, ConfigSource } from "./config";
 import { startCancelled } from "./lifecycle";
 import { logger } from "./log";
+import type { ReviewStart } from "./pr-head";
 import * as projects from "./projects";
 import { onboardingTask } from "./proposals";
 import { checkMapped, pathNeed, repoChoices, type PathNeed } from "./repos";
@@ -28,6 +29,8 @@ export interface StartOptions {
   branch?: string;
   // Coding: work in a scratch folder with no worktree.
   noWorktree?: boolean;
+  // Coding, a PR asked of the owner: brought to its head first.
+  review?: ReviewStart;
 }
 
 // What a coding start still needs from the owner before it can run. The
@@ -38,7 +41,7 @@ export type StartNeed =
   | { what: "branch"; suggested: string };
 
 export type StartResult =
-  | { type: "started"; project: ProjectRow | null }
+  | { type: "started"; project: ProjectRow | null; warning?: string }
   // Agents at once is reached: it starts by itself when a slot frees.
   | { type: "queued"; reason: string }
   | { type: "needs"; need: StartNeed }
@@ -279,6 +282,7 @@ export class TmuxDriver implements AgentDriver {
       noWorktree,
       resume,
       launchOverride: this.options.launchOverride,
+      ...(opts.review ? { review: opts.review } : {}),
     });
     switch (result.type) {
       case "started":
@@ -286,7 +290,11 @@ export class TmuxDriver implements AgentDriver {
           pending.map((t) => t.id),
           false,
         );
-        return { type: "started", project: result.project };
+        return {
+          type: "started",
+          project: result.project,
+          ...(result.warning ? { warning: result.warning } : {}),
+        };
       case "needs-path":
         return { type: "needs", need: result.need };
       case "failed":

@@ -345,7 +345,10 @@ Marks that change neither lifecycle nor agent state:
     progress (its only row: a done task has no other); the heading says
     `Wins (2/5)`, done of pinned.
   - Tomorrow the box is empty and yesterday's open Wins are back in their
-    sections. No carry-over.
+    sections. Nothing carries over by itself: `z` on an earlier day's Win
+    on the Board's Wins tab pins it for today again (`desk.carryWin`),
+    when its task is still open and not pinned today; a done or dropped
+    one is left as it came out, and with five today it says so.
   - The Board's Wins tab (1, the Board's first, AUG-0156, `core/wins-board.ts`,
     `components/wins-tab.tsx`) reads a day back: today on top, then
     yesterday; `h`/`l` a day earlier or later, `0` back to today.

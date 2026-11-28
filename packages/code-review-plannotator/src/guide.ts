@@ -149,6 +149,9 @@ export interface Patch {
   // The merge base the diff is taken from, and the branch it came from.
   mergeBase: string;
   base: string;
+  // The commit checked out when it was taken: what the notes were written
+  // against, so a review opened later can tell the code has moved on.
+  head: string;
 }
 
 // `git diff <merge-base>`: the branch's change plus edits not yet
@@ -167,7 +170,13 @@ export function patchFor(cwd: string, base: string): Patch | { error: string } {
     if (!text.trim()) {
       return { error: `no change against ${mb.ref}` };
     }
-    return { text, mergeBase: mb.sha, base: mb.ref };
+    const head = git(cwd, ["rev-parse", "HEAD"]);
+    return {
+      text,
+      mergeBase: mb.sha,
+      base: mb.ref,
+      head: head.ok ? head.out.trim() : "",
+    };
   }
   return { error: `no merge base with ${base} in ${cwd}` };
 }
@@ -588,6 +597,8 @@ export interface SavedFindings {
   id: string;
   title: string;
   base: string;
+  // The commit the findings were written against ("" when not recorded).
+  head: string;
   findings: Finding[];
 }
 
@@ -610,6 +621,7 @@ export function readFindings(dir: string): SavedFindings | null {
       id: str(value.id),
       title: str(value.title),
       base: str(value.base) || "main",
+      head: str(value.head),
       findings: value.findings.filter(isRecord).flatMap((f) => {
         const n = isRecord(f.note) ? f.note : null;
         if (!n || typeof f.file !== "string") {
@@ -675,6 +687,7 @@ export async function saveGuide(opts: {
     id: saved.id,
     title: guide.title,
     base: patch.base,
+    head: patch.head,
     findings,
   });
   return { id: saved.id, file, guide, findings, lines, comments, patch };
