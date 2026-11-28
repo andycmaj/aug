@@ -180,10 +180,10 @@ test("a click on a filter pill toggles it", async () => {
 
 test("the footer's view chip: a click on Board or Chat goes there", async () => {
   const s = await boot();
-  expect(s.line("v  switch")).toContain("▌ Chat ▐  Board");
+  expect(s.line("Board ")).toMatch(/▌ Chat ▐ {2}Board  *$/);
   await s.click(" Board ", RAIL);
   expect(s.frame()).toContain("Agent board");
-  expect(s.line("v  switch")).toContain(" Chat  ▌ Board ▐");
+  expect(s.line("▌ Board ▐")).toMatch(/ {2}Chat {2}▌ Board ▐ *$/);
   // The lit segment again: stays.
   await s.click(" Board ", RAIL);
   expect(s.frame()).toContain("Agent board");

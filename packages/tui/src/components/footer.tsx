@@ -21,20 +21,15 @@ import {
 } from "@andycmaj/opentui-app";
 import { useRiker, ViewMode } from "../context/riker";
 import { helpBindings, type HelpCtx } from "../keymap";
-import { ModeKey, ModeSegments } from "./ui";
+import { ModeSegments } from "./ui";
 
 const VIEW_MODES = [
   { mode: ViewMode.chat, label: "Chat" },
   { mode: ViewMode.board, label: "Board" },
 ] as const;
-const VIEW_KEY = "v";
-// The view chip's columns: each segment is its label padded and framed
-// (4 more), a gap, then the key and "  switch".
-const VIEW_CHIP_WIDTH =
-  VIEW_MODES.reduce((n, m) => n + m.label.length + 4, 0) +
-  2 +
-  VIEW_KEY.length +
-  "  switch".length;
+// The view chip's columns: each segment is its label padded and framed (4
+// more). Its key is v view among the hints, not on the chip.
+const VIEW_CHIP_WIDTH = VIEW_MODES.reduce((n, m) => n + m.label.length + 4, 0);
 
 // "escape" reads better as "esc" in a hint line.
 const KEY_WORDS: Record<string, string> = { escape: "esc" };
@@ -128,14 +123,11 @@ export function RikerFooter(props: {
           )}
         </For>
       </box>
-      <box flexDirection="row" flexShrink={0} gap={2}>
-        <ModeSegments
-          modes={VIEW_MODES}
-          active={riker.mode()}
-          onPick={riker.setMode}
-        />
-        <ModeKey keyName={VIEW_KEY} />
-      </box>
+      <ModeSegments
+        modes={VIEW_MODES}
+        active={riker.mode()}
+        onPick={riker.setMode}
+      />
     </box>
   );
 }
