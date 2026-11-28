@@ -136,13 +136,13 @@ describe("rail", () => {
       channel: "owner",
       createdAt: at(8),
     });
-    const watched = store.createTask({
-      title: "watched",
+    const theirs = store.createTask({
+      title: "theirs",
       kind: Kind.task,
       channel: "github",
-      watching: true,
       createdAt: at(9),
     });
+    store.updateTask(theirs.id, { waiting_on: "Devon" });
     const gone = store.createTask({
       title: "gone",
       kind: Kind.task,
@@ -175,17 +175,13 @@ describe("rail", () => {
       lastHeard: new Map(),
       now: new Date(at(12)),
     });
-    expect(rail.map((s) => s.section)).toEqual(["tasks", "watching", "later"]);
+    expect(rail.map((s) => s.section)).toEqual(["tasks", "later"]);
     expect(
       rail[0].items.map((i) => (i.type === "task" ? i.task.title : "")),
-    ).toEqual(["finished", "early", "watched", "late"]);
-    expect(rail[1].items.map((i) => i.key)).toEqual([
-      `t${watched.id}@watching`,
-    ]);
+    ).toEqual(["finished", "early", "theirs", "late"]);
     expect(
       flattenRail(rail).some((i) => i.type === "task" && i.task.id === gone.id),
     ).toBe(false);
-    void watched;
     void early;
     void late;
   });

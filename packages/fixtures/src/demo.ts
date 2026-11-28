@@ -81,7 +81,6 @@ function seedTask(
     reason: string;
     repo?: string;
     branch?: string;
-    watching?: boolean;
   },
 ): number {
   const msg = store.insertMessage(message(m))!;
@@ -90,7 +89,6 @@ function seedTask(
     summary: t.summary,
     kind: t.kind,
     priority: t.priority,
-    watching: t.watching,
     repo: t.repo,
     branch: t.branch ?? null,
     threadKey: m.thread,
@@ -99,7 +97,7 @@ function seedTask(
     triageReason: t.reason,
     createdAt: msg.received_at,
   });
-  store.fileMessage(msg.id, t.watching ? "watch" : t.kind, t.reason, task.id);
+  store.fileMessage(msg.id, t.kind, t.reason, task.id);
   store.addTurn({
     taskId: task.id,
     role: TurnRole.incoming,
@@ -464,8 +462,8 @@ export function seedDemo(): void {
     );
     store.updateTask(marcus, { waiting_on: "Marcus Reed" });
 
-    // 8. Watching: someone else handles it.
-    seedTask(
+    // 8. Someone else handles it.
+    const devon = seedTask(
       {
         channel: "github",
         id: "gh:4:a",
@@ -488,9 +486,9 @@ export function seedDemo(): void {
         summary: "Devon will rotate staging certs Thursday.",
         kind: Kind.task,
         reason: "Devon is handling it; you only care that it happens",
-        watching: true,
       },
     );
+    store.updateTask(devon, { waiting_on: "Devon" });
 
     // 9. For later.
     const later = store.createTask({

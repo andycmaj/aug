@@ -36,6 +36,7 @@ import {
   RAIL_FILTERS,
   SECTION_TITLES,
   TAG_MARK,
+  type RailFilter,
   type RailItem,
 } from "@riker/core/rail";
 import { prChip, prQueueWord } from "@riker/core/pr";
@@ -43,6 +44,7 @@ import { actionRailWord, taskRef } from "@riker/core/rows";
 import { AgentState, Kind, TaskStatus, type Priority } from "@riker/core/types";
 import {
   CHANNEL_WORD,
+  onPress,
   priorityColor,
   projectChip,
   toneColor,
@@ -67,7 +69,7 @@ interface RowView {
   markColor: ThemeColor;
   title: string;
   titleColor: ThemeColor;
-  // Tag marks beside the title (★ Win, ◉ watched), where the row's place
+  // Tag marks beside the title (★ Win), where the row's place
   // does not already say it.
   tags?: string;
   // Theirs when not the tag color (a project's manager mark).
@@ -233,7 +235,12 @@ export function Rail(props: { actions: TaskActions }) {
       width={RAIL_WIDTH}
       ref={(r) => (pane = r)}
     >
-      <FilterBar />
+      <FilterBar
+        onToggle={(f) => {
+          riker.toggleFilter(f);
+          landCursor();
+        }}
+      />
 
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
@@ -267,6 +274,7 @@ export function Rail(props: { actions: TaskActions }) {
                   {(item) => (
                     <RailRow
                       item={item()}
+                      onPress={() => riker.select(item().key)}
                       nested={isNested(item())}
                       cursor={riker.cursorKey() === item().key}
                       onTable={riker.selectedRowKey() === item().key}
@@ -296,7 +304,7 @@ export function Rail(props: { actions: TaskActions }) {
 // the rail's only header: the pills already count the work. A pill says
 // little, so a line under them says in words what the lit ones show, and
 // the footer's word for showing everything again.
-function FilterBar() {
+function FilterBar(props: { onToggle: (filter: RailFilter) => void }) {
   const riker = useRiker();
   const theme = useTheme();
   const anyOn = () => riker.railFilter().size > 0;
@@ -329,6 +337,7 @@ function FilterBar() {
                   fg={fg()}
                   bg={on() ? color() : undefined}
                   attributes={on() ? 1 : 0}
+                  onMouseDown={onPress(() => props.onToggle(f.filter))}
                 >{` ${f.mark} ${count()} `}</text>
               </Show>
             );
@@ -359,11 +368,12 @@ function EmptyRail() {
 // The highlight is the cursor while the rail has focus, and the selected row
 // while it does not (tilt-tui's focused/unfocused selection). The selected
 // row carries a ▸ in the gutter, beside its mark rather than in
-// place of it: the task you are watching is the one whose lane you want to
-// see move. The selected task's other row (a Win or a watched task is
-// listed twice) carries a dim ▹: the same task.
+// place of it: the task you are on is the one whose lane you want to see
+// move. The selected task's other row (a Win or a Due task is listed
+// twice) carries a dim ▹: the same task.
 function RailRow(props: {
   item: RailItem;
+  onPress: () => void;
   nested: boolean;
   cursor: boolean;
   onTable: boolean;
@@ -581,6 +591,7 @@ function RailRow(props: {
       flexDirection="row"
       marginLeft={props.nested ? NEST : 0}
       marginBottom={1}
+      onMouseDown={onPress(() => props.onPress())}
     >
       <text fg={props.onTable ? theme().accent : theme().textMuted}>
         {props.onTable ? "▸" : props.twin ? "▹" : " "}
@@ -696,12 +707,6 @@ export function RailLegend() {
       mark: TAG_MARK.win,
       markColor: theme.warning,
       word: "Win, listed under Wins",
-    },
-    {
-      bar: theme.borderSubtle ?? theme.textMuted,
-      mark: TAG_MARK.watching,
-      markColor: theme.warning,
-      word: "watched, under Watching",
     },
     {
       bar: theme.secondary,

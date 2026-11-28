@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { buildRail, type RailSection } from "../src/rail";
+import { buildRail, localDay, type RailSection } from "../src/rail";
 import { goToList, search, searchIndex } from "../src/search";
 import * as store from "../src/store";
 import { Kind, TaskStatus, TurnRole } from "../src/types";
@@ -14,6 +14,7 @@ function rail(): RailSection[] {
     pendingActions: new Set(),
     lastHeard: new Map(),
     now: NOW,
+    wins: store.winsOn(localDay(NOW)),
   });
 }
 
@@ -120,21 +121,21 @@ describe("search", () => {
     expect(titles("riker-23")).toEqual([want]);
   });
 
-  test("tasks off the open list (For later, watching) are found too, once", () => {
+  test("tasks off the open list (For later) and Wins are found too, once", () => {
     const later = store.createTask({
       title: "Renew the cert",
       kind: Kind.task,
       channel: "owner",
     });
     store.remindAt(later.id, "2026-12-01T00:00:00.000Z");
-    const watched = store.createTask({
+    const win = store.createTask({
       title: "Cert rollout",
       kind: Kind.task,
       channel: "owner",
     });
-    store.setWatching(watched.id, true);
+    store.addWin(localDay(NOW), win.id);
     const hits = find("cert");
-    // Watched, it is listed under Watching too, and found at its own row.
+    // A Win, it is listed under Wins too, and found at its own row.
     expect(
       hits
         .map((h) => [h.title, h.section])

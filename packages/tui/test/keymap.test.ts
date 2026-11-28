@@ -25,14 +25,7 @@ const ITEMS: HelpCtx["item"][] = [
   null,
 ];
 const KINDS = ["home", "system", "coding", "task", "chat", null];
-const FLAGS = [
-  "hasDraft",
-  "live",
-  "coding",
-  "watching",
-  "started",
-  "pr",
-] as const;
+const FLAGS = ["hasDraft", "live", "coding", "started", "pr"] as const;
 
 // The contexts a pane can be in. Only the Board sets its tab (board-mode),
 // and only the Inbox tab sets the inbox flags (inbox-tab): crossing them
@@ -60,7 +53,6 @@ function* contexts(scope: string): Generator<HelpCtx> {
               hasDraft: false,
               live: false,
               coding: false,
-              watching: false,
               started: false,
               pr: false,
               board,
@@ -132,7 +124,6 @@ test("the footer names what x and m do to the selected row", () => {
     hasDraft: false,
     live: false,
     coding: false,
-    watching: false,
     started: false,
     pr: false,
   };
@@ -152,7 +143,6 @@ test("d marks an open task done and reopens a done or dropped one", () => {
     hasDraft: false,
     live: false,
     coding: false,
-    watching: false,
     started: false,
     pr: false,
   };
@@ -167,7 +157,6 @@ test("the footer offers ghdash only on a task with a PR", () => {
     hasDraft: false,
     live: false,
     coding: true,
-    watching: false,
     started: true,
     pr: false,
   };
@@ -208,7 +197,6 @@ const quiet: HelpCtx = {
   hasDraft: false,
   live: true,
   coding: true,
-  watching: false,
   started: true,
   pr: true,
 };
@@ -584,7 +572,6 @@ function base(): HelpCtx {
     hasDraft: false,
     live: false,
     coding: false,
-    watching: false,
     started: false,
     pr: false,
   };

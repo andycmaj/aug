@@ -265,9 +265,15 @@ export function useShell(opts: {
             onClose={closeModal}
             header={riker.mode() === ViewMode.chat ? <RailLegend /> : undefined}
             footer={
-              <text fg={theme.textMuted}>
-                Nothing goes out until you press y and confirm.
-              </text>
+              <box flexDirection="column">
+                <text fg={theme.textMuted}>
+                  Nothing goes out until you press y and confirm.
+                </text>
+                <text fg={theme.textMuted}>
+                  Click a row or a tab to go there; drag over text to copy it.
+                  Config mouse: false leaves the mouse to your terminal.
+                </text>
+              </box>
             }
           />
         </Show>

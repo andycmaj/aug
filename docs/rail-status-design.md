@@ -13,7 +13,7 @@ Four axes, each with one owner in the code:
 | 1. task lifecycle | where is the work in its life | `tasks.status` + facts (`pr_status`, `merged_at`, `task_blockers`) | `store` / `lifecycle.ts` |
 | 2. agent state | what is its agent doing right now | `tasks.agent_state`, `sessions.state` | `lifecycle.ts` only |
 | 3. rail grouping | where the row sits and what mark it wears | derived, never stored | `lanes.ts`, `rail.ts` |
-| 4. task tagging | marks on a row that move nothing else | `priority`, `watching`, `wins`, project, goal | `desk.ts` |
+| 4. task tagging | marks on a row that move nothing else | `priority`, `wins`, project, goal | `desk.ts` |
 
 Agent state lives inside the lifecycle: only a task that is open (or
 later) has a live agent state worth showing. Done and dropped tasks keep
@@ -244,9 +244,8 @@ then the agent at rest, then whose it is.
 | 10 | blocked | ⊘ | muted | blocked by a task | phase blocked |
 | 11 | idle | ◇ | secondary | agent idle | agent idle |
 | 12 | stopped | ■ | muted | agent stopped | agent stopped |
-| 13 | watching | ○ | muted | watching | watching |
-| 14 | theirs | → | muted | waiting on them | `waiting_on` set |
-| 15 | yours / asked | • / ? | text / primary | on you / asked you | the rest |
+| 13 | theirs | → | muted | waiting on them | `waiting_on` set |
+| 14 | yours / asked | • / ? | text / primary | on you / asked you | the rest |
 
 `saved` and the old `blocked` lane go. The legend reads `LANE_META`, so it
 follows. A lane with a `nerdMark` shows it only where the font is a Nerd
@@ -260,7 +259,7 @@ AUG-0012`); a stopped row's says why it ended; a ready row's says
 already merged says `merged, agent working` (working outranks merged: an
 agent that landed its branch is often still writing its note). The selected
 row carries its `▸` in the gutter left of the bar, never in place of
-its mark, so the task you are watching shows its lane move (AUG-0123).
+its mark, so the task you are on shows its lane move (AUG-0123).
 The filter pills, the rail's only header, count ready rows (◈) next to
 asks (◆), and so does a folded project row. The done
 hook's "next" line on the task says "Ready for review: yours to close"
@@ -268,8 +267,7 @@ whenever the task stays open.
 
 ### Sections
 
-Home, **Due**, **Wins**, System, Tasks, Code Reviews, Watching, For
-later. Due lists each open task a timer fired on that the owner has not
+Home, **Due**, **Wins**, System, Tasks, Code Reviews, For later. Due lists each open task a timer fired on that the owner has not
 opened since (`core/timers.ts`; its timer message is unread,
 `store.ringingTimers`): a follow-up or schedule the owner or the Assistant
 set, and every reminder. An agent's own follow-up wakes the agent and does
@@ -298,7 +296,7 @@ one thing share a pill:
 | 6 | stopped ■ | stopped, queued (not running: needs Start or Continue) |
 | 7 | review ◎ | review |
 | 8 | open • | yours, asked |
-| 9 | waiting → | blocked, theirs, watching, later |
+| 9 | waiting → | blocked, theirs, later |
 
 Omitted on purpose: done (never on the rail, except as an unread
 ready (done), which is under ready). To fit nine pills in the rail's 46
@@ -317,8 +315,6 @@ Marks that change neither lifecycle nor agent state:
   after the lane's, `!!` urgent or `!` important, in the same color, so
   priority never rests on color alone; urgent reddens the title. `!!`
   rather than `‼`, which some terminals draw as a wide emoji.
-- **watching**: lists the task under Watching too (AUG-0175); it stays in
-  its project. Its row there wears `◉` unless its lane is already watching.
 - **slipped** (derived): a theirs row quiet 3 days; red bar. Never for
   blocked.
 - **project, goal**: the project chip, nesting under the project row.
@@ -335,7 +331,8 @@ Marks that change neither lifecycle nor agent state:
   - Table `wins(day, task_id, pinned_at)`, primary key `(day, task_id)`;
     `day` is the owner's local date. At most 5 per day, enforced in
     `desk.win`.
-  - Key `z` on a task row toggles it (`W` and `w` are taken); move `win`
+  - Key `w` on a task row toggles it: a Win already is unpinned, and a
+    sixth is refused with "Today has 5 Wins: unpin one first". Move `win`
     (`--off yes` to unpin) for the Assistant. Not an agent move: Wins are
     the owner's focus.
   - A Win is listed under Wins and stays where it sits (its project, Code
@@ -371,29 +368,27 @@ Marks that change neither lifecycle nor agent state:
 
 ### Listed twice (AUG-0175)
 
-A Win, an open task you watch, and a task a timer fired on show in two
-places: where the task sits (its project's group in Tasks, Code Reviews,
-For later) and under the Due, Wins or Watching heading; one that is more
-than one shows in each. The rows are one task:
+A Win and a task a timer fired on show in two places: where the task
+sits (its project's group in Tasks, Code Reviews, For later) and under
+the Due or Wins heading; one that is both shows in each. The rows are one task:
 
 - **Keys.** The task's own row keeps `t<id>`; a row under a heading is a
-  copy (`copy: true`), keyed `t<id>@wins` or `t<id>@watching`, so the
-  cursor tells them apart (`t<id>@due` under Due). A task with no row of its own (a done Win) has
+  copy (`copy: true`), keyed `t<id>@wins` or `t<id>@due`, so the
+  cursor tells them apart. A task with no row of its own (a done Win) has
   its Wins row as its own, keyed `t<id>`. `baseKey` strips the `@`;
   `rowFor` finds a key's row (exact, else the task's own, else a copy).
 - **Selection.** `selectedKey` is always the task's key, so the Canvas
   never changes when the cursor moves between its rows. `selectedRowKey`
   is the row standing for it: the cursor's, when it is on one of the
   task's rows, else its own row. That row gets `▸`; its other rows a dim
-  `▹`. When a row goes (unwatched, unpinned, folded), the selection falls
+  `▹`. When a row goes (unpinned, opened, folded), the selection falls
   to the task's remaining row.
 - **Counts.** Each heading counts its own members, copies included
-  (Tasks counts the task in its project; Wins `done/pinned`; Watching its
-  watched tasks). The filter pills, the Canvas's overview and the
+  (Tasks counts the task in its project; Wins `done/pinned`). The filter pills, the Canvas's overview and the
   project's `open` count each task once (copies left out).
 - **Look.** A copy is not nested and names its project (`◫ name`, with
-  or without a PR chip); a row wears `★` (Win) and `◉` (watched) only
-  where its heading does not already say it. One line: the title is cut
+  or without a PR chip); a row wears `★` (Win) only where its heading
+  does not already say it. One line: the title is cut
   by the tags' width.
 - **Walking.** Up, down, top and bottom pass every shown row, copies
   included. Next and back (`n`, `b`) stop at each task once, at its first
@@ -422,4 +417,4 @@ filter bar's contract (every lane has a pill or is listed as omitted).
    local detection through the Mux.
 5. **Blocked on task** (AUG-0018): `task_blockers`, `block_on` / `unblock`,
    `blockerResolved`.
-6. **Wins** (AUG-0050): `wins`, `z`, `win` move, the Wins section.
+6. **Wins** (AUG-0050): `wins`, `w`, `win` move, the Wins section.

@@ -150,7 +150,6 @@ function taskSections(task: TaskRow, lane: Lane, now: Date): InfoSection[] {
         "priority",
         task.priority_pinned ? `${task.priority} (set by you)` : task.priority,
       ],
-      ["watching", task.watching ? "yes" : null],
       ["waiting on", task.waiting_on],
       ["remind", when(task.remind_at, now)],
       ...store

@@ -161,7 +161,6 @@ export interface NewTask {
   summary?: string;
   kind: Kind;
   priority?: Priority;
-  watching?: boolean;
   repo?: string | null;
   threadKey?: string | null;
   channel: Channel;
@@ -177,13 +176,12 @@ export interface NewTask {
 export function createTask(t: NewTask): TaskRow {
   const at = t.createdAt ?? now();
   const id = run(
-    `INSERT INTO tasks (title, summary, kind, priority, watching, repo, thread_key, channel, url, triage_reason, created_at, updated_at, project_id, branch, from_task_id, goal_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (title, summary, kind, priority, repo, thread_key, channel, url, triage_reason, created_at, updated_at, project_id, branch, from_task_id, goal_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     t.title,
     t.summary ?? "",
     t.kind,
     t.priority ?? "regular",
-    t.watching ? 1 : 0,
     t.repo ?? null,
     t.threadKey ?? null,
     t.channel,
@@ -1815,10 +1813,6 @@ export function remindAt(taskId: number, at: string, by = "you"): void {
     cancelTimers(taskId, [TimerKind.remind]);
     addTimer({ taskId, kind: TimerKind.remind, dueAt: at, by });
   });
-}
-
-export function setWatching(taskId: number, on: boolean): void {
-  updateTask(taskId, { watching: on ? 1 : 0 });
 }
 
 // ── timers ───────────────────────────────────────────────────────────────

@@ -35,7 +35,6 @@ export function taskLine(t: TaskRow): string {
   const facts = [
     t.kind,
     t.status,
-    t.watching ? "watching" : "",
     t.status === TaskStatus.later && t.remind_at
       ? `until ${t.remind_at.slice(0, 10)}`
       : "",

@@ -23,7 +23,7 @@ its state changes. The rings take the place of the Board's columns:
 | 1                 | `asked`, `agentdone`       | on approach, expecting you    |
 | 2                 | `working`, `yours`         | en route, under control       |
 | 3                 | `queued`, `stopped`, `saved` | holding, or on the ground   |
-| 4 (edge)          | `theirs`, `watching`, `later` | outbound, someone else's  |
+| 4 (edge)          | `theirs`, `later` | outbound, someone else's  |
 | off the scope     | `done`                     | landed / radar service ends   |
 
 - **Angle is the sector.** Bearing comes from where the work lives: one
@@ -198,7 +198,7 @@ cleared route.
 Facilities combine sectors when traffic is light and split them when it is
 heavy.
 
-**Proposal:** a "busy" mode that folds FYI and Watching away and only
+**Proposal:** a "busy" mode that folds FYI and waiting-on-them away and only
 lets `blocked`/`approve` interrupt. Quiet hours do the reverse.
 
 ### Fuel → token budget

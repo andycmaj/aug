@@ -444,15 +444,14 @@ describe("triage routing", () => {
     expect(store.listTasks()).toHaveLength(0);
   });
 
-  test("a watch verdict makes a task that watches", async () => {
+  test("a watch answer, no longer offered, is filed as FYI with no task", async () => {
     fakeBrain(() => verdict("watch"));
-    const out = await triage(ghComment(1, "deploying the fix now"), {
-      config: config(),
-    });
-    const task = store.getTask(out.taskId!)!;
-    expect(out.verdict).toBe("watch");
-    expect(task.kind).toBe("task");
-    expect(task.watching).toBe(1);
+    const m = ghComment(1, "deploying the fix now");
+    const out = await triage(m, { config: config() });
+    expect(out.verdict).toBe("fyi");
+    expect(out.taskId).toBeNull();
+    expect(message(m.id).verdict).toBe("fyi");
+    expect(store.listTasks()).toHaveLength(0);
   });
 
   test("a DM that is a new ask makes a second task", async () => {
@@ -1049,13 +1048,5 @@ describe("review requests become coding tasks", () => {
       { config: config() },
     );
     expect(out.verdict).toBe("fyi");
-  });
-
-  test("watching a review someone else does stays a watch", async () => {
-    fakeBrain(() => verdict("watch"));
-    const out = await triage(reviewAsk(null), { config: config() });
-    const task = store.getTask(out.taskId!)!;
-    expect(task.kind).toBe("task");
-    expect(task.watching).toBe(1);
   });
 });

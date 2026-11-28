@@ -20,7 +20,6 @@ export const Lane = {
   asked: "asked",
   yours: "yours",
   theirs: "theirs",
-  watching: "watching",
   later: "later",
   done: "done",
 } as const;
@@ -57,7 +56,6 @@ export const LANE_META: Record<Lane, LaneMeta> = {
   asked: { word: "asked you", mark: "?", tone: "primary" },
   yours: { word: "on you", mark: "•", tone: "text" },
   theirs: { word: "waiting on them", mark: "→", tone: "muted" },
-  watching: { word: "watching", mark: "○", tone: "muted" },
   later: { word: "for later", mark: "◷", tone: "muted" },
   done: { word: "done", mark: "✓", tone: "muted" },
 };
@@ -160,9 +158,6 @@ export function laneOf(task: TaskRow, facts: LaneFacts): Lane {
   }
   if (task.agent_state === AgentState.stopped) {
     return Lane.stopped;
-  }
-  if (task.watching) {
-    return Lane.watching;
   }
   if (task.waiting_on) {
     return Lane.theirs;

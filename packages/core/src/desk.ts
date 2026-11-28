@@ -1182,22 +1182,6 @@ export class Desk {
     });
   }
 
-  watch(taskId: number, on: boolean): void {
-    this.onTask(on ? "watch" : "unwatch", taskId, () => {
-      store.setWatching(taskId, on);
-      correct(
-        this.config(),
-        {
-          taskId,
-          what: on
-            ? "Watch it: not mine, someone else handles it"
-            : "Stop watching: this is mine",
-        },
-        this.learnedNotice,
-      );
-    });
-  }
-
   // Ignore: dropped if nothing was done on it, otherwise Mark done. Either
   // way ctrl+z takes it back. Nothing is learned from it: what an ignore
   // teaches is the owner's to say, and learning from every x would put

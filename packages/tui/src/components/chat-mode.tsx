@@ -169,7 +169,6 @@ export function ChatMode() {
         hasDraft: false,
         live: false,
         coding: false,
-        watching: false,
         started: false,
         pr: false,
       };
@@ -183,7 +182,6 @@ export function ChatMode() {
         hasDraft: false,
         live: manager?.agent_state === AgentState.working,
         coding: false,
-        watching: false,
         started: false,
         pr: false,
       };
@@ -199,7 +197,6 @@ export function ChatMode() {
       hasDraft: riker.pending().has(t.id),
       live,
       coding: t.kind === Kind.coding,
-      watching: Boolean(t.watching),
       started: !riker.briefEditable(t.id),
       pr: riker.taskPr(t) !== null,
       closed: isClosed(t),

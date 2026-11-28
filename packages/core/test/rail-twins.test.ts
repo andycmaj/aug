@@ -1,6 +1,5 @@
-// A Win or a watched task is listed under its header and stays in
-// its project. The two rows are one task: counted once, found once, walked
-// once.
+// A Win is listed under Wins and stays in its project. The two rows are one
+// task: counted once, found once, walked once.
 
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
@@ -37,13 +36,12 @@ function setup() {
     });
   const neither = make("neither", 1);
   const win = make("win", 2);
-  const watched = make("watched", 3);
+  const other = make("other", 3);
+  // A second Win, waiting on someone: the one the waiting filter keeps.
   const both = make("both", 4);
-  store.setWatching(watched.id, true);
-  store.setWatching(both.id, true);
-  // Idle, so its lane is not watching and the row wears the ◉ tag.
-  store.updateTask(watched.id, { agent_state: AgentState.idle });
-  return { project, neither, win, watched, both };
+  store.updateTask(both.id, { waiting_on: "Devon" });
+  store.updateTask(other.id, { agent_state: AgentState.idle });
+  return { project, neither, win, other, both };
 }
 
 function railNow(wins: number[]): RailSection[] {
@@ -64,32 +62,23 @@ const keysOf = (rail: RailSection[], section: string) =>
 const task = (item: RailItem | null | undefined) =>
   item?.type === "task" ? item : null;
 
-describe("a Win or watched task under its header and in its project", () => {
+describe("a Win under Wins and in its project", () => {
   beforeEach(() => freshHome());
 
-  test("each sits in its project; Wins and Watching list their own as copies", () => {
-    const { project, neither, win, watched, both } = setup();
+  test("each sits in its project; Wins lists its own as copies", () => {
+    const { project, neither, win, other, both } = setup();
     const rail = railNow([both.id, win.id]);
-    expect(rail.map((s) => s.section)).toEqual([
-      "home",
-      "wins",
-      "tasks",
-      "watching",
-    ]);
+    expect(rail.map((s) => s.section)).toEqual(["home", "wins", "tasks"]);
     expect(keysOf(rail, "tasks")).toEqual([
       `p${project.id}`,
       `t${neither.id}`,
       `t${win.id}`,
-      `t${watched.id}`,
+      `t${other.id}`,
       `t${both.id}`,
     ]);
     expect(keysOf(rail, "wins")).toEqual([
       `t${both.id}@wins`,
       `t${win.id}@wins`,
-    ]);
-    expect(keysOf(rail, "watching")).toEqual([
-      `t${watched.id}@watching`,
-      `t${both.id}@watching`,
     ]);
     const items = flattenRail(rail);
     // Every row has its own key, so the cursor can tell them apart.
@@ -106,18 +95,13 @@ describe("a Win or watched task under its header and in its project", () => {
   });
 
   test("the project's row shows its tags; a copy leaves out the one its header says", () => {
-    const { neither, win, watched, both } = setup();
-    const items = flattenRail(railNow([win.id, both.id]));
+    const { neither, win, other } = setup();
+    const items = flattenRail(railNow([win.id]));
     const tags = (key: string) => task(items.find((i) => i.key === key))?.tags;
     expect(tags(`t${neither.id}`)).toEqual([]);
+    expect(tags(`t${other.id}`)).toEqual([]);
     expect(tags(`t${win.id}`)).toEqual(["win"]);
     expect(tags(`t${win.id}@wins`)).toEqual([]);
-    expect(tags(`t${watched.id}`)).toEqual(["watching"]);
-    expect(tags(`t${watched.id}@watching`)).toEqual([]);
-    // Its lane is watching, whose mark already says so.
-    expect(tags(`t${both.id}`)).toEqual(["win"]);
-    expect(tags(`t${both.id}@wins`)).toEqual([]);
-    expect(tags(`t${both.id}@watching`)).toEqual(["win"]);
   });
 
   test("headers count their own members; pills and the project count each task once", () => {
@@ -127,7 +111,6 @@ describe("a Win or watched task under its header and in its project", () => {
       rail.find((s) => s.section === section)!.count;
     expect(count("tasks")).toBe(4);
     expect(count("wins")).toBe(2);
-    expect(count("watching")).toBe(2);
     const pills = Object.values(filterCounts(rail)).reduce((a, b) => a + b, 0);
     expect(pills).toBe(4);
     const row = rail[2].items.find((i) => i.key === `p${project.id}`);
@@ -137,24 +120,22 @@ describe("a Win or watched task under its header and in its project", () => {
   test("a filter keeps both rows of a task it keeps, and counts each header's own", () => {
     const { both } = setup();
     const rail = filterRail(railNow([both.id]), new Set(["waiting"]));
-    // Only the two watched tasks are in a waiting lane (watching); the idle
-    // one is not.
+    // Only the Win waiting on someone is in a waiting lane (theirs); the
+    // idle one is not.
     expect(rail.map((s) => [s.section, s.count])).toEqual([
       ["home", 1],
       ["wins", 1],
       ["tasks", 1],
-      ["watching", 1],
     ]);
     expect(filterCounts(railNow([both.id])).waiting).toBe(1);
   });
 
-  test("folding the project hides its rows, not the copies under Wins or Watching", () => {
-    const { project, win, watched } = setup();
+  test("folding the project hides its rows, not the copies under Wins", () => {
+    const { project, win } = setup();
     const shown = flattenRail(
       foldRail(railNow([win.id]), new Set([project.id])),
     ).map((i) => i.key);
     expect(shown).toContain(`t${win.id}@wins`);
-    expect(shown).toContain(`t${watched.id}@watching`);
     expect(shown).not.toContain(`t${win.id}`);
     expect(shown).toContain(`p${project.id}`);
   });
@@ -184,7 +165,7 @@ describe("a Win or watched task under its header and in its project", () => {
   });
 
   test("Next walks each task once, at its first row, and never to the selected task's other row", () => {
-    const { project, neither, win, watched, both } = setup();
+    const { project, neither, win, other, both } = setup();
     const rail = railNow([both.id, win.id]);
     const order = flattenRail(rail).map((i) => i.key);
     const walk = (from: string | null) =>
@@ -199,7 +180,7 @@ describe("a Win or watched task under its header and in its project", () => {
       `t${both.id}@wins`,
       `t${win.id}@wins`,
       `t${neither.id}`,
-      `t${watched.id}`,
+      `t${other.id}`,
     ]);
     // On a Win's row in its project, its copy under Wins is not a stop.
     expect(walkableKeys(rail, `t${win.id}`)).not.toContain(`t${win.id}@wins`);
@@ -225,11 +206,11 @@ describe("a Win or watched task under its header and in its project", () => {
   });
 
   test("search finds each task once, at its own row", () => {
-    const { win, watched, both } = setup();
+    const { win, other, both } = setup();
     const rail = railNow([win.id, both.id]);
     const docs = searchIndex(rail, { messages: new Map(), turns: new Map() });
     const keys = docs.map((d) => d.item.key);
-    for (const id of [win.id, watched.id, both.id]) {
+    for (const id of [win.id, other.id, both.id]) {
       expect(keys.filter((k) => baseKey(k) === `t${id}`)).toEqual([`t${id}`]);
     }
     expect(docs.find((d) => d.item.key === `t${both.id}`)?.section).toBe(

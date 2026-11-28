@@ -175,7 +175,7 @@ test("kitty: ctrl+[ from the Board goes back to Chat", async () => {
   const s = await boot(true);
   await s.goTo("Badge printer");
   await s.press("v");
-  expect(s.frame()).toContain("chat | board");
+  expect(s.frame()).toContain("Agent board");
   expect(s.frame()).not.toContain("Tell the agent");
   await s.press("[", { ctrl: true });
   expect(s.shows(BADGE)).toBe(true);

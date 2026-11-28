@@ -496,24 +496,6 @@ export const MOVES: Record<string, MoveSpec> = {
       return `cancelled ${gone.map((t) => timerRef(t.id)).join(", ")} on ${ref(task)}`;
     },
   },
-  watch: {
-    help: "Watch the task: not the owner's, kept open",
-    task: true,
-    args: {},
-    run(desk, task) {
-      desk.watch(task!.id, true);
-      return `watching ${ref(task)}`;
-    },
-  },
-  unwatch: {
-    help: "Stop watching: the task is the owner's again",
-    task: true,
-    args: {},
-    run(desk, task) {
-      desk.watch(task!.id, false);
-      return `${ref(task)} back in Tasks`;
-    },
-  },
   start: {
     help: "Start (or continue) the task's agent",
     task: true,

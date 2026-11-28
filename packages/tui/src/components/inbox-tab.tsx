@@ -199,6 +199,16 @@ export function useInboxTab(opts: {
     move,
     View: (props: { width: number }) => (
       <InboxView
+        onRow={(key) =>
+          cursor.press(
+            rows().map((r) => r.key),
+            key,
+          )
+        }
+        onPill={(i) => {
+          setFilter(INBOX_FILTERS[i].filter);
+          cursor.reset();
+        }}
         rows={rows()}
         selected={row()?.key ?? null}
         openKey={cursor.openKey()}
@@ -263,6 +273,8 @@ function Upcoming(props: { width: number }) {
 }
 
 function InboxView(props: {
+  onRow: (key: string) => void;
+  onPill: (index: number) => void;
   rows: InboxRow[];
   selected: string | null;
   openKey: string | null;
@@ -310,6 +322,7 @@ function InboxView(props: {
           }))}
           hint="f next"
           query={props.query}
+          onPill={props.onPill}
         />
       </box>
       <Show when={props.filter === InboxFilter.timers}>
@@ -331,6 +344,7 @@ function InboxView(props: {
       >
         <ExpandList
           id="inbox"
+          onPress={props.onRow}
           entries={props.rows.map((row) => ({ row }))}
           rowKey={(row) => row.key}
           selected={props.selected}

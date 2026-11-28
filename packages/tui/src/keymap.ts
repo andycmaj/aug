@@ -24,7 +24,6 @@ export interface HelpCtx {
   hasDraft: boolean;
   live: boolean;
   coding: boolean;
-  watching: boolean;
   // Its agent has run at least once: the brief is settled.
   started: boolean;
   // Done or dropped: d reopens it rather than marks it done.
@@ -278,12 +277,6 @@ const taskActions: BindingSpec<HelpCtx>[] = [
   },
   {
     key: "w",
-    cmd: Commands.WATCH,
-    desc: "watch it / stop watching",
-    relevant: isWork,
-  },
-  {
-    key: "z",
     cmd: Commands.WIN,
     desc: "pin as one of today's Wins / unpin",
     help: "win",

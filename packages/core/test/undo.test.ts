@@ -163,7 +163,7 @@ describe("ctrl+z undoes the last move", () => {
     expect(store.getTask(t.id)!.project_id).toBe(a.id);
   });
 
-  test("remind, watch, kind, retitle, wait, block, win and link each go back", async () => {
+  test("remind, kind, retitle, wait, block, win and link each go back", async () => {
     const other = task("other");
     const t = task("old");
     const id = t.id;
@@ -174,11 +174,6 @@ describe("ctrl+z undoes the last move", () => {
         "remind",
         () => engine.desk.remind(id, 1),
         () => expect(store.getTask(id)!.status).toBe(was.status),
-      ],
-      [
-        "watch",
-        () => engine.desk.watch(id, true),
-        () => expect(store.getTask(id)!.watching).toBe(0),
       ],
       [
         "kind",

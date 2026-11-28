@@ -38,7 +38,6 @@ const FIELDS = [
   "summary",
   "kind",
   "waiting_on",
-  "watching",
   "story",
 ] as const;
 type Field = (typeof FIELDS)[number];
@@ -80,7 +79,6 @@ const PART_WORDS: Partial<Record<Part, string>> = {
   goal_id: "goal",
   summary: "brief",
   waiting_on: "waiting",
-  watching: "watching",
   story: "story switch",
   held: "start hold",
   timers: "timers",

@@ -20,7 +20,6 @@ const taskCtx: HelpCtx = {
   hasDraft: false,
   live: false,
   coding: true,
-  watching: false,
   started: true,
   pr: false,
 };
