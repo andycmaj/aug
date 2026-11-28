@@ -69,7 +69,7 @@ interface RowView {
   markColor: ThemeColor;
   title: string;
   titleColor: ThemeColor;
-  // Tag marks beside the title (★ Win, ◉ watched), where the row's place
+  // Tag marks beside the title (★ Win), where the row's place
   // does not already say it.
   tags?: string;
   // Theirs when not the tag color (a project's manager mark).
