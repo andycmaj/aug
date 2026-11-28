@@ -278,6 +278,16 @@ export function useDocsTab(opts: {
     },
     View: (props: { width: number }) => (
       <DocsView
+        onRow={(key) =>
+          cursor.press(
+            rows().map((r) => r.key),
+            key,
+          )
+        }
+        onPill={(i) => {
+          setKind(KIND_PILLS[i]);
+          refilter();
+        }}
         rows={shown()}
         groups={groups()}
         selected={row()?.key ?? null}
@@ -313,6 +323,8 @@ const KIND_PILLS: (DocKind | null)[] = [
 ];
 
 function DocsView(props: {
+  onRow: (key: string) => void;
+  onPill: (index: number) => void;
   rows: DocRow[];
   groups: [number | null, DocRow[]][] | null;
   selected: string | null;
@@ -374,6 +386,7 @@ function DocsView(props: {
           }))}
           hint="f kind · p project · P group"
           query={props.query}
+          onPill={props.onPill}
         >
           <Show when={props.project}>
             <text fg={theme.accent}>{`project: ${props.project}`}</text>
@@ -397,6 +410,7 @@ function DocsView(props: {
       >
         <ExpandList
           id="docs"
+          onPress={props.onRow}
           entries={entries()}
           rowKey={(r) => r.key}
           selected={props.selected}

@@ -118,3 +118,63 @@ test("a click on a Board tab switches to it", async () => {
   await s.click("4 Inbox");
   expect(boardTab()).toBe(BoardTab.inbox);
 });
+
+const ctrl = { ctrl: true };
+
+test("Inbox: a click moves the cursor, a second click opens the row", async () => {
+  const s = await boot();
+  await s.press("v");
+  await s.press("4");
+  const after = (words: string) => {
+    const rows = s.frame().split("\n");
+    const i = rows.findIndex((r) => r.includes(words));
+    return rows[i + 1];
+  };
+  expect(after("Gail Moreno")).toContain("Sam Delgado");
+  await s.click("Gail Moreno");
+  expect(after("Gail Moreno")).toContain("Sam Delgado");
+  await s.click("Gail Moreno");
+  expect(after("Gail Moreno")).not.toContain("Sam Delgado");
+  await s.click("Gail Moreno");
+  expect(after("Gail Moreno")).toContain("Sam Delgado");
+});
+
+test("Inbox: a click on a filter pill filters by it", async () => {
+  const s = await boot();
+  await s.press("v");
+  await s.press("4");
+  expect(s.frame()).toContain("Ruth Okafor");
+  await s.click("FYI 3");
+  expect(s.frame()).not.toContain("Ruth Okafor");
+  expect(s.frame()).toContain("Gail Moreno");
+});
+
+test("Columns: a click on a card puts the cursor on it", async () => {
+  const s = await boot();
+  await s.press("v");
+  await s.press("2");
+  expect(s.frame()).toContain("agent idle (2)");
+  await s.click("Retry webhook");
+  expect(s.frame()).toContain("agent idle (2/2)");
+});
+
+test("Knowledge: a click on an entry shows it", async () => {
+  const s = await boot();
+  await s.press("v");
+  await s.press("3");
+  const title = () => s.frame().split("\n")[3];
+  expect(title()).toContain("Bank CSVs carry a UTF-8 BOM");
+  await s.click("Inter-company transfers");
+  expect(title()).not.toContain("Bank CSVs carry a UTF-8 BOM");
+  expect(title()).toContain("Inter-company");
+});
+
+test("Go to: a click on a row opens it", async () => {
+  const s = await boot();
+  s.setup.mockInput.pressKey("\\", ctrl);
+  await s.settle();
+  expect(s.frame()).toContain("Go to");
+  await s.click("RIKER-0008 Rotate staging certs");
+  expect(s.frame()).not.toContain("Go to");
+  expect(s.line("Rotate staging certs", 0, RAIL)).toContain("▸");
+});

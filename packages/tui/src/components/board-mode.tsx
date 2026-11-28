@@ -347,6 +347,10 @@ export function BoardMode() {
                 columns={columns()}
                 col={col()}
                 row={row()}
+                onCard={(c, r) => {
+                  setCol(c);
+                  setRow(r);
+                }}
                 width={dims().width}
               />
             </Match>
@@ -354,6 +358,7 @@ export function BoardMode() {
               <Knowledge
                 entries={knowledge()}
                 selected={knowledgeAt()}
+                onEntry={setKnowledgeAt}
                 width={dims().width}
               />
             </Match>
@@ -387,6 +392,7 @@ function Columns(props: {
   col: number;
   row: number;
   width: number;
+  onCard: (col: number, row: number) => void;
 }) {
   const theme = useTheme();
   const riker = useRiker();
@@ -460,6 +466,7 @@ function Columns(props: {
                     <Card
                       task={task}
                       on={selected()}
+                      onPress={() => props.onCard(ci(), ri())}
                       width={colWidth() - 2}
                       spinner={riker.spinner()}
                     />
@@ -479,6 +486,7 @@ const cardId = (taskId: number) => `board-card-${taskId}`;
 function Card(props: {
   task: TaskRow;
   on: boolean;
+  onPress: () => void;
   width: number;
   spinner: string;
 }) {
@@ -518,6 +526,7 @@ function Card(props: {
       backgroundColor={props.on ? theme.primary : theme.background}
       paddingLeft={1}
       paddingRight={1}
+      onMouseDown={onPress(() => props.onPress())}
     >
       <text fg={fg() ?? theme.textMuted}>
         {truncate(
@@ -538,6 +547,7 @@ function Card(props: {
 function Knowledge(props: {
   entries: KnowledgeRow[];
   selected: number;
+  onEntry: (index: number) => void;
   width: number;
 }) {
   const theme = useTheme();
@@ -577,6 +587,7 @@ function Knowledge(props: {
                       on() ? contrastingForeground(theme.primary) : theme.text
                     }
                     bg={on() ? theme.primary : undefined}
+                    onMouseDown={onPress(() => props.onEntry(i()))}
                   >
                     {` ${truncate(entry.title, 40)}`}
                   </text>

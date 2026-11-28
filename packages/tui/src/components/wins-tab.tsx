@@ -154,6 +154,12 @@ export function useWinsTab(opts: { active: () => boolean; actions: Actions }) {
     }),
     View: (props: { width: number }) => (
       <WinsView
+        onRow={(key) =>
+          cursor.press(
+            lines().map((l) => l.key),
+            key,
+          )
+        }
         days={days()}
         selected={line()?.key ?? null}
         openKey={cursor.openKey()}
@@ -199,6 +205,7 @@ function rowSays(row: DayRow): string {
 }
 
 function WinsView(props: {
+  onRow: (key: string) => void;
   days: WinsDay[];
   selected: string | null;
   openKey: string | null;
@@ -323,6 +330,7 @@ function WinsView(props: {
       </box>
       <ExpandList
         id="wins"
+        onPress={props.onRow}
         entries={entries()}
         rowKey={(l) => l.key}
         selected={props.selected}
