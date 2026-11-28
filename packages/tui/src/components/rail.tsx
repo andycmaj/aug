@@ -36,6 +36,7 @@ import {
   RAIL_FILTERS,
   SECTION_TITLES,
   TAG_MARK,
+  type RailFilter,
   type RailItem,
 } from "@riker/core/rail";
 import { prChip, prQueueWord } from "@riker/core/pr";
@@ -43,6 +44,7 @@ import { actionRailWord, taskRef } from "@riker/core/rows";
 import { AgentState, Kind, TaskStatus, type Priority } from "@riker/core/types";
 import {
   CHANNEL_WORD,
+  onPress,
   priorityColor,
   projectChip,
   toneColor,
@@ -233,7 +235,12 @@ export function Rail(props: { actions: TaskActions }) {
       width={RAIL_WIDTH}
       ref={(r) => (pane = r)}
     >
-      <FilterBar />
+      <FilterBar
+        onToggle={(f) => {
+          riker.toggleFilter(f);
+          landCursor();
+        }}
+      />
 
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
@@ -267,6 +274,7 @@ export function Rail(props: { actions: TaskActions }) {
                   {(item) => (
                     <RailRow
                       item={item()}
+                      onPress={() => riker.select(item().key)}
                       nested={isNested(item())}
                       cursor={riker.cursorKey() === item().key}
                       onTable={riker.selectedRowKey() === item().key}
@@ -296,7 +304,7 @@ export function Rail(props: { actions: TaskActions }) {
 // the rail's only header: the pills already count the work. A lit pill is a mark and a
 // count, so a line under the pills says in words what the rail shows, and
 // the footer's word for showing everything again.
-function FilterBar() {
+function FilterBar(props: { onToggle: (filter: RailFilter) => void }) {
   const riker = useRiker();
   const theme = useTheme();
   const anyOn = () => riker.railFilter().size > 0;
@@ -329,6 +337,7 @@ function FilterBar() {
                   fg={fg()}
                   bg={on() ? color() : undefined}
                   attributes={on() ? 1 : 0}
+                  onMouseDown={onPress(() => props.onToggle(f.filter))}
                 >{` ${f.mark} ${count()} `}</text>
               </Show>
             );
@@ -364,6 +373,7 @@ function EmptyRail() {
 // listed twice) carries a dim ▹: the same task.
 function RailRow(props: {
   item: RailItem;
+  onPress: () => void;
   nested: boolean;
   cursor: boolean;
   onTable: boolean;
@@ -581,6 +591,7 @@ function RailRow(props: {
       flexDirection="row"
       marginLeft={props.nested ? NEST : 0}
       marginBottom={1}
+      onMouseDown={onPress(() => props.onPress())}
     >
       <text fg={props.onTable ? theme().accent : theme().textMuted}>
         {props.onTable ? "▸" : props.twin ? "▹" : " "}

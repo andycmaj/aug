@@ -73,4 +73,60 @@ describe("TerminalModes", () => {
     m.feed("\x1b[?2004h\x1bc");
     expect(m.paste("x")).toBe("x");
   });
+
+  describe("clicks", () => {
+    const none = { shift: false, alt: false, ctrl: false };
+
+    test("a program that asked for none gets none", () => {
+      const m = new TerminalModes();
+      m.feed("\x1b[?1006h");
+      expect(m.click("press", 0, 1, 1, none)).toBeNull();
+    });
+
+    test("1000 with SGR: press and release, no motion", () => {
+      const m = new TerminalModes();
+      m.feed("\x1b[?1000h\x1b[?1006h");
+      expect(m.click("press", 0, 3, 4, none)).toBe("\x1b[<0;4;5M");
+      expect(m.click("release", 0, 3, 4, none)).toBe("\x1b[<0;4;5m");
+      expect(m.click("press", 2, 0, 0, none)).toBe("\x1b[<2;1;1M");
+      expect(m.click("drag", 0, 5, 4, none)).toBeNull();
+      expect(m.click("move", 0, 5, 4, none)).toBeNull();
+    });
+
+    test("1002 adds a drag with its button held; 1003 any motion", () => {
+      const m = new TerminalModes();
+      m.feed("\x1b[?1002h\x1b[?1006h");
+      expect(m.click("drag", 0, 5, 4, none)).toBe("\x1b[<32;6;5M");
+      expect(m.click("move", 0, 5, 4, none)).toBeNull();
+      m.feed("\x1b[?1003h");
+      expect(m.click("move", 0, 5, 4, none)).toBe("\x1b[<35;6;5M");
+    });
+
+    test("modifiers add to the button", () => {
+      const m = new TerminalModes();
+      m.feed("\x1b[?1000;1006h");
+      expect(
+        m.click("press", 0, 0, 0, { shift: true, alt: true, ctrl: true }),
+      ).toBe("\x1b[<28;1;1M");
+    });
+
+    test("legacy encoding: release is button 3, cells clamp", () => {
+      const m = new TerminalModes();
+      m.feed("\x1b[?1000h");
+      expect(m.click("press", 0, 1, 2, none)).toBe('\x1b[M "#');
+      expect(m.click("release", 0, 1, 2, none)).toBe('\x1b[M#"#');
+      expect(m.click("press", 0, 400, 0, none)).toBe(
+        `\x1b[M ${String.fromCharCode(255)}!`,
+      );
+    });
+
+    test("X10 (9) is presses only, without modifiers", () => {
+      const m = new TerminalModes();
+      m.feed("\x1b[?9h");
+      expect(
+        m.click("press", 1, 0, 0, { shift: true, alt: false, ctrl: false }),
+      ).toBe("\x1b[M!!!");
+      expect(m.click("release", 1, 0, 0, none)).toBeNull();
+    });
+  });
 });

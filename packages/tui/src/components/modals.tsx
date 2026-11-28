@@ -30,7 +30,7 @@ import { Kind, type DraftAction, type TurnRow } from "@riker/core/types";
 import { ActionTurn } from "./chat-turn";
 import { linkOf } from "./connector-line";
 import { LinkMark } from "./link-mark";
-import { dayClock, ModeToggle, projectChip } from "./ui";
+import { dayClock, ModeToggle, onPress, projectChip } from "./ui";
 
 export function PromptModal(props: {
   title: string;
@@ -161,6 +161,10 @@ export function ChoiceModal(props: {
                 paddingLeft={1}
                 paddingRight={1}
                 backgroundColor={on() ? theme.primary : undefined}
+                onMouseDown={onPress(() => {
+                  props.onClose();
+                  choice.run();
+                })}
               >
                 <text
                   fg={on() ? contrastingForeground(theme.primary) : theme.text}
@@ -419,6 +423,7 @@ export function InfoModal(props: {
                     <box
                       flexDirection="row"
                       backgroundColor={on() ? theme.primary : undefined}
+                      onMouseDown={onPress(() => setSelected(row.i))}
                     >
                       <text
                         width={labelWidth()}
@@ -764,6 +769,7 @@ export function SearchModal(props: {
                     paddingLeft={1}
                     paddingRight={1}
                     backgroundColor={on() ? theme.primary : undefined}
+                    onMouseDown={onPress(() => pick(null))}
                   >
                     <text
                       width={SEARCH_TAG_WIDTH}
@@ -800,6 +806,7 @@ export function SearchModal(props: {
                   paddingLeft={1}
                   paddingRight={1}
                   backgroundColor={on() ? theme.primary : undefined}
+                  onMouseDown={onPress(() => pick(hit))}
                 >
                   <text
                     width={SEARCH_TAG_WIDTH}

@@ -21,6 +21,15 @@ import {
 } from "@andycmaj/opentui-app";
 import { useRiker, ViewMode } from "../context/riker";
 import { helpBindings, type HelpCtx } from "../keymap";
+import { ModeSegments } from "./ui";
+
+const VIEW_MODES = [
+  { mode: ViewMode.chat, label: "Chat" },
+  { mode: ViewMode.board, label: "Board" },
+] as const;
+// The view chip's columns: each segment is its label padded and framed (4
+// more). Its key is v view among the hints, not on the chip.
+const VIEW_CHIP_WIDTH = VIEW_MODES.reduce((n, m) => n + m.label.length + 4, 0);
 
 // "escape" reads better as "esc" in a hint line.
 const KEY_WORDS: Record<string, string> = { escape: "esc" };
@@ -89,7 +98,7 @@ export function RikerFooter(props: {
   const visible = createMemo(() =>
     fitHints(
       getHelpItems(bindings(), props.options),
-      dims().width - (props.left ?? 0) - 22,
+      dims().width - (props.left ?? 0) - 4 - 2 - VIEW_CHIP_WIDTH,
     ),
   );
 
@@ -114,28 +123,11 @@ export function RikerFooter(props: {
           )}
         </For>
       </box>
-      <text flexShrink={0}>
-        <span
-          style={{
-            fg:
-              riker.mode() === ViewMode.chat ? theme.primary : theme.textMuted,
-            attributes: riker.mode() === ViewMode.chat ? 1 : 0,
-          }}
-        >
-          chat
-        </span>
-        <span style={{ fg: theme.textMuted }}> | </span>
-        <span
-          style={{
-            fg:
-              riker.mode() === ViewMode.board ? theme.primary : theme.textMuted,
-            attributes: riker.mode() === ViewMode.board ? 1 : 0,
-          }}
-        >
-          board
-        </span>
-        <span style={{ fg: theme.textMuted }}> (v)</span>
-      </text>
+      <ModeSegments
+        modes={VIEW_MODES}
+        active={riker.mode()}
+        onPick={riker.setMode}
+      />
     </box>
   );
 }

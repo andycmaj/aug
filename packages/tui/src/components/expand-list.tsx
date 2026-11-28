@@ -12,6 +12,7 @@ import {
 } from "@andycmaj/opentui-app";
 import type { Dialogs } from "./actions";
 import { PromptModal } from "./modals";
+import { onPress } from "./ui";
 
 // Where the cursor is and which row is open. Made at module level by each
 // view, so both survive a switch of Board tab.
@@ -37,6 +38,20 @@ export function listCursor() {
     },
     open(key: string) {
       setOpenKey(key);
+    },
+    // A click: on the cursor's row it opens or closes it, as enter does;
+    // elsewhere the cursor goes there, closing what was open.
+    press(keys: string[], key: string) {
+      const i = keys.indexOf(key);
+      if (i < 0) {
+        return;
+      }
+      if (i === Math.min(at(), keys.length - 1)) {
+        setOpenKey((k) => (k === key ? null : key));
+        return;
+      }
+      setAt(i);
+      setOpenKey(null);
     },
   };
 }
@@ -84,16 +99,19 @@ export function FilterPills(props: {
   pills: Pill[];
   hint?: string;
   query?: string;
+  // A click on the pill at this index.
+  onPill?: (index: number) => void;
   children?: JSX.Element;
 }) {
   const theme = useTheme();
   return (
     <box flexDirection="row" gap={1} flexShrink={0}>
       <For each={props.pills}>
-        {(p) => (
+        {(p, i) => (
           <text
             fg={p.on ? contrastingForeground(theme.secondary) : theme.textMuted}
             bg={p.on ? theme.secondary : undefined}
+            onMouseDown={onPress(() => props.onPill?.(i()))}
           >{` ${p.word}${p.count === undefined ? "" : ` ${p.count}`} `}</text>
         )}
       </For>
@@ -129,6 +147,8 @@ export function ExpandList<T>(props: {
   // The row's cells, laid out in a line; `on` is the cursor row.
   row: (row: T, on: boolean) => JSX.Element;
   detail: (row: T) => JSX.Element;
+  // A click on a row's line (not what opened under it).
+  onPress?: (key: string) => void;
   indent?: number;
   paddingRight?: number;
 }) {
@@ -173,6 +193,7 @@ export function ExpandList<T>(props: {
                 flexDirection="row"
                 gap={1}
                 backgroundColor={sel() ? theme.primary : undefined}
+                onMouseDown={onPress(() => props.onPress?.(key()))}
               >
                 {props.row(entry.row, sel())}
               </box>

@@ -10,11 +10,11 @@ import {
   type Accessor,
   type ParentProps,
 } from "solid-js";
-import { RGBA, type BoxRenderable } from "@opentui/core";
+import { RGBA, type BoxRenderable, type MouseEvent } from "@opentui/core";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { createRequiredContext, useTheme } from "@andycmaj/opentui-app";
 import { PtySession } from "../terminal/pty-session";
-import { TerminalModes } from "../terminal/modes";
+import { TerminalModes, type Click } from "../terminal/modes";
 import { readClipboard } from "../terminal/clipboard";
 import { terminalReplies } from "../terminal/replies";
 import { ViewportTerminalRenderable } from "../terminal/viewport-terminal";
@@ -91,6 +91,26 @@ export { useTerminals };
 
 function isHex(color: string | undefined): color is string {
   return Boolean(color && /^#[0-9a-f]{6}/i.test(color));
+}
+
+const CLICKS: Partial<Record<MouseEvent["type"], Click>> = {
+  down: "press",
+  up: "release",
+  drag: "drag",
+  move: "move",
+};
+
+// A cell inside the terminal: a drag that left it is held at its edge.
+function cellIn(
+  view: { x: number; y: number; width: number; height: number },
+  x: number,
+  y: number,
+) {
+  const clamp = (n: number, size: number) => Math.max(0, Math.min(size - 1, n));
+  return {
+    x: clamp(x - view.x, view.width),
+    y: clamp(y - view.y, view.height),
+  };
 }
 
 export function TerminalsProvider(props: ParentProps) {
@@ -207,6 +227,39 @@ export function TerminalsProvider(props: ParentProps) {
         term.session.write(bytes);
       } else {
         view.scrollLines(direction === "up" ? -3 : 3);
+      }
+    };
+    // Clicks go in only while this terminal is attached, and only the kinds
+    // the program asked for. The press that attaches a detached terminal
+    // goes no further (it is a click on Riker, not in the program), and a
+    // release or drag goes only after a press that went in, so the program
+    // never sees half a click.
+    let held: number | null = null;
+    view.onMouse = (event) => {
+      const kind = CLICKS[event.type];
+      if (!kind) {
+        return;
+      }
+      if (kind === "press" && attached() !== request.id) {
+        return;
+      }
+      if ((kind === "release" || kind === "drag") && held === null) {
+        return;
+      }
+      if (kind === "move" && (held !== null || attached() !== request.id)) {
+        return;
+      }
+      const button = held ?? event.button;
+      const at = cellIn(view, event.x, event.y);
+      const bytes = modes.click(kind, button, at.x, at.y, event.modifiers);
+      if (kind === "press") {
+        held = bytes ? event.button : null;
+      } else if (kind === "release") {
+        held = null;
+      }
+      if (bytes) {
+        event.stopPropagation();
+        term.session.write(bytes);
       }
     };
     terms.set(request.id, term);
