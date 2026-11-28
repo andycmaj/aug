@@ -181,10 +181,16 @@ export function ModeToggle<M extends string>(props: {
 // A left press on a row, a tab or a pill does what its key does. It acts as
 // the button goes down, and opentui then focuses the pane under it, so the
 // pane and the row change together. Other buttons and the wheel pass by.
+// opentui has already started selecting the text under the press, and what
+// the press changes (a tab, a filter) would stretch that selection over the
+// new layout, so a press that acts is a click, never the start of a
+// selection.
 export function onPress(fn: () => void) {
   return (event: MouseEvent) => {
-    if (event.button === MouseButton.LEFT) {
-      fn();
+    if (event.button !== MouseButton.LEFT) {
+      return;
     }
+    (event.target ?? event.currentTarget)?.ctx.clearSelection();
+    fn();
   };
 }

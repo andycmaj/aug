@@ -6,8 +6,10 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testRender } from "@opentui/solid";
+import { ThemeProvider } from "@andycmaj/opentui-app";
 import { App } from "../src/app";
-import { boardTab } from "../src/components/board-tab";
+import { SelectionColors } from "../src/selection-colors";
+import { boardTab, setBoardTab } from "../src/components/board-tab";
 import { BoardTab } from "../src/keymap";
 import { installFixture } from "@riker/fixtures/demo";
 import * as store from "@riker/core/store";
@@ -15,6 +17,8 @@ import * as store from "@riker/core/store";
 let destroy: (() => void) | undefined;
 let home: string | undefined;
 afterEach(() => {
+  // The Board's tab is the module's: leave it where other tests expect it.
+  setBoardTab(BoardTab.wins);
   destroy?.();
   if (home) {
     rmSync(home, { recursive: true, force: true });
@@ -347,3 +351,78 @@ test("mouse: false in config: clicks are the terminal's, not Riker's", async () 
   const s = await boot({ mouse: false });
   expect(s.setup.renderer.useMouse).toBe(false);
 });
+
+// A colour as hex, to compare cells.
+const hex = (c: { r: number; g: number; b: number; a: number }) =>
+  c.a === 0
+    ? "none"
+    : [c.r, c.g, c.b]
+        .map((v) =>
+          Math.round(v * 255)
+            .toString(16)
+            .padStart(2, "0"),
+        )
+        .join("");
+
+test("text selected on a lit band stays readable", async () => {
+  // Dark text on an orange band, as a cursor row draws it.
+  const setup = await testRender(
+    () => (
+      <ThemeProvider>
+        <SelectionColors />
+        <box backgroundColor="#fab283">
+          <text fg="#000000">lit words on a band</text>
+        </box>
+      </ThemeProvider>
+    ),
+    { width: 40, height: 3 },
+  );
+  destroy = () => setup.renderer.destroy();
+  await setup.renderOnce();
+  const cell = (x: number) => {
+    let at = 0;
+    for (const span of setup.captureSpans().lines[0].spans) {
+      if (x >= at && x < at + span.width) {
+        return { fg: hex(span.fg), bg: hex(span.bg) };
+      }
+      at += span.width;
+    }
+    throw new Error("no cell");
+  };
+  expect(cell(1)).toEqual({ fg: "000000", bg: "fab283" });
+  await setup.mockMouse.drag(0, 0, 4, 0);
+  await setup.renderOnce();
+  const selected = cell(1);
+  expect(selected.fg).not.toBe(selected.bg);
+  expect(selected.bg).not.toBe("fab283");
+});
+
+test("a click on a tab, a pill or a row selects no text", async () => {
+  const s = await boot();
+  await s.press("v");
+  const none = () => !s.setup.renderer.hasSelection;
+  await s.setup.mockMouse.pressDown(...xy(s, "6 Docs"));
+  await s.settle();
+  expect(none()).toBe(true);
+  await s.setup.mockMouse.release(...xy(s, "6 Docs"));
+  await s.settle();
+  expect(none()).toBe(true);
+  await s.click("file");
+  expect(none()).toBe(true);
+  await s.click("all");
+  const rows = s.frame().split("\n");
+  const y = rows.findIndex((r, i) => i > 4 && /^ ┃ \S/.test(r));
+  await s.setup.mockMouse.click(12, y);
+  await s.settle();
+  expect(none()).toBe(true);
+  expect(s.copied).toEqual([]);
+});
+
+function xy(
+  s: Awaited<ReturnType<typeof boot>>,
+  words: string,
+): [number, number] {
+  const rows = s.frame().split("\n");
+  const y = rows.findIndex((r) => r.includes(words));
+  return [rows[y].indexOf(words) + 1, y];
+}

@@ -14,6 +14,7 @@ import {
 } from "@andycmaj/opentui-app";
 import { RikerProvider, useRiker, ViewMode } from "./context/riker";
 import { useToast } from "./context/toast";
+import { SelectionColors } from "./selection-colors";
 import { TerminalsProvider } from "./context/terminals";
 import { ToastProvider } from "./context/toast";
 import { Toast } from "./components/toast";
@@ -88,6 +89,7 @@ export function App(props: {
   }
   return (
     <ThemeProvider name={props.theme}>
+      <SelectionColors />
       <RikerProvider engine={props.engine}>
         <TerminalsProvider>
           <ToastProvider>

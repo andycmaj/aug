@@ -79,9 +79,17 @@ binding.
 
 While Riker has the mouse, a plain drag no longer selects text in your
 terminal. Most terminals still select with shift held (option in some
-macOS terminals). Riker selects text you drag over itself (chats, briefs,
-lists). When the button comes up it copies the text to the system clipboard
-and says "Copied". A click with no drag copies nothing.
+macOS terminals). Riker selects text you drag over itself (a chat, a
+brief, an open row's detail). When the button comes up it copies the text
+to the system clipboard and says "Copied". A click with no drag copies
+nothing.
+
+A press on something that acts (a row, a tab, a pill) never starts a
+selection, dragged or not. opentui begins selecting under every press, and
+the tab or filter the press switched would stretch that selection over the
+new layout. Selected text is drawn in the theme's selection colors
+(`selection-colors.tsx`, on every `<text>`), not by swapping the cell's own
+colors, which made dark text on a lit row dark on dark.
 
 ## Turning it off
 
@@ -100,4 +108,6 @@ terminal again. The `?` help card says so.
   (a click attaches it with no bytes in, the next click goes in as exact
   SGR, a 1002 drag as press, motion and release, nothing to a program that
   asked for no clicks, a rail click detaches). It also checks drag to copy,
-  a click that copies nothing, and `mouse: false`.
+  a click that copies nothing, `mouse: false`, a click on a tab, pill or
+  row that selects nothing, and selected text on a lit band in the theme's
+  selection colors.
